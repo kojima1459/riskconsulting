@@ -13,6 +13,7 @@
 | step | play | スキーマ | 呼び出し元 |
 |---|---|---|---|
 | s1/s2/s3/s4 | PL-01/02 | Schema-S1/S2/S3/S4 | modPipeline |
+| s2c/s3c（批判）・s2r/s3r（改訂） | PL-01/02のdeep時 | Schema-S2C/S3C・改訂はS2/S3と同一 | modPipeline |
 | pf | PL-03 | Schema-PF | modPlayOps |
 | wt | PL-05 | Schema-WT | modPlayOps(1.5) |
 | fg | PL-06 | Schema-FG | modPlayOps(1.5) |
@@ -132,7 +133,15 @@ Public Sub AppendServiceGap(ByVal caseId As String, ByVal industryCode As String
 Public Function BuildS1System() As String
 Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hp As String, ByVal yuho As String, _
                             ByVal memo As String, ByVal contractTxt As String, ByVal prevRenewal As String, _
-                            ByVal dossierTxt As String) As String
+                            ByVal dossierTxt As String, ByVal fieldNotes As String, ByVal hearingAnswers As String) As String
+' 入念モード(quality_mode=deep)用（15章§4.5〜4.7）:
+Public Function BuildS2CriticSystem() As String
+Public Function BuildS2CriticUser(ByVal s1Json As String, ByVal s2Json As String, ByVal riskLib As String) As String
+Public Function BuildS3CriticSystem() As String
+Public Function BuildS3CriticUser(ByVal ctx As TCaseCtx, ByVal s1Summary As String, _
+                                  ByVal s2Json As String, ByVal s3Json As String) As String
+Public Function ReviseSuffix(ByVal critiqueDigest As String) As String
+' modValidate: CheckS2C / CheckS3C を追加（15章）。modSchemas: SchemaS2C / SchemaS3C を追加
 Public Function BuildSparringSystem(ByVal dossierSummary As String, ByVal s1s2s3Json As String, _
                                     ByVal schemes As String, ByVal patterns As String, _
                                     ByVal mechs As String, ByVal rules As String) As String  ' PL-04
@@ -154,6 +163,9 @@ Public Function SchemaS1() As String   ' 同様に S2/S3/S4/PF/WT/FG
 ' === app: modPipeline / modPlayOps ===
 Public Function RunAll(ByVal caseId As String) As Boolean
 Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
+    ' quality_mode=deep のとき、S2/S3は 生成→批判(CheckS2C/S3C合格の批判JSON)→
+    ' 指摘ありなら改訂(ReviseSuffix)の3呼び出しで実行。批判・改訂はrun_logに
+    ' step="s2c"/"s3c"/"s2r"/"s3r" として記録。deep_transport指定時は批判・改訂のみ経路変更
 Public Function RunPreflight(ByVal inboxId As String) As Boolean
 
 ' === app: modCaseStore / modInboxStore / modJudgeStore ===

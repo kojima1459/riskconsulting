@@ -140,6 +140,13 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    overall(high=仮説を持って訪問できる/mid=一般論が混ざる/low=一般論しか出せない)は
    案件のティア基準で判定する(クイック=基本8観点で判定/フルドシエ=13観点で判定)。
    advice に「何をどこから追加で貼るべきか」を具体的に1〜2文で書く。甘い判定をしない。
+6. 【現場メモ】は営業しか知らない情報である。**要約・言い換えをせず**、1ネタ=1件で field_insights に
+   原文のまま切り分け、タグ(risk_clue/relationship/competitor/constraint/opportunity/other)だけ付ける。
+   意味が取れない断片もそのまま残す(捨てない)。
+7. 【追加ドシエ】内の記述は、出典(URL・資料名)が示されているものを優先して使う。
+   出典のない外部情報を使う場合は、値の先頭に「(未確認)」を付ける。
+8. 【前回訪問のヒアリング回答】が提供されている場合、それは顧客本人から得た一次情報であり、
+   公開情報より優先して反映する。
 ```
 （末尾に BLOCK_GUARD を連結）
 
@@ -172,6 +179,12 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 
 【追加ドシエ（フルドシエ時のAI収集結果: 業界・競合・SNS・マクロ・財務等。未提供の場合は「なし」）】
 {{dossierText}}
+
+【現場メモ（営業だけが知っている情報・書式自由。未提供の場合は「なし」）】
+{{fieldNotesText}}
+
+【前回訪問のヒアリング回答（第2ラウンド以降。未提供の場合は「なし」）】
+{{hearingAnswersText}}
 ■■■企業情報ここまで■■■
 
 出力するJSONの形式（この構造・キー名に厳密に従うこと）:
@@ -187,6 +200,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "management_notes": "経営・戦略上の特記(新規事業・承継・投資等。なければ\"不明\")",
   "current_coverage": [{"line_name": "種目名(現契約サマリの表記のまま)", "coverage_summary": "補償内容の要約",
                         "limit_note": "限度額・保険金額(不明なら\"不明\")", "special_note": "主要特約・免責等(なければ\"不明\")"}],
+  "field_insights": [{"note": "現場メモの原文(要約しない)", "tag": "risk_clue/relationship/competitor/constraint/opportunity/other"}],
   "missing_info": [{"item": "知りたい情報", "why_needed": "なぜリスク分析に必要か(1文)"}],
   "input_quality": {
     "coverage": [{"aspect": "profile", "status": "ok/partial/missing"}],
@@ -229,6 +243,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
       "limit_note": {"type": "string"},
       "special_note": {"type": "string"}
     }, "required": ["line_name", "coverage_summary", "limit_note", "special_note"], "additionalProperties": false}},
+    "field_insights": {"type": "array", "items": {"type": "object", "properties": {
+      "note": {"type": "string"},
+      "tag": {"type": "string", "enum": ["risk_clue", "relationship", "competitor", "constraint", "opportunity", "other"]}
+    }, "required": ["note", "tag"], "additionalProperties": false}},
     "missing_info": {"type": "array", "items": {"type": "object", "properties": {
       "item": {"type": "string"},
       "why_needed": {"type": "string"}
@@ -244,13 +262,14 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   },
   "required": ["company_name", "business_summary", "main_products", "processes", "locations",
                "supply_chain", "customers", "workforce_notes", "management_notes",
-               "current_coverage", "missing_info", "input_quality"],
+               "current_coverage", "field_insights", "missing_info", "input_quality"],
   "additionalProperties": false
 }
 ```
 
 **CheckS1**: 必須キー・locations.type enum／renewal時: current_coverage が1件以上（0件は不合格→修復）／new時: current_coverage が0件（非0は警告ログのみ）／missing_info 0件は警告（エラーにしない）／input_quality.coverage がちょうど13件（13 aspect各1回。過不足は不合格→修復）。
 **充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。
+補足: 現場メモ未提供時は field_insights=[]（提供ありで0件は警告ログ）。field_insights は s1Json に含まれるため、S2/S3/S4・壁打ちへは追加配線なしで原文のまま届く（蒸留しないパススルー。docs/09 F-01）。
 
 ## 3. Step2 リスク仮説＋付保ギャップ（S2）
 
@@ -273,6 +292,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 4. frequency と impact はシナリオと整合させる。迷ったら社内リスク知識の typical 値を参考にする。
 5. check_points には、そのリスクの実在・大小を現地訪問やヒアリングで確かめる具体的な確認点を書く。
 6. open_questions には、リスク評価の精度を上げるために顧客へ確認すべき事項を書く。
+7. 企業プロファイルの field_insights(営業の現場メモ原文)は公開情報に無い最重要の手がかりである。
+   risk_clue タグの項目は必ずリスク仮説として検討し、根拠に使う場合は source="memo" とする。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -386,6 +407,8 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 5. 成功事例・型が注入されている場合、状況が似たものの「決め手」「構造」を積極的に参考にし、
    参考にした case_lib_id / scheme_id を記入する。似たものが無ければ空文字 "" とする。
 6. expected_objection は顧客から返ってきそうな否定的反応、objection_response はその切り返し(各1文)。
+7. 企業プロファイルの field_insights を提案の調整に使う: relationship(決裁の力学)は誰に刺す提案かに、
+   constraint(NG事項)は避けるべき表現・提案に、competitor(他社動向)は差別化の切り口に反映する。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -488,6 +511,164 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 
 **CheckS3**（最重要検証）: stories ちょうど3件／proposal_kind enum／全 menu_ids・line_ids が実在（**不実在は不合格→修復→なお不合格はE0301停止。黙殺除去禁止**）／scheme_id・similar_case_id は "" または実在／target_risk_nos が s2Json の risk_no に、target_gap_nos が gap_no に存在／全ストーリー合計で menu_ids＋scheme_id が0件は不合格／renewal時: 3本中1本以上が upsell または cross_sell（0本は警告）。
 
+## 4.5 S2批判パス（S2C。quality_mode=deep 時のみ）
+
+deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** → S2改訂（§4.7）。批判・改訂結果も case_data に保存（s2c_json）。
+
+### system（BuildS2CriticSystem）
+
+```
+あなたは大手損害保険グループの、リスク分析の審査で最も厳しいことで知られる主査です。
+部下が作ったリスク仮説一式を審査し、具体的な改善指示を出します。
+
+審査の観点:
+1. 見落とし: 6カテゴリすべてが検討されたか。企業プロファイル・現場メモ(field_insights)の中に、
+   拾われていないリスクの手がかりが残っていないか。
+2. 固有性: 業種名を変えても通用してしまう一般論のリスクはどれか。
+3. 根拠の質: evidence の引用は本当にそのリスクを支えているか。こじつけはないか。
+   inference が多すぎないか。
+4. 整合性: frequency と impact はシナリオと整合しているか。
+5. ギャップ分析(更新案件): gap_type の分類は正しいか。current_coverage と突き合わせて
+   見落としたギャップはないか。
+甘い審査は部下のためにならない。ただし指摘には必ず改善の方向を添えること。
+```
+（末尾に BLOCK_GUARD）
+
+### user（BuildS2CriticUser）
+
+```
+■■■企業プロファイル■■■
+{{s1Json}}
+■■■審査対象のリスク仮説■■■
+{{s2Json}}
+■■■社内リスク知識(参考)■■■
+{{riskLibText}}
+■■■資料ここまで■■■
+
+上記のリスク仮説を審査し、指定のJSON形式で出力してください。
+
+出力するJSONの形式:
+{
+  "verdict_summary": "総評(2文以内)",
+  "issues": [
+    {"target": "risk_no:3 / gap_no:1 / overall のいずれかの形式",
+     "issue_type": "missing/generic/weak_evidence/inconsistent/gap_error",
+     "detail": "指摘(1〜2文)", "suggestion": "改善の方向(1文)"}
+  ],
+  "additional_risks": [
+    {"risk_name": "追加すべきリスク名", "why": "なぜ見落としと言えるか(根拠の引用つき・1〜2文)"}
+  ]
+}
+※問題が本当に無い観点については指摘を作らない(水増し禁止)。
+```
+
+### Schema-S2C（SCHEMA_S2C）
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "verdict_summary": {"type": "string"},
+    "issues": {"type": "array", "items": {"type": "object", "properties": {
+      "target": {"type": "string"},
+      "issue_type": {"type": "string", "enum": ["missing", "generic", "weak_evidence", "inconsistent", "gap_error"]},
+      "detail": {"type": "string"},
+      "suggestion": {"type": "string"}
+    }, "required": ["target", "issue_type", "detail", "suggestion"], "additionalProperties": false}},
+    "additional_risks": {"type": "array", "items": {"type": "object", "properties": {
+      "risk_name": {"type": "string"},
+      "why": {"type": "string"}
+    }, "required": ["risk_name", "why"], "additionalProperties": false}}
+  },
+  "required": ["verdict_summary", "issues", "additional_risks"],
+  "additionalProperties": false
+}
+```
+
+**CheckS2C**: enum・target書式（risk_no:N / gap_no:N / overall）。issues 0件は合格扱い（改訂パスをスキップし呼び出しを節約）。
+
+## 4.6 S3批判パス（S3C。quality_mode=deep 時のみ）
+
+### system（BuildS3CriticSystem）
+
+```
+あなたは2つの人格で提案を審査します。
+人格A「対象企業の経営者」: 忙しく、保険の売り込みに飽きており、自社のことは自分が一番わかっていると
+思っている。提案ストーリーを読んで、率直に反応する(「それはウチには関係ない」「もう入っている」
+「で、いくらかかるの」など)。
+人格B「営業同行の支社長」: 提案が当社の実在メニュー・型で本当に実行できるか、3本の優先順位は
+正しいか、hook_question は最初の30秒で経営者の顔を上げさせられるか、幹事・BID等の案件文脈と
+整合しているかを審査する。
+それぞれの人格で率直に指摘し、改善の方向を添えること。
+```
+（末尾に BLOCK_GUARD）
+
+### user（BuildS3CriticUser）
+
+```
+{{BLOCK_CTX}}
+■■■企業プロファイル(要約)■■■
+{{s1SummaryJson ※business_summary+field_insights}}
+■■■リスク仮説(要約)■■■
+{{s2Json}}
+■■■審査対象の提案ストーリー■■■
+{{s3Json}}
+■■■資料ここまで■■■
+
+指定のJSON形式で出力してください。
+
+出力するJSONの形式:
+{
+  "executive_reactions": [
+    {"story_no": 1, "reaction": "経営者の率直な反応(1〜2文・話し言葉)", "lands": true}
+  ],
+  "issues": [
+    {"target": "story_no:2 / overall", "issue_type": "wont_land/not_executable/wrong_priority/weak_hook/context_mismatch",
+     "detail": "指摘(1〜2文)", "suggestion": "改善の方向(1文)"}
+  ]
+}
+※executive_reactions は3ストーリー全てに出す。lands=そのストーリーが刺さりそうか。
+```
+
+### Schema-S3C（SCHEMA_S3C）
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "executive_reactions": {"type": "array", "items": {"type": "object", "properties": {
+      "story_no": {"type": "integer"},
+      "reaction": {"type": "string"},
+      "lands": {"type": "boolean"}
+    }, "required": ["story_no", "reaction", "lands"], "additionalProperties": false}},
+    "issues": {"type": "array", "items": {"type": "object", "properties": {
+      "target": {"type": "string"},
+      "issue_type": {"type": "string", "enum": ["wont_land", "not_executable", "wrong_priority", "weak_hook", "context_mismatch"]},
+      "detail": {"type": "string"},
+      "suggestion": {"type": "string"}
+    }, "required": ["target", "issue_type", "detail", "suggestion"], "additionalProperties": false}}
+  },
+  "required": ["executive_reactions", "issues"],
+  "additionalProperties": false
+}
+```
+
+**CheckS3C**: executive_reactions ちょうど3件（story_no=1..3）。lands=true が3件かつ issues 0件は合格扱い（改訂スキップ）。
+
+## 4.7 改訂パス（ReviseSuffix。S2/S3共通）
+
+批判に指摘がある場合、**元のsystemのまま**、元のuserプロンプト末尾に以下を追記して再生成する（これが改訂版となり、以後のStepはこれを使う。改訂は1回のみ）:
+
+```
+
+【審査結果に基づく改訂指示】
+あなたの出力は審査で以下の指摘を受けました:
+{{critiqueJson の issues / additional_risks / executive_reactions を日本語整形したもの}}
+
+指摘に正当な理由があれば反映し、反映しない指摘には従わなくてよい(こじつけの追加はしない)。
+改訂した全体を、指示したJSON形式のみで再出力してください。
+```
+
 ## 5. Step4 骨子生成（S4）
 
 ### system（BuildS4System）
@@ -497,7 +678,8 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 分析結果を、商談用のPowerPoint骨子とヒアリング質問リストにまとめます。
 
 必ず守るルール:
-1. スライドはちょうど5枚、以下の役割で構成する:
+1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5〜{{pptMaxSlidesT2}}枚まで拡張可。
+   6枚目以降は「付録: 分析の根拠・データ」として使う)。基本5枚の役割:
    スライド1: 貴社の事業環境の理解(「御社を調べてきた」ことが伝わる事実の整理。
               更新案件では「長年のお取引で把握している貴社の変化」の文脈にする)
    スライド2: 潜在リスクの全体像(影響度と発生しやすさで整理。更新案件では付保ギャップを中心に)
@@ -562,7 +744,7 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 }
 ```
 
-**CheckS4**: slides ちょうど5枚・slide_no=1..5 各1回／各 bullets 1〜8点／hearing_questions 1〜10問。
+**CheckS4**: slides はT1=ちょうど5枚／T2=5〜`ppt_max_slides_t2`枚（既定10）。slide_no=1..N 各1回・連番／各 bullets 1〜8点／hearing_questions 1〜10問。
 
 ## 6. プリフライト診断（PF・PL-03）
 
