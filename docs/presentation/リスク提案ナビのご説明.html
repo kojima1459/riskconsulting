@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リスク提案ナビ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --ink:#24303E;        /* 本文の紺鼠 */
+    --sub:#5A6B7E;        /* 補足の灰藍 */
+    --paper:#FFFFFF;
+    --mist:#EFF3F8;       /* 淡い藍鼠の面 */
+    --ai:#2B5B8F;         /* 藍(基調) */
+    --kaki:#B4552D;       /* 柿(課題・Before) */
+    --matsu:#2F7A54;      /* 松葉(効果・After) */
+    --line:#D8E0E9;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Noto Sans JP","Yu Gothic","Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    font-size:16.5px;line-height:1.95;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:840px;margin:0 auto;padding:0 28px 80px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN",serif;text-wrap:balance;}
+  /* ── 表紙 ── */
+  header{padding:64px 0 40px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:13px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:18px;}
+  h1{font-size:40px;line-height:1.35;font-weight:700;}
+  h1 .kana{display:block;font-size:15px;letter-spacing:.3em;color:var(--sub);font-family:"Noto Sans JP",sans-serif;font-weight:500;margin-bottom:10px;}
+  .lede{margin-top:22px;font-size:19px;line-height:2;}
+  .lede strong{color:var(--ai);}
+  .meta{margin-top:26px;font-size:13.5px;color:var(--sub);}
+  /* ── セクション共通 ── */
+  section{padding:52px 0 8px;}
+  .eyebrow{font-size:13px;letter-spacing:.16em;color:var(--ai);font-weight:700;margin-bottom:10px;}
+  h2{font-size:27px;font-weight:700;margin-bottom:22px;line-height:1.5;}
+  p.body{max-width:41em;}
+  .note{font-size:13.5px;color:var(--sub);margin-top:14px;}
+  /* ── Before/After ── */
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:26px;}
+  .ba .col{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--paper);}
+  .ba .head{padding:10px 18px;font-weight:700;font-size:15px;color:#fff;}
+  .ba .before .head{background:var(--kaki);}
+  .ba .after  .head{background:var(--matsu);}
+  .ba ul{list-style:none;padding:16px 18px;}
+  .ba li{padding-left:1.2em;text-indent:-1.2em;margin-bottom:8px;font-size:15px;line-height:1.8;}
+  .ba li::before{content:"・";}
+  .ba .time{display:block;text-align:center;font-family:"Shippori Mincho",serif;font-size:26px;font-weight:700;padding:6px 0 16px;}
+  .ba .before .time{color:var(--kaki);}
+  .ba .after  .time{color:var(--matsu);}
+  /* ── 3ステップ ── */
+  .steps{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch;margin-top:26px;}
+  .step{background:var(--mist);border-radius:6px;padding:18px 16px;text-align:center;}
+  .step .n{display:inline-block;width:30px;height:30px;line-height:30px;border-radius:50%;background:var(--ai);color:#fff;font-weight:700;margin-bottom:10px;}
+  .step .t{font-weight:700;margin-bottom:6px;}
+  .step .d{font-size:13.5px;color:var(--sub);line-height:1.7;}
+  .arrow{align-self:center;color:var(--ai);font-size:22px;font-weight:700;}
+  /* ── 出てくるもの4点 ── */
+  .outs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:26px;}
+  .out{border:1px solid var(--line);border-left:5px solid var(--ai);border-radius:4px;padding:16px 18px;background:var(--paper);}
+  .out .t{font-weight:700;margin-bottom:4px;}
+  .out .d{font-size:14px;color:var(--sub);line-height:1.75;}
+  /* ── たとえ話 ── */
+  .fable{background:var(--mist);border-radius:8px;padding:28px 30px;margin-top:26px;}
+  .fable p{margin-bottom:14px;}
+  .fable p:last-child{margin-bottom:0;}
+  .fable .q{font-family:"Shippori Mincho",serif;font-size:19px;font-weight:700;color:var(--ai);}
+  /* ── 循環図 ── */
+  .loop{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:8px;align-items:stretch;margin:26px 0 10px;}
+  .loop .node{background:var(--paper);border:2px solid var(--ai);border-radius:6px;padding:14px 12px;text-align:center;font-size:14px;line-height:1.7;}
+  .loop .node b{display:block;font-size:15px;margin-bottom:2px;}
+  .loopback{text-align:center;color:var(--matsu);font-weight:700;font-size:14.5px;margin-bottom:6px;}
+  /* ── 安心材料 ── */
+  .safe{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:26px;}
+  .safe .card{background:var(--mist);border-radius:6px;padding:20px 18px;}
+  .safe .t{font-weight:700;margin-bottom:8px;color:var(--ai);}
+  .safe .d{font-size:14px;line-height:1.8;}
+  /* ── 進め方 ── */
+  table.plan{width:100%;border-collapse:collapse;margin-top:24px;font-size:15px;}
+  table.plan th,table.plan td{border:1px solid var(--line);padding:12px 16px;text-align:left;vertical-align:top;line-height:1.75;}
+  table.plan th{background:var(--mist);font-weight:700;white-space:nowrap;width:9em;}
+  .ask{border:2px solid var(--ai);border-radius:8px;padding:24px 28px;margin-top:30px;}
+  .ask .t{font-family:"Shippori Mincho",serif;font-size:20px;font-weight:700;color:var(--ai);margin-bottom:12px;}
+  .ask ol{padding-left:1.4em;}
+  .ask li{margin-bottom:8px;}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--sub);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  @media (max-width:640px){
+    h1{font-size:30px;}
+    .ba,.outs,.safe{grid-template-columns:1fr;}
+    .steps,.loop{grid-template-columns:1fr;}
+    .arrow{transform:rotate(90deg);justify-self:center;}
+  }
+  @media print{
+    body{font-size:13px;}
+    section{padding:28px 0 4px;break-inside:avoid;}
+    header{padding:28px 0 20px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">AI活用プロジェクト ご説明資料</div>
+  <h1><span class="kana">リスク テイアン ナビ</span>リスク提案ナビ<span style="font-size:22px;">（仮称）</span></h1>
+  <p class="lede">会社名とホームページの文章を入れると、リスクコンサル提案の事前準備が<br>
+  <strong>「まる1日仕事」から「15分」</strong>になる——そんな道具を、私たちの手で作ります。</p>
+  <div class="meta">2026年8月　商品部 AIリスクコンサルティングPJ　開発担当: 小島</div>
+</header>
+
+<section>
+  <div class="eyebrow">はじまりは、あの春華堂の話です</div>
+  <h2>訪問前の「調べ物」が、いちばん時間を食っている</h2>
+  <p class="body">企業情報、工場の設備、製造工程、想定されるリスク——訪問前の下調べと資料づくりに丸1日。しかもその出来栄えは、担当者の経験次第でバラバラ。部長が営業時代に感じられたこの課題は、いまも変わっていません。</p>
+  <div class="ba">
+    <div class="col before">
+      <div class="head">いま（春華堂のときのやり方）</div>
+      <ul>
+        <li>HPや資料を読み込み、手作業でメモ</li>
+        <li>リスクの洗い出しは経験と勘が頼り</li>
+        <li>提案書はゼロから作成</li>
+        <li>ベテランと若手で仕上がりに大差</li>
+      </ul>
+      <span class="time">約1日</span>
+    </div>
+    <div class="col after">
+      <div class="head">これから（リスク提案ナビ）</div>
+      <ul>
+        <li>HPの文章を貼り付けてボタンを押すだけ</li>
+        <li>リスクの候補が根拠つきで一覧に</li>
+        <li>提案書のたたき台が自動でできる</li>
+        <li>誰がやっても、まず80点から始まる</li>
+      </ul>
+      <span class="time">約15分（目標）</span>
+    </div>
+  </div>
+  <p class="note">※所要時間は目標値です。10〜11月の試行で実測し、ご報告します。</p>
+</section>
+
+<section>
+  <div class="eyebrow">使い方は3つだけ</div>
+  <h2>営業担当の操作は「貼る・押す・待つ」</h2>
+  <div class="steps">
+    <div class="step"><span class="n">1</span><div class="t">貼る</div><div class="d">訪問先のホームページの会社概要などをコピーして、Excelの入力欄に貼り付け</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="n">2</span><div class="t">押す</div><div class="d">「一括実行」ボタンを押す</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="n">3</span><div class="t">待つ</div><div class="d">数分で4つの成果物ができあがる</div></div>
+  </div>
+  <div class="outs">
+    <div class="out"><div class="t">① リスク分析表</div><div class="d">その会社ならではの潜在リスクを、「なぜそう言えるか」の根拠つきで一覧化</div></div>
+    <div class="out"><div class="t">② 提案の切り口 3本</div><div class="d">当社に実在するコンサルメニュー・保険種目に結びついた、商談の入り口</div></div>
+    <div class="out"><div class="t">③ 提案書のたたき台（パワポ5枚）</div><div class="d">「御社を調べてきました」が伝わる構成で自動作成。人が仕上げて完成</div></div>
+    <div class="out"><div class="t">④ 訪問で聞くことリスト</div><div class="d">調べても分からなかったことを質問リストに。初回訪問の質が上がる</div></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">よくあるAIと、何が違うのか</div>
+  <h2>「当社の武器」を持たせてから、調査に行かせます</h2>
+  <div class="fable">
+    <p class="q">たとえるなら——優秀だけれど入社1年目の部下に、企業調査を頼むところを想像してください。</p>
+    <p>手ぶらで行かせれば、返ってくるのは教科書どおりの一般論です。世の中のAIをそのまま使うと、これが起きます。</p>
+    <p>リスク提案ナビは、この部下に<strong>「当社のコンサルメニュー一覧」「保険種目の対応表」、そしてベテランの「勝ちパターン帳」</strong>を持たせてから調査に行かせます。だから、実在する当社のサービスに結びついた、お客様に出せる提案が返ってきます。存在しないサービスを口にしたら、その場で突き返す仕組みも入れます。</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">この企画のいちばんの狙い</div>
+  <h2>使うほど賢くなる。ベテランの経験が、みんなの提案になる</h2>
+  <p class="body">80点までの資料は社内に揃っています。差がつくのは、<strong>「何がお客様に刺さったか」という残りの20点</strong>——いまは個人の頭の中にあって、共有されていません。この道具は、それを貯めて配る仕組みを最初から組み込みます。</p>
+  <div class="loop">
+    <div class="node"><b>使う</b>提案を作って商談へ</div>
+    <div class="arrow">→</div>
+    <div class="node"><b>ひとこと記録</b>刺さった／刺さらなかったを一行メモ</div>
+    <div class="arrow">→</div>
+    <div class="node"><b>勝ちパターン帳へ</b>月1回、良い事例を登録</div>
+    <div class="arrow">→</div>
+    <div class="node"><b>全員に反映</b>翌月から全員の提案に自動で活きる</div>
+  </div>
+  <div class="loopback">↺ この循環が回るほど、道具も組織も賢くなります</div>
+  <p class="body">最初の「勝ちパターン帳」には、部長の春華堂でのご経験を第1号として載せさせてください。研修や掛け声ではなく、<strong>日々の仕事の副産物として成功事例が共有される</strong>——属人化への、仕組みでの答えです。</p>
+</section>
+
+<section>
+  <div class="eyebrow">ご安心いただきたいこと</div>
+  <h2>守りを固めたうえで、攻めます</h2>
+  <div class="safe">
+    <div class="card"><div class="t">公開情報だけを使う</div><div class="d">入力はホームページや有価証券報告書など公開情報のみ。お客様の非公開情報や個人情報は入れないルールを、注意書きと自動チェックの両方で徹底します。</div></div>
+    <div class="card"><div class="t">必ず人が確認する</div><div class="d">できあがるのは「たたき台」。中身を確認・手直しするのは担当者と専門部署です。途中の分析を専門家が直せる作りにしています。</div></div>
+    <div class="card"><div class="t">社内公認の仕組みの上で動く</div><div class="d">AIとのやり取りは、全社に配られている社内公認のAI機能を通します。新しい契約や追加費用は不要で、利用記録も残ります。</div></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">進め方</div>
+  <h2>下期の中で、実際のお客様5〜10社で試します</h2>
+  <table class="plan">
+    <tr><th>9月</th><td>キックオフで実演（春華堂の公開情報でその場でお見せします）。各グループの困りごと収集と並行して製作開始</td></tr>
+    <tr><th>10月中旬</th><td>試作完成。実在1社で通し確認、ベテランの「勝ちパターン」の初期登録</td></tr>
+    <tr><th>10月下旬〜11月</th><td>商品部と営業企画で5〜10社に試行。準備時間と提案の質を、ベテランの採点で測定</td></tr>
+    <tr><th>11月末</th><td>結果をご報告し、対象業種の拡大・全社展開への道筋をご判断いただく</td></tr>
+  </table>
+  <div class="ask">
+    <div class="t">部長にお願いしたいこと（3つ）</div>
+    <ol>
+      <li>ベテランの方々への<strong>「勝ち提案インタビュー」</strong>（お一人1時間程度）への号令</li>
+      <li>試行に協力いただく<strong>営業企画側の窓口</strong>の調整（杉山さん等）</li>
+      <li>情報システム部門への確認2点（配布ルール・お客様情報の扱い）の<strong>後押し</strong></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <span>商品部 AIリスクコンサルティングPJ</span>
+  <span>本資料の内容は試行結果により変わることがあります</span>
+</footer>
+
+</div>
+</body>
+</html>
