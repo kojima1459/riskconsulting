@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リスク提案ナビ 出力デモ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic","Meiryo",sans-serif;font-size:15px;line-height:1.85;}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px 80px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho",serif;text-wrap:balance;}
+  header{padding:48px 0 28px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:12px;}
+  h1{font-size:30px;font-weight:700;}
+  .lede{margin-top:12px;color:var(--sub);font-size:14px;}
+  .disclaimer{margin-top:14px;background:var(--warn);border-left:4px solid var(--kaki);padding:10px 14px;font-size:13px;line-height:1.7;}
+  section.case{margin-top:48px;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .casehead{background:var(--ai);color:#fff;padding:14px 22px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;}
+  .casehead h2{font-size:21px;color:#fff;}
+  .chip{display:inline-block;background:rgba(255,255,255,.18);border-radius:99px;padding:1px 12px;font-size:12px;}
+  .body{padding:20px 22px;}
+  h3{font-size:15px;color:var(--ai);margin:22px 0 8px;border-left:4px solid var(--ai);padding-left:8px;}
+  h3:first-child{margin-top:0;}
+  .iq{background:var(--mist);border-radius:6px;padding:12px 16px;font-size:13.5px;line-height:1.8;}
+  .iq b.hi{color:var(--matsu);} .iq b.mid{color:#8a6d1a;} .iq b.lo{color:var(--kaki);}
+  .tblwrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.65;}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--mist);white-space:nowrap;font-weight:700;}
+  td.c{text-align:center;white-space:nowrap;}
+  .prop{border:1px solid var(--line);border-left:5px solid var(--matsu);border-radius:4px;padding:12px 16px;margin-bottom:12px;font-size:13.5px;}
+  .prop .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--matsu);border-radius:3px;padding:1px 8px;margin-right:8px;vertical-align:middle;}
+  .prop .kind.k2{background:var(--ai);} .prop .kind.k3{background:#7A5C9E;}
+  .prop b.h{font-size:14.5px;}
+  .prop .hook{background:var(--mist);border-radius:4px;padding:6px 10px;margin:8px 0;font-style:normal;}
+  .prop .meta{color:var(--sub);font-size:12.5px;margin-top:4px;}
+  ul.tight{padding-left:1.3em;font-size:13.5px;} ul.tight li{margin-bottom:4px;}
+  .gapbox{background:var(--warn);border:1px solid #E8D5B5;border-radius:6px;padding:14px 18px;margin-top:20px;font-size:13.5px;}
+  .gapbox .t{font-weight:700;color:var(--kaki);margin-bottom:6px;}
+  .synth{margin-top:52px;}
+  .synth h2{font-size:24px;margin-bottom:14px;}
+  footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--sub);}
+  @media (max-width:640px){h1{font-size:24px;} .body{padding:16px 14px;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">リスク提案ナビ — 出力デモ（模擬実行）</div>
+  <h1>3社で回すと、何が出て、何が足りないか</h1>
+  <p class="lede">ニデック（T2フルドシエ・入念モード）／成英工業（T1クイック）／エイベックス（T2・座組型、興行中止保険を除く）。2026年8月時点の公開情報で収集→S1構造化→S2リスク仮説→S3提案→S4骨子の順に仕様どおり実行。</p>
+  <div class="disclaimer">⚠ これは仕様書（docs/spec）どおりの<strong>手動模擬実行</strong>です。実機はAIリボン経由で動作します。メニューIDは仮（ナレッジ未装填のため）、型IDは型ライブラリ候補（docs/05・07）を参照。<strong>事実関係の出典は文末に記載、提案は仮説であり要専門家レビュー。</strong></div>
+</header>
+
+<!-- ═══════════ CASE 1: ニデック ═══════════ -->
+<section class="case">
+  <div class="casehead"><h2>① ニデック</h2><span class="chip">新規・非幹事想定</span><span class="chip">T2フルドシエ</span><span class="chip">入念モード</span><span class="chip">業種: 電気機械器具製造</span></div>
+  <div class="body">
+    <h3>入力充足度診断（S1）</h3>
+    <div class="iq">総合: <b class="hi">高</b>（有報・第三者委報告・報道が豊富）。不足: <b class="lo">付保・提案の経緯(insurance_ctx)=無い</b>・財務詳細=断片的（有報提出延期中のため）。助言: 幹事・共保構成と既存D&O条件は営業ルートでの確認が必須。</div>
+
+    <h3>リスク仮説（S2・抜粋6/14件）＋批判パス反映済み</h3>
+    <div class="tblwrap"><table>
+      <tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th></tr>
+      <tr><td>経営・戦略</td><td>役員責任追及の連鎖</td><td>不適切会計の累積影響1,607億円・純資産影響約1,397億円を受け、株主代表訴訟・証券訴訟・海外投資家からの請求が今後数年続く</td><td class="c">高</td><td class="c">大</td><td>第三者委報告 2026/3公表（ニュース）</td></tr>
+      <tr><td>経営・戦略</td><td>特別注意銘柄→上場廃止シナリオ</td><td>2025/10指定。1年後審査で改善不認定なら上場廃止。資金調達・人材流出・取引条件悪化が連鎖</td><td class="c">中</td><td class="c">大</td><td>東証指定（ニュース）</td></tr>
+      <tr><td>経営・戦略</td><td>子会社統制の構造疲労</td><td>M&Aで拡大した子会社群の管理限界が不正の温床に。同じ構造は品質・安全・サイバーでも再発しうる</td><td class="c">中</td><td class="c">大</td><td>第三者委報告の指摘（ニュース）＋推定</td></tr>
+      <tr><td>財物・自然災害</td><td>車載事業再編に伴う遊休資産</td><td>約2,500億円規模の減損検討→拠点統廃合。休止工場は火災・盗難・環境リスクが未管理化しやすい</td><td class="c">中</td><td class="c">中</td><td>減損報道＋業界知識</td></tr>
+      <tr><td>労務・人為</td><td>再建期のキーパーソン流出・内部通報増</td><td>統制再構築の負荷・処遇不安で技術者離脱。通報対応の巧拙が二次不祥事を左右</td><td class="c">高</td><td class="c">中</td><td>創業者辞任等の報道＋推定</td></tr>
+      <tr><td>サイバー・情報</td><td>グローバル子会社のセキュリティ統制格差</td><td>会計統制と同根の「本社の目が届かない」構造。海外拠点経由の侵入・情報流出</td><td class="c">中</td><td class="c">大</td><td>推定（統制指摘からの類推）</td></tr>
+    </table></div>
+
+    <h3>提案ストーリー（S3・3本）— 経営者ペルソナ審査済み</h3>
+    <div class="prop"><span class="kind k3">座組提案</span><b class="h">「再建の証明」を保険が担ぐ — ガバナンス再建連動プログラム</b>
+      <div class="hook">「東証の審査まであと1年。<strong>再発防止が本物だと、誰がどう証明しますか？</strong>」</div>
+      子会社・海外拠点のリスク統制診断（コンサル）を軸に、診断結果と改善実装を引受条件・料率に反映するパッケージ（サイバー・PL・危機管理費用）。幹事D&Oには触らず、<strong>幹事がやっていない「再建の実装支援」レイヤー</strong>に入る。診断レポートは東証・投資家への説明資材としても機能＝保険が再建の証明書になる。
+      <div class="meta">型: P12診断前置型×P2検知バンドル ｜ 種目: サイバー・賠責・費用利益 ｜ 対象リスク: 子会社統制・サイバー</div></div>
+    <div class="prop"><span class="kind k2">新種目提案</span><b class="h">危機対応費用の第二波に備える — 調査・対応費用パッケージ</b>
+      <div class="hook">「第三者委員会の費用、想定の何倍でしたか？<strong>次の有事は、初動費用を保険で。</strong>」</div>
+      今回級の調査費用・危機管理広報・訴訟対応の実費は巨額。訴訟の波が続く数年間の「守りの運転資金」として、危機管理費用・訴訟対応費用の補償を提案。
+      <div class="meta">型: P7役務・費用型 ｜ 種目: 費用利益・新種 ｜ 対象リスク: 役員責任追及・通報対応</div></div>
+    <div class="prop"><span class="kind k1 kind">補償拡大</span><b class="h">再編で生まれる「空き家工場」の財物・環境カバー</b>
+      <div class="hook">「統廃合が決まった拠点、<strong>止めた日からのリスク管理</strong>は決まっていますか？」</div>
+      休廃止拠点の財物・環境賠償・解体までの管理費用。クラッソーネ型（適用先候補）の解体連携も視野。
+      <div class="meta">型: P4サービス裏受け候補 ｜ 種目: 火災・環境賠償 ｜ 対象リスク: 遊休資産</div></div>
+
+    <h3>ヒアリングリスト（S4・抜粋）</h3>
+    <ul class="tight"><li>現在の幹事・共保構成と、D&O・会社役員賠償の増枠交渉の状況は？（当社が入れる余地の特定）</li><li>子会社統制の再構築はどの部門が主管で、外部診断の予算はあるか？</li><li>車載再編のスケジュールと対象拠点は？</li><li>通報件数の推移と対応体制は？</li></ul>
+
+    <div class="gapbox"><div class="t">この案件で足りなかったデータ</div>
+      ①<strong>付保状況・幹事構成</strong>（公開情報に一切ない。提案3本の実行可能性は全部ここに依存）②既存取引・過去接点の社内履歴 ③D&O市場の硬化状況（業界の引受相場観—ベテランの頭の中にしかない）④有報提出延期中のため直近財務が断片的。</div>
+  </div>
+</section>
+
+<!-- ═══════════ CASE 2: 成英工業 ═══════════ -->
+<section class="case">
+  <div class="casehead"><h2>② 成英工業（舞鶴）</h2><span class="chip">新規</span><span class="chip">T1クイック</span><span class="chip">業種: とび・土工工事業</span></div>
+  <div class="body">
+    <h3>入力充足度診断（S1）</h3>
+    <div class="iq">総合: <b class="lo">低〜中</b>。HPから事業内容（足場・とび工事、平成8年〜、<strong>原子力発電所構内工事を含む建築全般</strong>、電気工事）は取れたが、<b class="lo">従業員数・財務・拠点詳細・元請構造=無い</b>。助言: 非上場小規模はWeb情報が構造的に薄い。信用調査情報と<strong>営業の現場メモ（元請がどこか・下請階層・現場数）が実質の主データになる</strong>。この診断のまま出す提案は骨格まで。</div>
+
+    <h3>リスク仮説（S2・抜粋5件）</h3>
+    <div class="tblwrap"><table>
+      <tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th></tr>
+      <tr><td>労務・人為</td><td>墜落・転落労災</td><td>足場組立・解体時の墜落。建設業の死亡災害最多類型で、とび職はその中心</td><td class="c">中</td><td class="c">大</td><td>業種プライア（労災統計）×HP事業内容</td></tr>
+      <tr><td>製造・品質・賠償</td><td>足場倒壊・資材落下の第三者賠償</td><td>強風時の足場倒壊による隣接物・通行人被害。近年の台風激甚化で頻度上昇</td><td class="c">中</td><td class="c">大</td><td>業種プライア×気候動向</td></tr>
+      <tr><td>事業継続・SC</td><td>原発構内という特殊現場への依存</td><td>高い安全要求・入構管理・工程遅延ペナルティ。事故時は取引停止が事業継続に直結</td><td class="c">低</td><td class="c">大</td><td>HP「原子力発電所内での工事」</td></tr>
+      <tr><td>労務・人為</td><td>とび職の担い手不足・高齢化</td><td>採用難→無理な工程→事故の悪循環。技能承継の断絶</td><td class="c">高</td><td class="c">中</td><td>業種プライア（構造1: 担い手の消失）</td></tr>
+      <tr><td>財物・自然災害</td><td>資材・車両（強風・盗難）</td><td>ヤード保管の足場資材の盗難・台風被害、運搬車両事故</td><td class="c">中</td><td class="c">小</td><td>業種プライア</td></tr>
+    </table></div>
+
+    <h3>提案ストーリー（S3・3本）</h3>
+    <div class="prop"><span class="kind k2">新種目提案</span><b class="h">「人を守る会社」を採用の武器に — 業務災害＋安全DXパッケージ</b>
+      <div class="hook">「若い職人さんの親御さんに、<strong>『うちは安全に一番金をかけてる』と言えますか？</strong>」</div>
+      労災上乗せ（業務災害総合）＋ウェアラブル・墜落検知等の安全DXで料率還元（P3行動変容型）。保険を採用パンフに書ける福利厚生として提案——担い手不足という経営課題に保険で答える。
+      <div class="meta">型: P3行動変容還元型 ｜ 種目: 傷害（業務災害）・労災上乗せ</div></div>
+    <div class="prop"><span class="kind k1 kind">補償拡大</span><b class="h">台風の夜に眠れる賠償カバー — 足場倒壊・落下物への備え</b>
+      <div class="hook">「台風予報の夜、<strong>どの現場の足場が一番心配ですか？</strong>」</div>
+      請負業者賠償の限度額・範囲を現場実態（市街地・隣接構造物）で点検。気象アラート連動の養生チェックリスト提供（cmap活用）をセットに。
+      <div class="meta">型: P2検知×補償 ｜ 種目: 賠責（請負業者）</div></div>
+    <div class="prop"><span class="kind k3">座組提案</span><b class="h">原発構内品質を「認証」に変える — 特殊現場対応力の商品化</b>
+      <div class="hook">「原発で認められた安全管理、<strong>他の元請にも伝わっていますか？</strong>」</div>
+      原発構内工事の安全実績を第三者評価・認証化し、認証保有を引受優遇に反映（P11認証ドライブ型）。同社の受注拡大と当社の優良risk選別が一致する座組。
+      <div class="meta">型: P11認証ドライブ型 ｜ 種目: 賠責・傷害 ｜ ※要・元請構造の確認</div></div>
+
+    <h3>ヒアリングリスト（S4・抜粋）</h3>
+    <ul class="tight"><li>従業員数・年齢構成と、とび1級技能士の人数は？</li><li>主要元請はどちらで、下請階層は何次か？請負契約の賠償条項は？</li><li>現在の労災上乗せ・賠償の付保状況は？（元請の包括に乗っているか自社契約か）</li><li>原発構内の年間工事量の比率は？</li></ul>
+
+    <div class="gapbox"><div class="t">この案件で足りなかったデータ</div>
+      ①<strong>非上場小規模の財務・従業員数</strong>（Webに構造的に存在しない→信用調査データの社内利用可否が論点）②<strong>元請構造と請負契約条項</strong>（提案の前提なのに現場メモでしか取れない）③元請包括契約への付保の乗り方（建設業特有—業種知識としてライブラリ化すべき）。T1の出力が「骨格まで」なのはこのため。<strong>逆に言えば、初回訪問のヒアリングリストの価値が最も高い案件類型。</strong></div>
+  </div>
+</section>
+
+<!-- ═══════════ CASE 3: エイベックス ═══════════ -->
+<section class="case">
+  <div class="casehead"><h2>③ エイベックス</h2><span class="chip">新規・興行中止保険を除く</span><span class="chip">T2フルドシエ</span><span class="chip">業種: 音楽・映像・エンタメ</span></div>
+  <div class="body">
+    <h3>入力充足度診断（S1）</h3>
+    <div class="iq">総合: <b class="hi">高</b>（事業構造は公開情報で立体的に取れる: 音楽・ライブ／アニメ・配信PF「アニメタイムズ」／<strong>ダンススクール・アーティストアカデミー（リアル＋デジタル育成、オンラインアプリ展開）</strong>）。不足: 所属アーティストの契約形態(insurance_ctx)・スクール拠点数=断片的。</div>
+
+    <h3>リスク仮説（S2・抜粋5件）※興行中止系は除外指定</h3>
+    <div class="tblwrap"><table>
+      <tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th></tr>
+      <tr><td>労務・人為</td><td>スクール＝「他人の子どもを預かる場」</td><td>未成年レッスン中の傷害・熱中症、指導者と生徒の関係リスク、送迎・入退室。1件の事故がブランド全体を毀損</td><td class="c">中</td><td class="c">大</td><td>アカデミー事業（HP）×プライア（E柱2）</td></tr>
+      <tr><td>サイバー・情報</td><td>ファン・生徒の会員データ</td><td>FC・チケット・育成アプリに集まる未成年含む個人データの漏えい・不正アクセス</td><td class="c">中</td><td class="c">大</td><td>デジタル育成アプリ展開（インタビュー記事）</td></tr>
+      <tr><td>経営・戦略</td><td>生成AIによる肖像・音声の悪用</td><td>所属アーティストのディープフェイク広告・偽音源・なりすまし詐欺。ファンが被害者になり、対応費用と信頼毀損が本体に返る</td><td class="c">高</td><td class="c">中</td><td>推定（業界動向）＋H領域プライア</td></tr>
+      <tr><td>労務・人為</td><td>アーティスト・ダンサーの身体資本</td><td>声帯障害・怪我・メンタル不調による長期就業不能。個人事業主的契約だと保障の空白</td><td class="c">中</td><td class="c">中</td><td>事業構造からの推定（要契約形態確認）</td></tr>
+      <tr><td>製造・品質・賠償</td><td>アニメ・IP事業のE&O</td><td>製作委員会・配信PFにおける権利侵害クレーム・納期遅延・海外配信の準拠法リスク</td><td class="c">中</td><td class="c">中</td><td>アニメ事業・配信PF（HP）</td></tr>
+    </table></div>
+
+    <h3>提案ストーリー（S3・3本）</h3>
+    <div class="prop"><span class="kind k3">座組提案</span><b class="h">「日本一安全なダンススクール」を商品にする — 預かる場包括×育成アプリ・エンベデッド</b>
+      <div class="hook">「保護者が月謝を払う本当の理由は、<strong>上手くなることと、無事に帰ってくること</strong>の両方です」</div>
+      スクール網を団体単位で包括（レッスン中傷害＋施設賠償＋対応費用）し、<strong>育成アプリの会費に保険を組み込む（P1エンベデッド）</strong>。入退室通知・指導ガイドライン等の予防セットで「業界初の安全認証スクール」をブランド化——生徒獲得競争の武器として売る。
+      <div class="meta">型: S-3預かる場包括×P1エンベデッド ｜ 種目: 傷害・施設賠償・費用 ｜ 対象: スクール・会員データ</div></div>
+    <div class="prop"><span class="kind k3">座組提案</span><b class="h">アーティストの「デジタル分身」を守る — なりすまし検知×対応費用バンドル</b>
+      <div class="hook">「<strong>偽物の◯◯さんが、今夜もファンからお金を集めています。</strong>誰が、どこまで対応しますか？」</div>
+      ディープフェイク・偽アカウント検知サービス（適用先候補の探索対象）×検知後の削除請求・法的対応・ファン向け注意喚起の費用を保険がカバー。FC会員へのなりすまし詐欺補償をFC会費にエンベデッドする拡張も（B-9系逆張り: 個人分野の壁をPF経由で回避）。
+      <div class="meta">型: P2検知×補償＋P10 PF責任カバー ｜ 種目: 費用・サイバー ｜ 対象: AI悪用・会員データ</div></div>
+    <div class="prop"><span class="kind k2">新種目提案</span><b class="h">「声と身体が資本」の保障設計 — 所属タレント・スタッフの就業不能プログラム</b>
+      <div class="hook">「主力アーティストが半年歌えなくなったとき、<strong>本人と会社、どちらの損失も設計されていますか？</strong>」</div>
+      契約形態に応じたGLTD/所得補償の団体設計＋キーパーソンの逸失利益カバー。野外イベントスタッフの熱中症対策（ウェアラブル×傷害）も同じ枠で。
+      <div class="meta">型: P8団体型×P3行動変容 ｜ 種目: GLTD・傷害・費用利益 ｜ ※契約形態の確認が前提</div></div>
+
+    <h3>ヒアリングリスト（S4・抜粋）</h3>
+    <ul class="tight"><li>スクール・アカデミーの拠点数、生徒数、未成年比率、運営主体（直営/FC）は？</li><li>所属アーティストの契約形態（専属マネジメント/雇用/業務委託）の構成は？</li><li>なりすまし・偽サイトの対応は現在どの部署が何件処理しているか？</li><li>育成アプリの運営主体と会員規約（保険組込みの改定余地）は？</li></ul>
+
+    <div class="gapbox"><div class="t">この案件で足りなかったデータ</div>
+      ①<strong>契約形態</strong>（雇用か業務委託かで提案3が根本から変わる—公開情報では取れない）②スクールの運営形態・生徒数（エンベデッドの母集団規模）③なりすまし被害の実件数（社内対応ログは先方にしかない）④検知サービスの組み手候補（適用先候補テーブルの探索が未実行）。</div>
+  </div>
+</section>
+
+<!-- ═══════════ 総括 ═══════════ -->
+<section class="synth">
+  <h2>総括: 3社デモが炙り出した「本プロダクトに足りないもの」</h2>
+  <div class="tblwrap"><table>
+    <tr><th>#</th><th>不足</th><th>3社での現れ方</th><th>プロダクトへの反映案</th></tr>
+    <tr><td>1</td><td><strong>付保状況・幹事構成が公開情報に無い</strong></td><td>全社共通。提案の実行可能性（どの隙間に入れるか）が最後まで仮定のまま</td><td>新規案件でも「付保の見立てメモ」（営業が知ってる範囲・伝聞可）を準必須入力に格上げ。Phase 2で社内契約DB接続を最優先候補に</td></tr>
+    <tr><td>2</td><td>非上場中小の財務・従業員数</td><td>成英工業で顕著。Webに構造的に存在しない</td><td>信用調査データ（帝国DB等）の社内契約・利用可否を確認（OQ-8）。あればT1の充足度が一段上がる</td></tr>
+    <tr><td>3</td><td>契約構造の知識（元請条項・業務委託・製作委員会）</td><td>成英（元請包括への乗り方）・エイベックス（アーティスト契約）で提案の分岐点に</td><td>業種別「聞くべき契約構造」の質問テンプレをリスクライブラリに追加（check_pointsの業種特化）</td></tr>
+    <tr><td>4</td><td>業界の引受相場観（市場の硬軟）</td><td>ニデックのD&O市場硬化など、ベテランの頭の中にしかない</td><td>種目マスタに「市場環境メモ」列を追加（管理者が四半期更新・S3に注入）</td></tr>
+    <tr><td>5</td><td>メニュー一覧の未装填</td><td>今回は仮メニューで代用。実在サービスに紐づけば提案の具体性が一段上がる</td><td>シード装填（T-90）の優先度を再確認——<strong>ツールより先にカタログ</strong></td></tr>
+    <tr><td>6</td><td>組み手候補の探索が手動</td><td>エイベックスの検知サービス組み手が「探索対象」止まり</td><td>docs/08 D-5（座組パートナー探索）を提案生成と連動実行する運用に</td></tr>
+  </table></div>
+  <p style="margin-top:16px;font-size:13.5px;color:var(--sub);">一方で確認できたこと: 公開情報＋業種プライア＋型ライブラリだけでも、<strong>「その会社の言葉で書かれた、幹事がやっていない切り口」は作れる</strong>（ニデックの"再建の証明"、成英の"採用の武器"、エイベックスの"安全なスクールを商品化"）。不足データの大半は「初回訪問で聞けばいい事項」に変換済み＝ヒアリングシートが受け皿として機能した。</p>
+</section>
+
+<footer>
+  出典: ニデック関連は第三者委員会報告・東証発表等の報道（<a href="https://www.newton-consulting.co.jp/bcmnavi/voice/nidec-accounting-fraud-analysis.html">リスク管理Navi</a>ほか）／成英工業は<a href="https://seiei-inc.com/">公式サイト</a>／エイベックスは<a href="https://avex.com/jp/ja/corp/business/">公式事業紹介</a>・<a href="https://aaa.avex.jp/">アーティストアカデミー</a>・<a href="https://halftime-media.com/interviews/avex-dance/">ダンス事業インタビュー</a>。本デモの提案は仮説であり、専門部署のレビュー前の内容です。
+</footer>
+
+</div>
+</body>
+</html>
