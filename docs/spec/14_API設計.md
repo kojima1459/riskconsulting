@@ -1,178 +1,176 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.0
 
-## 1. LLM経路の全体方針
+## 1. LLM経路と分岐
 
-唯一の窓口は `modGatewayRPN.CallStep()`。呼び出し元（modPipeline）は経路を意識しない。
+唯一の窓口は `modGatewayRPN.CallStep()`。呼び出し元（modPipeline / modPlayOps）は経路を意識しない。
 
-```
-modPipeline ──> modGatewayRPN.CallStep(stepName, systemPrompt, userPrompt, schemaJson) ──┬─ ribbon（既定）
-                                                                                         ├─ direct
-                                                                                         └─ mock
-```
+- 分岐規則（PoC互換）: `mock_llm=TRUE` → mock。それ以外は `llm_transport`（ribbon/direct/mock）
+- ribbon選択時にリボン未検出 → **E0201で停止**（directへ自動フォールバックしない。一般利用者PCでの誤課金・誤失敗防止）
+- 全呼び出しは run_log に1行記録（step, play, transport, model, latency, validate_result, injected_kb_ids）
 
-分岐規則（PoC互換）: `mock_llm=TRUE` → mock。それ以外は `llm_transport`（ribbon/direct/mock）。ribbon選択時にリボン未検出なら **E0201 を返して停止**（directへの自動フォールバックはしない。キーの無い一般利用者PCで誤ってdirectに落ちて失敗する事故を防ぐ）。
+### Stepレジストリ（呼び出し単位の正）
+
+| step | play | スキーマ | 呼び出し元 |
+|---|---|---|---|
+| s1/s2/s3/s4 | PL-01/02 | Schema-S1/S2/S3/S4 | modPipeline |
+| pf | PL-03 | Schema-PF | modPlayOps |
+| wt | PL-05 | Schema-WT | modPlayOps(1.5) |
+| fg | PL-06 | Schema-FG | modPlayOps(1.5) |
 
 ## 2. ribbon経路（主経路・本番）
 
-社内AIリボン「リボンちゃん」の確定API（PoC `docs/dev/RIBBON_API_CONFIRMED.md` が一次情報）に従う。
+確定台帳（PoC `docs/dev/RIBBON_API_CONFIRMED.md`）準拠の12引数呼び出し:
 
 ```vb
 result = Application.Run("ChatGPT", _
-    userPrompt,               ' 1 Text
-    systemPrompt,             ' 2 roleSystem ← Stepのsystemプロンプトを渡す
-    0.3,                      ' 3 Temperature (Double。GPT-5系では無視される)
-    0,                        ' 4 MaxTokens (Long。0=既定)
-    waitSec,                  ' 5 Wait (config llm_wait_sec 既定1200)
-    model,                    ' 6 config recommended_model 既定 gpt-5.5
-    "",                       ' 7 prevU（会話継続。RPNは各Step独立のため常に""）
-    "",                       ' 8 prevA（同上）
-    "リスク提案ナビ:" & stepName, ' 9 toolN（管理側ログでのツール識別。必須）
-    effort,                   '10 config reasoning_effort（GPT-5系）
-    verbosity)                '11 config reasoning_verbosity
+    userPrompt, systemPrompt, 0.3, 0, waitSec, model, _
+    "", "", "リスク提案ナビ:" & stepName, effort, verbosity)
+'  1 Text  2 roleSystem  3 Temp(Double)  4 MaxTokens(Long,0=既定)  5 Wait
+'  6 model(config recommended_model)  7 prevU  8 prevA(各Step独立のため常に"")
+'  9 toolN(管理側ログ識別・必須)  10 effort  11 verbosity(GPT-5系)
 ```
 
-- 戻り値: Azure OpenAIの応答テキストがそのまま返る（ラッパー側の加工なし。上限エラー等もそのまま文字列）
-- **response_format は指定できない** → JSONはプロンプトで強制し（15章）、後段の `modJsonLite` + `modValidate` + 修復リトライで担保（§5）
-- アドイン検出: `Application.AddIns` ループで `InStr(name, config ribbon_addin_name)>0 And Installed`（セッションキャッシュ）
-- 起動時に `LimitCheck()`（True=続行不可）を1回呼ぶ（config limit_check で無効化可）。続行不可時は案内を出し、実行ボタン押下時に再案内
-- エラー分類: 空応答=E0202 / 上限系文字列（PoC `LooksLikeLimitError` 移植）=E0204 / アドイン無し=E0201。戻り値は `"#ERR:E02xx:説明"` 形式（例外は投げない。PoC規約）
+- 戻り値はAzure OpenAI応答の素通し。response_format指定不可 → JSONは15章のプロンプト強制＋§5の防衛線で担保
+- アドイン検出: `Application.AddIns` ループ（`ribbon_addin_name` 部分一致＋Installed、セッションキャッシュ）
+- 起動時 `LimitCheck()`（True=続行不可→案内し、実行時に再案内。config limit_check で無効化可）
+- 温度・MaxTokensはGPT-5系では無視され effort/verbosity が効く（V2実運用で確認済み）。`reasoning_tuning` エスケープハッチはPoC同様に維持
+- エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）
 
 ## 3. direct経路（開発・検証用）
 
-OpenAI API を `MSXML2.ServerXMLHTTP.6.0` で直叩き。PoC modGatewayDirect の骨格（setTimeouts・ステータス表示・構造化ログ）を流用し、embeddings→chat/completions に書き換える。
-
-### リクエスト
+`MSXML2.ServerXMLHTTP.6.0`、`setTimeouts 5000,10000,{t},{t}`（t=direct_http_timeout_ms）。
 
 ```
 POST {direct_api_base}/chat/completions
-Content-Type: application/json
-Authorization: Bearer {key}          ← config direct_key_path のファイルから読む（§6）
-```
-
-```json
+Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログに保存禁止
 {
-  "model": "gpt-4.1",
-  "temperature": 0.3,
-  "messages": [
-    {"role": "system", "content": "<systemPrompt>"},
-    {"role": "user",   "content": "<userPrompt>"}
-  ],
-  "response_format": {
-    "type": "json_schema",
-    "json_schema": {"name": "<step名>", "strict": true, "schema": { ...15章のSchema... }}
-  }
+  "model": "{direct_model}", "temperature": 0.3,
+  "messages": [{"role":"system","content":sys},{"role":"user","content":usr}],
+  "response_format": {"type":"json_schema",
+    "json_schema":{"name":"{step}","strict":true,"schema":{...modSchemasの該当スキーマ...}}}
 }
 ```
 
-- **Structured Outputs (strict:true)** を必ず使う。15章のスキーマはstrict要件（全プロパティrequired・additionalProperties:false）を満たして定義してある
-- レスポンスは `choices[0].message.content` を modJsonLite で抽出（`"content"` キーの文字列値抽出。エスケープ解除は modJsonLite.UnescapeJsonStr）
-- `refusal` 非空 / `finish_reason != "stop"` はエラー扱い（E0206）
-- タイムアウト: `setTimeouts 5000, 10000, {direct_http_timeout_ms}, {direct_http_timeout_ms}`
-- リトライ: HTTP 429/500/502/503 は指数バックオフで最大3回（2s→4s→8s、`Application.Wait`）。408/タイムアウトは1回。4xx（429除く）はリトライしない
-- o系モデル指定時は temperature を送らない（パラメタ非対応）。モデル名先頭 "o" で分岐する簡易判定を modGatewayDirect 内に置く
+- **strict:true必須**。15章の全スキーマはstrict要件（全プロパティrequired・additionalProperties:false・enum統制）を満たす
+- 応答は `choices[0].message.content` を modJsonLite で抽出。`refusal`非空 / `finish_reason≠"stop"` は E0206
+- リトライ: 429/500/502/503=指数バックオフ最大3回（2s/4s/8s）。408/タイムアウト=1回。その他4xx=リトライなし
+- o系モデル名（先頭"o"）では temperature を送らない
+- キー不存在=E0205「direct経路は開発者専用です」
+- コスト目安: 1案件=4呼び出し・入力≈25k tok・出力≈8k tok → 数十円/案件。PoC全体で数千円以内
 
-### コスト試算（direct経路・参考値）
-1案件 = 4呼び出し、入力合計 ≈ 25k tokens・出力合計 ≈ 8k tokens。gpt-4.1相当の単価で **1案件あたり数十円のオーダー**。PoC規模（10社×試行3回）で数千円以内。ribbon経路は社内利用枠のため追加費用なし。
+## 4. mock経路
 
-## 4. mock経路（社外開発・デモ用）
+modMockRibbon が step別に**決定的**なサンプルJSON（15章§8「浜松スイーツファクトリー」一式＋PF応答）を返す。乱数・現在時刻不使用。同一入力（正規化ハッシュ）→同一応答。
 
-- `wintest/mock_ribbon/modMockRibbon.bas` 方式: 各Stepに対して**決定的**なサンプルJSON（春華堂を模した架空企業データ）を返す
-- 決定性: 同じ入力（正規化後ハッシュ）→同じ応答。乱数不使用（PoC規約）
-- 用途: 画面フロー確認・PPT生成テスト・ユニットテスト・自宅Macでの開発
-
-## 5. JSON信頼性の担保（両経路共通の防衛線）
+## 5. JSON防衛線（両経路共通・全step）
 
 ```
-LLM応答文字列
- → (1) modJsonLite.ExtractJsonBlock   前後の説明文・```json フェンスを剥がし最外{ }を取り出す
- → (2) modJsonLite.ParseObject        軽量パース（対象スキーマに必要なキーのみ抽出。汎用パーサは作らない）
- → (3) modValidate.CheckS{n}          必須キー・型・enum・件数・ID実在（S3のmenu_id/line_id）
- → NG時: (4) 修復リトライ（config json_repair_retry=1 回）
-          「あなたの直前の出力は次の検証エラーで不合格でした: <エラー列挙>。
-           同じ内容を、指示したJSON形式のみで（説明文なしで）再出力してください。」
-          を追記して同Stepを再呼び出し
- → なおNG: E03xx でStep失敗。案件状態=error、S{n}シートにエラー内容と「入力を短くする/再実行」の対処を表示
+raw → (1) modJsonLite.ExtractJsonBlock（説明文・```フェンス除去・最外{}）
+    → (2) modJsonLite で対象スキーマに必要なキーのみ抽出（汎用パーサは作らない）
+    → (3) modValidate.Check{S1..S4|PF|WT|FG}（型・enum・件数・ID実在・整合）
+    → NG: (4) 修復リトライ（json_repair_retry=1回。15章§7のサフィックスを user末尾に追記して同stepを再呼び出し）
+    → なおNG: E03xxでstep失敗。生応答は case_data/pf_json に保存済み
 ```
+- directはstrictで(1)(2)がほぼ素通しになるが、**(3)の業務検証（ID実在・件数・整合）は両経路で必須**（スキーマでは表現できない）
+- validate_result（ok/repaired/failed）を run_log に記録し、月次でプロンプト改善のシグナルにする
 
-- direct経路はstrictにより(1)(2)はほぼ素通しになるが、**(3)の業務検証（menu_id実在等）はスキーマでは表現できないため両経路で必須**
-- 検証エラーは err_log(E03xx) と run_log(validate_result) に記録。修復で直った場合も `repaired` と記録し、プロンプト改善のシグナルにする
+## 6. 内部インターフェース契約（公開関数シグネチャ）
 
-## 6. 認証・キー管理（direct経路のみ）
-
-- キーは `config direct_key_path`（既定 `%APPDATA%\RPN\api_key.txt`、環境変数展開対応）のテキストファイル1行目から読む
-- **ブック内（configシート含む）にキーを保存することを禁止**。modConfig にキーを持たせない（modGatewayDirect がファイルを直接読む）
-- ファイル不存在時: E0205「APIキーファイルがありません（direct経路は開発者専用です）」を表示し停止
-- ログ・画面にキーを一切出力しない（err_log の detail にリクエストヘッダを含めない）
-
-## 7. 内部インターフェース契約（実装対象の公開関数シグネチャ）
-
-エラー規約: core/app層の関数は**例外を投げず**、String戻り値は `"#ERR:Exxxx:メッセージ"`、Boolean戻り値は False＋modLog記録（PoC規約踏襲）。
+エラー規約: 例外を投げない。String戻り値は `"#ERR:Exxxx:メッセージ"`、Boolean戻り値は False＋modLog記録。
 
 ```vb
-' === modGatewayRPN ===
-Public Function CallStep(ByVal stepName As String, ByVal systemPrompt As String, _
-                         ByVal userPrompt As String, ByVal schemaJson As String, _
-                         Optional ByRef latencyMs As Long = 0) As String
-    ' 経路分岐・呼出・#ERR規約。schemaJsonはdirect経路のresponse_formatにのみ使用
+' === core: modGatewayRPN ===
+Public Function CallStep(ByVal stepName As String, ByVal playId As String, _
+                         ByVal systemPrompt As String, ByVal userPrompt As String, _
+                         ByVal schemaJson As String, Optional ByRef latencyMs As Long = 0) As String
 Public Function RibbonAvailable() As Boolean
-Public Function RunLimitCheck() As Boolean   ' True=続行不可
+Public Function RunLimitCheck() As Boolean            ' True=続行不可
 
-' === modJsonLite ===
-Public Function ExtractJsonBlock(ByVal raw As String) As String          ' 失敗時 ""
+' === core: modJsonLite ===
+Public Function ExtractJsonBlock(ByVal raw As String) As String        ' 失敗時 ""
 Public Function GetStr(ByVal json As String, ByVal key As String) As String
 Public Function GetLong(ByVal json As String, ByVal key As String, ByVal dflt As Long) As Long
-Public Function GetArrayItems(ByVal json As String, ByVal key As String) As Collection ' 各要素のJSON文字列
+Public Function GetBoolJ(ByVal json As String, ByVal key As String, ByVal dflt As Boolean) As Boolean
+Public Function GetArrayItems(ByVal json As String, ByVal key As String) As Collection
 Public Function EscapeJsonStr(ByVal s As String) As String
 Public Function UnescapeJsonStr(ByVal s As String) As String
 
-' === modValidate ===  戻り値: "" =合格 / 非空=エラー列挙（修復プロンプトへ渡す日本語文）
-Public Function CheckS1(ByVal json As String) As String
-Public Function CheckS2(ByVal json As String) As String
-Public Function CheckS3(ByVal json As String, ByVal kb As Object) As String ' kb=modKnowledgeのID集合
+' === app: modValidate ===  戻り値 ""=合格 / 非空=エラー列挙（修復プロンプト用の日本語）
+Public Function CheckS1(ByVal json As String, ByVal caseType As String) As String
+Public Function CheckS2(ByVal json As String, ByVal caseType As String) As String
+Public Function CheckS3(ByVal json As String, ByVal s2Json As String) As String  ' ID実在はmodKnowledge参照
 Public Function CheckS4(ByVal json As String) As String
+Public Function CheckPF(ByVal json As String) As String
+Public Function CheckWT(ByVal json As String) As String          ' Phase1.5
+Public Function CheckFG(ByVal json As String) As String          ' Phase1.5
 
-' === modKnowledge ===
-Public Function LoadKnowledge() As Boolean                    ' 起動時/再読込。内部キャッシュへ
-Public Function RiskLibFor(ByVal industryCode As String) As String   ' 注入用テキスト整形済（上限kb_risk_rows）
-Public Function MenusFor(ByVal industryCode As String) As String     ' 同（上限kb_menu_rows・is_active=TRUEのみ）
-Public Function CasesFor(ByVal industryCode As String) As String     ' 同（上限kb_case_rows）
-Public Function MenuIdExists(ByVal menuId As String) As Boolean
-Public Function LineIdExists(ByVal lineId As String) As Boolean
+' === app: modKnowledge ===
+Public Function LoadKnowledge() As Boolean            ' 起動時/再読込。スナップショット保存込み
+Public Function RiskLibFor(ByVal industryCode As String) As String     ' 整形済注入テキスト
+Public Function MenusFor(ByVal industryCode As String) As String
+Public Function LinesText() As String
+Public Function CasesFor(ByVal industryCode As String) As String
+Public Function SchemesFor(ByVal industryCode As String) As String     ' status∈{proven,adopted}のみ
+Public Function PatternsText() As String                                ' P1-P15全件（PF/FG用）
+Public Function RulesText() As String                                   ' 判断基準（PF/FG用）
+Public Function ResearchingText() As String                             ' 研究テーマ一覧（PF用）
+Public Function MenuIdExists(ByVal id As String) As Boolean
+Public Function LineIdExists(ByVal id As String) As Boolean
+Public Function SchemeIdExists(ByVal id As String) As Boolean
+Public Function CaseLibIdExists(ByVal id As String) As Boolean
+Public Function PatternIdExists(ByVal id As String) As Boolean
 Public Sub AppendServiceGap(ByVal caseId As String, ByVal industryCode As String, ByVal riskDesc As String)
 
-' === modPromptsRPN ===（純文字列・R4。configアクセスのみ許可）
+' === app: modPromptsCore / modPromptsBlocks / modPromptsOps / modSchemas ===
+' 15章と一字一句一致。シグネチャ:
 Public Function BuildS1System() As String
-Public Function BuildS1User(ByVal company As String, ByVal industryName As String, _
-                            ByVal hpText As String, ByVal yuhoText As String, ByVal memoText As String) As String
+Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hp As String, ByVal yuho As String, _
+                            ByVal memo As String, ByVal contractTxt As String, ByVal prevRenewal As String) As String
 Public Function BuildS2System() As String
-Public Function BuildS2User(ByVal s1Json As String, ByVal riskLibText As String) As String
+Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String) As String
 Public Function BuildS3System() As String
-Public Function BuildS3User(ByVal s2Json As String, ByVal menusText As String, _
-                            ByVal linesText As String, ByVal casesText As String) As String
+Public Function BuildS3User(ByVal ctx As TCaseCtx, ByVal s2Json As String, ByVal menus As String, _
+                            ByVal lines As String, ByVal cases As String, ByVal schemes As String) As String
 Public Function BuildS4System() As String
-Public Function BuildS4User(ByVal s1Json As String, ByVal s2Json As String, ByVal s3Json As String) As String
-Public Function BuildRepairSuffix(ByVal validationErrors As String) As String
-Public Function SchemaS1() As String   ' 15章のスキーマJSON文字列（direct経路用・定数分割格納）
-Public Function SchemaS2() As String
-Public Function SchemaS3() As String
-Public Function SchemaS4() As String
+Public Function BuildS4User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, ByVal s3Json As String) As String
+Public Function BuildPFSystem() As String
+Public Function BuildPFUser(ByVal theme As String, ByVal body As String, ByVal rules As String, _
+                            ByVal menusSummary As String, ByVal schemes As String, ByVal patterns As String, _
+                            ByVal researching As String) As String
+Public Function RepairSuffix(ByVal validationErrors As String) As String
+Public Function SchemaS1() As String   ' 同様に S2/S3/S4/PF/WT/FG
+' TCaseCtx（modTypes）: case_type, channel, kanji, bid, reins, other_insurers, company, industry_code, industry_name
 
-' === modPipeline ===
+' === app: modPipeline / modPlayOps ===
 Public Function RunAll(ByVal caseId As String) As Boolean
 Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
-    ' 前提状態チェック→プロンプト組立→CallStep→検証→保存→描画→状態更新→下流無効化
+Public Function RunPreflight(ByVal inboxId As String) As Boolean
 
-' === modCaseStore ===
-Public Function NewCase(ByVal company As String, ByVal industryCode As String) As String ' 戻り=case_id
+' === app: modCaseStore / modInboxStore / modJudgeStore ===
+Public Function NewCase(ByVal company As String, ByVal industryCode As String, ByVal caseType As String) As String
 Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, ByVal content As String) As Boolean
-Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String  ' 分割の透過結合
+Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String
 Public Function SetStatus(ByVal caseId As String, ByVal status As String) As Boolean
 Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long)
+Public Function RepairStates() As Long                 ' 起動時整合修復（E-12）。戻り=修復件数
+Public Function NewInboxItem(ByVal sourceKind As String, ByVal theme As String, ByVal body As String) As String
+Public Function SetInboxJudgement(ByVal inboxId As String, ByVal status As String, _
+                                  ByVal dropType As String, ByVal reviveTag As String, ByVal reviveDue As Date) As Boolean
+Public Function NewJudgement(ByVal rec As TJudgement) As String
 
-' === modExportPpt ===
-Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
-                            ByRef outPath As String) As String  ' ""=成功
-
-' === modExportHearing ===
+' === app: modExportPpt / modExportHearing ===
+Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, ByRef outPath As String) As String ' ""=成功
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 ```
+
+## 7. スキーマ・レジストリ（modSchemas。本文は15章）
+
+| 定数名 | 対応step | strict検証済み観点 |
+|---|---|---|
+| SCHEMA_S1 | s1 | current_coverage は常に必須（newは空配列） |
+| SCHEMA_S2 | s2 | gaps は常に必須（newは空配列）。6カテゴリ/頻度/影響/出所enum |
+| SCHEMA_S3 | s3 | proposal_kind enum。scheme_id は "" 許容 |
+| SCHEMA_S4 | s4 | slides配列・hearing_questions |
+| SCHEMA_PF | pf | 5問判定・文法4値・予測類型・組み替え案 |
+| SCHEMA_WT | wt | 分類enum・pattern_id |
+| SCHEMA_FG | fg | 格付enum・文法4bool |
