@@ -85,6 +85,12 @@ Public Function CallStep(ByVal stepName As String, ByVal playId As String, _
                          ByVal schemaJson As String, Optional ByRef latencyMs As Long = 0) As String
 Public Function RibbonAvailable() As Boolean
 Public Function RunLimitCheck() As Boolean            ' True=続行不可
+' 壁打ち(PL-04)専用: リボンの会話継続引数(prevU/prevA)を使う唯一の関数。
+' 履歴は「新しい順」に ";;;" 区切りで連結して渡す(PoC 裁定D11の実証方式)。
+' 渡す履歴は直近 sparring_max_turns 往復まで。JSONスキーマは使わない(自由対話)。
+Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
+                         ByVal userMsg As String, ByVal histU As String, ByVal histA As String, _
+                         Optional ByRef latencyMs As Long = 0) As String
 
 ' === core: modJsonLite ===
 Public Function ExtractJsonBlock(ByVal raw As String) As String        ' 失敗時 ""
@@ -125,7 +131,11 @@ Public Sub AppendServiceGap(ByVal caseId As String, ByVal industryCode As String
 ' 15章と一字一句一致。シグネチャ:
 Public Function BuildS1System() As String
 Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hp As String, ByVal yuho As String, _
-                            ByVal memo As String, ByVal contractTxt As String, ByVal prevRenewal As String) As String
+                            ByVal memo As String, ByVal contractTxt As String, ByVal prevRenewal As String, _
+                            ByVal dossierTxt As String) As String
+Public Function BuildSparringSystem(ByVal dossierSummary As String, ByVal s1s2s3Json As String, _
+                                    ByVal schemes As String, ByVal patterns As String, _
+                                    ByVal mechs As String, ByVal rules As String) As String  ' PL-04
 Public Function BuildS2System() As String
 Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String) As String
 Public Function BuildS3System() As String
@@ -139,7 +149,7 @@ Public Function BuildPFUser(ByVal theme As String, ByVal body As String, ByVal r
                             ByVal researching As String) As String
 Public Function RepairSuffix(ByVal validationErrors As String) As String
 Public Function SchemaS1() As String   ' 同様に S2/S3/S4/PF/WT/FG
-' TCaseCtx（modTypes）: case_type, channel, kanji, bid, reins, other_insurers, company, industry_code, industry_name
+' TCaseCtx（modTypes）: case_type, dossier_tier, channel, kanji, bid, reins, other_insurers, company, industry_code, industry_name
 
 ' === app: modPipeline / modPlayOps ===
 Public Function RunAll(ByVal caseId As String) As Boolean
