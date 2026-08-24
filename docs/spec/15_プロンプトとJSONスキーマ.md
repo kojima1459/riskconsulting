@@ -75,6 +75,23 @@ BLOCK_RENEWAL_S3:
 
 ## 2. Step1 企業プロファイル構造化（S1）
 
+### 2.0 収集レシピ（入力収集の標準。案件入力シートに常設表示・利用ガイドに転載）
+
+「HPテキスト」の正体を定義する。以下の8項目を、それぞれの場所からコピーして貼付欄にまとめて貼る（見出しは付けなくてよい。順不同・重複可）。目安は合計5,000〜20,000字。
+
+| # | aspect(内部キー) | 集めるもの | どこから |
+|---|---|---|---|
+| 1 | profile | 社名・所在地・資本金・従業員数・事業内容一覧 | HP「会社概要」ページ |
+| 2 | business | 主力製品・サービスの説明、製造・提供プロセス | HP「事業紹介」「製品情報」 |
+| 3 | sites | 拠点・工場・店舗の一覧、設備・立地の記述 | HP「拠点一覧」「工場紹介」 |
+| 4 | history | 沿革（事業転換・M&A・新工場） | HP「沿革」 |
+| 5 | news | 直近1年のニュース・プレスリリースの見出しと要点 | HP「ニュース」 |
+| 6 | hr | 募集職種・求める人材（事業実態と人手状況が滲む） | HP「採用情報」 |
+| 7 | finance_risk | 「事業等のリスク」章・事業の内容（上場時）／決算公告・業界記事（非上場時） | EDINET・有報PDF |
+| 8 | sales_memo | 紹介経緯・訪問メモ・営業が知っている事情 | 営業メモ欄へ |
+
+S1はこの8項目の充足度を診断し（input_quality）、不足時は「何をどこから足すか」を返す。**入力が薄いまま実行した場合、出力は一般論に近づき、その分はヒアリングシート（訪問で聞く事項）に回る**——この関係を利用ガイドに明記する。
+
 ### system（BuildS1System）
 
 ```
@@ -89,6 +106,11 @@ BLOCK_RENEWAL_S3:
    新規事業・海外展開・大口取引先）を優先的に拾う。
 4. missing_info には「リスク分析のために本当は知りたいが入力に無かった情報」を、
    営業が顧客に確認しやすい粒度で列挙する。
+5. input_quality で入力の充足度を診断する。8つの観点(profile=会社概要, business=事業・製品,
+   sites=拠点・設備, history=沿革, news=直近の動き, hr=採用・人員, finance_risk=有報・財務リスク,
+   sales_memo=営業情報)それぞれに status(ok=十分/partial=断片的/missing=無い)を付け、
+   overall(high=分析に十分/mid=一般論が混ざる/low=一般論しか出せない)を判定し、
+   advice に「何をどのページから追加で貼るべきか」を具体的に1〜2文で書く。甘い判定をしない。
 ```
 （末尾に BLOCK_GUARD を連結）
 
@@ -132,9 +154,15 @@ BLOCK_RENEWAL_S3:
   "management_notes": "経営・戦略上の特記(新規事業・承継・投資等。なければ\"不明\")",
   "current_coverage": [{"line_name": "種目名(現契約サマリの表記のまま)", "coverage_summary": "補償内容の要約",
                         "limit_note": "限度額・保険金額(不明なら\"不明\")", "special_note": "主要特約・免責等(なければ\"不明\")"}],
-  "missing_info": [{"item": "知りたい情報", "why_needed": "なぜリスク分析に必要か(1文)"}]
+  "missing_info": [{"item": "知りたい情報", "why_needed": "なぜリスク分析に必要か(1文)"}],
+  "input_quality": {
+    "coverage": [{"aspect": "profile", "status": "ok/partial/missing"}],
+    "overall": "high/mid/low",
+    "advice": "追加で貼るべき情報とその場所(1〜2文。十分なら\"追加不要\")"
+  }
 }
 ※新規案件（現契約サマリが「なし」）の場合、current_coverage は [] とする。
+※input_quality.coverage は8観点(profile, business, sites, history, news, hr, finance_risk, sales_memo)を必ず各1回出力する。
 ```
 
 ### Schema-S1（SCHEMA_S1）
@@ -171,16 +199,25 @@ BLOCK_RENEWAL_S3:
     "missing_info": {"type": "array", "items": {"type": "object", "properties": {
       "item": {"type": "string"},
       "why_needed": {"type": "string"}
-    }, "required": ["item", "why_needed"], "additionalProperties": false}}
+    }, "required": ["item", "why_needed"], "additionalProperties": false}},
+    "input_quality": {"type": "object", "properties": {
+      "coverage": {"type": "array", "items": {"type": "object", "properties": {
+        "aspect": {"type": "string", "enum": ["profile", "business", "sites", "history", "news", "hr", "finance_risk", "sales_memo"]},
+        "status": {"type": "string", "enum": ["ok", "partial", "missing"]}
+      }, "required": ["aspect", "status"], "additionalProperties": false}},
+      "overall": {"type": "string", "enum": ["high", "mid", "low"]},
+      "advice": {"type": "string"}
+    }, "required": ["coverage", "overall", "advice"], "additionalProperties": false}
   },
   "required": ["company_name", "business_summary", "main_products", "processes", "locations",
                "supply_chain", "customers", "workforce_notes", "management_notes",
-               "current_coverage", "missing_info"],
+               "current_coverage", "missing_info", "input_quality"],
   "additionalProperties": false
 }
 ```
 
-**CheckS1**: 必須キー・locations.type enum／renewal時: current_coverage が1件以上（0件は不合格→修復）／new時: current_coverage が0件（非0は警告ログのみ）／missing_info 0件は警告（エラーにしない）。
+**CheckS1**: 必須キー・locations.type enum／renewal時: current_coverage が1件以上（0件は不合格→修復）／new時: current_coverage が0件（非0は警告ログのみ）／missing_info 0件は警告（エラーにしない）／input_quality.coverage がちょうど8件（8 aspect各1回。過不足は不合格→修復）。
+**充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。
 
 ## 3. Step2 リスク仮説＋付保ギャップ（S2）
 
