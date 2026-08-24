@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>リスク提案ナビ 出力デモ</title>
+<!-- v2: レバレジーズを4社目として追加 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
 <style>
   :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;}
@@ -50,8 +51,8 @@
 
 <header>
   <div class="kicker">リスク提案ナビ — 出力デモ（模擬実行）</div>
-  <h1>3社で回すと、何が出て、何が足りないか</h1>
-  <p class="lede">ニデック（T2フルドシエ・入念モード）／成英工業（T1クイック）／エイベックス（T2・座組型、興行中止保険を除く）。2026年8月時点の公開情報で収集→S1構造化→S2リスク仮説→S3提案→S4骨子の順に仕様どおり実行。</p>
+  <h1>4社で回すと、何が出て、何が足りないか</h1>
+  <p class="lede">ニデック（T2・入念モード）／成英工業（T1クイック）／エイベックス（T2・座組型、興行中止保険を除く）／レバレジーズ（T2・PF型）。2026年8月時点の公開情報で収集→S1構造化→S2リスク仮説→S3提案→S4骨子の順に仕様どおり実行。</p>
   <div class="disclaimer">⚠ これは仕様書（docs/spec）どおりの<strong>手動模擬実行</strong>です。実機はAIリボン経由で動作します。メニューIDは仮（ナレッジ未装填のため）、型IDは型ライブラリ候補（docs/05・07）を参照。<strong>事実関係の出典は文末に記載、提案は仮説であり要専門家レビュー。</strong></div>
 </header>
 
@@ -173,6 +174,45 @@
   </div>
 </section>
 
+<!-- ═══════════ CASE 4: レバレジーズ ═══════════ -->
+<section class="case">
+  <div class="casehead"><h2>④ レバレジーズ</h2><span class="chip">新規</span><span class="chip">T2フルドシエ</span><span class="chip">業種: 人材・PFサービス（非上場）</span></div>
+  <div class="body">
+    <h3>入力充足度診断（S1）</h3>
+    <div class="iq">総合: <b class="mid">中〜高</b>。事業構造は取れる（年商1,428億円・40以上の事業・年間100億円規模の新規事業投資／レバテック=ITフリーランス・SES／レバウェル=医療介護保育人材／2026年4月ペンマーク（学生アプリ）子会社化／<strong>2026年8月「レバクリ 職場の健康」開始</strong>）。不足: <b class="lo">非上場のため有報なし・財務は断片</b>、事業別の規模・契約形態=無い。助言: 40事業のどこから入るかの選定自体が営業判断——本デモではPF3事業（レバテック/レバウェル/ペンマーク）に絞って分析。</div>
+
+    <h3>リスク仮説（S2・抜粋5件）</h3>
+    <div class="tblwrap"><table>
+      <tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th></tr>
+      <tr><td>製造・品質・賠償</td><td>紹介・派遣人材に起因する責任の波及</td><td>紹介した医療・介護人材の事故/経歴詐称/早期離職→施設側からの責任追及・返金対応。紹介ビジネスの構造的リスク</td><td class="c">中</td><td class="c">中</td><td>レバウェル事業（HP）×業種プライア</td></tr>
+      <tr><td>サイバー・情報</td><td>センシティブ個人データの集中</td><td>求職者・医療従事者・学生（ペンマーク）のデータを大量保有。漏えい時は複数事業へ同時に信頼毀損が波及</td><td class="c">中</td><td class="c">大</td><td>事業構成（HP・ニュース）</td></tr>
+      <tr><td>労務・人為</td><td>登録フリーランスの保障空白</td><td>レバテック登録者は客先常駐・個人事業主。作業ミス起因の損害賠償・情報漏えい・病気時の所得断絶が個人に全部落ちる。フリーランス保護法で発注側・仲介側の責任が問われる方向</td><td class="c">高</td><td class="c">中</td><td>レバテック事業×G領域プライア（雇用の外側）</td></tr>
+      <tr><td>経営・戦略</td><td>M&A・新規事業の高速展開に伴う統合リスク</td><td>年100億円の新規投資・子会社化の連続。買収先の簿外債務・システム統合・カルチャー衝突</td><td class="c">高</td><td class="c">中</td><td>ペンマーク子会社化・投資規模（ニュース）</td></tr>
+      <tr><td>経営・戦略</td><td>ヘルスケア新事業の役務提供責任</td><td>「レバクリ 職場の健康」等、健康・医療の助言に踏み込むサービスは、助言起因のクレーム・E&Oが新種のリスクになる</td><td class="c">低</td><td class="c">中</td><td>レバクリ開始（2026/8ニュース）＋推定</td></tr>
+    </table></div>
+
+    <h3>提案ストーリー（S3・3本）</h3>
+    <div class="prop"><span class="kind k3">座組提案</span><b class="h">「選ばれるエージェント」の決定打 — レバテック登録者へのセーフティネット組込み</b>
+      <div class="hook">「エージェントの手数料が同じなら、フリーランスは<strong>『守ってくれる方』</strong>を選びます」</div>
+      レバテックを契約者とするB2B2Cで、登録フリーランスにE&O賠償・情報漏えい賠償・所得補償を標準装備（B-7スポットワークPF型のIT版）。フリーランス保護法の施行が追い風で、<strong>他エージェントとの差別化＝レバテックの営業ツール</strong>として売る。逆選択はPF全体加入で回避（P1エンベデッド）。
+      <div class="meta">型: S型B-7×P10 PF責任カバー×P1 ｜ 種目: 賠責・所得補償・費用 ｜ 対象リスク: 保障空白</div></div>
+    <div class="prop"><span class="kind k3">座組提案</span><b class="h">紹介ビジネスの「約束」を保険で担ぐ — レバウェル早期離職・事故対応の裏受け</b>
+      <div class="hook">「紹介した看護師さんが3ヶ月で辞めたとき、<strong>施設への返金と再紹介、原資はどこから出ていますか？</strong>」</div>
+      早期離職時の返金・再紹介費用、紹介人材起因の事故対応費用を費用保険で裏受け（P4——STUDIO災害支援と同じ「自腹の約束を保険で確約に変える」構造）。医療人材には看護職賠償のエンベデッドを併設。
+      <div class="meta">型: P4サービス裏受け×P1 ｜ 種目: 費用・賠責 ｜ 対象リスク: 責任波及</div></div>
+    <div class="prop"><span class="kind k2">新種目提案</span><b class="h">年100億の攻めを支える守り — M&A・サイバーのグループ包括</b>
+      <div class="hook">「40事業の買収と統合、<strong>デューデリで拾えないリスクは誰が持ちますか？</strong>」</div>
+      表明保証保険（M&A保険）の継続利用スキーム＋グループ横断のサイバー包括（センシティブデータ3種: 求職者・医療・学生）。急成長ベンチャーは付保が事業拡大に追いつかないのが通例——「保険の棚卸し」を入口に。
+      <div class="meta">型: P12診断前置×P13共同組成視野 ｜ 種目: 新種（表明保証）・サイバー</div></div>
+
+    <h3>ヒアリングリスト（S4・抜粋）</h3>
+    <ul class="tight"><li>レバテック登録者数と、現在フリーランス向けに提供している補償・福利厚生は？</li><li>レバウェルの返金・再紹介規定と、その年間発生額は？</li><li>グループの保険プログラムは持株一括か事業会社ごとか？（40事業の付保の全体像）</li><li>「レバクリ 職場の健康」の座組（提携医療機関・責任分担）は？——当社の健康経営支援との協業余地</li></ul>
+
+    <div class="gapbox"><div class="t">この案件で足りなかったデータ＋新しい発見</div>
+      ①非上場のため財務・事業別規模が断片的（有報なし→OQ-8の信用調査データが効く典型例）②各事業の契約形態・返金規定は内部情報 ③<strong>新発見: 40事業のコングロマリットは「1案件」の器に入らない</strong>——事業単位に案件を分けて分析し、グループ包括で束ねる二層構造が要る。現仕様に「親子案件」の概念が無い（総括#7として仕様課題に追加）。</div>
+  </div>
+</section>
+
 <!-- ═══════════ 総括 ═══════════ -->
 <section class="synth">
   <h2>総括: 3社デモが炙り出した「本プロダクトに足りないもの」</h2>
@@ -184,12 +224,13 @@
     <tr><td>4</td><td>業界の引受相場観（市場の硬軟）</td><td>ニデックのD&O市場硬化など、ベテランの頭の中にしかない</td><td>種目マスタに「市場環境メモ」列を追加（管理者が四半期更新・S3に注入）</td></tr>
     <tr><td>5</td><td>メニュー一覧の未装填</td><td>今回は仮メニューで代用。実在サービスに紐づけば提案の具体性が一段上がる</td><td>シード装填（T-90）の優先度を再確認——<strong>ツールより先にカタログ</strong></td></tr>
     <tr><td>6</td><td>組み手候補の探索が手動</td><td>エイベックスの検知サービス組み手が「探索対象」止まり</td><td>docs/08 D-5（座組パートナー探索）を提案生成と連動実行する運用に</td></tr>
+    <tr><td>7</td><td><strong>コングロマリットが「1案件」の器に入らない</strong></td><td>レバレジーズ（40事業）。事業単位の分析とグループ包括の二層が要る</td><td>案件に「親子関係」（グループ案件→事業別子案件）を持たせる仕様拡張を検討（parent_case_id。v2.1候補）</td></tr>
   </table></div>
   <p style="margin-top:16px;font-size:13.5px;color:var(--sub);">一方で確認できたこと: 公開情報＋業種プライア＋型ライブラリだけでも、<strong>「その会社の言葉で書かれた、幹事がやっていない切り口」は作れる</strong>（ニデックの"再建の証明"、成英の"採用の武器"、エイベックスの"安全なスクールを商品化"）。不足データの大半は「初回訪問で聞けばいい事項」に変換済み＝ヒアリングシートが受け皿として機能した。</p>
 </section>
 
 <footer>
-  出典: ニデック関連は第三者委員会報告・東証発表等の報道（<a href="https://www.newton-consulting.co.jp/bcmnavi/voice/nidec-accounting-fraud-analysis.html">リスク管理Navi</a>ほか）／成英工業は<a href="https://seiei-inc.com/">公式サイト</a>／エイベックスは<a href="https://avex.com/jp/ja/corp/business/">公式事業紹介</a>・<a href="https://aaa.avex.jp/">アーティストアカデミー</a>・<a href="https://halftime-media.com/interviews/avex-dance/">ダンス事業インタビュー</a>。本デモの提案は仮説であり、専門部署のレビュー前の内容です。
+  出典: ニデック関連は第三者委員会報告・東証発表等の報道（<a href="https://www.newton-consulting.co.jp/bcmnavi/voice/nidec-accounting-fraud-analysis.html">リスク管理Navi</a>ほか）／成英工業は<a href="https://seiei-inc.com/">公式サイト</a>／エイベックスは<a href="https://avex.com/jp/ja/corp/business/">公式事業紹介</a>・<a href="https://aaa.avex.jp/">アーティストアカデミー</a>・<a href="https://halftime-media.com/interviews/avex-dance/">ダンス事業インタビュー</a>／レバレジーズは<a href="https://leverages.jp/news/2026/0803/6048/">公式ニュース（レバクリ）</a>・<a href="https://melev.leverages.jp/article/12992/">meLev</a>・<a href="https://levtech.co.jp/news/374056/">レバテック</a>。本デモの提案は仮説であり、専門部署のレビュー前の内容です。
 </footer>
 
 </div>
