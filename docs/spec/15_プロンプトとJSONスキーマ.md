@@ -297,6 +297,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 6. open_questions には、リスク評価の精度を上げるために顧客へ確認すべき事項を書く。
 7. 企業プロファイルの field_insights(営業の現場メモ原文)は公開情報に無い最重要の手がかりである。
    risk_clue タグの項目は必ずリスク仮説として検討し、根拠に使う場合は source="memo" とする。
+8. 各リスクに preventions(未然防止策)を1〜3件付ける。「事故が起きたら払う」ではなく
+   「検知し、予防し、行動を変え、残余を保険でカバーする」が当社の思想である。
+   対応する社内サービスが■■■内の一覧に実在する場合のみ related_menu_id にIDを書く(創作禁止)。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -314,6 +317,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 {{riskLibText ※0行時は「(この業種の登録知識はまだありません)」}}
 ■■■社内リスク知識ここまで■■■
 
+■■■当社メニュー一覧(要約。preventionsのrelated_menu_idはこの中からのみ)ここから■■■
+{{menusText}}
+■■■当社メニュー一覧ここまで■■■
+
 上記を材料に、この企業の潜在リスク仮説を8〜15件、指定のJSON形式で出力してください。
 
 出力するJSONの形式:
@@ -327,7 +334,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
       "frequency": "high/mid/low",
       "impact": "large/mid/small",
       "evidence": {"quote": "根拠となる原文の短い引用", "source": "hp/yuho/memo/contract/prev_renewal/knowledge/inference"},
-      "check_points": ["現地・ヒアリングでの確認点"]
+      "check_points": ["現地・ヒアリングでの確認点"],
+      "preventions": [{"measure": "未然防止策(1文。検知・予防・行動変容の観点で)", "related_menu_id": "対応する当社メニューID または \"\""}]
     }
   ],
   "gaps": [
@@ -367,8 +375,12 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
         "quote": {"type": "string"},
         "source": {"type": "string", "enum": ["hp", "yuho", "memo", "contract", "prev_renewal", "knowledge", "inference"]}
       }, "required": ["quote", "source"], "additionalProperties": false},
-      "check_points": {"type": "array", "items": {"type": "string"}}
-    }, "required": ["risk_no", "category", "risk_name", "scenario", "frequency", "impact", "evidence", "check_points"],
+      "check_points": {"type": "array", "items": {"type": "string"}},
+      "preventions": {"type": "array", "items": {"type": "object", "properties": {
+        "measure": {"type": "string"},
+        "related_menu_id": {"type": "string"}
+      }, "required": ["measure", "related_menu_id"], "additionalProperties": false}}
+    }, "required": ["risk_no", "category", "risk_name", "scenario", "frequency", "impact", "evidence", "check_points", "preventions"],
        "additionalProperties": false}},
     "gaps": {"type": "array", "items": {"type": "object", "properties": {
       "gap_no": {"type": "integer"},
@@ -386,7 +398,7 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 }
 ```
 
-**CheckS2**: risks 5〜20件・risk_no重複なし・全enum・quote非空／renewal時: gaps 1件以上（0件は警告のみ。真にギャップ無しの優良契約はありうる）／new時: gaps 0件（非0は不合格→修復）／inference比率50%超で警告（run_log記録）。
+**CheckS2**: risks 5〜20件・risk_no重複なし・全enum・quote非空／各risk preventions 1〜3件・related_menu_id は "" または実在（不実在は不合格→修復）／renewal時: gaps 1件以上（0件は警告のみ。真にギャップ無しの優良契約はありうる）／new時: gaps 0件（非0は不合格→修復）／inference比率50%超で警告（run_log記録）。
 
 ## 4. Step3 提案マッチング（S3）
 
@@ -673,6 +685,10 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 ```
 
 ## 5. Step4 骨子生成（S4）
+
+### 出力バリアント（s4_variant。人が選択・S3のscheme比率から推奨表示）
+- **proposal（保険提案書・既定)**: 従来の5枚構成
+- **alliance（協業提案書)**: scheme提案が主軸の案件用。構成: ①貴社の事業と当社が見ている課題 ②ご一緒に解けると考える理由（座組図: 誰が何を提供し、保険がどこに入るか） ③貴社・当社・顧客それぞれのメリット ④実証（PoC）の進め方のご提案 ⑤（T2）付録。BuildS4Systemはバリアントに応じて構成指示ブロックを差し替える
 
 ### system（BuildS4System）
 

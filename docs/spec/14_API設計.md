@@ -181,7 +181,9 @@ Public Function SetInboxJudgement(ByVal inboxId As String, ByVal status As Strin
 Public Function NewJudgement(ByVal rec As TJudgement) As String
 
 ' === app: modExportPpt / modExportHearing ===
-Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, ByRef outPath As String) As String ' ""=成功
+Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
+                            ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance
+Public Function GenerateReport(ByVal caseId As String, ByRef outPath As String) As String ' リスクレポート(S1+S2から整形・LLM不使用)
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 ```
 
