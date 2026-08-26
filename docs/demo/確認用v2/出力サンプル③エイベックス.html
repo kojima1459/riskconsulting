@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出力サンプル③ エイベックス</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;--deep:#7A5C9E;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic","Meiryo",sans-serif;font-size:14.5px;line-height:1.85;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 70px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho",serif;text-wrap:balance;}
+  header{padding:38px 0 20px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:10px;}
+  h1{font-size:27px;font-weight:700;}
+  .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{display:inline-block;background:var(--mist);border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:12px;color:var(--sub);}
+  .chip.b{background:var(--ai);color:#fff;border-color:var(--ai);}
+  .disclaimer{margin-top:12px;background:var(--warn);border-left:4px solid var(--kaki);padding:9px 13px;font-size:12.5px;line-height:1.7;}
+  h2{font-size:19px;color:var(--ai);margin:34px 0 12px;padding-bottom:4px;border-bottom:2px solid var(--line);}
+  h3{font-size:14.5px;color:var(--ai);margin:18px 0 8px;border-left:4px solid var(--ai);padding-left:8px;}
+  .iq{background:var(--mist);border-radius:6px;padding:12px 16px;font-size:13px;line-height:2.0;}
+  .iq .asp{display:inline-block;border-radius:3px;padding:0 7px;margin:1px 2px;font-size:11.5px;color:#fff;}
+  .a-ok{background:var(--matsu);} .a-pt{background:#B08A2E;} .a-ms{background:#A9B4C0;}
+  .iq b.hi{color:var(--matsu);} .iq b.mid{color:#8a6d1a;} .iq b.lo{color:var(--kaki);}
+  .fnote{border:1px dashed var(--deep);border-radius:6px;padding:10px 14px;font-size:13px;margin-top:10px;}
+  .fnote .t{color:var(--deep);font-weight:700;font-size:12px;}
+  .tblwrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.65;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--mist);white-space:nowrap;font-weight:700;}
+  td.c{text-align:center;white-space:nowrap;}
+  .deepbox{border:1px solid var(--deep);border-radius:6px;overflow:hidden;margin-top:12px;font-size:13px;}
+  .deepbox .h{background:var(--deep);color:#fff;padding:5px 14px;font-size:12.5px;font-weight:700;}
+  .deepbox .b{padding:10px 14px;}
+  .deepbox .exec{background:var(--mist);border-radius:4px;padding:6px 10px;margin:6px 0;}
+  .prop{border:1px solid var(--line);border-left:5px solid var(--matsu);border-radius:4px;padding:12px 16px;margin-bottom:12px;font-size:13px;}
+  .prop .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--matsu);border-radius:3px;padding:1px 8px;margin-right:6px;vertical-align:middle;}
+  .prop .kind.k2{background:var(--ai);} .prop .kind.k3{background:var(--deep);}
+  .prop .w{display:inline-block;font-size:10.5px;border:1px solid var(--deep);color:var(--deep);border-radius:3px;padding:0 6px;margin-left:4px;vertical-align:middle;}
+  .prop b.h{font-size:14px;}
+  .prop .hook{background:var(--mist);border-radius:4px;padding:6px 10px;margin:8px 0;}
+  .prop .meta{color:var(--sub);font-size:12px;margin-top:5px;}
+  .prop .veh{color:var(--kaki);font-size:12px;margin-top:2px;}
+  ul.tight{padding-left:1.3em;font-size:13px;} ul.tight li{margin-bottom:4px;}
+  .slides{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px;}
+  .slide{border:1px solid var(--line);border-radius:4px;padding:8px 12px;}
+  .slide .n{color:var(--sub);font-size:11px;}
+  .slide b{font-size:13px;}
+  .gapbox{background:var(--warn);border:1px solid #E8D5B5;border-radius:6px;padding:12px 16px;margin-top:22px;font-size:13px;}
+  .gapbox .t{font-weight:700;color:var(--kaki);margin-bottom:5px;}
+  footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub);}
+  @media (max-width:640px){h1{font-size:22px;} .slides{grid-template-columns:1fr;}}
+  @media print{body{font-size:12px;} h2{margin-top:22px;} .prop,.slide,.deepbox{break-inside:avoid;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">リスク提案ナビ 出力サンプル ③／④ — 仕様v2.2どおりの手動模擬実行</div>
+  <h1>エイベックス株式会社</h1>
+  <div class="chips"><span class="chip b">新規開拓</span><span class="chip b">T2フルドシエ</span><span class="chip b">入念モード(deep)</span><span class="chip">業種: 音楽・エンタテインメント</span><span class="chip">ホール</span><span class="chip">非幹事(想定)</span><span class="chip b">出力: 協業提案書(alliance)</span><span class="chip">興行中止保険は対象外指定</span></div>
+  <div class="disclaimer">⚠ 手動模擬実行・公開情報のみ。ご指定により<strong>興行中止保険以外</strong>で構成。この案件は<strong>協業提案書（alliance）バリアント</strong>のサンプルです。現場メモはデモ用のダミー記入例。</div>
+</header>
+
+<h2>STEP 1｜入力と充足度診断</h2>
+<div class="iq">
+<b>収集した情報</b>: D-1〜D-4＋HPレシピ。事業構成: 音楽（レーベル・360度）／アニメ・映像／ライブ・イベント／マネジメント／<strong>ダンス・アーティスト育成スクール（エイベックス・アーティストアカデミー等）</strong>／デジタル・ファンクラブ事業。<br>
+<span class="asp a-ok">会社概要</span><span class="asp a-ok">事業・製品</span><span class="asp a-pt">拠点・設備</span><span class="asp a-ok">沿革</span><span class="asp a-ok">直近の動き</span><span class="asp a-pt">採用・人員</span><span class="asp a-ok">有報・財務リスク</span><span class="asp a-pt">営業情報</span><span class="asp a-ok">SNS評判</span><span class="asp a-ok">競合・業界事故</span><span class="asp a-ok">市況・マクロ</span><span class="asp a-ok">財務状態</span><span class="asp a-ms">付保・提案の経緯</span><br>
+総合: <b class="hi">高</b>。<b>助言</b>: 興行関連の既存付保（興行中止・イベント賠償）は確実に存在するはず——重複提案を避けるため付保状況ヒアリングが必須。
+</div>
+<div class="fnote"><span class="t">💬 現場メモ（自由入力欄・デモ用ダミー）</span><br>「スクール事業を全国展開強化中との業界記事。子どもクラスの比率が高いらしい」→ field_insights: <b>opportunity</b> タグでパススルー</div>
+
+<h2>STEP 2｜リスク分析表（抜粋5件・批判パス反映済み）</h2>
+<div class="tblwrap"><table>
+<tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th><th>未然防止策 → 実行手段</th></tr>
+<tr><td>労務・人為</td><td>スクール（子どもを預かる場）の事故</td><td>ダンスレッスン中の負傷・熱中症・送迎/待機時の管理事故。全国多拠点×子ども比率の高さで頻度が積み上がる</td><td class="c">高</td><td class="c">中</td><td>スクール事業（HP）＋現場メモ</td><td>安全管理基準の統一・検知(入退室/体調) → 賠責＋傷害＋費用の包括</td></tr>
+<tr><td>サイバー・情報</td><td>ファンデータ・チケット基盤への攻撃</td><td>会員・決済情報の漏えい、チケットPFの停止。信頼毀損がアーティスト全体に波及</td><td class="c">中</td><td class="c">大</td><td>デジタル/FC事業（HP）×業界事故類型</td><td>ASM・態勢診断 → サイバー保険包括</td></tr>
+<tr><td>経営・戦略</td><td>なりすまし・ディープフェイクによる肖像・ファン被害</td><td>所属アーティストの偽動画・偽グッズ・偽チケット詐欺。ファンが直接の被害者になり、ブランド毀損と補償要請が同時に来る</td><td class="c">高</td><td class="c">中</td><td>業界動向（D-3）＋生成AI普及</td><td>公式検証・通報導線の整備 → （AI詐欺補償は研究テーマRT登録済・条件成就監視）</td></tr>
+<tr><td>労務・人為</td><td>アーティスト・スタッフの長期離脱（メンタル含む）</td><td>稼働集中・SNS誹謗による不調で活動休止。個人に事業が紐づくため損失が直撃</td><td class="c">中</td><td class="c">大</td><td>業界プライア＋報道類型</td><td>メンタルケア体制 → GLTD型の所属者向け制度設計</td></tr>
+<tr><td>事業継続・SC</td><td>グッズ・物販サプライチェーン</td><td>ライブ物販の製造・輸入遅延、品質問題による回収</td><td class="c">中</td><td class="c">中</td><td>事業構成からの推定 <b>(推定)</b></td><td>調達先の把握 → 生産物回収費用・輸送系</td></tr>
+</table></div>
+<div class="deepbox"><div class="h">🔍 入念モード｜批判パス（S3C 経営者ペルソナ）の記録・抜粋</div><div class="b">
+<div class="exec">経営者(想定)反応: 「イベント系の保険はもう入り尽くしている。<b>保険の話なら購買に回して</b>」→ lands=false 判定</div>
+<b>改訂指示</b>: 「保険商品の提案に見える構成を捨て、<u>スクール事業の成長と、ファンの安心という『事業の話』から入る協業提案（alliance）へ変更せよ</u>」→ <b>S4バリアントを alliance に切替（本サンプルの見せ場）</b>
+</div></div>
+
+<h2>STEP 3｜提案ストーリー</h2>
+<div class="prop"><span class="kind k3">座組提案</span><b class="h">「安心して預けられるスクール」を業界標準に — スクール安全認証×包括保険プログラム</b><span class="w">W1 空白</span><span class="w">W3 堀</span><span class="w">W4 信用増幅</span>
+<div class="hook">「習い事を選ぶ保護者の一番の基準は月謝ではなく<strong>『安心して預けられるか』</strong>です。それを証明する仕組み、業界にまだありません」</div>
+スクールの安全管理基準（施設・指導・送迎・体調管理）を当社と共同で策定し、基準充足を条件に賠責＋傷害＋費用を包括化。<strong>「エイベックス基準」が業界標準になれば、後発スクールは追う側に回る</strong>（ペット介護型と同じ「基準を先に作った者が堀を得る」構造）。保険は月謝に内包（エンベデッド）で保護者の手続きゼロ。
+<div class="meta">型: 預かる場包括（S-3型）×認証連動（P11）×エンベデッド（P1） ｜ 対象リスク: スクール事故</div>
+<div class="veh">実行手段: 賠責＋傷害＋<b>顧客サービス費用保険（債務履行型）</b>（見舞・代替レッスン等のサービス約束の裏受け）</div></div>
+<div class="prop"><span class="kind k3">座組提案</span><b class="h">ファンの「推し活」を守る — 公式チケット・グッズ保証プログラム</b><span class="w">W4 信用増幅</span>
+<div class="hook">「偽チケット・偽グッズでファンが泣く時代。<strong>『公式で買えば守られる』を約束できたら、公式ECの武器になりませんか</strong>」</div>
+公式ルート購入者への保証（偽造被害・不着・イベント変更時の払戻等サービス）を保険で裏受けし、公式流通の優位性を作る。エイベックスは「約束できる公式」になり、二次流通対策とファン保護を同時に実現。
+<div class="meta">型: サービス裏受け（P4）×PF責任カバー（P10） ｜ 対象リスク: なりすまし・ファン被害</div>
+<div class="veh">実行手段: <b>約定履行費用保険・顧客サービス費用保険（債務履行型）</b>＋動産総合（商品付帯方式）</div></div>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">デジタル基盤とアーティスト資本の守り — サイバー包括＋所属者ケア制度</b>
+<div class="hook">「御社の資産はマスターテープからデータと人に移りました。<strong>守りの設計は移りましたか？</strong>」</div>
+ファンデータ・チケット基盤のサイバー包括（ASM診断前置）と、所属アーティスト・スタッフ向けの長期離脱補償（GLTD型）・メンタルケア制度をセットで。
+<div class="meta">型: 診断前置（P12）×団体プール（P8） ｜ 対象リスク: サイバー・長期離脱</div>
+<div class="veh">実行手段: サイバー保険＋GLTD</div></div>
+
+<h2>STEP 4｜協業提案書骨子（alliance・6枚）＋ヒアリングシート</h2>
+<div class="slides">
+<div class="slide"><span class="n">1</span><br><b>貴社の事業と、私たちが見ている課題</b><br>・「モノ（CD）→体験→コミュニティ」への進化と、新しく生まれた3つの守りの空白</div>
+<div class="slide"><span class="n">2</span><br><b>ご一緒に解けると考える理由（座組図）</b><br>・貴社=基準・チャネル・ブランド／当社=補償・事故対応・制度設計。保険がどこに入るかを1枚で</div>
+<div class="slide"><span class="n">3</span><br><b>第一弾: スクール安全認証プログラム</b><br>・基準策定→認証→包括保険→月謝内包の流れと「業界標準」の狙い</div>
+<div class="slide"><span class="n">4</span><br><b>三方のメリット</b><br>・保護者=安心／貴社=差別化と継続収益／当社=新しい市場。ファン保証への拡張構想</div>
+<div class="slide"><span class="n">5</span><br><b>実証（PoC）の進め方</b><br>・スクール数拠点で安全基準の共同策定から（3ヶ月）</div>
+<div class="slide"><span class="n">6（付録）</span><br><b>リスク分析の全体像</b><br>・分析表と根拠</div>
+</div>
+<h3>ヒアリングシート（10問から抜粋）</h3>
+<ul class="tight">
+<li>スクール事業の拠点数・生徒数・子どもクラス比率と、現在の安全管理基準の運用状況は</li>
+<li>イベント・興行まわりの既存付保（保険会社・種目）——重複のない提案のため必須確認</li>
+<li>偽グッズ・偽チケット被害の把握状況と、ファンからの問い合わせ実態</li>
+<li>ファンクラブ・EC基盤のシステム構成とセキュリティ診断の実施状況</li>
+</ul>
+
+<div class="gapbox"><div class="t">この案件で足りなかったデータ（実機PoCへの示唆）</div>
+①スクールの事故実態（社内に事故データなし→保護者向け共済等の競合実態も要調査）②興行系の既存付保（重複回避の生命線）③検知・入退室管理の組み手候補（→適用先候補探索プレイD-5の対象）。<b>批判パスが「保険提案→協業提案」への転換を強制した点が入念モードの効果実証</b>。</div>
+<footer>リスク提案ナビ 出力サンプル（手動模擬実行）｜出典: エイベックス公式サイト事業紹介・アカデミー情報・業界公開情報（2026年8月時点）｜社外秘・要専門家レビュー</footer>
+</div>
+</body>
+</html>

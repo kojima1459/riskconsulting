@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出力サンプル② 成英工業</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;--deep:#7A5C9E;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic","Meiryo",sans-serif;font-size:14.5px;line-height:1.85;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 70px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho",serif;text-wrap:balance;}
+  header{padding:38px 0 20px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:10px;}
+  h1{font-size:27px;font-weight:700;}
+  .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{display:inline-block;background:var(--mist);border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:12px;color:var(--sub);}
+  .chip.b{background:var(--ai);color:#fff;border-color:var(--ai);}
+  .disclaimer{margin-top:12px;background:var(--warn);border-left:4px solid var(--kaki);padding:9px 13px;font-size:12.5px;line-height:1.7;}
+  h2{font-size:19px;color:var(--ai);margin:34px 0 12px;padding-bottom:4px;border-bottom:2px solid var(--line);}
+  h3{font-size:14.5px;color:var(--ai);margin:18px 0 8px;border-left:4px solid var(--ai);padding-left:8px;}
+  .iq{background:var(--mist);border-radius:6px;padding:12px 16px;font-size:13px;line-height:2.0;}
+  .iq .asp{display:inline-block;border-radius:3px;padding:0 7px;margin:1px 2px;font-size:11.5px;color:#fff;}
+  .a-ok{background:var(--matsu);} .a-pt{background:#B08A2E;} .a-ms{background:#A9B4C0;}
+  .iq b.hi{color:var(--matsu);} .iq b.mid{color:#8a6d1a;} .iq b.lo{color:var(--kaki);}
+  .fnote{border:1px dashed var(--deep);border-radius:6px;padding:10px 14px;font-size:13px;margin-top:10px;}
+  .fnote .t{color:var(--deep);font-weight:700;font-size:12px;}
+  .tblwrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.65;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--mist);white-space:nowrap;font-weight:700;}
+  td.c{text-align:center;white-space:nowrap;}
+  .deepbox{border:1px solid var(--deep);border-radius:6px;overflow:hidden;margin-top:12px;font-size:13px;}
+  .deepbox .h{background:var(--deep);color:#fff;padding:5px 14px;font-size:12.5px;font-weight:700;}
+  .deepbox .b{padding:10px 14px;}
+  .deepbox .exec{background:var(--mist);border-radius:4px;padding:6px 10px;margin:6px 0;}
+  .prop{border:1px solid var(--line);border-left:5px solid var(--matsu);border-radius:4px;padding:12px 16px;margin-bottom:12px;font-size:13px;}
+  .prop .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--matsu);border-radius:3px;padding:1px 8px;margin-right:6px;vertical-align:middle;}
+  .prop .kind.k2{background:var(--ai);} .prop .kind.k3{background:var(--deep);}
+  .prop .w{display:inline-block;font-size:10.5px;border:1px solid var(--deep);color:var(--deep);border-radius:3px;padding:0 6px;margin-left:4px;vertical-align:middle;}
+  .prop b.h{font-size:14px;}
+  .prop .hook{background:var(--mist);border-radius:4px;padding:6px 10px;margin:8px 0;}
+  .prop .meta{color:var(--sub);font-size:12px;margin-top:5px;}
+  .prop .veh{color:var(--kaki);font-size:12px;margin-top:2px;}
+  ul.tight{padding-left:1.3em;font-size:13px;} ul.tight li{margin-bottom:4px;}
+  .slides{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px;}
+  .slide{border:1px solid var(--line);border-radius:4px;padding:8px 12px;}
+  .slide .n{color:var(--sub);font-size:11px;}
+  .slide b{font-size:13px;}
+  .gapbox{background:var(--warn);border:1px solid #E8D5B5;border-radius:6px;padding:12px 16px;margin-top:22px;font-size:13px;}
+  .gapbox .t{font-weight:700;color:var(--kaki);margin-bottom:5px;}
+  footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub);}
+  @media (max-width:640px){h1{font-size:22px;} .slides{grid-template-columns:1fr;}}
+  @media print{body{font-size:12px;} h2{margin-top:22px;} .prop,.slide,.deepbox{break-inside:avoid;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">リスク提案ナビ 出力サンプル ②／④ — 仕様v2.2どおりの手動模擬実行</div>
+  <h1>成英工業株式会社（舞鶴）</h1>
+  <div class="chips"><span class="chip b">新規開拓</span><span class="chip b">T1クイック</span><span class="chip b">標準モード</span><span class="chip">業種: とび・土工工事業</span><span class="chip">リテール</span><span class="chip">非幹事(想定)</span><span class="chip">出力: 保険提案書(proposal)</span></div>
+  <div class="disclaimer">⚠ 手動模擬実行・公開情報のみ。<strong>この案件は「情報が薄い地方非上場企業」でツールがどう振る舞うか</strong>を見るサンプルです（誠実に「薄い」と言い、聞くことに変換する）。現場メモはデモ用のダミー記入例。</div>
+</header>
+
+<h2>STEP 1｜入力と充足度診断</h2>
+<div class="iq">
+<b>収集した情報</b>: HPレシピ8項目（会社HPより: 足場・とび工事、平成8年創業、<strong>原子力発電所構内工事を含む建築全般</strong>、電気工事）。<br>
+<span class="asp a-ok">会社概要</span><span class="asp a-ok">事業・製品</span><span class="asp a-pt">拠点・設備</span><span class="asp a-pt">沿革</span><span class="asp a-ms">直近の動き</span><span class="asp a-ms">採用・人員</span><span class="asp a-ms">有報・財務リスク</span><span class="asp a-pt">営業情報</span><span class="asp a-ms">SNS評判</span><span class="asp a-ms">競合・業界事故</span><span class="asp a-ms">市況・マクロ</span><span class="asp a-ms">財務状態</span><span class="asp a-ms">付保・提案の経緯</span><br>
+総合: <b class="lo">低</b>。<b>助言（充足度ゲートの警告表示）</b>: 「この入力では一般論に近い出力になります。<u>帝国DB企業検索で財務・従業員数・取引先を確認して要点を財務欄に、元請構造・現場数は営業情報として現場メモに追加してください</u>」——非上場小規模はWeb情報が構造的に薄く、<b>信用調査データと営業の足で稼ぐ情報が主データになる</b>。
+</div>
+<div class="fnote"><span class="t">💬 現場メモ（自由入力欄・デモ用ダミー）</span><br>「代理店経由の情報: 元請は関電工系が中心らしい。社長は2代目で40代」→ field_insights: <b>relationship / risk_clue</b> タグでパススルー</div>
+
+<h2>STEP 2｜リスク分析表（抜粋5件）</h2>
+<div class="tblwrap"><table>
+<tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th><th>未然防止策 → 実行手段</th></tr>
+<tr><td>労務・人為</td><td>墜落・転落労災</td><td>足場組立・解体時の墜落。建設業死亡災害の最多類型で、とび職はその中心</td><td class="c">中</td><td class="c">大</td><td>業種プライア（労災統計）×HP事業内容</td><td>フルハーネス・安全教育の徹底支援 → 労災上乗せ＋業災</td></tr>
+<tr><td>製造・品質・賠償</td><td>第三者・隣接物への飛来落下</td><td>資材・工具の落下による通行人・隣接建物被害。市街地案件で影響大</td><td class="c">中</td><td class="c">大</td><td>業種プライア×HP（建築全般）</td><td>養生基準の点検 → 請負業者賠償</td></tr>
+<tr><td>労務・人為</td><td>原子力構内工事の特殊管理要件</td><td>被ばく管理・入域管理等の特殊要件への不適合が、事故時の責任・取引資格に直結</td><td class="c">低</td><td class="c">大</td><td>HP「原子力発電所構内工事」の記述</td><td>特殊現場の管理体制ヒアリング（要確認・推測で埋めない）</td></tr>
+<tr><td>経営・戦略</td><td>元請依存と契約履行リスク</td><td>特定元請への依存度が高い場合、工期遅延・履行トラブルが取引全体に波及。工事履行保証のニーズ</td><td class="c">中</td><td class="c">中</td><td>現場メモ（元請は関電工系中心）＋業種プライア</td><td>下請階層・依存度の確認 → 履行保証（照会実needs上位47件の領域）</td></tr>
+<tr><td>労務・人為</td><td>職人の高齢化・技能承継</td><td>とび職人の担い手不足。ベテラン退職で受注能力自体が縮む</td><td class="c">高</td><td class="c">中</td><td>業種プライア（建設業の構造）— <b>(推定)</b></td><td>実態は訪問で確認 → GLTD・傷害の福利厚生パッケージが入口候補</td></tr>
+</table></div>
+
+<h2>STEP 3｜提案ストーリー</h2>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">「人が資本」の会社の守り — 労災上乗せ＋GLTDの福利厚生パッケージ</b><span class="w">W3 固有アセット</span>
+<div class="hook">「職人さんの確保、ますます大変では。<strong>『ケガと長期離脱に強い会社』は、採用の武器になります</strong>」</div>
+墜落リスクと担い手不足を「守り」と「採用力」の両面で解く。労災上乗せ＋GLTD＋業災を、若手採用のための福利厚生パッケージとして提案。
+<div class="meta">型: 団体プール（P8） ｜ 対象リスク: 墜落労災・技能承継</div>
+<div class="veh">実行手段: 労災上乗せ・GLTD・業務災害補償</div></div>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">元請に選ばれ続けるための履行保証・賠償の整え</b>
+<div class="hook">「関電工系の元請さんとのお取引、<strong>保証や賠償の要件は年々厳しくなっていませんか？</strong>」</div>
+元請の調達要件（賠償資力・履行保証）への適合を整えることが受注継続の条件になる。請負業者賠償の限度額見直し＋工事履行保証を、元請要件のヒアリングとセットで。※現場メモ（元請構造）を切り口に使用。
+<div class="meta">型: 診断前置（P12）の簡易版 ｜ 対象リスク: 飛来落下・履行</div>
+<div class="veh">実行手段: 請負業者賠償・履行保証（約定履行費用保険）</div></div>
+<div class="prop"><span class="kind k3">座組提案</span><b class="h">（第2ラウンド候補）原子力構内という「専門性の証明」を武器に変える</b><span class="w">W1 空白</span>
+<div class="hook">「原子力構内の管理要件をクリアできる会社は限られます。<strong>その信用を、他の受注にも使えるとしたら？</strong>」</div>
+特殊現場の管理体制が確認できれば（→ヒアリング）、認証連動型（管理水準を料率・保証条件に反映）で「選ばれる下請」のポジション強化を支援する構想。初回では風呂敷を広げず、確認質問に留める。
+<div class="meta">型: 認証連動（P11）候補 ｜ 状態: 仮説（要ヒアリング）</div></div>
+
+<h2>STEP 4｜提案書骨子（5枚固定/T1）＋ヒアリングシート</h2>
+<div class="slides">
+<div class="slide"><span class="n">1</span><br><b>貴社の事業の理解</b><br>・足場・とび×原子力構内という専門性・平成8年からの実績</div>
+<div class="slide"><span class="n">2</span><br><b>この業種で大きいリスク</b><br>・墜落労災／第三者賠償／履行の3点を頻度×影響で</div>
+<div class="slide"><span class="n">3</span><br><b>同業の事故類型</b><br>・建設業の墜落・飛来落下の一般類型と労災統計</div>
+<div class="slide"><span class="n">4</span><br><b>ご支援の方向性</b><br>・福利厚生パッケージ／賠償・履行の整え</div>
+<div class="slide"><span class="n">5</span><br><b>次のステップ</b><br>・下記を伺ったうえで具体案をご提示</div>
+</div>
+<h3>ヒアリングシート（このティアでは最重要の成果物・10問から抜粋）</h3>
+<ul class="tight">
+<li>従業員数と職人さんの年齢構成を教えてください（採用のご状況も）</li>
+<li>主な元請と、下請階層・年間の現場数はどの程度でしょうか</li>
+<li>元請から求められる保険・保証の要件（賠償限度額・履行保証）はありますか</li>
+<li>原子力構内工事の管理体制（被ばく管理・資格者）と年間の従事割合を伺えますか</li>
+<li>現在ご加入の保険（種目・保険会社）と更新月を差し支えない範囲で</li>
+</ul>
+
+<div class="gapbox"><div class="t">この案件が示すこと（実機PoCへの示唆）</div>
+情報が薄い先では、ツールの価値は「立派な提案書」ではなく<b>「薄いと正直に言い、帝国DBと現場メモへ誘導し、聞くべきことを整えて訪問の質を上げる」</b>ことにある。T1はこれで正しい——1件の現場メモ（元請構造）だけで提案2本の切り口が具体化した点が、現場メモ機能の効果の実証。</div>
+<footer>リスク提案ナビ 出力サンプル（手動模擬実行）｜出典: 会社HP・建設業労災統計（一般公表値）（2026年8月時点）｜社外秘・要専門家レビュー</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出力サンプル④ レバレジーズ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;--deep:#7A5C9E;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic","Meiryo",sans-serif;font-size:14.5px;line-height:1.85;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 70px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho",serif;text-wrap:balance;}
+  header{padding:38px 0 20px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:10px;}
+  h1{font-size:27px;font-weight:700;}
+  .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{display:inline-block;background:var(--mist);border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:12px;color:var(--sub);}
+  .chip.b{background:var(--ai);color:#fff;border-color:var(--ai);}
+  .disclaimer{margin-top:12px;background:var(--warn);border-left:4px solid var(--kaki);padding:9px 13px;font-size:12.5px;line-height:1.7;}
+  h2{font-size:19px;color:var(--ai);margin:34px 0 12px;padding-bottom:4px;border-bottom:2px solid var(--line);}
+  h3{font-size:14.5px;color:var(--ai);margin:18px 0 8px;border-left:4px solid var(--ai);padding-left:8px;}
+  .iq{background:var(--mist);border-radius:6px;padding:12px 16px;font-size:13px;line-height:2.0;}
+  .iq .asp{display:inline-block;border-radius:3px;padding:0 7px;margin:1px 2px;font-size:11.5px;color:#fff;}
+  .a-ok{background:var(--matsu);} .a-pt{background:#B08A2E;} .a-ms{background:#A9B4C0;}
+  .iq b.hi{color:var(--matsu);} .iq b.mid{color:#8a6d1a;} .iq b.lo{color:var(--kaki);}
+  .fnote{border:1px dashed var(--deep);border-radius:6px;padding:10px 14px;font-size:13px;margin-top:10px;}
+  .fnote .t{color:var(--deep);font-weight:700;font-size:12px;}
+  .tblwrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.65;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--mist);white-space:nowrap;font-weight:700;}
+  td.c{text-align:center;white-space:nowrap;}
+  .deepbox{border:1px solid var(--deep);border-radius:6px;overflow:hidden;margin-top:12px;font-size:13px;}
+  .deepbox .h{background:var(--deep);color:#fff;padding:5px 14px;font-size:12.5px;font-weight:700;}
+  .deepbox .b{padding:10px 14px;}
+  .deepbox .exec{background:var(--mist);border-radius:4px;padding:6px 10px;margin:6px 0;}
+  .prop{border:1px solid var(--line);border-left:5px solid var(--matsu);border-radius:4px;padding:12px 16px;margin-bottom:12px;font-size:13px;}
+  .prop .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--matsu);border-radius:3px;padding:1px 8px;margin-right:6px;vertical-align:middle;}
+  .prop .kind.k2{background:var(--ai);} .prop .kind.k3{background:var(--deep);}
+  .prop .w{display:inline-block;font-size:10.5px;border:1px solid var(--deep);color:var(--deep);border-radius:3px;padding:0 6px;margin-left:4px;vertical-align:middle;}
+  .prop b.h{font-size:14px;}
+  .prop .hook{background:var(--mist);border-radius:4px;padding:6px 10px;margin:8px 0;}
+  .prop .meta{color:var(--sub);font-size:12px;margin-top:5px;}
+  .prop .veh{color:var(--kaki);font-size:12px;margin-top:2px;}
+  ul.tight{padding-left:1.3em;font-size:13px;} ul.tight li{margin-bottom:4px;}
+  .slides{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px;}
+  .slide{border:1px solid var(--line);border-radius:4px;padding:8px 12px;}
+  .slide .n{color:var(--sub);font-size:11px;}
+  .slide b{font-size:13px;}
+  .gapbox{background:var(--warn);border:1px solid #E8D5B5;border-radius:6px;padding:12px 16px;margin-top:22px;font-size:13px;}
+  .gapbox .t{font-weight:700;color:var(--kaki);margin-bottom:5px;}
+  footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub);}
+  @media (max-width:640px){h1{font-size:22px;} .slides{grid-template-columns:1fr;}}
+  @media print{body{font-size:12px;} h2{margin-top:22px;} .prop,.slide,.deepbox{break-inside:avoid;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">リスク提案ナビ 出力サンプル ④／④ — 仕様v2.2どおりの手動模擬実行</div>
+  <h1>レバレジーズ株式会社</h1>
+  <div class="chips"><span class="chip b">新規開拓</span><span class="chip b">T2フルドシエ</span><span class="chip b">入念モード(deep)</span><span class="chip">業種: 人材・プラットフォーム（非上場）</span><span class="chip">ホール</span><span class="chip">非幹事(想定)</span><span class="chip b">出力: 協業提案書(alliance)</span></div>
+  <div class="disclaimer">⚠ 手動模擬実行・公開情報のみ。この案件は<strong>非上場メガベンチャー×PF型座組</strong>のサンプル。40超の事業を持つため、本デモはPF3事業（レバテック/レバウェル/ペンマーク）に案件を絞った——グループ全体は「親案件-子案件」で扱うのが実機の推奨（仕様v2.1課題）。現場メモはデモ用のダミー記入例。</div>
+</header>
+
+<h2>STEP 1｜入力と充足度診断</h2>
+<div class="iq">
+<b>収集した情報</b>: D-1〜D-4＋HPレシピ。年商1,428億円（2024年度）・40以上の事業・年間100億円規模の新規事業投資／レバテック（ITフリーランス・SES）／レバウェル（医療介護保育人材）／2026年4月ペンマーク（学生アプリ）子会社化／<strong>2026年8月「レバクリ 職場の健康」開始</strong>。<br>
+<span class="asp a-ok">会社概要</span><span class="asp a-ok">事業・製品</span><span class="asp a-pt">拠点・設備</span><span class="asp a-ok">沿革</span><span class="asp a-ok">直近の動き</span><span class="asp a-ok">採用・人員</span><span class="asp a-ms">有報・財務リスク</span><span class="asp a-pt">営業情報</span><span class="asp a-pt">SNS評判</span><span class="asp a-ok">競合・業界事故</span><span class="asp a-ok">市況・マクロ</span><span class="asp a-pt">財務状態</span><span class="asp a-ms">付保・提案の経緯</span><br>
+総合: <b class="mid">中〜高</b>。<b>助言</b>: 非上場のため有報なし・財務は断片——<u>帝国DB企業検索で財務概況を確認し要点を財務欄へ</u>（OQ-8解決済みの正式手順）。事業別の契約形態・返金規定は内部情報のためヒアリングへ。
+</div>
+<div class="fnote"><span class="t">💬 現場メモ（自由入力欄・デモ用ダミー）</span><br>「ベンチャーは保険が事業拡大に追いついてないのが通例。ここも例外ではないはず、との営業所感」→ field_insights: <b>opportunity</b> タグでパススルー</div>
+
+<h2>STEP 2｜リスク分析表（抜粋5件・批判パス反映済み）</h2>
+<div class="tblwrap"><table>
+<tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th><th>未然防止策 → 実行手段</th></tr>
+<tr><td>製造・品質・賠償</td><td>紹介・派遣人材に起因する責任の波及</td><td>紹介した医療・介護人材の事故/経歴詐称/早期離職→施設からの責任追及・返金対応が紹介ビジネスの構造リスク</td><td class="c">中</td><td class="c">中</td><td>レバウェル事業（HP）×業種プライア</td><td>資格・経歴確認の標準化 → 返金・再紹介の裏受け（下記提案2）</td></tr>
+<tr><td>サイバー・情報</td><td>センシティブ個人データの集中</td><td>求職者・医療従事者・学生（ペンマーク）のデータ大量保有。漏えい時は複数事業へ同時波及</td><td class="c">中</td><td class="c">大</td><td>事業構成（HP・ニュース）</td><td>ASM・グループ横断診断 → サイバー包括</td></tr>
+<tr><td>労務・人為</td><td>登録フリーランスの保障空白</td><td>レバテック登録者は客先常駐の個人事業主。作業ミス賠償・情報漏えい・病気時の所得断絶が個人に全部落ちる。フリーランス保護法で仲介側の配慮も問われる方向</td><td class="c">高</td><td class="c">中</td><td>レバテック事業×雇用外領域プライア</td><td>登録者向けセーフティネットの制度化（下記提案1）</td></tr>
+<tr><td>経営・戦略</td><td>M&A・新規事業の高速展開に伴う統合リスク</td><td>年100億円投資・子会社化連続。買収先の簿外債務・システム統合・統制格差</td><td class="c">高</td><td class="c">中</td><td>ペンマーク子会社化・投資規模（ニュース）</td><td>買収時DDの定型化 → 表明保証保険（W&I）</td></tr>
+<tr><td>製造・品質・賠償</td><td>ヘルスケア助言サービスのE&O</td><td>「レバクリ 職場の健康」等、健康領域の助言に踏み込むサービスの助言起因クレーム</td><td class="c">低</td><td class="c">中</td><td>レバクリ開始（2026/8ニュース）＋<b>(推定)</b></td><td>サービス約款・免責の整理 → E&O</td></tr>
+</table></div>
+<div class="deepbox"><div class="h">🔍 入念モード｜批判パス（S2C/S3C）の記録・抜粋</div><div class="b">
+<b>S2C指摘</b>: 「初版は『40事業の総花』でどの事業のリスクか曖昧（generic）。PF3事業に絞り、各リスクを事業名に接地せよ」→ 反映済み。<br>
+<div class="exec">経営者(想定)反応: 「うちは意思決定が速い。<b>検討に半年かかる話なら聞かない</b>」→ 改訂指示: PoCを3ヶ月・1事業から始める設計に変更（提案1）</div>
+</div></div>
+
+<h2>STEP 3｜提案ストーリー</h2>
+<div class="prop"><span class="kind k3">座組提案</span><b class="h">「選ばれるエージェント」の決定打 — レバテック登録者セーフティネットの標準装備</b><span class="w">W1 空白</span><span class="w">W2 制度追い風</span><span class="w">W4 信用増幅</span>
+<div class="hook">「手数料が同じなら、フリーランスは<strong>『守ってくれるエージェント』</strong>を選びます。それを最初にやった会社が基準になります」</div>
+レバテックを契約者とするB2B2Cで、登録フリーランスにE&O賠償・情報漏えい賠償・所得補償を標準装備。フリーランス保護法の施行が追い風で、<strong>他エージェントとの差別化＝レバテック自身の営業ツール</strong>として機能する（保険がコストでなく売上を作る）。登録者全体加入で逆選択を回避。PoCは1職種・3ヶ月から。
+<div class="meta">型: スポットワークPF型（B-7）×PF責任カバー（P10）×エンベデッド（P1） ｜ 対象リスク: 保障空白</div>
+<div class="veh">実行手段: 賠責（E&O）＋所得補償＋<b>顧客サービス費用保険（債務履行型）</b></div></div>
+<div class="prop"><span class="kind k3">座組提案</span><b class="h">紹介ビジネスの「約束」を保険で担ぐ — レバウェル早期離職・事故対応の裏受け</b><span class="w">W4 信用増幅</span>
+<div class="hook">「紹介した看護師さんが3ヶ月で辞めたときの返金と再紹介、<strong>原資はどこから出ていますか？</strong>」</div>
+早期離職時の返金・再紹介費用、紹介人材起因の事故対応費用を費用保険で裏受け。<strong>「自腹の約束」を「保険で確約できる約束」に変える</strong>——施設向けに「保証つき紹介」を名乗れることが営業差別化になる。医療人材への看護職賠償エンベデッドを併設。
+<div class="meta">型: サービス裏受け（P4） ｜ 対象リスク: 責任波及</div>
+<div class="veh">実行手段: <b>約定履行費用保険・顧客サービス費用保険（債務履行型）</b>＋看護職賠償</div></div>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">年100億の攻めを支える守り — M&A・サイバーのグループ包括</b>
+<div class="hook">「40事業の買収と統合、<strong>デューデリで拾いきれないリスクは誰が持ちますか？</strong>」</div>
+表明保証保険（W&I）の継続利用スキーム＋求職者・医療・学生の3種のセンシティブデータを束ねるサイバー包括。「保険の棚卸し」を入口に（現場メモ: ベンチャーは付保が拡大に追いつかない通例、を切り口に使用）。
+<div class="meta">型: 診断前置（P12） ｜ 対象リスク: 統合リスク・データ集中</div>
+<div class="veh">実行手段: 表明保証保険（W&I）＋サイバー包括＋E&O</div></div>
+
+<h2>STEP 4｜協業提案書骨子（alliance・6枚）＋ヒアリングシート</h2>
+<div class="slides">
+<div class="slide"><span class="n">1</span><br><b>貴社の急成長と、私たちが見ている3つの空白</b><br>・フリーランスの保障／紹介の約束の原資／統合リスク</div>
+<div class="slide"><span class="n">2</span><br><b>ご一緒に解けると考える理由（座組図）</b><br>・貴社=PF・データ・スピード／当社=補償・制度設計・全国事故対応</div>
+<div class="slide"><span class="n">3</span><br><b>第一弾: レバテック・セーフティネット</b><br>・登録者標準装備の設計と「選ばれるエージェント」の物語</div>
+<div class="slide"><span class="n">4</span><br><b>三方のメリット</b><br>・フリーランス=安心／貴社=差別化・定着／当社=新市場。レバウェル保証つき紹介への拡張</div>
+<div class="slide"><span class="n">5</span><br><b>実証の進め方</b><br>・1職種×3ヶ月のPoC→データで料率精緻化</div>
+<div class="slide"><span class="n">6（付録）</span><br><b>リスク分析の全体像</b></div>
+</div>
+<h3>ヒアリングシート（10問から抜粋）</h3>
+<ul class="tight">
+<li>レバテック登録者数と、現在フリーランス向けに提供している補償・福利厚生の有無</li>
+<li>レバウェルの返金・再紹介規定と、その年間発生規模（差し支えない範囲で）</li>
+<li>グループの保険プログラムは持株一括ですか、事業会社ごとですか（40事業の付保全体像）</li>
+<li>「レバクリ 職場の健康」の座組（提携先・責任分担）——当社の健康経営支援との協業余地</li>
+<li>M&A時のリスク評価・表明保証保険の利用経験</li>
+</ul>
+
+<div class="gapbox"><div class="t">この案件で足りなかったデータ（実機PoCへの示唆）</div>
+①非上場のため財務・事業別規模が断片（→帝国DB手順で補完）②返金規定・契約形態は内部情報（→ヒアリング）③<b>40事業は「1案件」に入らない——親案件・子案件の二層構造が要る</b>（仕様v2.1候補として記録済み）。批判パスが「総花→事業接地」「長期検討→3ヶ月PoC」の2箇所を強制修正した点も入念モードの効果実証。</div>
+<footer>リスク提案ナビ 出力サンプル（手動模擬実行）｜出典: レバレジーズ公式ニュース（レバクリ 2026/8）・meLev・レバテック公式・各種公開情報（2026年8月時点）｜社外秘・要専門家レビュー</footer>
+</div>
+</body>
+</html>

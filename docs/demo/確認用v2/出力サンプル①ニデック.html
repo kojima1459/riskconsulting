@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出力サンプル① ニデック</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;--deep:#7A5C9E;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic","Meiryo",sans-serif;font-size:14.5px;line-height:1.85;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 70px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho",serif;text-wrap:balance;}
+  header{padding:38px 0 20px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:10px;}
+  h1{font-size:27px;font-weight:700;}
+  .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{display:inline-block;background:var(--mist);border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:12px;color:var(--sub);}
+  .chip.b{background:var(--ai);color:#fff;border-color:var(--ai);}
+  .disclaimer{margin-top:12px;background:var(--warn);border-left:4px solid var(--kaki);padding:9px 13px;font-size:12.5px;line-height:1.7;}
+  h2{font-size:19px;color:var(--ai);margin:34px 0 12px;padding-bottom:4px;border-bottom:2px solid var(--line);}
+  h3{font-size:14.5px;color:var(--ai);margin:18px 0 8px;border-left:4px solid var(--ai);padding-left:8px;}
+  .iq{background:var(--mist);border-radius:6px;padding:12px 16px;font-size:13px;line-height:2.0;}
+  .iq .asp{display:inline-block;border-radius:3px;padding:0 7px;margin:1px 2px;font-size:11.5px;color:#fff;}
+  .a-ok{background:var(--matsu);} .a-pt{background:#B08A2E;} .a-ms{background:#A9B4C0;}
+  .iq b.hi{color:var(--matsu);} .iq b.mid{color:#8a6d1a;} .iq b.lo{color:var(--kaki);}
+  .fnote{border:1px dashed var(--deep);border-radius:6px;padding:10px 14px;font-size:13px;margin-top:10px;}
+  .fnote .t{color:var(--deep);font-weight:700;font-size:12px;}
+  .tblwrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.65;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--mist);white-space:nowrap;font-weight:700;}
+  td.c{text-align:center;white-space:nowrap;}
+  .deepbox{border:1px solid var(--deep);border-radius:6px;overflow:hidden;margin-top:12px;font-size:13px;}
+  .deepbox .h{background:var(--deep);color:#fff;padding:5px 14px;font-size:12.5px;font-weight:700;}
+  .deepbox .b{padding:10px 14px;}
+  .deepbox .exec{background:var(--mist);border-radius:4px;padding:6px 10px;margin:6px 0;}
+  .prop{border:1px solid var(--line);border-left:5px solid var(--matsu);border-radius:4px;padding:12px 16px;margin-bottom:12px;font-size:13px;}
+  .prop .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--matsu);border-radius:3px;padding:1px 8px;margin-right:6px;vertical-align:middle;}
+  .prop .kind.k2{background:var(--ai);} .prop .kind.k3{background:var(--deep);}
+  .prop .w{display:inline-block;font-size:10.5px;border:1px solid var(--deep);color:var(--deep);border-radius:3px;padding:0 6px;margin-left:4px;vertical-align:middle;}
+  .prop b.h{font-size:14px;}
+  .prop .hook{background:var(--mist);border-radius:4px;padding:6px 10px;margin:8px 0;}
+  .prop .meta{color:var(--sub);font-size:12px;margin-top:5px;}
+  .prop .veh{color:var(--kaki);font-size:12px;margin-top:2px;}
+  ul.tight{padding-left:1.3em;font-size:13px;} ul.tight li{margin-bottom:4px;}
+  .slides{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px;}
+  .slide{border:1px solid var(--line);border-radius:4px;padding:8px 12px;}
+  .slide .n{color:var(--sub);font-size:11px;}
+  .slide b{font-size:13px;}
+  .gapbox{background:var(--warn);border:1px solid #E8D5B5;border-radius:6px;padding:12px 16px;margin-top:22px;font-size:13px;}
+  .gapbox .t{font-weight:700;color:var(--kaki);margin-bottom:5px;}
+  footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub);}
+  @media (max-width:640px){h1{font-size:22px;} .slides{grid-template-columns:1fr;}}
+  @media print{body{font-size:12px;} h2{margin-top:22px;} .prop,.slide,.deepbox{break-inside:avoid;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">リスク提案ナビ 出力サンプル ①／④ — 仕様v2.2どおりの手動模擬実行</div>
+  <h1>ニデック株式会社</h1>
+  <div class="chips"><span class="chip b">新規開拓</span><span class="chip b">T2フルドシエ</span><span class="chip b">入念モード(deep)</span><span class="chip">業種: 電気機械器具製造業</span><span class="chip">ホール</span><span class="chip">非幹事(想定)</span><span class="chip">BIDなし</span><span class="chip">出力: 保険提案書(proposal)</span></div>
+  <div class="disclaimer">⚠ 実機（AIリボン経由）完成前の<strong>手動模擬実行</strong>です。2026年8月時点の公開情報のみ使用。メニューID等はナレッジ装填前のため公開情報ベースの実在サービス名で代用。<strong>提案は仮説であり、引受可否・幹事構成の確認前です。</strong>現場メモはデモ用のダミー記入例です。</div>
+</header>
+
+<h2>STEP 1｜入力と充足度診断</h2>
+<div class="iq">
+<b>収集した情報</b>: ディープリサーチ収集（D-1企業ドシエ・D-2業界競合・D-3リスク兆候・D-4マクロ）＋EDINET・報道＋HPレシピ8項目。<br>
+<span class="asp a-ok">会社概要</span><span class="asp a-ok">事業・製品</span><span class="asp a-ok">拠点・設備</span><span class="asp a-ok">沿革</span><span class="asp a-ok">直近の動き</span><span class="asp a-pt">採用・人員</span><span class="asp a-pt">有報・財務リスク</span><span class="asp a-pt">営業情報</span><span class="asp a-ok">SNS評判</span><span class="asp a-ok">競合・業界事故</span><span class="asp a-ok">市況・マクロ</span><span class="asp a-pt">財務状態</span><span class="asp a-ms">付保・提案の経緯</span><br>
+総合: <b class="hi">高</b>（13観点中9がok）。<b>助言</b>: 有報提出延期中のため直近財務は断片的。付保・提案の経緯（幹事構成・既存D&O条件）は公開情報に存在しないため、<u>営業ルートでの確認が分析の最重要ピース</u>（→ヒアリングシートに反映済み）。
+</div>
+<div class="fnote"><span class="t">💬 現場メモ（自由入力欄・デモ用ダミー）</span><br>「企業営業部の話では、再建関連で外部コンサルが多数出入りしているらしい」→ field_insights: <b>competitor</b> タグで下流に原文パススルー</div>
+
+<h2>STEP 2｜リスク分析表（抜粋6/14件・批判パス反映済み）</h2>
+<div class="tblwrap"><table>
+<tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th><th>未然防止策 → 実行手段</th></tr>
+<tr><td>経営・戦略</td><td>役員責任追及の連鎖</td><td>不適切会計の累積影響1,607億円・純資産影響約1,397億円を受け、株主代表訴訟・証券訴訟・海外投資家請求が数年継続</td><td class="c">高</td><td class="c">大</td><td>第三者委報告 2026/3（報道）</td><td>訴訟対応体制の事前整備 → D&O・訴訟対応費用</td></tr>
+<tr><td>経営・戦略</td><td>特別注意銘柄→上場廃止シナリオ</td><td>2025/10指定。1年後審査で改善不認定なら上場廃止。資金調達・人材・取引条件へ連鎖</td><td class="c">中</td><td class="c">大</td><td>東証指定（報道）</td><td>内部統制改善の第三者証明 → ガバナンス診断（コンサル）</td></tr>
+<tr><td>経営・戦略</td><td>子会社統制の構造疲労</td><td>M&Aで拡大した子会社群の管理限界が不正の温床に。同じ構造は品質・安全・サイバーで再発しうる</td><td class="c">中</td><td class="c">大</td><td>第三者委報告の指摘＋推定</td><td>グループ横断のリスク統制診断 → 診断前置型パッケージ</td></tr>
+<tr><td>サイバー・情報</td><td>海外子会社経由のセキュリティ統制格差</td><td>会計統制と同根の「本社の目が届かない」構造。海外拠点経由の侵入・情報流出</td><td class="c">中</td><td class="c">大</td><td>推定（統制指摘からの類推）</td><td>ASMによる外部公開資産の可視化 → サイバー保険＋ASM診断</td></tr>
+<tr><td>財物・自然災害</td><td>車載事業再編に伴う遊休資産</td><td>約2,500億円規模の減損検討→拠点統廃合。休止工場は火災・盗難・環境リスクが未管理化</td><td class="c">中</td><td class="c">中</td><td>減損報道＋業種プライア</td><td>休止拠点の管理計画策定 → 火災・環境賠償＋解体連携</td></tr>
+<tr><td>労務・人為</td><td>再建期のキーパーソン流出・通報増加</td><td>統制再構築の負荷・処遇不安で技術者離脱。通報対応の巧拙が二次不祥事を左右</td><td class="c">高</td><td class="c">中</td><td>経営体制変更の報道＋推定</td><td>通報対応・危機管理体制の外部診断 → 危機管理費用</td></tr>
+</table></div>
+<div class="deepbox"><div class="h">🔍 入念モード｜批判パス（S2C 主査審査）の記録・抜粋</div><div class="b">
+<b>指摘</b>: 「初版はガバナンス系に偏重（6/12件）。ニデックは製造業である——精密モーター事業の品質・PL、レアアース等の調達リスクの検討が漏れている（missing）」→ <b>改訂で財物・調達系2件を追加し、本表は改訂後</b>。<br>
+<b>指摘</b>: 「『上場廃止』の頻度=高は過大。東証の改善審査プロセスを踏まえ中へ（inconsistent）」→ 反映済み。
+</div></div>
+
+<h2>STEP 3｜提案ストーリー（経営者ペルソナ審査済み）</h2>
+<div class="prop"><span class="kind k3">座組提案</span><b class="h">「再建の証明」を保険が担ぐ — ガバナンス再建連動プログラム</b><span class="w">W1 空白</span><span class="w">W4 信用増幅</span>
+<div class="hook">「東証の審査まであと1年。<strong>再発防止が本物だと、誰がどう証明しますか？</strong>」</div>
+子会社・海外拠点のリスク統制診断を軸に、診断結果と改善実装を引受条件・料率に反映するパッケージ（サイバー・賠責・危機管理費用）。幹事のD&Oには触らず、<strong>幹事がやっていない「再建の実装支援」レイヤー</strong>に入る。診断レポートは東証・投資家への説明資材にもなる——保険が再建の証明書になる（信用増幅装置）。
+<div class="meta">型: 診断前置（P12）×検知バンドル（P2） ｜ 対象リスク: 子会社統制・サイバー ｜ 経営者反応(S3C): 「コンサルはもう大勢入っている」→切り返し「診断で終わらず、結果を引受条件と料率に接続して"証明"まで運ぶのは保険会社にしかできません」※現場メモ（コンサル多数出入り）を反論設計に使用</div>
+<div class="veh">実行手段: サイバー保険＋ASM診断＋態勢診断（自社グループ実在サービス）</div></div>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">危機対応の「第二波」に備える — 調査・訴訟対応費用パッケージ</b><span class="w">W2 トリガー成熟</span>
+<div class="hook">「第三者委員会の費用、想定の何倍でしたか。<strong>次の有事は、初動の資金を保険で。</strong>」</div>
+今回級の調査費用・危機管理広報・訴訟対応の実費は巨額かつ数年続く。訴訟の波が続く期間の「守りの運転資金」として費用補償を提案。実損・実費型なので約款思想と整合。
+<div class="meta">型: 役務・費用型（P7） ｜ 対象リスク: 役員責任追及・通報対応</div>
+<div class="veh">実行手段: 費用利益・新種（危機管理費用系）＋D&O増枠の設計余地</div></div>
+<div class="prop"><span class="kind">補償拡大</span><b class="h">再編で生まれる「空き家工場」の財物・環境カバー</b>
+<div class="hook">「統廃合が決まった拠点、<strong>止めた日からのリスク管理</strong>は決まっていますか？」</div>
+休廃止拠点の財物・環境賠償・解体までの管理費用。解体マッチング事業者（適用先候補に登録済み）との連携で「保険＋出口」まで提示。
+<div class="meta">型: サービス裏受け（P4）候補 ｜ 対象リスク: 遊休資産</div>
+<div class="veh">実行手段: 火災（企業）＋環境賠償＋解体連携スキーム</div></div>
+
+<h2>STEP 4｜提案書骨子（保険提案書・7枚/T2）＋ヒアリングシート</h2>
+<div class="slides">
+<div class="slide"><span class="n">1</span><br><b>貴社の事業環境の理解</b><br>・再建と成長投資を両立させる1年——外部の眼が最も厳しい期間<br>・精密モーターの技術資産は毀損していない</div>
+<div class="slide"><span class="n">2</span><br><b>潜在リスクの全体像</b><br>・ガバナンス再建期に特有の「二次リスク」を頻度×影響で整理<br>・見えている損失（減損）の裏の、未管理リスク</div>
+<div class="slide"><span class="n">3</span><br><b>同業で顕在化している事故類型</b><br>・大手製造業の統制不備起因の訴訟・サイバー侵入の類型（一般類型として）</div>
+<div class="slide"><span class="n">4</span><br><b>当社がご支援できること</b><br>・提案3本（再建連動プログラム／費用パッケージ／休止拠点カバー）</div>
+<div class="slide"><span class="n">5</span><br><b>次のステップ</b><br>・主要子会社数社での診断パイロットのご提案</div>
+<div class="slide"><span class="n">6-7（付録）</span><br><b>分析の根拠・データ</b><br>・リスク分析表全14件・出典一覧</div>
+</div>
+<h3>ヒアリングシート（10問から抜粋）</h3>
+<ul class="tight">
+<li>現在の保険プログラムの幹事・共保構成と、D&O・役員賠償の増枠交渉のご状況を教えてください（※他社付保はデータで取得不可のため必須質問）</li>
+<li>子会社統制の再構築はどの部門が主管で、外部診断の予算枠はございますか</li>
+<li>車載事業再編の対象拠点とスケジュールの概要を伺えますか</li>
+<li>内部通報の件数推移と対応体制について、可能な範囲でお聞かせください</li>
+</ul>
+
+<div class="gapbox"><div class="t">この案件で足りなかったデータ（実機PoCへの示唆）</div>
+①付保状況・幹事構成（公開情報にゼロ。提案3本の実行可能性は全部ここに依存→ヒアリング必須質問化で対応）②既存取引・過去接点の社内履歴 ③D&O市場の硬化状況の相場観（ベテランの頭の中→判断台帳への蓄積対象）④有報提出延期中で直近財務が断片的。</div>
+<footer>リスク提案ナビ 出力サンプル（手動模擬実行）｜出典: 有価証券報告書・EDINET・第三者委員会報告に関する各社報道・東証開示（2026年8月時点）｜社外秘・要専門家レビュー</footer>
+</div>
+</body>
+</html>
