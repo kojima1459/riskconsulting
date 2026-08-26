@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出力サンプル⑤ 春華堂</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  :root{--ink:#24303E;--sub:#5A6B7E;--paper:#FFF;--mist:#EFF3F8;--ai:#2B5B8F;--kaki:#B4552D;--matsu:#2F7A54;--line:#D8E0E9;--warn:#FBF3E6;--deep:#7A5C9E;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic","Meiryo",sans-serif;font-size:14.5px;line-height:1.85;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 70px;}
+  h1,h2{font-family:"Shippori Mincho","Yu Mincho",serif;text-wrap:balance;}
+  header{padding:38px 0 20px;border-bottom:3px solid var(--ai);}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--ai);font-weight:700;margin-bottom:10px;}
+  h1{font-size:27px;font-weight:700;}
+  .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{display:inline-block;background:var(--mist);border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:12px;color:var(--sub);}
+  .chip.b{background:var(--ai);color:#fff;border-color:var(--ai);}
+  .disclaimer{margin-top:12px;background:var(--warn);border-left:4px solid var(--kaki);padding:9px 13px;font-size:12.5px;line-height:1.7;}
+  h2{font-size:19px;color:var(--ai);margin:34px 0 12px;padding-bottom:4px;border-bottom:2px solid var(--line);}
+  h3{font-size:14.5px;color:var(--ai);margin:18px 0 8px;border-left:4px solid var(--ai);padding-left:8px;}
+  .iq{background:var(--mist);border-radius:6px;padding:12px 16px;font-size:13px;line-height:2.0;}
+  .iq .asp{display:inline-block;border-radius:3px;padding:0 7px;margin:1px 2px;font-size:11.5px;color:#fff;}
+  .a-ok{background:var(--matsu);} .a-pt{background:#B08A2E;} .a-ms{background:#A9B4C0;}
+  .iq b.hi{color:var(--matsu);} .iq b.mid{color:#8a6d1a;} .iq b.lo{color:var(--kaki);}
+  .fnote{border:1px dashed var(--deep);border-radius:6px;padding:10px 14px;font-size:13px;margin-top:10px;}
+  .fnote .t{color:var(--deep);font-weight:700;font-size:12px;}
+  .tblwrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;line-height:1.65;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--mist);white-space:nowrap;font-weight:700;}
+  td.c{text-align:center;white-space:nowrap;}
+  .deepbox{border:1px solid var(--deep);border-radius:6px;overflow:hidden;margin-top:12px;font-size:13px;}
+  .deepbox .h{background:var(--deep);color:#fff;padding:5px 14px;font-size:12.5px;font-weight:700;}
+  .deepbox .b{padding:10px 14px;}
+  .deepbox .exec{background:var(--mist);border-radius:4px;padding:6px 10px;margin:6px 0;}
+  .prop{border:1px solid var(--line);border-left:5px solid var(--matsu);border-radius:4px;padding:12px 16px;margin-bottom:12px;font-size:13px;}
+  .prop .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--matsu);border-radius:3px;padding:1px 8px;margin-right:6px;vertical-align:middle;}
+  .prop .kind.k2{background:var(--ai);} .prop .kind.k3{background:var(--deep);}
+  .prop .w{display:inline-block;font-size:10.5px;border:1px solid var(--deep);color:var(--deep);border-radius:3px;padding:0 6px;margin-left:4px;vertical-align:middle;}
+  .prop b.h{font-size:14px;}
+  .prop .hook{background:var(--mist);border-radius:4px;padding:6px 10px;margin:8px 0;}
+  .prop .meta{color:var(--sub);font-size:12px;margin-top:5px;}
+  .prop .veh{color:var(--kaki);font-size:12px;margin-top:2px;}
+  ul.tight{padding-left:1.3em;font-size:13px;} ul.tight li{margin-bottom:4px;}
+  .slides{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px;}
+  .slide{border:1px solid var(--line);border-radius:4px;padding:8px 12px;}
+  .slide .n{color:var(--sub);font-size:11px;}
+  .slide b{font-size:13px;}
+  .gapbox{background:var(--warn);border:1px solid #E8D5B5;border-radius:6px;padding:12px 16px;margin-top:22px;font-size:13px;}
+  .gapbox .t{font-weight:700;color:var(--kaki);margin-bottom:5px;}
+  footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub);}
+  @media (max-width:640px){h1{font-size:22px;} .slides{grid-template-columns:1fr;}}
+  @media print{body{font-size:12px;} h2{margin-top:22px;} .prop,.slide,.deepbox{break-inside:avoid;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">リスク提案ナビ 出力サンプル ⑤ — 仕様v2.2どおりの手動模擬実行</div>
+  <h1>有限会社 春華堂</h1>
+  <div class="chips"><span class="chip b">新規開拓（再訪）</span><span class="chip b">T2フルドシエ</span><span class="chip b">入念モード(deep)</span><span class="chip">業種: 菓子製造業（浜松）</span><span class="chip">リテール〜ホール</span><span class="chip">非幹事(想定)</span><span class="chip">BIDなし</span><span class="chip">出力: 保険提案書(proposal)</span></div>
+  <div class="disclaimer">⚠ 実機（AIリボン経由）完成前の<strong>手動模擬実行</strong>です。2026年8月時点の公開情報のみ使用。提案は仮説であり引受可否・既存付保の確認前。現場メモは<strong>「かつて訪問経験のある上席の記憶を営業が書き留めた」想定のダミー記入例</strong>——過去の訪問経験がツールの入力になる使い方のデモです。</div>
+</header>
+
+<h2>STEP 1｜入力と充足度診断</h2>
+<div class="iq">
+<b>収集した情報</b>: ディープリサーチ収集（D-1〜D-4）＋HPレシピ。創業1887年・浜松の菓子製造（和洋）。主力「うなぎパイ」（1961年〜・「夜のお菓子」）。<strong>うなぎパイファクトリー</strong>（2005年〜・工場見学・来館者年約60万人の産業観光拠点）。<strong>SWEETS BANK</strong>（2021年・浜松いわた信用金庫と協業の本社＋店舗＋カフェ複合施設・開業1.5ヶ月で8万人来場）。2025年: 長野県境に交流拠点（空き家再生）。<strong>2026年2月: 新卒初任給6.8〜18.5%引き上げ＋ベースアップ</strong>。<br>
+<span class="asp a-ok">会社概要</span><span class="asp a-ok">事業・製品</span><span class="asp a-ok">拠点・設備</span><span class="asp a-ok">沿革</span><span class="asp a-ok">直近の動き</span><span class="asp a-ok">採用・人員</span><span class="asp a-ms">有報・財務リスク</span><span class="asp a-ok">営業情報</span><span class="asp a-pt">SNS評判</span><span class="asp a-ok">競合・業界事故</span><span class="asp a-pt">市況・マクロ</span><span class="asp a-ms">財務状態</span><span class="asp a-ms">付保・提案の経緯</span><br>
+総合: <b class="hi">高</b>（非上場ながら情報発信が豊富な企業）。<b>助言</b>: 有限会社のため財務は非公開——帝国DB企業検索で概況確認を推奨。既存付保（地元代理店経由の可能性大）はヒアリング必須。
+</div>
+<div class="fnote"><span class="t">💬 現場メモ（自由入力欄・デモ用ダミー: 過去に訪問経験のある上席の記憶を書き留めた想定）</span><br>「約20年前に提案訪問。当時は企業情報・工場設備・製造工程・潜在リスクの事前調査に膨大な時間がかかった。提案は火災・地震が中心だった。工場見学施設はその後の開業。地元金融機関との関係が深い会社という印象」→ field_insights: <b>relationship / opportunity / risk_clue</b> タグで下流へ原文パススルー</div>
+
+<h2>STEP 2｜リスク分析表（抜粋6/13件・批判パス反映済み）</h2>
+<div class="tblwrap"><table>
+<tr><th>カテゴリ</th><th>リスク</th><th>シナリオ</th><th>頻度</th><th>影響</th><th>根拠（出所）</th><th>未然防止策 → 実行手段</th></tr>
+<tr><td>事業継続・SC</td><td>南海トラフ地震×主力製造拠点の集中</td><td>浜松は南海トラフ想定域。うなぎパイの製造が止まれば、全国の売場・土産需要への供給が長期停止し、ブランドの棚が競合に置き換わる</td><td class="c">低</td><td class="c">大</td><td>拠点所在地（HP）×ハザード公知情報</td><td>BCP実効性診断・代替製造の事前設計 → 地震危険＋利益（BI）</td></tr>
+<tr><td>製造・品質・賠償</td><td>アレルゲン・異物混入×リコール</td><td>小麦・卵・乳製品等を扱う量産ライン。表示誤り・混入が発生すると回収費用とブランド毀損が同時に来る。単一主力ブランドゆえ風評の増幅率が高い</td><td class="c">中</td><td class="c">大</td><td>製品構成（HP）×業種プライア</td><td>表示チェック体制・ライン管理の点検 → PL＋<b>生産物回収費用保険</b></td></tr>
+<tr><td>労務・人為</td><td>来館者年約60万人の施設内事故</td><td>工場見学・スイーツバンク・カフェは「来館者を預かる場」。転倒・体調不良・繁忙期（GW・盆）の混雑事故。事故は最高の広告装置を最悪の広告に変える</td><td class="c">中</td><td class="c">中</td><td>ファクトリー来館者数（公表値）＋施設構成</td><td>見学動線・混雑時の安全点検 → 施設賠償＋来館者傷害の包括</td></tr>
+<tr><td>事業継続・SC</td><td>主要原材料の調達・価格変動</td><td>うなぎエキス（資源制約）・バター・小麦の調達難と価格高騰が、名物の製造原価と供給量を直撃</td><td class="c">高</td><td class="c">中</td><td>製品特性×市況（D-4マクロ）</td><td>調達先の複線化状況の確認（要ヒアリング）</td></tr>
+<tr><td>労務・人為</td><td>人材確保・職人技能の承継</td><td>初任給を最大18.5%引き上げ（2026/2発表）＝採用難が経営課題である証左。菓子職人の技能承継と製造ラインの人手はブランドの生命線</td><td class="c">高</td><td class="c">中</td><td><b>初任給引き上げ発表（2026/2ニュース）</b></td><td>「人に投資する会社」の制度整備 → GLTD・団体傷害の福利厚生パッケージ</td></tr>
+<tr><td>経営・戦略</td><td>多業態展開に伴う新リスクの未整理</td><td>複合施設・カフェ・交流拠点（空き家再生）と業態が広がる一方、保険・管理体制が菓子製造時代のままだと空白が生じる</td><td class="c">中</td><td class="c">中</td><td>SWEETS BANK・長野拠点（報道）＋現場メモ（提案は火災・地震中心だった）</td><td>業態別のリスク棚卸し → 包括プログラム化の検討</td></tr>
+</table></div>
+<div class="deepbox"><div class="h">🔍 入念モード｜批判パス（S2C/S3C）の記録・抜粋</div><div class="b">
+<b>S2C指摘</b>: 「初版は製造リスク偏重。年60万人の<u>観光施設側</u>——繁忙期の混雑・食物アレルギーを持つ来館者への提供リスク——が漏れている（missing）」→ 施設内事故の行を追加・アレルゲンのシナリオに提供時の観点を反映。<br>
+<div class="exec">経営者(想定)反応: 「保険は地元の代理店さんに任せている。<b>付き合いもある</b>」→ lands=false 判定</div>
+<b>S3C改訂指示</b>: 「入替提案に見せない。<u>『南海トラフとブランド』という代理店の守備範囲を超える2つの経営課題の設計の話</u>として構成し、既存代理店との共存を明示せよ」→ 提案1のhookと構成に反映。
+</div></div>
+
+<h2>STEP 3｜提案ストーリー（経営者ペルソナ審査済み）</h2>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">うなぎパイが「止まらない」設計 — 南海トラフBCP×利益保険プログラム</b><span class="w">W2 トリガー成熟</span><span class="w">W4 信用増幅</span>
+<div class="hook">「浜松のラインが止まった日、<strong>全国の売場からうなぎパイが消えるまで何日でしょうか。そして、棚が戻るまでに何ヶ月でしょうか</strong>」</div>
+建物・設備の地震危険だけでなく、<strong>供給停止の期間損失（利益）と、棚を失うブランド損失</strong>まで含めたBCP設計。BCP実効性診断（コンサル）を前置し、診断結果を補償設計・料率に反映する。既存のご加入は活かしたまま、地震・利益という設計難度の高い領域を当社が受け持つ——<u>既存代理店との共存を前提にした構成</u>。
+<div class="meta">型: 診断前置（P12） ｜ 対象リスク: 南海トラフ×拠点集中 ｜ ※約20年前の提案（火災・地震中心）の現代版アップデートとして提示——現場メモの記憶を接続</div>
+<div class="veh">実行手段: 地震危険担保＋利益（BI）＋BCPコンサル</div></div>
+<div class="prop"><span class="kind">補償拡大</span><b class="h">年60万人の「魅せる工場」を守る — 体験施設包括プログラム</b><span class="w">W1 空白</span>
+<div class="hook">「工場見学は最高の広告です。だからこそ、<strong>来館者の事故は最悪の広告になります</strong>」</div>
+ファクトリー・スイーツバンク・カフェを「来館者を預かる体験施設群」として捉え直し、施設賠償＋来館者傷害＋食品PL・回収費用を包括化。繁忙期の混雑・アレルギー対応を含む安全点検（未然防止）を前置する。菓子製造の保険と観光施設の保険の<strong>隙間</strong>を埋める提案。
+<div class="meta">型: 預かる場包括（S-3型）×診断前置（P12） ｜ 対象リスク: 施設内事故・リコール</div>
+<div class="veh">実行手段: 施設賠償＋傷害＋PL＋<b>生産物回収費用保険</b></div></div>
+<div class="prop"><span class="kind k2">新種目提案</span><b class="h">「人に投資する会社」の宣言を制度で裏づける — 職人・従業員の福利厚生パッケージ</b><span class="w">W2 時事</span>
+<div class="hook">「初任給を最大18.5%上げられた御社の次の一手は、<strong>『入った人が長く安心して働ける』の見える化</strong>ではないでしょうか」</div>
+賃上げ（2026/2発表）の文脈に乗せ、GLTD（長期就業不能）＋団体傷害＋健康支援を採用力の武器としてパッケージ化。職人の技能承継リスクに対する「辞めない・倒れない」への投資。
+<div class="meta">型: 団体プール（P8） ｜ 対象リスク: 人材確保・技能承継 ｜ 経営者反応(S3C): 「コストが増える話ばかりでは」→切り返し「賃上げ広報と同じで、これは採用市場への投資です。導入企業の採用実績でご説明します」</div>
+<div class="veh">実行手段: GLTD＋団体傷害＋健康経営支援</div></div>
+
+<h2>STEP 4｜提案書骨子（保険提案書・7枚/T2）＋ヒアリングシート</h2>
+<div class="slides">
+<div class="slide"><span class="n">1</span><br><b>貴社の事業環境の理解</b><br>・1887年からの暖簾と、工場見学・複合施設という「開かれた菓子企業」への進化<br>・賃上げに踏み込んだ「人への投資」</div>
+<div class="slide"><span class="n">2</span><br><b>潜在リスクの全体像</b><br>・南海トラフ×拠点集中／品質×単一ブランド／体験施設×60万人を頻度×影響で</div>
+<div class="slide"><span class="n">3</span><br><b>同業で顕在化している事故類型</b><br>・食品リコールの回収費用と風評の一般類型／観光施設の来館者事故類型</div>
+<div class="slide"><span class="n">4</span><br><b>当社がご支援できること</b><br>・提案3本（止まらない設計／体験施設包括／福利厚生パッケージ）</div>
+<div class="slide"><span class="n">5</span><br><b>次のステップ</b><br>・BCP実効性診断と施設安全点検のご提案（既存のご加入と共存する形で）</div>
+<div class="slide"><span class="n">6-7（付録）</span><br><b>分析の根拠</b><br>・リスク分析表全13件・出典一覧</div>
+</div>
+<h3>ヒアリングシート（10問から抜粋）</h3>
+<ul class="tight">
+<li>現在の保険のご加入状況（種目・代理店・保険会社）と更新月を差し支えない範囲で（※既存代理店と共存する提案のため必須確認）</li>
+<li>南海トラフを想定したBCP（代替製造・在庫方針・復旧目標日数）の現在の整備状況は</li>
+<li>うなぎパイの製造ラインは何系統で、停止時の代替手段はありますか</li>
+<li>ファクトリー・スイーツバンクの繁忙期の来館者数と、救護・混雑対応の体制は</li>
+<li>原材料（うなぎエキス・バター等）の調達先の複線化の状況は</li>
+<li>賃上げの狙い（採用課題の実感）と、福利厚生の現状を伺えますか</li>
+</ul>
+
+<div class="gapbox"><div class="t">この案件で足りなかったデータ（実機PoCへの示唆）＋この1枚の意味</div>
+①財務（有限会社・非公開→帝国DB手順で補完）②既存付保・地元代理店との関係（提案の構成を左右する最重要情報→ヒアリング必須質問化）③工場の設備・ライン構成（→見学施設の公開情報からある程度読めるのが本件の特殊な強み）。<br>
+<b>この1枚の意味</b>: かつて「企業情報・工場設備・製造工程・潜在リスクの事前調査に膨大な時間がかかった」先で、同じ水準の初回準備が<b>公開情報収集込みで約2時間（人の作業15分）</b>で出る——そして当時の提案（火災・地震中心）を、体験施設・人材・ブランドまで含む現在の姿に更新できる。これが本ツールの価値の実演です。</div>
+<footer>リスク提案ナビ 出力サンプル（手動模擬実行）｜出典: 春華堂公式サイト・うなぎパイファクトリー公式・SWEETS BANK関連報道（販促会議/流通ニュース）・初任給引き上げプレスリリース（PR TIMES 2026/2）・日経報道（2026年8月時点）｜社外秘・要専門家レビュー</footer>
+</div>
+</body>
+</html>
