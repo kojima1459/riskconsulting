@@ -1,4 +1,6 @@
-# 15. プロンプトとJSONスキーマ v2.0（本製品の核心）
+# 15. プロンプトとJSONスキーマ v2.3（本製品の核心）
+
+> v2.3: 2026-08-27部会フィードバック（内田部長・高橋PL）反映。リスクユニバース10分類化・保険移転可能性(insurability)・リスクステータス(ラウンド間ライフサイクル)・5段階スコア・引受目線(do_not_propose)・追加リサーチプロンプト生成(research_requests)・拠点ハザード観点(hazard)を追加。変更の経緯はdocs/20章。
 
 本章の文字列が実装の正。modPromptsCore / modPromptsBlocks / modPromptsOps / modSchemas には**本章のテキストを一字一句このまま**定数実装する（30,000字契約のため分割・連結）。本章とコードの一致検査はテスト対象（17章 T-23）。
 
@@ -15,7 +17,9 @@
 
 | enum | 日本語 |
 |---|---|
-| category: property_natcat / product_liability / labor_hr / bcp_supplychain / cyber_info / management_strategy | 財物・自然災害／製造・品質・賠償／労務・人為／事業継続・サプライチェーン／サイバー・情報／経営・戦略 |
+| category: strategy_market / supply_chain / manufacturing_quality / sales_customer / facility_bcp / hr_labor / digital_info / legal_regulatory / finance_counterparty / brand_social | 戦略・市場／調達・供給網／製造・品質／販売・顧客／施設・自然災害・BCP／人材・労務／デジタル・情報／法務・規制／財務・取引先／ブランド・社会（リスクユニバース10分類） |
+| transferability: cover / partial / hard | 比較的移転しやすい／条件付き・部分的／保険化困難 |
+| risk status: proposed / confirmed / rejected / new | 仮説／ヒアリングで確認済み／棄却（記録は残す）／新規発見 |
 | frequency: high/mid/low ・ impact: large/mid/small | 高/中/低 ・ 大/中/小 |
 | source: hp / yuho / memo / contract / prev_renewal / knowledge / inference | HP／有報／営業メモ／現契約／前回更新メモ／社内ナレッジ／推定 |
 | gap_type: uninsured / underinsured / overlap | 無保険／過小／重複 |
@@ -104,19 +108,20 @@ BLOCK_RENEWAL_S3:
 | 7 | finance_risk | 「事業等のリスク」章・事業の内容（上場時）／決算公告・業界記事（非上場時） | EDINET・有報PDF |
 | 8 | sales_memo | 紹介経緯・訪問メモ・営業が知っている事情 | 営業メモ欄へ |
 
-### T2フルドシエ（重要案件）は上記8項目に以下の5観点を追加する（計13観点）
+### T2フルドシエ（重要案件）は上記8項目に以下の6観点を追加する（計14観点）
 
 | # | aspect | 集めるもの | どこから |
 |---|---|---|---|
 | 9 | sns | SNS・口コミの評判傾向（品質・労働環境・炎上の有無） | docs/08 D-3 |
 | 10 | competitors | 主要競合とポジション、業界の重大事故事例 | docs/08 D-2 |
 | 11 | market | 業界の市況・需給・法改正、マクロ環境（為替・金利・原材料・人手） | docs/08 D-2/D-4 |
-| 12 | finance | 売上・利益の傾向、投資動向（有報・決算公告・公開記事） | docs/08 D-1 |
+| 12 | finance | 売上・利益の傾向、純資産・投資動向（有報・決算公告・公開記事） | docs/08 D-1 |
 | 13 | insurance_ctx | 付保の経緯・他社提案・過去のヒアリングで得た課題感（**社内で得た情報。顧客の非公開情報の扱いは16章のマトリクス順守**） | 営業メモ・現契約・前回更新メモ |
+| 14 | hazard | 拠点ごとのハザード情報（浸水想定深・土砂災害警戒区域・地震/津波/液状化想定・過去被災歴） | docs/08 D-7（ディープリサーチ）＋重ねるハザードマップ（disaportal.gsi.go.jp）で住所検索し要点を転記 |
 
 T2の収集は**docs/08「ドシエ収集プロンプト集」でディープリサーチ社内アプリに行わせ、人はコピペ運搬のみ**（人の作業15分・放置1〜2時間）。収集結果は「追加ドシエ」貼付欄へ。
 
-S1はこの観点の充足度を診断し（input_quality。判定基準はティア連動: T1は8基本観点、T2は13観点で評価）、不足時は「何をどこから足すか」を返す。**入力が薄いまま実行した場合、出力は一般論に近づき、その分はヒアリングシート（訪問で聞く事項）に回る**——この関係を利用ガイドに明記する。
+S1はこの観点の充足度を診断し（input_quality。判定基準はティア連動: T1は8基本観点、T2は14観点で評価）、不足時は「何をどこから足すか」を返し、さらに**不足観点を埋めるためのディープリサーチ用プロンプト文面そのもの（research_requests）を生成する**（営業はコピペして投げるだけ。高橋FB③）。**入力が薄いまま実行した場合、出力は一般論に近づき、その分はヒアリングシート（訪問で聞く事項）に回る**——この関係を利用ガイドに明記する。
 
 ### system（BuildS1System）
 
@@ -132,14 +137,22 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    新規事業・海外展開・大口取引先）を優先的に拾う。
 4. missing_info には「リスク分析のために本当は知りたいが入力に無かった情報」を、
    営業が顧客に確認しやすい粒度で列挙する。
-5. input_quality で入力の充足度を診断する。13の観点(profile=会社概要, business=事業・製品,
+5. input_quality で入力の充足度を診断する。14の観点(profile=会社概要, business=事業・製品,
    sites=拠点・設備, history=沿革, news=直近の動き, hr=採用・人員, finance_risk=有報・財務リスク,
    sales_memo=営業情報, sns=SNS評判, competitors=競合・業界事故, market=市況・マクロ,
-   finance=財務状態, insurance_ctx=付保・提案の経緯)それぞれに
+   finance=財務状態, insurance_ctx=付保・提案の経緯, hazard=拠点ハザード情報)それぞれに
    status(ok=十分/partial=断片的/missing=無い)を付ける。
    overall(high=仮説を持って訪問できる/mid=一般論が混ざる/low=一般論しか出せない)は
-   案件のティア基準で判定する(クイック=基本8観点で判定/フルドシエ=13観点で判定)。
+   案件のティア基準で判定する(クイック=基本8観点で判定/フルドシエ=14観点で判定)。
    advice に「何をどこから追加で貼るべきか」を具体的に1〜2文で書く。甘い判定をしない。
+5b. research_requests には、status が partial/missing の観点のうち外部調査で埋められるものについて、
+   社内の調査AIアプリにそのまま貼って使える調査プロンプト文面を生成する。対象企業名・業種・
+   拠点名など既知の固有情報を文面に埋め込み、出典(URL)を付けて回答するよう指示する具体文とする。
+   営業メモ・現契約など顧客からしか得られない観点は対象にしない(ヒアリングで得るべきものは
+   missing_info に回す)。全観点が ok なら空配列とする。
+6b. locations では、入力に拠点の住所やハザード情報(浸水想定・土砂災害警戒区域・地震想定等)が
+   含まれる場合、それぞれ address / hazard_note に転記する。無ければ "不明" とする。ハザード情報は
+   後続のリスク分析で自然災害リスクの根拠になる最重要情報である。
 6. 【現場メモ】は営業しか知らない情報である。**要約・言い換えをせず**、1ネタ=1件で field_insights に
    原文のまま切り分け、タグ(risk_clue/relationship/competitor/constraint/opportunity/other)だけ付ける。
    意味が取れない断片もそのまま残す(捨てない)。
@@ -196,7 +209,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "business_summary": "主力事業の要約(200字以内)",
   "main_products": ["主力製品・サービス"],
   "processes": ["製造・販売プロセスの特徴(1項目1文)"],
-  "locations": [{"name": "拠点名", "type": "工場/本社/店舗/倉庫/その他", "notes": "設備・立地の特記(なければ\"不明\")"}],
+  "locations": [{"name": "拠点名", "type": "工場/本社/店舗/倉庫/その他", "address": "住所(入力にあれば。なければ\"不明\")",
+                 "hazard_note": "ハザード情報(浸水想定深・土砂・地震等。入力にあれば転記。なければ\"不明\")",
+                 "notes": "設備・立地の特記(なければ\"不明\")"}],
   "supply_chain": {"key_materials": ["主要な原材料・仕入品"], "notes": "調達・物流の特記(なければ\"不明\")"},
   "customers": {"segments": ["顧客層"], "channels": ["販路"]},
   "workforce_notes": "従業員・技能に関する特記(なければ\"不明\")",
@@ -209,10 +224,13 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     "coverage": [{"aspect": "profile", "status": "ok/partial/missing"}],
     "overall": "high/mid/low",
     "advice": "追加で貼るべき情報とその場所(1〜2文。十分なら\"追加不要\")"
-  }
+  },
+  "research_requests": [{"purpose": "何を埋めるための調査か(対象aspectを含め1文)",
+                         "prompt_text": "調査AIアプリにそのまま貼れるプロンプト全文(企業名・拠点等の固有情報を埋め込む)"}]
 }
 ※新規案件（現契約サマリが「なし」）の場合、current_coverage は [] とする。
-※input_quality.coverage は13観点(profile, business, sites, history, news, hr, finance_risk, sales_memo, sns, competitors, market, finance, insurance_ctx)を必ず各1回出力する。
+※input_quality.coverage は14観点(profile, business, sites, history, news, hr, finance_risk, sales_memo, sns, competitors, market, finance, insurance_ctx, hazard)を必ず各1回出力する。
+※全観点が ok の場合、research_requests は [] とする。
 ```
 
 ### Schema-S1（SCHEMA_S1）
@@ -228,8 +246,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     "locations": {"type": "array", "items": {"type": "object", "properties": {
       "name": {"type": "string"},
       "type": {"type": "string", "enum": ["工場", "本社", "店舗", "倉庫", "その他"]},
+      "address": {"type": "string"},
+      "hazard_note": {"type": "string"},
       "notes": {"type": "string"}
-    }, "required": ["name", "type", "notes"], "additionalProperties": false}},
+    }, "required": ["name", "type", "address", "hazard_note", "notes"], "additionalProperties": false}},
     "supply_chain": {"type": "object", "properties": {
       "key_materials": {"type": "array", "items": {"type": "string"}},
       "notes": {"type": "string"}
@@ -256,22 +276,26 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     }, "required": ["item", "why_needed"], "additionalProperties": false}},
     "input_quality": {"type": "object", "properties": {
       "coverage": {"type": "array", "items": {"type": "object", "properties": {
-        "aspect": {"type": "string", "enum": ["profile", "business", "sites", "history", "news", "hr", "finance_risk", "sales_memo", "sns", "competitors", "market", "finance", "insurance_ctx"]},
+        "aspect": {"type": "string", "enum": ["profile", "business", "sites", "history", "news", "hr", "finance_risk", "sales_memo", "sns", "competitors", "market", "finance", "insurance_ctx", "hazard"]},
         "status": {"type": "string", "enum": ["ok", "partial", "missing"]}
       }, "required": ["aspect", "status"], "additionalProperties": false}},
       "overall": {"type": "string", "enum": ["high", "mid", "low"]},
       "advice": {"type": "string"}
-    }, "required": ["coverage", "overall", "advice"], "additionalProperties": false}
+    }, "required": ["coverage", "overall", "advice"], "additionalProperties": false},
+    "research_requests": {"type": "array", "items": {"type": "object", "properties": {
+      "purpose": {"type": "string"},
+      "prompt_text": {"type": "string"}
+    }, "required": ["purpose", "prompt_text"], "additionalProperties": false}}
   },
   "required": ["company_name", "business_summary", "main_products", "processes", "locations",
                "supply_chain", "customers", "workforce_notes", "management_notes",
-               "current_coverage", "field_insights", "missing_info", "input_quality"],
+               "current_coverage", "field_insights", "missing_info", "input_quality", "research_requests"],
   "additionalProperties": false
 }
 ```
 
-**CheckS1**: 必須キー・locations.type enum／renewal時: current_coverage が1件以上（0件は不合格→修復）／new時: current_coverage が0件（非0は警告ログのみ）／missing_info 0件は警告（エラーにしない）／input_quality.coverage がちょうど13件（13 aspect各1回。過不足は不合格→修復）。
-**充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。
+**CheckS1**: 必須キー・locations.type enum／renewal時: current_coverage が1件以上（0件は不合格→修復）／new時: current_coverage が0件（非0は警告ログのみ）／missing_info 0件は警告（エラーにしない）／input_quality.coverage がちょうど14件（14 aspect各1回。過不足は不合格→修復）／overall≠high かつ research_requests 0件は警告ログ（エラーにしない）。
+**充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。research_requests は案件入力シートの「追加収集」欄に一覧表示し、各行に「コピー」操作を付ける（営業は調査AIアプリへ貼るだけ。11章）。
 補足: 現場メモ未提供時は field_insights=[]（提供ありで0件は警告ログ）。field_insights は s1Json に含まれるため、S2/S3/S4・壁打ちへは追加配線なしで原文のまま届く（蒸留しないパススルー。docs/09 F-01）。
 
 ## 3. Step2 リスク仮説＋付保ギャップ（S2）
@@ -284,8 +308,12 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 （更新案件ではさらに付保ギャップ）を作ります。
 
 必ず守るルール:
-1. リスクは6カテゴリ(property_natcat, product_liability, labor_hr, bcp_supplychain,
-   cyber_info, management_strategy)を必ず一度は検討し、該当が本当に無いカテゴリだけ省略してよい。
+1. リスクは「リスクユニバース10分類」(strategy_market=戦略・市場, supply_chain=調達・供給網,
+   manufacturing_quality=製造・品質(サービス業では提供品質), sales_customer=販売・顧客,
+   facility_bcp=施設・自然災害・BCP, hr_labor=人材・労務, digital_info=デジタル・情報,
+   legal_regulatory=法務・規制, finance_counterparty=財務・取引先, brand_social=ブランド・社会)
+   を必ず一度は検討し、該当が本当に無い分類だけ省略してよい。各リスクは「主たる発生源」で
+   一意に分類し、重複計上しない(MECE)。
 2. 各リスクには evidence を必ず付ける。quote は企業プロファイルまたは社内リスク知識からの
    短い引用(50字以内)、source はその出所
    (hp/yuho/memo/contract/prev_renewal=入力情報、knowledge=社内リスク知識、inference=論理的推定)。
@@ -300,6 +328,24 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 8. 各リスクに preventions(未然防止策)を1〜3件付ける。「事故が起きたら払う」ではなく
    「検知し、予防し、行動を変え、残余を保険でカバーする」が当社の思想である。
    対応する社内サービスが■■■内の一覧に実在する場合のみ related_menu_id にIDを書く(創作禁止)。
+9. frequency_score / impact_score は1〜5の整数で、frequency/impact の3値と整合させる
+   (low/small=1〜2, mid=3, high/large=4〜5)。リスクマップ上の相対位置が意味を持つよう、
+   全リスクを同じ物差しで採点する。
+10. 各リスクに insurability(保険による移転可能性)を付ける。
+   transferability: cover=既存の保険で比較的移転しやすい / partial=条件付き・部分的 /
+   hard=保険化困難(価格変動・需要減・技能喪失など保険事故に当たらないもの)。
+   line_note には想定される既存種目の一般名称と主な確認点(免責・限度額・トリガー)を、
+   control_note には保険以外の管理策(回避・低減・保有)を、各50字以内で書く。
+   hard のリスクも省略しない——「保険で解決できないが経営上重要」と示すこと自体が
+   リスクコンサルティングの価値である。
+11. loss_scale_note には損害規模の目安を書く。入力に財務データ(売上・純資産等)がある場合は
+   「純資産◯億円に対し損害◯億円規模」のような財務体力との対比を書く(概算と明記)。
+   数字の材料が無い場合は空文字 "" とする。数字の創作は重大な誤りである。
+12. status は初回生成では必ず "proposed" とする。■■■前回ラウンドのリスク仮説とヒアリング回答■■■が
+   提供されている再実行(第2ラウンド以降)では、前回の各リスクを引き継いだうえで、回答により
+   裏づけられたものを "confirmed"、否定されたものを "rejected"(削除はしない。理由を scenario
+   末尾に追記)、回答から新たに発見したリスクを "new" とする。提案書が訪問のたびに成長する——
+   これが本製品の中核思想である。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -321,6 +367,13 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 {{menusText}}
 ■■■当社メニュー一覧ここまで■■■
 
+■■■前回ラウンドのリスク仮説とヒアリング回答(第2ラウンド以降のみ。初回は「なし」)ここから■■■
+【前回のリスク仮説】
+{{prevS2Json ※初回は「なし」}}
+【訪問で得たヒアリング回答】
+{{hearingAnswersText ※初回は「なし」}}
+■■■ここまで■■■
+
 上記を材料に、この企業の潜在リスク仮説を8〜15件、指定のJSON形式で出力してください。
 
 出力するJSONの形式:
@@ -328,12 +381,19 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "risks": [
     {
       "risk_no": 1,
-      "category": "product_liability",
+      "category": "manufacturing_quality",
       "risk_name": "リスク名(企業固有の言葉で・30字以内)",
       "scenario": "発生シナリオ(何がどうなって損害に至るか・150字以内)",
+      "status": "proposed/confirmed/rejected/new",
       "frequency": "high/mid/low",
       "impact": "large/mid/small",
+      "frequency_score": 3,
+      "impact_score": 4,
       "evidence": {"quote": "根拠となる原文の短い引用", "source": "hp/yuho/memo/contract/prev_renewal/knowledge/inference"},
+      "insurability": {"transferability": "cover/partial/hard",
+                       "line_note": "想定既存種目の一般名称と主な確認点(50字以内)",
+                       "control_note": "保険以外の管理策=回避・低減・保有(50字以内)"},
+      "loss_scale_note": "損害規模の目安・財務体力との対比(概算と明記。材料が無ければ\"\")",
       "check_points": ["現地・ヒアリングでの確認点"],
       "preventions": [{"measure": "未然防止策(1文。検知・予防・行動変容の観点で)", "related_menu_id": "対応する当社メニューID または \"\""}]
     }
@@ -355,7 +415,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 
 riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 ```
-[RL-09-003] カテゴリ:product_liability リスク:アレルゲン表示誤り 典型シナリオ:… 典型頻度:mid 典型影響:large 確認点:表示チェック体制;製造ライン分離
+[RL-09-003] カテゴリ:manufacturing_quality リスク:アレルゲン表示誤り 典型シナリオ:… 典型頻度:mid 典型影響:large 確認点:表示チェック体制;製造ライン分離
 ```
 
 ### Schema-S2（SCHEMA_S2）
@@ -366,21 +426,30 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
   "properties": {
     "risks": {"type": "array", "items": {"type": "object", "properties": {
       "risk_no": {"type": "integer"},
-      "category": {"type": "string", "enum": ["property_natcat", "product_liability", "labor_hr", "bcp_supplychain", "cyber_info", "management_strategy"]},
+      "category": {"type": "string", "enum": ["strategy_market", "supply_chain", "manufacturing_quality", "sales_customer", "facility_bcp", "hr_labor", "digital_info", "legal_regulatory", "finance_counterparty", "brand_social"]},
       "risk_name": {"type": "string"},
       "scenario": {"type": "string"},
+      "status": {"type": "string", "enum": ["proposed", "confirmed", "rejected", "new"]},
       "frequency": {"type": "string", "enum": ["high", "mid", "low"]},
       "impact": {"type": "string", "enum": ["large", "mid", "small"]},
+      "frequency_score": {"type": "integer", "minimum": 1, "maximum": 5},
+      "impact_score": {"type": "integer", "minimum": 1, "maximum": 5},
       "evidence": {"type": "object", "properties": {
         "quote": {"type": "string"},
         "source": {"type": "string", "enum": ["hp", "yuho", "memo", "contract", "prev_renewal", "knowledge", "inference"]}
       }, "required": ["quote", "source"], "additionalProperties": false},
+      "insurability": {"type": "object", "properties": {
+        "transferability": {"type": "string", "enum": ["cover", "partial", "hard"]},
+        "line_note": {"type": "string"},
+        "control_note": {"type": "string"}
+      }, "required": ["transferability", "line_note", "control_note"], "additionalProperties": false},
+      "loss_scale_note": {"type": "string"},
       "check_points": {"type": "array", "items": {"type": "string"}},
       "preventions": {"type": "array", "items": {"type": "object", "properties": {
         "measure": {"type": "string"},
         "related_menu_id": {"type": "string"}
       }, "required": ["measure", "related_menu_id"], "additionalProperties": false}}
-    }, "required": ["risk_no", "category", "risk_name", "scenario", "frequency", "impact", "evidence", "check_points", "preventions"],
+    }, "required": ["risk_no", "category", "risk_name", "scenario", "status", "frequency", "impact", "frequency_score", "impact_score", "evidence", "insurability", "loss_scale_note", "check_points", "preventions"],
        "additionalProperties": false}},
     "gaps": {"type": "array", "items": {"type": "object", "properties": {
       "gap_no": {"type": "integer"},
@@ -398,7 +467,7 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 }
 ```
 
-**CheckS2**: risks 5〜20件・risk_no重複なし・全enum・quote非空／各risk preventions 1〜3件・related_menu_id は "" または実在（不実在は不合格→修復）／renewal時: gaps 1件以上（0件は警告のみ。真にギャップ無しの優良契約はありうる）／new時: gaps 0件（非0は不合格→修復）／inference比率50%超で警告（run_log記録）。
+**CheckS2**: risks 5〜20件・risk_no重複なし・全enum・quote非空／各risk preventions 1〜3件・related_menu_id は "" または実在（不実在は不合格→修復）／frequency_score/impact_score が3値バンドと整合（low/small∈{1,2}, mid=3, high/large∈{4,5}。不整合は不合格→修復）／初回実行時: 全risk status="proposed"（それ以外は不合格→修復）。第2ラウンド以降: "rejected" の risk が削除されていないこと（前回risk数より減少は警告）／renewal時: gaps 1件以上（0件は警告のみ。真にギャップ無しの優良契約はありうる）／new時: gaps 0件（非0は不合格→修復）／inference比率50%超で警告（run_log記録）／transferability=hard が0件は警告ログ（保険で解けないリスクの明示は分析の信頼性の証。docs/20 高橋FB①）。
 
 ## 4. Step3 提案マッチング（S3）
 
@@ -424,6 +493,13 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
 6. expected_objection は顧客から返ってきそうな否定的反応、objection_response はその切り返し(各1文)。
 7. 企業プロファイルの field_insights を提案の調整に使う: relationship(決裁の力学)は誰に刺す提案かに、
    constraint(NG事項)は避けるべき表現・提案に、competitor(他社動向)は差別化の切り口に反映する。
+8. 保険会社としての引受目線でも審査する。リスク仮説の中に、当社が引き受けるべきでない・
+   引き受けられない可能性が高い状態のもの(例: 不祥事・訴訟が係争中の先のD&O、直近大事故後の
+   当該種目、明らかな高損害率が推定される種目)があれば、stories には入れず do_not_propose に
+   理由とともに記載する。網羅性のためリスク分析には残すが、提案は控える——この使い分けを
+   明示することがレポートの信頼性を作る。
+9. リスク仮説に loss_scale_note(損害規模と財務体力の対比)がある場合、pitch に1文で織り込む
+   (例: 「純資産◯億円に対し◯億円規模の損害となり得る」)。数字の創作はしない。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -476,14 +552,18 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
   ],
   "unmatched_risks": [
     {"risk_no": 5, "risk_name": "リスク名", "why_unmatched": "適合メニュー・型が無い理由(1文)"}
+  ],
+  "do_not_propose": [
+    {"topic": "提案を控える種目・リスク(例: D&O)", "reason": "控える理由(引受目線・1〜2文)"}
   ]
 }
 ※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。
+※do_not_propose は該当が無ければ [] とする(水増し禁止)。
 ```
 
 整形（modKnowledge）:
 ```
-[M-0012] 食品工場リスク診断サービス | 概要:… | 対応カテゴリ:product_liability;bcp_supplychain
+[M-0012] 食品工場リスク診断サービス | 概要:… | 対応カテゴリ:manufacturing_quality;supply_chain
 [L-03] 生産物賠償責任保険(PL保険)
 [S-0004] 見守りヤモリ型(P2) | 構造:検知パートナー×有事補償バンドル | 成立条件:…;…;… | 適用シグナル:…
 [K-0003] 業種:09 顧客像:… 提示リスク:… 提案:… 決め手:…
@@ -517,14 +597,18 @@ riskLibText整形（modKnowledge.RiskLibFor。1行1知識）:
       "risk_no": {"type": "integer"},
       "risk_name": {"type": "string"},
       "why_unmatched": {"type": "string"}
-    }, "required": ["risk_no", "risk_name", "why_unmatched"], "additionalProperties": false}}
+    }, "required": ["risk_no", "risk_name", "why_unmatched"], "additionalProperties": false}},
+    "do_not_propose": {"type": "array", "items": {"type": "object", "properties": {
+      "topic": {"type": "string"},
+      "reason": {"type": "string"}
+    }, "required": ["topic", "reason"], "additionalProperties": false}}
   },
-  "required": ["stories", "unmatched_risks"],
+  "required": ["stories", "unmatched_risks", "do_not_propose"],
   "additionalProperties": false
 }
 ```
 
-**CheckS3**（最重要検証）: stories ちょうど3件／proposal_kind enum／全 menu_ids・line_ids が実在（**不実在は不合格→修復→なお不合格はE0301停止。黙殺除去禁止**）／scheme_id・similar_case_id は "" または実在／target_risk_nos が s2Json の risk_no に、target_gap_nos が gap_no に存在／全ストーリー合計で menu_ids＋scheme_id が0件は不合格／renewal時: 3本中1本以上が upsell または cross_sell（0本は警告）。
+**CheckS3**（最重要検証）: stories ちょうど3件／proposal_kind enum／全 menu_ids・line_ids が実在（**不実在は不合格→修復→なお不合格はE0301停止。黙殺除去禁止**）／scheme_id・similar_case_id は "" または実在／target_risk_nos が s2Json の risk_no に、target_gap_nos が gap_no に存在／全ストーリー合計で menu_ids＋scheme_id が0件は不合格／stories が do_not_propose の topic と重複していないか（重複は不合格→修復）／renewal時: 3本中1本以上が upsell または cross_sell（0本は警告）。
 
 ## 4.5 S2批判パス（S2C。quality_mode=deep 時のみ）
 
@@ -537,14 +621,17 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 部下が作ったリスク仮説一式を審査し、具体的な改善指示を出します。
 
 審査の観点:
-1. 見落とし: 6カテゴリすべてが検討されたか。企業プロファイル・現場メモ(field_insights)の中に、
-   拾われていないリスクの手がかりが残っていないか。
+1. 見落とし: リスクユニバース10分類すべてが検討されたか。企業プロファイル・現場メモ
+   (field_insights)の中に、拾われていないリスクの手がかりが残っていないか。
 2. 固有性: 業種名を変えても通用してしまう一般論のリスクはどれか。
 3. 根拠の質: evidence の引用は本当にそのリスクを支えているか。こじつけはないか。
-   inference が多すぎないか。
-4. 整合性: frequency と impact はシナリオと整合しているか。
+   inference が多すぎないか。loss_scale_note に根拠のない数字が書かれていないか。
+4. 整合性: frequency と impact はシナリオと整合しているか。frequency_score/impact_score の
+   相対関係は全リスク間で妥当か(全部4〜5のような判定の逃げがないか)。
 5. ギャップ分析(更新案件): gap_type の分類は正しいか。current_coverage と突き合わせて
    見落としたギャップはないか。
+6. 移転可能性: transferability の判定は正しいか。保険化困難(hard)なリスクを安易に cover と
+   していないか。逆に、条件・特約次第で移転できるものを hard と切り捨てていないか。
 甘い審査は部下のためにならない。ただし指摘には必ず改善の方向を添えること。
 ```
 （末尾に BLOCK_GUARD）
@@ -567,7 +654,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
   "verdict_summary": "総評(2文以内)",
   "issues": [
     {"target": "risk_no:3 / gap_no:1 / overall のいずれかの形式",
-     "issue_type": "missing/generic/weak_evidence/inconsistent/gap_error",
+     "issue_type": "missing/generic/weak_evidence/inconsistent/gap_error/insurability_error",
      "detail": "指摘(1〜2文)", "suggestion": "改善の方向(1文)"}
   ],
   "additional_risks": [
@@ -586,7 +673,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
     "verdict_summary": {"type": "string"},
     "issues": {"type": "array", "items": {"type": "object", "properties": {
       "target": {"type": "string"},
-      "issue_type": {"type": "string", "enum": ["missing", "generic", "weak_evidence", "inconsistent", "gap_error"]},
+      "issue_type": {"type": "string", "enum": ["missing", "generic", "weak_evidence", "inconsistent", "gap_error", "insurability_error"]},
       "detail": {"type": "string"},
       "suggestion": {"type": "string"}
     }, "required": ["target", "issue_type", "detail", "suggestion"], "additionalProperties": false}},
@@ -613,7 +700,8 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 「で、いくらかかるの」など)。
 人格B「営業同行の支社長」: 提案が当社の実在メニュー・型で本当に実行できるか、3本の優先順位は
 正しいか、hook_question は最初の30秒で経営者の顔を上げさせられるか、幹事・BID等の案件文脈と
-整合しているかを審査する。
+整合しているか、そして**引受部門が難色を示すはずの提案が混ざっていないか**(係争中の先のD&O、
+大事故直後の当該種目など。あれば do_not_propose に回すべき)を審査する。
 それぞれの人格で率直に指摘し、改善の方向を添えること。
 ```
 （末尾に BLOCK_GUARD）
@@ -638,7 +726,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
     {"story_no": 1, "reaction": "経営者の率直な反応(1〜2文・話し言葉)", "lands": true}
   ],
   "issues": [
-    {"target": "story_no:2 / overall", "issue_type": "wont_land/not_executable/wrong_priority/weak_hook/context_mismatch",
+    {"target": "story_no:2 / overall", "issue_type": "wont_land/not_executable/wrong_priority/weak_hook/context_mismatch/uw_concern",
      "detail": "指摘(1〜2文)", "suggestion": "改善の方向(1文)"}
   ]
 }
@@ -658,7 +746,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
     }, "required": ["story_no", "reaction", "lands"], "additionalProperties": false}},
     "issues": {"type": "array", "items": {"type": "object", "properties": {
       "target": {"type": "string"},
-      "issue_type": {"type": "string", "enum": ["wont_land", "not_executable", "wrong_priority", "weak_hook", "context_mismatch"]},
+      "issue_type": {"type": "string", "enum": ["wont_land", "not_executable", "wrong_priority", "weak_hook", "context_mismatch", "uw_concern"]},
       "detail": {"type": "string"},
       "suggestion": {"type": "string"}
     }, "required": ["target", "issue_type", "detail", "suggestion"], "additionalProperties": false}}

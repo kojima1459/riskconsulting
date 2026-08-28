@@ -180,10 +180,13 @@ Public Function SetInboxJudgement(ByVal inboxId As String, ByVal status As Strin
                                   ByVal dropType As String, ByVal reviveTag As String, ByVal reviveDue As Date) As Boolean
 Public Function NewJudgement(ByVal rec As TJudgement) As String
 
-' === app: modExportPpt / modExportHearing ===
+' === app: modExportHtml / modExportPpt / modExportHearing ===
+Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
+    ' ""=成功。S1+S2+S3のJSONを固定HTMLテンプレート(高橋PLプロト準拠・10章FR-37)に流し込み、
+    ' 自己完結HTML 1ファイルを出力(LLM不使用)。テンプレ本体は modHtmlTemplate(純文字列モジュール・R4)、
+    ' データはJSONをそのままJS配列としてテンプレートに埋め込む。v2.3で主力出力(旧GenerateReportを置換)
 Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
-                            ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance
-Public Function GenerateReport(ByVal caseId As String, ByRef outPath As String) As String ' リスクレポート(S1+S2から整形・LLM不使用)
+                            ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance。Phase 1.5
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 ```
 
@@ -192,7 +195,7 @@ Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 | 定数名 | 対応step | strict検証済み観点 |
 |---|---|---|
 | SCHEMA_S1 | s1 | current_coverage は常に必須（newは空配列） |
-| SCHEMA_S2 | s2 | gaps は常に必須（newは空配列）。6カテゴリ/頻度/影響/出所enum |
+| SCHEMA_S2 | s2 | gaps は常に必須（newは空配列）。リスクユニバース10分類/頻度/影響/1〜5スコア/移転可能性/status/出所enum（v2.3） |
 | SCHEMA_S3 | s3 | proposal_kind enum。scheme_id は "" 許容 |
 | SCHEMA_S4 | s4 | slides配列・hearing_questions |
 | SCHEMA_PF | pf | 5問判定・文法4値・予測類型・組み替え案 |
