@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リスク提案ナビ 操作イメージ</title>
+<style>
+:root{
+  --green:#006C4F; --green-mid:#0E8A66; --green-soft:#E7F3EE; --green-line:#BFDCD0;
+  --blue:#2B5BA8; --blue-soft:#EEF3FB; --blue-line:#C4D3EC;
+  --ink:#1F2933; --muted:#5C6674; --line:#D8DEE6; --paper:#FFFFFF; --bg:#E7EAEE;
+  --amber:#9A6700; --amber-bg:#FFF4D6; --red:#B3261E; --red-bg:#FDECEA;
+  --grid:#EDF0F4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Meiryo","メイリオ","Yu Gothic UI","Yu Gothic","游ゴシック","MS PGothic",sans-serif;
+ font-size:13px;line-height:1.6}
+.app{max-width:1240px;margin:18px auto 40px;padding:0 12px}
+/* Excel窓 */
+.xl{background:#fff;border:1px solid #B9C1CB;border-radius:8px;overflow:hidden;
+ box-shadow:0 14px 40px rgba(31,41,51,.16)}
+.xl-title{background:#217346;color:#fff;padding:7px 14px;font-size:12px;display:flex;
+ justify-content:space-between;align-items:center}
+.xl-title .dots{letter-spacing:3px;opacity:.85}
+.xl-ribbon{background:#F3F5F7;border-bottom:1px solid var(--line);padding:8px 12px;
+ display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid #B9C4CF;background:#fff;border-radius:5px;padding:6px 12px;font-size:12px;
+ font-weight:700;cursor:pointer;color:var(--ink)}
+.btn:hover{background:var(--blue-soft)}
+.btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+.btn.primary:hover{background:var(--green-mid)}
+.btn.ghost{border-style:dashed;color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:default}
+.mock-tag{margin-left:auto;background:var(--amber-bg);color:var(--amber);border:1px solid #EDD28B;
+ border-radius:999px;padding:3px 12px;font-size:11px;font-weight:900}
+/* シート領域 */
+.sheet{min-height:560px;padding:18px 20px 24px;position:relative;
+ background:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+ background-size:88px 26px;background-color:#fff}
+.sheet[hidden]{display:none}
+/* シートタブ */
+.tabs{display:flex;gap:2px;background:#F3F5F7;border-top:1px solid var(--line);padding:5px 10px 7px;
+ overflow-x:auto}
+.tab{border:1px solid var(--line);border-radius:0 0 6px 6px;border-top:none;background:#E9EDF1;
+ padding:4px 13px;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tab.on{background:#fff;color:var(--green);border-bottom:2px solid var(--green)}
+.tab.dis{opacity:.45;cursor:default}
+/* 汎用部品 */
+.panel{background:#fff;border:1px solid var(--line);border-radius:7px;padding:12px 14px;box-shadow:0 1px 2px rgba(31,41,51,.04)}
+.panel h4{margin:0 0 8px;font-size:13px;color:var(--green)}
+.lbl{font-size:10.5px;font-weight:900;color:var(--muted);letter-spacing:.04em}
+.fld{border:1px solid #B9C4CF;border-radius:4px;background:#fff;padding:5px 9px;font-size:12.5px;min-height:17px}
+.fld.area{min-height:54px;font-size:11.5px;color:#3D4856;line-height:1.55}
+.chip{display:inline-block;font-size:10px;font-weight:900;border-radius:999px;padding:2px 9px;margin:1px 2px 1px 0}
+.c-ok{background:var(--green-soft);color:var(--green)}
+.c-part{background:var(--amber-bg);color:var(--amber)}
+.c-miss{background:var(--red-bg);color:var(--red)}
+.c-blue{background:var(--blue-soft);color:var(--blue)}
+.c-gray{background:#EEF1F4;color:var(--muted)}
+.c-new{background:#F3EAFB;color:#6B3FA0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+table.x{border-collapse:collapse;width:100%;background:#fff;font-size:11.5px}
+table.x th{background:var(--green);color:#fff;font-size:10.5px;padding:6px 8px;text-align:left;position:sticky;top:0}
+table.x td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;background:#fff}
+tr.strike td{background:#FBF2F1}
+tr.strike .rname b{text-decoration:line-through;color:var(--muted)}
+tr.newrow td{background:#F8F3FD}
+.scorebar{display:inline-flex;gap:2px}
+.scorebar i{width:8px;height:8px;border-radius:2px;background:#DCE3EA}
+.scorebar i.f{background:var(--blue)}
+.transfer{font-size:10px;font-weight:900;border-radius:4px;padding:2px 7px;display:inline-block}
+.tr-cover{background:var(--green-soft);color:var(--green)}
+.tr-part{background:var(--amber-bg);color:var(--amber)}
+.tr-hard{background:var(--red-bg);color:var(--red)}
+.story{border:1px solid var(--blue-line);border-left:5px solid var(--blue);border-radius:7px;padding:11px 14px;background:#fff}
+.story .kind{font-size:9.5px;font-weight:900;color:#fff;background:var(--blue);border-radius:999px;padding:2px 9px}
+.story h5{margin:6px 0 4px;font-size:14px}
+.story .hook{background:var(--blue-soft);border-radius:6px;padding:7px 10px;font-size:12px;margin:6px 0}
+.mini{font-size:10.5px;color:var(--muted);line-height:1.5}
+.progress-wrap{position:absolute;inset:0;background:rgba(255,255,255,.94);display:grid;place-items:center;z-index:5}
+.progress-box{width:420px;text-align:center}
+.pbar{height:10px;background:#E5EAEF;border-radius:99px;overflow:hidden;margin:12px 0 8px}
+.pbar i{display:block;height:100%;width:0;background:var(--green);transition:width .5s}
+.steps-line{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted)}
+.steps-line b.done{color:var(--green)}
+.hl{outline:3px solid #FFB800;outline-offset:2px;border-radius:7px;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{outline-color:#FFE08A}}
+/* コーチ */
+.coach{position:sticky;bottom:14px;margin:16px auto 0;max-width:1240px;padding:0 12px;z-index:20}
+.coach-in{background:#26313E;color:#fff;border-radius:10px;padding:13px 18px;display:flex;gap:16px;
+ align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.coach-no{flex:0 0 auto;background:var(--green);border-radius:8px;font-weight:900;font-size:12px;
+ padding:6px 10px;white-space:nowrap}
+.coach-txt{flex:1;font-size:12.5px;line-height:1.55}
+.coach-txt b{color:#8FE3C0}
+.coach-nav{display:flex;gap:8px}
+.coach-nav .btn{border-color:#4A5768;background:#33404F;color:#fff}
+.coach-nav .btn.primary{background:var(--green);border-color:var(--green)}
+.dots-nav{display:flex;gap:4px;margin-top:8px;justify-content:center}
+.dots-nav i{width:8px;height:8px;border-radius:50%;background:#B9C4CF;cursor:pointer}
+.dots-nav i.on{background:var(--green)}
+.head-note{max-width:1240px;margin:0 auto 12px;padding:0 12px;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+.head-note h1{font-size:17px;margin:0;color:var(--green)}
+.head-note .mini{font-size:11px}
+.chat{display:grid;gap:8px;max-width:760px}
+.msg{border-radius:9px;padding:9px 13px;font-size:12px;max-width:88%}
+.msg.u{background:var(--blue-soft);justify-self:end;border:1px solid var(--blue-line)}
+.msg.a{background:#fff;border:1px solid var(--line)}
+.repcard{border:2px solid var(--green-line);border-radius:9px;background:var(--green-soft);padding:14px 16px;display:flex;gap:14px;align-items:center}
+.repthumb{flex:0 0 auto;width:120px;height:86px;background:#fff;border:1px solid var(--green-line);border-radius:5px;
+ display:grid;grid-template-rows:18px 1fr;overflow:hidden}
+.repthumb .b1{background:var(--green)}
+.repthumb .b2{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:4px}
+.repthumb .b2 span{background:#E3ECE8;border-radius:2px}
+@media(max-width:860px){.grid2,.grid3{grid-template-columns:1fr}.coach-in{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div lang="ja">
+<div class="head-note">
+  <h1>リスク提案ナビ — 操作イメージ（クリックで進むモック）</h1>
+  <span class="mini">画面下の「次へ」で物語が進みます／下のシートタブは自由に切替可｜実装前のイメージ共有用・データは春華堂の試作サンプル</span>
+</div>
+
+<div class="app">
+<div class="xl">
+  <div class="xl-title"><span>📗 リスク提案ナビ.xlsm — Excel</span><span class="dots">— ▢ ✕</span></div>
+  <div class="xl-ribbon">
+    <button class="btn primary" id="btnRun">▶ 一括実行</button>
+    <button class="btn">S1</button><button class="btn">S2</button><button class="btn">S3</button>
+    <button class="btn" id="btnReport">📄 レポート出力</button>
+    <button class="btn">📋 ヒアリングシート</button>
+    <button class="btn" id="btnSave">💾 企業ファイルへ保存</button>
+    <span class="mock-tag">操作イメージ（モック）</span>
+  </div>
+
+  <!-- ===== HOME ===== -->
+  <section class="sheet" id="sh-home">
+    <div class="grid2">
+      <div class="panel" id="home-case">
+        <h4>案件</h4>
+        <div style="display:grid;gap:7px">
+          <div><span class="lbl">対象案件</span><div class="fld" id="caseName">（案件がありません）　[＋ 新規案件]</div></div>
+          <div><span class="lbl">状態</span><div class="fld" id="caseState">—</div></div>
+          <div><span class="lbl">収集ティア</span><div class="fld">T2 フルドシエ（重要案件・14観点）／品質: 入念モード</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h4>ナレッジ（全員で育てる知恵袋）</h4>
+        <div class="mini" style="font-size:11.5px">読込OK：メニュー42件／保険種目30件／座組の型22件／成功事例8件／判断基準16行<br>
+        ※各種目Gの「ナレッジ確認シート」の回答がここに入り、全員の提案が賢くなる</div>
+        <div style="margin-top:8px"><span class="chip c-ok">ナレッジブック接続中</span><span class="chip c-gray">最終更新 2026/8/28</span></div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="panel"><h4>受信箱</h4><div class="mini" style="font-size:11.5px">未診断 3件［🔍 プリフライト診断］／採択待ち 2件<br>壁打ちの「💡気づき」もここに貯まる → 月次で「型」に昇格</div></div>
+      <div class="panel"><h4>記録</h4><div class="mini" style="font-size:11.5px">［📝 商談の記録（事実のみ・5分）］［⚖ 判断台帳］<br>記録が貯まるほど、次の提案・将来のBID/高ロス対応が賢くなる</div></div>
+    </div>
+  </section>
+
+  <!-- ===== 案件入力 ===== -->
+  <section class="sheet" id="sh-input" hidden>
+    <div class="grid2">
+      <div style="display:grid;gap:10px">
+        <div class="panel" id="p-basic">
+          <h4>案件の基本情報</h4>
+          <div class="grid2" style="gap:8px">
+            <div><span class="lbl">企業名 *</span><div class="fld">有限会社春華堂（春華堂グループ）</div></div>
+            <div><span class="lbl">業種 *</span><div class="fld">菓子製造・小売・体験施設 ▼</div></div>
+            <div><span class="lbl">種別</span><div class="fld">新規</div></div>
+            <div><span class="lbl">取引・幹事など</span><div class="fld">リテール／幹事:未確認／BID:なし</div></div>
+          </div>
+        </div>
+        <div class="panel" id="p-paste">
+          <h4>情報の貼付欄（集め方はナビが案内）</h4>
+          <span class="lbl">HP等の公開情報（収集レシピ8項目）</span>
+          <div class="fld area">会社概要・沿革(1887年創業)・うなぎパイファクトリー・SWEETS BANK・nicoe・EC/LINE移行のお知らせ・初任給18.5%引上げプレスリリース… <b>12,400字</b></div>
+          <span class="lbl" style="margin-top:6px;display:block">追加ドシエ（調査AIアプリの回答を貼るだけ）</span>
+          <div class="fld area">D-1企業ドシエ／D-2業界・競合／D-4マクロ／<b>D-7拠点ハザード</b>: 本社・工場は浜松市。県第4次地震被害想定で震度6強、主力工場周辺は浸水想定なし・液状化注意…（出典URL付き）</div>
+          <span class="lbl" style="margin-top:6px;display:block">現場メモ（営業だけが知る情報・書式自由）</span>
+          <div class="fld area">部長が約20年前に訪問し火災中心で提案した先。当時の社長は職人気質。地元代理店との付き合いが長いらしい。</div>
+          <div id="p-answers" hidden>
+            <span class="lbl" style="margin-top:6px;display:block;color:var(--green)">★ 訪問後：ヒアリング回答の貼付（第2ラウンド）</span>
+            <div class="fld area" style="border-color:var(--green)">工場見学は年60万人。主力ラインは2024年更新済みで予備機あり。地震の補償は入っていない。保険は地元代理店経由の火災のみ。就業規則の休職期間は1年。「地震はずっと気になっとった」と社長。</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;gap:10px;align-content:start">
+        <div class="panel" id="p-quality">
+          <h4>入力の充足度（S1実行後に自動診断）</h4>
+          <div id="q-before" class="mini" style="font-size:11.5px">実行するとここに「情報が足りているか」が14の観点で表示されます</div>
+          <div id="q-after" hidden>
+            <div>
+              <span class="chip c-ok">会社概要</span><span class="chip c-ok">事業・製品</span><span class="chip c-ok">拠点・設備</span>
+              <span class="chip c-ok">沿革</span><span class="chip c-ok">直近の動き</span><span class="chip c-part">採用・人員</span>
+              <span class="chip c-part">財務</span><span class="chip c-ok">市況・マクロ</span><span class="chip c-ok">競合</span>
+              <span class="chip c-part">SNS評判</span><span class="chip c-miss">付保の経緯</span><span class="chip c-ok">営業情報</span>
+              <span class="chip c-ok">ハザード</span><span class="chip c-part">有報・財務リスク</span>
+            </div>
+            <div class="mini" style="margin-top:6px;font-size:11.5px"><b>総合: 仮説を持って訪問できる水準</b>。未上場のため財務は決算公告・信用調査情報で代替評価。付保の経緯は取得不可情報 → <b>ヒアリングシートに回しました</b></div>
+          </div>
+        </div>
+        <div class="panel" id="p-research" hidden>
+          <h4>追加収集の提案（AIが調査文をつくる）</h4>
+          <div class="mini" style="font-size:11.5px">足りない観点を埋める調査文を自動生成。<b>［コピー］して社内の調査AIに貼るだけ</b>：</div>
+          <div class="fld" style="margin-top:6px;font-size:11px">「春華堂（浜松市・菓子製造）のSNS・口コミの評判傾向（製品品質・労働環境・話題化の有無）を出典付きで…」　<button class="btn" style="padding:2px 10px;font-size:10.5px">コピー</button></div>
+          <div class="fld" style="margin-top:5px;font-size:11px">「春華堂の直近の決算公告・信用調査系の公開記事から売上・利益・純資産の傾向を…」　<button class="btn" style="padding:2px 10px;font-size:10.5px">コピー</button></div>
+        </div>
+        <div class="panel">
+          <h4>収集レシピ（何をどこから貼るか）</h4>
+          <div class="mini" style="font-size:11.5px">□会社概要 □事業・製品 □拠点 □沿革 □ニュース □採用 □有報/決算公告 □営業メモ ＋T2: □SNS □競合 □市況 □財務 □付保 □<b>ハザード</b><br>目安: 合計5,000〜20,000字（現在 <b>12,400字</b>）</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== S1 ===== -->
+  <section class="sheet" id="sh-s1" hidden>
+    <div class="grid2">
+      <div class="panel">
+        <h4>企業プロファイル（AIの読み取り結果 = 編集できる）</h4>
+        <table class="x">
+          <tr><td style="width:110px"><b>事業の要約</b></td><td>1887年創業の菓子製造。うなぎパイを中核に、製造＋直営小売＋EC＋工場見学・体験施設（年間来訪60万人規模）が一体の事業モデル</td></tr>
+          <tr><td><b>拠点とハザード</b></td><td>本社・主力工場（浜松市）— 震度6強想定・液状化注意／SWEETS BANK・nicoe（商業・体験）— 来訪者集中<br><span class="mini">※拠点ごとに住所・災害情報を構造化して保持</span></td></tr>
+          <tr><td><b>めざす姿・注力</b></td><td>体験価値・地域共創への投資拡大／EC会員基盤のLINE移行（2026/10）／初任給18.5%引上げ（2026/2）で人材確保に本腰</td></tr>
+          <tr><td><b>現場メモの扱い</b></td><td><span class="chip c-blue">関係性</span>地元代理店との長い付き合い（原文のまま保持）　<span class="chip c-blue">手がかり</span>約20年前は火災中心の提案</td></tr>
+        </table>
+      </div>
+      <div style="display:grid;gap:10px;align-content:start">
+        <div class="panel">
+          <h4>ここがポイント</h4>
+          <div class="mini" style="font-size:12px">・AIが書けなかった項目は「不明」と正直に表示<br>・<b>間違いはセルを直せば、そこから先だけ再実行</b>できる<br>・現場メモは要約せず原文のまま次の分析へ渡す（営業の言葉が一番のヒント）</div>
+        </div>
+        <div class="panel" style="border-color:var(--green-line);background:var(--green-soft)">
+          <h4>次はリスク分析へ</h4>
+          <div class="mini" style="font-size:12px">このプロファイル＋ナレッジ（業種の典型リスク・判断基準）を材料に、この会社「固有」のリスク仮説を作ります</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== S2 ===== -->
+  <section class="sheet" id="sh-s2" hidden>
+    <div class="panel" style="margin-bottom:10px">
+      <h4 style="display:inline">リスク仮説（10の切り口で漏れなく・根拠つき）</h4>
+      <span class="mini" id="s2note">　初回はすべて「仮説」。訪問して確かめる前提の出発点です</span>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="x" style="min-width:980px">
+      <thead><tr><th>状態</th><th>分類</th><th>リスク（企業固有）</th><th>起こりやすさ</th><th>影響</th><th>根拠（出典つき）</th><th>保険で移転</th><th>未然防止策</th></tr></thead>
+      <tbody>
+        <tr data-r2="confirm"><td><span class="chip c-gray st">仮説</span></td><td>施設・災害</td><td class="rname"><b>南海トラフ地震で工場・体験施設が同時被災</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></span></td>
+          <td class="mini">県第4次被害想定: 震度6強〔D-7〕</td><td><span class="transfer tr-part">条件付き</span></td><td class="mini">BCP策定支援・耐震診断（当社メニュー実在ID）</td></tr>
+        <tr data-r2="confirm"><td><span class="chip c-gray st">仮説</span></td><td>販売・顧客</td><td class="rname"><b>工場見学・体験施設での来訪者事故</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span></td>
+          <td class="mini">工場見学・nicoe・SWEETS BANK運営〔HP〕</td><td><span class="transfer tr-cover">移転しやすい</span></td><td class="mini">導線・混雑対策の点検サービス</td></tr>
+        <tr data-r2="reject"><td><span class="chip c-gray st">仮説</span></td><td>製造・品質</td><td class="rname"><b>焼成ラインの老朽故障による長期停止</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></span></td>
+          <td class="mini">主力商品の生産集中〔推定〕</td><td><span class="transfer tr-cover">移転しやすい</span></td><td class="mini">予防保全・設備診断</td></tr>
+        <tr><td><span class="chip c-gray st">仮説</span></td><td>調達・供給網</td><td class="rname"><b>小麦・卵・エネルギー価格の高騰</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span></td>
+          <td class="mini">初任給PRで原材料高騰に言及〔PR〕</td><td><span class="transfer tr-hard">保険化困難</span></td><td class="mini">調達分散・価格転嫁（保険以外の打ち手を明示）</td></tr>
+        <tr><td><span class="chip c-gray st">仮説</span></td><td>人材・労務</td><td class="rname"><b>採用競争・賃上げ原資と定着（初任給18.5%引上げ）</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td class="mini">2026/2プレスリリース〔PR〕</td><td><span class="transfer tr-part">条件付き</span></td><td class="mini">福利厚生（収入補償）で「選ばれる会社」づくり</td></tr>
+        <tr><td><span class="chip c-gray st">仮説</span></td><td>デジタル・情報</td><td class="rname"><b>EC・LINE移行に伴う顧客接点・情報の事故</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td class="mini">2026/10アプリ終了・LINE移行〔HP〕</td><td><span class="transfer tr-part">条件付き</span></td><td class="mini">移行時の体制点検・訓練</td></tr>
+        <tr data-r2="new2" hidden class="newrow"><td><span class="chip c-new">★新発見</span></td><td>財務・取引先</td><td><b>地震・利益の補償が空白（既契約は地元代理店経由の火災のみ）</b></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td>
+          <td><span class="scorebar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></span></td>
+          <td class="mini">ヒアリング回答〔一次情報〕</td><td><span class="transfer tr-cover">移転しやすい</span></td><td class="mini">地元代理店と共存する追加設計（関係を壊さない）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="mini" style="margin-top:8px">※ 表のセルは直接編集OK。直したら「S2から再実行」で下流だけ作り直し／大事な案件は<b>別のAIが辛口審査</b>（見落とし・こじつけ・引受目線）してから確定</div>
+  </section>
+
+  <!-- ===== S3 ===== -->
+  <section class="sheet" id="sh-s3" hidden>
+    <div class="grid3" id="stories">
+      <div class="story">
+        <span class="kind">座組の型</span><span class="chip c-gray" style="float:right" id="k1tag">初回=方向性</span>
+        <h5 id="k1t">南海トラフに備える「事業を止めない」設計</h5>
+        <div class="hook" id="k1h">「地震で工場が3ヶ月止まったら、うなぎパイの棚は誰が守りますか？」</div>
+        <div class="mini" id="k1b">地震の備え×利益の補償×BCP支援をひとつの物語に。実在メニューIDに紐づけ（創作禁止の検証つき）</div>
+      </div>
+      <div class="story">
+        <span class="kind">新規提案</span><span class="chip c-gray" style="float:right">初回=方向性</span>
+        <h5>体験施設まるごと安心パッケージ</h5>
+        <div class="hook">「年間60万人が来る場所は、もう工場ではなく観光施設です」</div>
+        <div class="mini" id="k2b">来訪者事故・イベント・キャンセルを包括で。想定される反論と切り返しも同時に出力</div>
+      </div>
+      <div class="story">
+        <span class="kind">新規提案</span><span class="chip c-gray" style="float:right">初回=方向性</span>
+        <h5>賃上げ時代の「選ばれる会社」福利厚生</h5>
+        <div class="hook">「初任給18.5%引上げの次は、辞めない仕組みづくりでは？」</div>
+        <div class="mini">病気・ケガで働けない期間の収入補償を、採用力強化の文脈で提案</div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="panel"><h4>あえて提案しないこと（正直に明記）</h4>
+        <div class="mini" style="font-size:12px">・原材料価格の高騰そのもの → 保険では対応困難。調達分散など<b>保険以外の打ち手</b>として整理<br>・転売品の品質問題 → 既存商品で直接は応えられない → <b>新サービス候補としてナレッジに自動記録</b>（商品部への宿題になる）</div></div>
+      <div class="panel" id="p-round2" hidden style="border-color:var(--green-line);background:var(--green-soft)"><h4>第2ラウンドで提案が具体化</h4>
+        <div class="mini" style="font-size:12px">✓ 地震・利益が空白と判明 → 提案①が「方向性」から<b>付保設計のたたき台</b>へ<br>✓ 来訪60万人が確定 → 包括設計の規模感を具体化<br>✓ 休職規程1年と判明 → 福利厚生提案が就業規則連動の設計へ<br>★ 地元代理店と<b>共存する</b>提案の形に自動調整（現場メモの「関係性」を反映）</div></div>
+    </div>
+  </section>
+
+  <!-- ===== 壁打ち ===== -->
+  <section class="sheet" id="sh-spar" hidden>
+    <div class="grid2">
+      <div class="panel">
+        <h4>壁打ち（提案前の作戦会議・ロープレ）</h4>
+        <div class="chat">
+          <div class="msg u">地元代理店と長い付き合いがあるみたいや。関係を壊さずに提案するにはどう入る？</div>
+          <div class="msg a">既契約（火災）はそのまま尊重し、「空白になっている地震・利益・体験施設」だけを当社が補完する<b>共存型</b>を推奨します。切り出しは「いまの保険を変える話ではなく、足りていない備えの話」。代理店と共同提案の形も選択肢です。想定反論:「代理店に悪い」→「むしろ代理店だけではカバーできない領域を埋める話だと伝えられます」…</div>
+          <div class="msg u">経営者ペルソナで反論してみて。</div>
+          <div class="msg a">（社長役）「地震保険は高いって聞いとるよ。それにうちは138年やってきて大丈夫やった」——こう来たら、費用ではなく<b>復旧までの時間</b>で話すのが有効です…</div>
+        </div>
+        <div style="margin-top:8px"><button class="btn">発話を送る</button> <button class="btn">💡 この気づきを受信箱へ</button></div>
+      </div>
+      <div class="panel" style="align-self:start">
+        <h4>ここがポイント</h4>
+        <div class="mini" style="font-size:12px">・案件の分析結果とナレッジを覚えた状態で対話できる（毎回説明し直さなくてよい）<br>・「ポン出しで終わらせず、人とAIで研ぎ澄ます」ための場所<br>・良い気づきは💡ひとつで受信箱へ → 月次で「型」に昇格 → <b>翌月から全員の提案に反映</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 出力 ===== -->
+  <section class="sheet" id="sh-out" hidden>
+    <div class="grid2">
+      <div style="display:grid;gap:10px">
+        <div class="repcard" id="repcard">
+          <div class="repthumb"><div class="b1"></div><div class="b2"><span></span><span></span><span></span><span></span></div></div>
+          <div>
+            <b style="font-size:14px">リスク分析レポート（HTML・1ファイル）生成完了</b>
+            <div class="mini" style="font-size:11.5px;margin-top:3px">ダブルクリックで開ける・印刷OK。経営サマリー→企業理解→リスクの全体地図→リスクマップ→保険カバレッジ表→提案ストーリー→ヒアリング項目→出典。<b>お手元の「出力サンプル⑤春華堂」がこの実物です</b></div>
+          </div>
+        </div>
+        <div class="panel"><h4>ヒアリングシート（次の面談で聞くことリスト・A4印刷）</h4>
+          <div class="mini" style="font-size:12px">1. 主力商品ごとの生産工場と、止まった場合の許容期間は？<br>2. 各拠点の耐震・浸水対策と非常用電源は？<br>3. 工場見学・体験施設の年間来訪者数と事故履歴は？<br>4. 就業規則の休職期間と、休職中の給与の扱いは？<br>5. 現在の保険（火災・地震・利益・賠償）の加入状況と窓口は？　…全8問</div></div>
+      </div>
+      <div class="panel" style="align-self:start"><h4>ここがポイント</h4>
+        <div class="mini" style="font-size:12px">・レポートは<b>そのまま顧客に見せられる品質</b>を目標（冒頭サマリーは文字中心、以降グラフィカル）<br>・「保険で守れること／守れないこと」を正直に書くのが信頼の源<br>・パワーポイントへの変換は後日対応（まずHTMLで速く・美しく）</div></div>
+    </div>
+  </section>
+
+  <!-- ===== フィードバック ===== -->
+  <section class="sheet" id="sh-fb" hidden>
+    <div class="grid2">
+      <div class="panel">
+        <h4>商談の記録（事実だけ・5分で終わる）</h4>
+        <div style="display:grid;gap:8px">
+          <div><span class="lbl">何が起きた？（選ぶだけ）</span><div><span class="chip c-ok">次回アポ獲得 ✓</span><span class="chip c-gray">見積依頼</span><span class="chip c-gray">成約</span><span class="chip c-gray">失注</span></div></div>
+          <div><span class="lbl">顧客の実際の発言（そのまま引用）</span><div class="fld area">「地震はずっと気になっとった。数字で見せられたのは初めてや」「代理店さんの顔は立ててほしい」</div></div>
+          <div><span class="lbl">刺さった理由の解釈は書かない</span><div class="mini">→ 解釈はAIと月次の編集会がやる。営業は事実だけでOK（負担を増やさない設計）</div></div>
+        </div>
+      </div>
+      <div class="panel" style="align-self:start">
+        <h4>この記録がどこへ行くか</h4>
+        <div class="mini" style="font-size:12px">案件の入力→分析→提案→<b>商談の結果</b>が1本の記録として企業ファイルに残る。<br><br>成功した提案は月次で「型」に昇格し、<b>翌月から全員のS3提案に自動で混ざる</b>。<br><br>——これが「使うほど会社全体が賢くなる」仕組みの正体</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="tabs" id="tabs">
+    <span class="tab on" data-s="home">HOME</span>
+    <span class="tab" data-s="input">案件入力</span>
+    <span class="tab" data-s="s1">S1_企業プロファイル</span>
+    <span class="tab" data-s="s2">S2_リスク仮説</span>
+    <span class="tab" data-s="s3">S3_提案</span>
+    <span class="tab" data-s="spar">壁打ち</span>
+    <span class="tab" data-s="out">出力</span>
+    <span class="tab" data-s="fb">フィードバック</span>
+    <span class="tab dis">受信箱</span>
+    <span class="tab dis">判断台帳</span>
+  </div>
+</div>
+</div>
+
+<div class="coach">
+  <div class="coach-in">
+    <span class="coach-no" id="cNo">STEP 1/10</span>
+    <span class="coach-txt" id="cTxt"></span>
+    <span class="coach-nav">
+      <button class="btn" id="cPrev">← 戻る</button>
+      <button class="btn primary" id="cNext">次へ →</button>
+    </span>
+  </div>
+  <div class="dots-nav" id="cDots"></div>
+</div>
+</div>
+
+<script>
+(function(){
+var steps=[
+ {s:'home',hl:'home-case',t:'<b>① 案件をつくる</b>：HOME画面で「＋新規案件」。今回は<b>春華堂</b>（部長が約20年前に提案した先）を新規・重要案件として登録します。'},
+ {s:'input',hl:'p-paste',t:'<b>② 情報を貼る</b>：HPの文章、調査AIの回答（業界・競合・<b>拠点の災害情報</b>）、そして<b>営業だけが知る現場メモ</b>をコピペするだけ。集め方はナビが案内します。'},
+ {s:'input',hl:null,run:true,t:'<b>③ 一括実行</b>：ボタンひとつ。AIが「読む→リスクを考える→提案を組む→資料にする」を順に実行します（放置5分・その間は別の仕事OK）。'},
+ {s:'input',hl:'p-quality',after:1,t:'<b>④ 足りない情報は「足りない」と言う</b>：14の観点で充足度を診断。足りない分は<b>調査文を自動生成</b>（コピーして調査AIへ）し、顧客にしか聞けないことはヒアリングシートに回します。'},
+ {s:'s1',hl:null,t:'<b>⑤ 会社の理解を確認</b>：AIの読み取り結果（事業構造・拠点×災害情報・<b>めざす姿</b>）。間違いはセルを直せば、そこから先だけ再実行できます。'},
+ {s:'s2',hl:null,t:'<b>⑥ リスク分析を見る・直す</b>：10の切り口で漏れなく、全て根拠つき。「保険で移転できるか」を3色で正直に表示。この段階では全部<b>仮説</b>です。'},
+ {s:'s3',hl:null,t:'<b>⑦ 提案の方向性3本</b>：切り出す一言（フック）・想定反論と切り返しつき。実在しないサービス名は仕組みで排除。<b>あえて提案しないこと</b>も理由つきで明示します。'},
+ {s:'spar',hl:null,t:'<b>⑧ 壁打ちで研ぎ澄ます</b>：提案前にAI相手に予行演習。経営者役に反論させることもできます。良い気づきは💡ひとつで全社のナレッジへ。'},
+ {s:'out',hl:'repcard',t:'<b>⑨ レポートとヒアリングシートを持って訪問</b>：お手元の「出力サンプル⑤春華堂」がこの実物です。ここまで<b>約2時間（人の作業15分）</b>。'},
+ {s:'s2',hl:null,round2:true,t:'<b>⑩ 訪問後：回答を貼ると提案が育つ</b>：仮説が「<b>確認済み✓</b>／<b>違った</b>（消さずに記録）／<b>★新発見</b>」に更新され、提案は種目の具体策へ。記録は<b>1社1ファイル</b>に蓄積——担当が代わっても引き継げます。'}
+];
+var cur=0, round2=false;
+function showSheet(id){
+  document.querySelectorAll('.sheet').forEach(function(s){s.hidden=true});
+  document.getElementById('sh-'+id).hidden=false;
+  document.querySelectorAll('.tab[data-s]').forEach(function(t){t.classList.toggle('on',t.dataset.s===id)});
+}
+function clearHl(){document.querySelectorAll('.hl').forEach(function(e){e.classList.remove('hl')})}
+function applyRound2(){
+  round2=true;
+  document.getElementById('p-answers').hidden=false;
+  document.getElementById('s2note').innerHTML='　<b style="color:var(--green)">第2ラウンド：ヒアリング回答を反映して更新済み</b>';
+  document.querySelectorAll('tr[data-r2="confirm"] .st').forEach(function(c){c.className='chip c-ok st';c.textContent='確認済 ✓'});
+  document.querySelectorAll('tr[data-r2="reject"]').forEach(function(r){r.classList.add('strike');
+    var c=r.querySelector('.st');c.className='chip c-miss st';c.textContent='違った';
+    if(!r.querySelector('.rejnote'))r.querySelector('.rname').insertAdjacentHTML('beforeend','<div class="mini rejnote">→ 2024年にライン更新済み・予備機あり（記録として保持）</div>')});
+  document.querySelectorAll('tr[data-r2="new2"]').forEach(function(r){r.hidden=false});
+  document.getElementById('p-round2').hidden=false;
+  document.getElementById('k1tag').className='chip c-ok';
+  document.getElementById('k1tag').textContent='第2R=具体設計';
+  document.getElementById('caseState').textContent='第2ラウンド完了（提案が具体化）— 企業ファイルへ保存済み';
+}
+function runAnim(cb){
+  var sheet=document.getElementById('sh-input');
+  var ov=document.createElement('div');ov.className='progress-wrap';
+  ov.innerHTML='<div class="progress-box"><b style="font-size:15px">一括実行中…</b><div class="pbar"><i id="pb"></i></div><div class="steps-line"><b id="p1">① 読む</b><b id="p2">② リスクを考える</b><b id="p3">③ 提案を組む</b><b id="p4">④ 資料にする</b></div><div class="mini" style="margin-top:8px">実際は放置5分。その間、別の仕事をしていてOK</div></div>';
+  sheet.appendChild(ov);
+  var pb=ov.querySelector('#pb'),i=0,ids=['p1','p2','p3','p4'];
+  var tm=setInterval(function(){
+    i++;pb.style.width=(i*25)+'%';
+    if(ids[i-1])ov.querySelector('#'+ids[i-1]).classList.add('done');
+    if(i>=4){clearInterval(tm);setTimeout(function(){ov.remove();cb();},600);}
+  },700);
+}
+function afterRun(){
+  document.getElementById('q-before').hidden=true;
+  document.getElementById('q-after').hidden=false;
+  document.getElementById('p-research').hidden=false;
+  document.getElementById('caseName').textContent='C-20260901-001　春華堂（新規・T2）';
+  document.getElementById('caseState').textContent='S4まで完了 — レポート出力可能';
+}
+function go(i,fromDot){
+  cur=Math.max(0,Math.min(steps.length-1,i));
+  var st=steps[cur];
+  clearHl();
+  showSheet(st.s);
+  if(st.after||cur>3)afterRun();
+  if(st.round2)applyRound2();
+  if(st.hl){var el=document.getElementById(st.hl);if(el)el.classList.add('hl');}
+  document.getElementById('cNo').textContent='STEP '+(cur+1)+'/'+steps.length;
+  document.getElementById('cTxt').innerHTML=st.t;
+  document.getElementById('cPrev').disabled=(cur===0);
+  document.getElementById('cNext').textContent=(cur===steps.length-1)?'最初へ戻る ↺':'次へ →';
+  document.querySelectorAll('#cDots i').forEach(function(d,k){d.classList.toggle('on',k===cur)});
+  if(st.run&&!fromDot){runAnim(function(){afterRun();});}
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+var dots=document.getElementById('cDots');
+steps.forEach(function(_,k){var d=document.createElement('i');d.addEventListener('click',function(){go(k,true)});dots.appendChild(d)});
+document.getElementById('cNext').addEventListener('click',function(){ if(cur===steps.length-1){location.reload();return;} go(cur+1);});
+document.getElementById('cPrev').addEventListener('click',function(){go(cur-1,true)});
+document.querySelectorAll('.tab[data-s]').forEach(function(t){t.addEventListener('click',function(){clearHl();showSheet(t.dataset.s)})});
+document.getElementById('btnRun').addEventListener('click',function(){go(2)});
+document.getElementById('btnReport').addEventListener('click',function(){go(8,true)});
+go(0,true);
+})();
+</script>
+</body>
+</html>
