@@ -75,7 +75,13 @@
 
 ## 5. セッション間照合の結果（2026-08-28・伝書鳩ラウンド）
 
-**系譜の確定（発注者回答 2026-08-28）**: main → product/nexus-agent → claude/internal-notebook-lm-chatbot-B6BE7 と派生し、**B6BE7が最終生き残り（正史）**。nexus・gemini-demoは死に筋ブランチだが、本書§1〜2の転用資産（demo_data・structure_chunker・wintest等）はそこにしか無いものが多く、ブランチ削除前に必要分を退避すること。§3のキー露出は死に筋ブランチ上でもGitHubに残る限り有効＝ローテーション推奨は不変。B6BE7は34ラウンドの修正・実機テストを重ねても実機バグが続く状態（LibreOffice合格→実Excel失敗の乖離）で、nexusのwintest基盤（実Excel自動テスト）がB6BE7に未移植であることが一因とみられる——本製品17章の「実機検問」方式の正しさの傍証。
+**系譜の確定（発注者回答 2026-08-28）**: main → product/nexus-agent → claude/internal-notebook-lm-chatbot-B6BE7 と派生し、**B6BE7が最終生き残り（正史）**。nexus・gemini-demoは死に筋ブランチだが、本書§1〜2の転用資産はそこにしか無いものが多く、ブランチ削除前に必要分を退避すること。
+
+**⚠️ 実物照合による訂正（同日追記・tip 51cc7a1「R34クローズ」を直接検証）**:
+- **B6BE7 tipは MyBookshelfそのもの**（wintest/・build_mybookshelf.py・dist/MyBookshelf(_dev).xlsm・開発憲法CLAUDE.md を全部含む。nexus系譜の直接の後継で、§1〜2の主要資産の大半はB6BE7にも実在＝退避不要のものが多い。wintestは「未移植」でなく**既にある**）
+- **🔴 キー露出は正史B6BE7上でも確定**: 最新tip `51cc7a1`「R34クローズ・配布物確定」の `dist/MyBookshelf.xlsm` の `sheet23.xml` に `OBF1:` blobがあり、同ブランチの `build_mybookshelf.py` 平文 `_OBF_KEY` で復号すると32字のキー形状文字列が復元される（値は転記しない）。「キー混入は誤報」判定は完全に覆った。R34で「配布物確定」した成果物に復元可能キーが載ったまま＝死に筋ブランチ限定ではない。**ローテーション＋dist追跡外し＋public/private確認は、GqNZ6でなくB6BE7に直接上げるべき最優先案件**。
+- **`claude/claude-md-setup-GqNZ6` は系譜外の孤立ブランチ**: B6BE7とのmerge-base空、tree直下は `.claude / CLAUDE.md / README.md / docs` のみで src/dist/build を持たない。CLAUDE.md整備専用で本体コードを見ていないため「dist/が無い」「開発憲法用語が無い」との同セッション回答は**そのブランチについては正しいが正史の実態ではない**。開発憲法・検問方式の照会先はGqNZ6ではなく **B6BE7 の `.claude/skills/final-gates/SKILL.md` と CLAUDE.md**（実在確認済み）。本製品17章が追随すべき正はこちら。
+- **実機テスト地獄は移植でなく検問組込の問題**: wintest（実Excel自動テスト）はB6BE7最新tipにも同梱済み（tree直下 `wintest`）。34ラウンドで実機バグが続くのは、LibreOffice合格を出荷条件にし wintest実Excel PASS を final-gates に必須化していない疑い。B6BE7確認事項:「テスト3004はLibreOffice実行か実Excel(wintest)実行か。乖離するなら final-gates に実Excel PASS を必須化しているか」。本製品17章はテストを3層分離（(a)純VBA=modTestsPure・どこでも／(b)Excel固有=wintest実機のみ／(c)実機前静的検査=vba_lint.py）し、**「(b)が通るまで出荷しない」を検問に置く**。
 
 姉妹PJの開発セッション（**B6BE7ブランチ・45コミット・chatbot_v2系**）に§1〜3を照会したところ「4問中3問は前提不成立（誤報）」と返ってきたが、**実物照合の結果、これはブランチ相違**であって本書の誤りではない。同一リポジトリに系譜の異なるブランチが並存している。
 
