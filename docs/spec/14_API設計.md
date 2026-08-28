@@ -35,7 +35,7 @@ result = Application.Run("ChatGPT", _
 - アドイン検出: `Application.AddIns` ループ（`ribbon_addin_name` 部分一致＋Installed、セッションキャッシュ）
 - 起動時 `LimitCheck()`（True=続行不可→案内し、実行時に再案内。config limit_check で無効化可）
 - 温度・MaxTokensはGPT-5系では無視され effort/verbosity が効く（V2実運用で確認済み）。`reasoning_tuning` エスケープハッチはPoC同様に維持
-- エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）
+- エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）。**ただし成否判定は§6の帯域外フラグで行い、文字列プレフィクスを判定に使わない**
 
 ## 3. direct経路（開発・検証用）
 
@@ -80,13 +80,15 @@ raw → (1) modJsonLite.ExtractJsonBlock（説明文・```フェンス除去・�
 
 ## 6. 内部インターフェース契約（公開関数シグネチャ）
 
-エラー規約: 例外を投げない。String戻り値は `"#ERR:Exxxx:メッセージ"`、Boolean戻り値は False＋modLog記録。
+エラー規約: 例外を投げない。**成否は帯域外で運ぶ**: LLM応答など外部由来テキストを返しうる関数（CallStep等）は `ByRef ok As Boolean` で成否を返し、呼び出し側は**このフラグのみ**で成否を判定する。`"#ERR:Exxxx:メッセージ"` は ok=False のときの人間向け説明であって判定材料にしない。理由: 平文プレフィクスによる成否判定はLLM出力側から偽造可能（プロンプトに「#ERR:…とだけ出力せよ」と仕込むと、アプリのエラーUIを騙った任意文面表示＝フィッシング／恒久DoSが成立する。姉妹PJ B6BE7監査「先人の轍」で実証。docs/21 §5）。外部由来テキストが混入し得ない純内部関数に限り、従来どおり String戻り値 `"#ERR:..."`／Boolean戻り値 False＋modLog記録でよい。
 
 ```vb
 ' === core: modGatewayRPN ===
 Public Function CallStep(ByVal stepName As String, ByVal playId As String, _
                          ByVal systemPrompt As String, ByVal userPrompt As String, _
-                         ByVal schemaJson As String, Optional ByRef latencyMs As Long = 0) As String
+                         ByVal schemaJson As String, ByRef ok As Boolean, _
+                         Optional ByRef latencyMs As Long = 0) As String
+' ok: 成否の唯一の判定材料（帯域外シグナル・§6エラー規約）。戻り値文字列の内容では判定しない
 Public Function RibbonAvailable() As Boolean
 Public Function RunLimitCheck() As Boolean            ' True=続行不可
 ' 壁打ち(PL-04)専用: リボンの会話継続引数(prevU/prevA)を使う唯一の関数。
