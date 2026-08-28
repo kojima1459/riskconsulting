@@ -43,7 +43,7 @@ result = Application.Run("ChatGPT", _
 
 ```
 POST {direct_api_base}/chat/completions
-Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログに保存禁止
+Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログ・リポジトリ・配布物のいずれにも保存禁止（キーはローテ不能の借用1本＝漏れたら作り直せない。16章NFR-S2）
 {
   "model": "{direct_model}", "temperature": 0.3,
   "messages": [{"role":"system","content":sys},{"role":"user","content":usr}],
