@@ -135,6 +135,11 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 2. テキストから合理的に推定できる事項は、値の先頭に「(推定)」を付けて書いてよい。ただし推定は控えめに。
 3. リスク分析の材料になる情報（工場・設備・原材料・製造工程・販路・季節性・老朽化・立地・従業員・
    新規事業・海外展開・大口取引先）を優先的に拾う。
+3b. strategy_outlook では「この会社が今めざしていること」を抽出する。上場企業は有価証券報告書の
+   「経営方針・経営環境及び対処すべき課題」「経営者による分析(MD&A)」と中期経営計画から、
+   未上場はHPの経営理念・社長挨拶・採用ページ・プレスリリースから、
+   (1)ミッション・ビジョン・バリュー等の掲げる価値観 (2)注力事業・成長投資・やろうとしていること
+   (3)置かれた市場環境 を読み取る。現状だけでなく「目指す姿」が後続のリスク分析の基準になる。
 4. missing_info には「リスク分析のために本当は知りたいが入力に無かった情報」を、
    営業が顧客に確認しやすい粒度で列挙する。
 5. input_quality で入力の充足度を診断する。14の観点(profile=会社概要, business=事業・製品,
@@ -216,6 +221,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "customers": {"segments": ["顧客層"], "channels": ["販路"]},
   "workforce_notes": "従業員・技能に関する特記(なければ\"不明\")",
   "management_notes": "経営・戦略上の特記(新規事業・承継・投資等。なければ\"不明\")",
+  "strategy_outlook": {"mvv": "ミッション・ビジョン・バリュー等の要約(なければ\"不明\")",
+                       "aspirations": ["いま力を入れている事業・やろうとしていること(1項目1文)"],
+                       "market_context": "置かれた市場環境の要約(なければ\"不明\")"},
   "current_coverage": [{"line_name": "種目名(現契約サマリの表記のまま)", "coverage_summary": "補償内容の要約",
                         "limit_note": "限度額・保険金額(不明なら\"不明\")", "special_note": "主要特約・免責等(なければ\"不明\")"}],
   "field_insights": [{"note": "現場メモの原文(要約しない)", "tag": "risk_clue/relationship/competitor/constraint/opportunity/other"}],
@@ -260,6 +268,11 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     }, "required": ["segments", "channels"], "additionalProperties": false},
     "workforce_notes": {"type": "string"},
     "management_notes": {"type": "string"},
+    "strategy_outlook": {"type": "object", "properties": {
+      "mvv": {"type": "string"},
+      "aspirations": {"type": "array", "items": {"type": "string"}},
+      "market_context": {"type": "string"}
+    }, "required": ["mvv", "aspirations", "market_context"], "additionalProperties": false},
     "current_coverage": {"type": "array", "items": {"type": "object", "properties": {
       "line_name": {"type": "string"},
       "coverage_summary": {"type": "string"},
@@ -288,7 +301,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     }, "required": ["purpose", "prompt_text"], "additionalProperties": false}}
   },
   "required": ["company_name", "business_summary", "main_products", "processes", "locations",
-               "supply_chain", "customers", "workforce_notes", "management_notes",
+               "supply_chain", "customers", "workforce_notes", "management_notes", "strategy_outlook",
                "current_coverage", "field_insights", "missing_info", "input_quality", "research_requests"],
   "additionalProperties": false
 }
@@ -320,6 +333,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    source="inference" のリスクは全体の3割以下に抑える。
 3. 業種の一般論で終わらせない。企業固有の記述(製品・工程・拠点・販路)に結びついたリスクを優先し、
    リスク名やシナリオに固有名詞を含める。
+3b. 「現状」のリスクだけでなく、企業プロファイルの strategy_outlook(目指す姿・注力事業)から
+   「目指す姿へ向かう過程で新たに生じるリスク」を必ず検討する(新規事業の立上げ・大型投資・
+   M&A・海外進出・チャネル転換に伴う変化リスク)。経営者にとって、いま張っている勝負に潜む
+   リスクこそ最も関心が高い。
 4. frequency と impact はシナリオと整合させる。迷ったら社内リスク知識の typical 値を参考にする。
 5. check_points には、そのリスクの実在・大小を現地訪問やヒアリングで確かめる具体的な確認点を書く。
 6. open_questions には、リスク評価の精度を上げるために顧客へ確認すべき事項を書く。
