@@ -83,14 +83,15 @@
 - **`claude/claude-md-setup-GqNZ6` は系譜外の孤立ブランチ**: B6BE7とのmerge-base空、tree直下は `.claude / CLAUDE.md / README.md / docs` のみで src/dist/build を持たない。CLAUDE.md整備専用で本体コードを見ていないため「dist/が無い」「開発憲法用語が無い」との同セッション回答は**そのブランチについては正しいが正史の実態ではない**。開発憲法・検問方式の照会先はGqNZ6ではなく **B6BE7 の `.claude/skills/final-gates/SKILL.md` と CLAUDE.md**（実在確認済み）。本製品17章が追随すべき正はこちら。
 - **実機テスト地獄は移植でなく検問組込の問題**: wintest（実Excel自動テスト）はB6BE7最新tipにも同梱済み（tree直下 `wintest`）。34ラウンドで実機バグが続くのは、LibreOffice合格を出荷条件にし wintest実Excel PASS を final-gates に必須化していない疑い。B6BE7確認事項:「テスト3004はLibreOffice実行か実Excel(wintest)実行か。乖離するなら final-gates に実Excel PASS を必須化しているか」。本製品17章はテストを3層分離（(a)純VBA=modTestsPure・どこでも／(b)Excel固有=wintest実機のみ／(c)実機前静的検査=vba_lint.py）し、**「(b)が通るまで出荷しない」を検問に置く**。
 
-姉妹PJの開発セッション（**B6BE7ブランチ・45コミット・chatbot_v2系**）に§1〜3を照会したところ「4問中3問は前提不成立（誤報）」と返ってきたが、**実物照合の結果、これはブランチ相違**であって本書の誤りではない。同一リポジトリに系譜の異なるブランチが並存している。
+**決着（2026-08-28・向こうが全面訂正）**: 姉妹PJセッションは当初「4問中3問は前提不成立（誤報）」と返したが、`product/nexus-agent` を調査範囲外にしたまま「全45コミットでゼロ」と断言していた自らの範囲ミスを認め、**キー露出の指摘は完全に正しいと訂正**した。向こうの実測確定値: config シート（`sheet6.xml`）にラベル `azure_embed_key`＝`OBF1:`＋hex64（32バイトの実在キー・`obfuscate_secret()` は空なら空を返す実装なので空ではない）、XOR鍵は平文2箇所（`build/build_mybookshelf.py:136` と `src/core/modUtil.bas:52`＝`_OBF_KEY="NexusAgentBuildObfuscationKey2026"`）、**対になる Azure エンドポイントも平文で同居**（テナント名・デプロイ名・キーが揃った即利用可能な組）。3セッション（本セッション・nexus読み・B6BE7監査）が独立に同一結論へ到達。**対応順序（順序厳守）**: ①先にキーのローテーション（Azure Portal＝発注者の手・削除では露出は取り消せない）→②Azure利用ログで不正利用確認→③dist/追跡外し・履歴除去→④恒久対策（ビルドが秘密を配布物に焼き込む設計の廃止）。以下の照合表は当初の食い違いの記録として残す。
 
-| 論点 | B6BE7（向こう） | product/nexus-agent（本書の対象・165コミット） | 判定 |
+| 論点 | 当初の向こうの回答 | 実物（本書対象＝nexus系） | 決着 |
 |---|---|---|---|
-| build_mybookshelf.py / TODO.md / EDGE_CASES.md / wintest | 存在しない | **実在**（TODO.mdは `docs/dev/TODO.md`） | 双方とも自ブランチについて正 |
-| dist内の実キー | 全45コミット走査で検出0 | **再検証で確定**: `dist/MyBookshelf(_dev).xlsm` の `xl/worksheets/sheet6.xml` に `OBF1:` blob各2件。ビルドスクリプト平文の `_OBF_KEY` でXOR復号すると**32字のキー形状文字列**が復元される（値は転記しない） | §3の指摘は**nexusブランチについて有効**。ローテーション推奨は維持 |
+| build_mybookshelf.py / TODO.md / EDGE_CASES.md / wintest | 存在しない | **実在**（TODO.mdは `docs/dev/TODO.md`） | ブランチ相違。双方とも自ブランチについて正 |
+| dist内の実キー | 全45コミット走査で検出0 | **確定**: `dist/MyBookshelf(_dev).xlsm` の `sheet6.xml`（config）にラベル `azure_embed_key`＝`OBF1:`＋hex64。平文XOR鍵で復号可能・空でない実キー・Azureエンドポイント平文同居（値は転記しない） | **向こうが訂正し完全一致**。範囲外走査による誤断言だった。ローテ最優先 |
 | リボン呼出 | `Application.Run("ChatGPT", prompt)` 引数1個・Wait/MaxTokens不在 | 12引数（RIBBON_API_CONFIRMED.md） | ブランチで実装世代が違う。**本製品は12引数版を正**とする（14章） |
-| 【社内限】引受GL | **向こうでも確認**。しかも抽出本文が `dist/index/chunks.json`（785チャンク）と配布xlsmの `knowledge_base` シート（867行・約51万字）にコミット・配布済み | demo_data/にPDF原本 | **両ブランチで露出**。承認記録はどこにも無し→**OQ-11の先例にはならない**（許可の事実は発注者しか知らない） |
+| 【社内限】引受GL | **向こうでも確認**。抽出本文が `dist/index/chunks.json`（785チャンク）と配布xlsmの `knowledge_base` シート（867行・約51万字）にコミット・配布済み | demo_data/にPDF原本 | **両ブランチで露出**。承認記録なし→**OQ-11の先例にはならない**（許可の事実は発注者しか知らない） |
+| 開発憲法の正 | GqNZ6は「規約用語0件」 | 対コード規約＝`product/nexus-agent:docs/dev/CONTRIBUTING.md`（§2.5=30,000字・§3=3ゲート）。CLAUDE.md（GqNZ6）は対人作法のみ | **17章はCONTRIBUTING.md準拠**。人向け作法は別レイヤー |
 
 ### B6BE7監査「先人の轍」から本製品仕様に取り込んだもの
 
