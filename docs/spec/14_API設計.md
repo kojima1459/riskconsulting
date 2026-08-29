@@ -356,7 +356,7 @@ Public Function FmtPatterns(ByVal rows As Variant) As String    ' 15章§6.1 pat
 Public Function FmtRules(ByVal rows As Variant) As String       ' 15章§6.1 rulesText。0行は "(登録なし)"
 Public Function FmtResearching(ByVal rows As Variant) As String ' 15章§6.1 researchingText。0行は "(登録なし)"
 Public Function FmtMechs(ByVal rows As Variant) As String       ' 15章§6.1 mechs。0行は "(登録なし)"（16章E-09）
-Public Function TrimKbLine(ByVal s As String) As String
+Public Function TrimKbLine(ByVal s As String) As String  ' 適用点はmodKnowledgeFmt内部のRowLine最終段(全整形行が必ず通る)
 ' 15章§0.7 の最終段「各行を先頭400字で切り『…』を付す」の実体。**400字以内はそのまま返す**
 ' （何も足さない）。超える場合は先頭400字（`modUtil.SafeLeft` と同じサロゲート安全な切り方）へ
 ' `…`（U+2026。CP932内）を付けて返すので、戻り値は最大401字になる。
@@ -409,7 +409,7 @@ Public Function BuildSparringSystem() As String                                 
 Public Function RepairSuffix() As String                                         ' 15章§7 修復サフィックス
 Public Function SchemaS1() As String   ' 同様に SchemaS2 / S3 / S4 / S2C / S3C / PF / WT / FG（§7の表が正）
 ' `Block*` 7本（BlockCtx / BlockRenewalS1..S3 / BlockGuard / BlockS4Proposal / BlockS4Alliance）は
-'   modPromptsBlocks の内部関数であり本節に宣言を持たない（正は15章§10.2）。同じく無引数。
+'   modPromptsBlocks の Public 関数（modPromptsOps が参照するため Private 不可）だが、本節の公開契約面には載せない（正は15章§10.2）。同じく無引数。
 ' `ReviseSuffix` / `RepairSuffix` は user 末尾へ連結する1ブロックであり専用の Asm* を置かない。
 '   `{{critiqueDigest}}` / `{{validationErrors}}` の埋め込みは呼び出し側が `Fill` で行う。
 ' --- (2) 組立層（modPromptsOps。純関数=Excelトークン禁止・15章の本文を持たない）---

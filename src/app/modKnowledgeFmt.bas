@@ -224,7 +224,8 @@ Private Function RowLine(ByVal rows As Variant, ByVal r As Long, ByVal idText As
     lineText = "[" & idText & "]"
     If LenB(headText) > 0 Then lineText = lineText & FM_SPACE & headText
     AppendPart lineText, FM_PIPE, BodyOf(rows, r, pipeSpec, FM_PIPE)
-    RowLine = lineText
+    ' 15章§0.7 最終段: 1行400字切詰め(適用点はここ=全整形行が必ず通る)
+    RowLine = TrimKbLine(lineText)
 End Function
 
 ' 書式スペック("ラベル=列名;...")を1本の文字列へ。値が空の項目は丸ごと落とす。
