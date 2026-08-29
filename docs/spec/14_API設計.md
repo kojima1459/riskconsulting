@@ -1,6 +1,6 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
-> v2.4: 実装前監査72件の裁定を反映。§6の関数契約を15章のプロンプト本文が要求する引数へ全面改訂（BuildS1User/S2User/S3User/S4System・CallChatの帯域外成否）、NormalizeLlmJson・MenusSummaryFor・MechsText・LastInjectedIds・SanitizeFileName・TryEnterUiLock・FreezeRoundを新設、§7を定数から純関数へ、§2/§3のハードコードをconfig駆動へ、§5にExtractJsonBlock入力パターン表を新設。
+> v2.4: 実装前監査72件の裁定を反映。§6の関数契約を15章のプロンプト本文が要求する引数へ全面改訂（BuildS1User/S2User/S3User/S4System・CallChatの帯域外成否）、NormalizeLlmJson・MenusSummaryFor・MechsText・LastInjectedIds・SanitizeFileName・TryEnterUiLock・FreezeRoundを新設、§7を定数から純関数へ、§2/§3のハードコードをconfig駆動へ、§5にExtractJsonBlock入力パターン表を新設。（検証指摘の修正）BuildS3Userの引数順を15章の貼付ブロック出現順（menus, lines, schemes, cases）へ修正、JsStringSafeの適用順を明示、modUIProgressにParkFocusを追加、§4のmock本数を「7 step種・11応答」へ、modHtmlTemplate/modHtmlThemeの関数契約の正が18章であることを明記。
 
 ## 1. LLM経路と分岐
 
@@ -17,6 +17,7 @@
 | s1/s2/s3/s4 | PL-01/02 | Schema-S1/S2/S3/S4 | modPipeline |
 | s2c/s3c（批判）・s2r/s3r（改訂） | PL-01/02のdeep時 | Schema-S2C/S3C・改訂はS2/S3と同一 | modPipeline |
 | pf | PL-03 | Schema-PF | modPlayOps |
+| sp | PL-04（壁打ち） | なし（自由対話。CallChat経由） | modSparring |
 | wt | PL-05 | Schema-WT | modPlayOps(1.5) |
 | fg | PL-06 | Schema-FG | modPlayOps(1.5) |
 
