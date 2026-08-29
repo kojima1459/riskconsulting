@@ -1,0 +1,19 @@
+{
+  "_comment": "リスク提案ナビ(RPN) VBAモジュール台帳。12章§2のレイヤ構成とモジュール一覧に準拠し、パスは <repo> からの相対パス。ビルド時にここへ列挙された全ファイルの存在を検査する(--allow-missing で欠落を警告に緩和)。逆方向(src/ に実在するのに未登録)も check_unregistered で検査するため、モジュールを新設したら必ずここへ1行足すこと。role は 12章§2 の層(core/app/ui/test)。type=std の .bas だけが vba_src シートへ格納される。**実装済みのモジュールだけを載せる**(未着手のモジュールを先に載せるとビルドが常に欠落エラーになるため)。wave は 17章§3 のタスクID。",
+  "modules": [
+    {
+      "name": "modTestRunner",
+      "path": "src/test/modTestRunner.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-01"
+    },
+    {
+      "name": "modTestsPure",
+      "path": "src/test/modTestsPure.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-01"
+    }
+  ]
+}

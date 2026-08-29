@@ -1,0 +1,322 @@
+{
+  "_comment": "ナレッジブック(ナレッジブック.xlsx)のシート台帳。13章§3が正であり、本ファイルは従(ずれたら本ファイルを直す。13章は直さない)。build/build_rpn.py --kb はこのファイルだけを見てシートを作り、tools/sheet_check.py --kb が13章§3のMarkdown表/箇条書きを直接パースして本ファイルと成果物ブックの両方を照合する(17章 T-03)。マクロ無し.xlsxであり、vba_src・config・guardシートは持たない(13章§3冒頭・11章§1)。全15シートは1シート1テーブル(1行目=物理名ヘッダ)。",
+  "kb_version": "1.0.0",
+  "text_number_format": "@",
+  "_text_number_format_note": "本体ブックと同じ二重化(16章E-46/NFR-S7)。type=String列をExcelのテキスト書式へ固定する。",
+
+  "enums": {
+    "_note": "入力規則(データの入力規則リスト)の値集合。正は19章§3(記載箇所を各キーに注記)。",
+    "category": ["strategy_market", "supply_chain", "manufacturing_quality", "sales_customer", "facility_bcp", "hr_labor", "digital_info", "legal_regulatory", "finance_counterparty", "brand_social"],
+    "_category_note": "19章§3 category(リスクユニバース10分類)。S2出力のcategoryと同一語彙(13章§3.1)。",
+    "frequency": ["high", "mid", "low"],
+    "impact": ["large", "mid", "small"],
+    "boolean": ["TRUE", "FALSE"],
+    "scheme_status": ["proven", "adopted", "candidate", "external"],
+    "_scheme_status_note": "19章§3 scheme.status。",
+    "mech_layer": ["detect", "prevent", "entry", "benefit", "underwrite"],
+    "_mech_layer_note": "19章§3 mech.layer。",
+    "watch_source_kind": ["own_pr", "competitor_pr", "media", "regulation"],
+    "_watch_source_kind_note": "19章§3 watch.source_kind。巡回リストのkind・ウォッチログのsource_kindが共有する。",
+    "watch_classification": ["new_asset", "pattern_example", "target_candidate", "rule_change"],
+    "_watch_classification_note": "19章§3 watch.classification。",
+    "rule_class": ["fortuity", "adverse_selection", "indemnity", "pool_size", "insurable_interest", "high_loss", "trigger", "channel", "mandate", "duplicate", "scope", "uw"],
+    "_rule_class_note": "19章§3 rule.rule_class(12値)。",
+    "rule_workaround": ["entry_path", "benefit_form", "underwriter", "none"],
+    "_rule_workaround_note": "19章§3 rule.workaround。",
+    "target_status": ["listed", "contacted", "in_poc", "dropped"],
+    "_target_status_note": "19章§3 target.status。",
+    "rt_status": ["researching", "done", "dropped"],
+    "_rt_status_note": "19章§3 rt.status。"
+  },
+
+  "sheets": [
+    {
+      "name": "業種マスタ",
+      "spec_ref": "13章§3.1",
+      "columns": [
+        {"name": "industry_code", "type": "String", "width": 12, "header_note": "日本標準産業分類 中分類コード＋00 共通(13章§1)"},
+        {"name": "industry_name", "type": "String", "width": 26},
+        {"name": "aliases", "type": "String", "width": 44, "header_note": "別名・検索用キーワード(;区切り)"}
+      ],
+      "reserve_rows": 40,
+      "seed_rows": [
+        ["00", "共通", "全業種共通;業種不明;複合業種"],
+        ["06", "総合工事業", "建設業;ゼネコン;土木;建築工事"],
+        ["07", "職別工事業", "とび;大工;左官;専門工事業"],
+        ["08", "設備工事業", "電気工事;管工事;設備業"],
+        ["09", "食料品製造業", "食品製造;食品工場;菓子製造;製菓;食品加工"],
+        ["10", "飲料・たばこ・飼料製造業", "飲料メーカー;酒造;製茶;飼料製造"],
+        ["11", "繊維工業", "紡績;織物;アパレル製造;縫製"],
+        ["16", "化学工業", "化学メーカー;化成品;塗料;樹脂原料"],
+        ["18", "プラスチック製品製造業", "樹脂成形;プラスチック加工;射出成形"],
+        ["21", "窯業・土石製品製造業", "セメント;ガラス;陶磁器;耐火物"],
+        ["22", "鉄鋼業", "製鉄;鉄鋼メーカー;高炉;製鋼"],
+        ["24", "金属製品製造業", "金属加工;板金;プレス加工;金型"],
+        ["25", "はん用機械器具製造業", "汎用機械;ポンプ;バルブ;軸受"],
+        ["26", "生産用機械器具製造業", "産業機械;工作機械;製造装置"],
+        ["28", "電子部品・デバイス・電子回路製造業", "半導体;電子部品;基板製造;デバイス"],
+        ["29", "電気機械器具製造業", "電機メーカー;家電;モーター;変圧器"],
+        ["31", "輸送用機械器具製造業", "自動車部品;自動車製造;二輪車;完成車メーカー;サプライヤー"],
+        ["32", "その他の製造業", "雑貨製造;玩具;楽器;その他メーカー"],
+        ["39", "情報サービス業", "SIer;ソフトウェア開発;IT企業;システム開発"],
+        ["44", "道路貨物運送業", "運送業;トラック輸送;物流;配送業"],
+        ["47", "倉庫業", "倉庫;物流センター;保管業"],
+        ["50", "各種商品卸売業", "総合商社;卸売;商事会社"],
+        ["52", "飲食料品卸売業", "食品卸;酒類卸;青果卸"],
+        ["58", "飲食料品小売業", "スーパー;食品小売;八百屋;精肉店"],
+        ["60", "その他の小売業", "雑貨店;ホームセンター;専門小売"],
+        ["61", "無店舗小売業", "通信販売;ECサイト;ネット通販"],
+        ["68", "不動産取引業", "不動産仲介;不動産販売;デベロッパー"],
+        ["70", "物品賃貸業", "リース業;レンタル業"],
+        ["75", "宿泊業", "ホテル;旅館;宿泊施設"],
+        ["76", "飲食店", "レストラン;飲食チェーン;外食産業"]
+      ]
+    },
+
+    {
+      "name": "リスクライブラリ",
+      "spec_ref": "13章§3.1",
+      "columns": [
+        {"name": "risk_lib_id", "type": "String", "width": 16, "header_note": "RL-<業種>-NNN(13章§1)"},
+        {"name": "industry_code", "type": "String", "width": 12, "header_note": "業種マスタ実在"},
+        {"name": "category", "type": "String", "width": 22, "dv": "category", "header_note": "リスクユニバース10分類。S2出力のcategoryと同一語彙"},
+        {"name": "risk_name", "type": "String", "width": 26},
+        {"name": "typical_scenario", "type": "String", "width": 44},
+        {"name": "typical_freq", "type": "String", "width": 12, "dv": "frequency"},
+        {"name": "typical_impact", "type": "String", "width": 12, "dv": "impact"},
+        {"name": "check_points", "type": "String", "width": 40, "header_note": "業種特有の聞くべき契約構造を含める(;区切り)"},
+        {"name": "priority", "type": "Long", "width": 10, "header_note": "1-3"},
+        {"name": "source", "type": "String", "width": 24}
+      ],
+      "reserve_rows": 30
+    },
+
+    {
+      "name": "メニュー一覧",
+      "spec_ref": "13章§3.1",
+      "columns": [
+        {"name": "menu_id", "type": "String", "width": 12, "header_note": "M-NNNN(13章§1)"},
+        {"name": "menu_name", "type": "String", "width": 30},
+        {"name": "summary", "type": "String", "width": 44, "header_note": "100字以内"},
+        {"name": "target_categories", "type": "String", "width": 30, "header_note": "対応カテゴリ(;区切り)"},
+        {"name": "target_industries", "type": "String", "width": 20, "header_note": "業種コード(;区切り)。空=指定なし"},
+        {"name": "is_active", "type": "String", "width": 10, "dv": "boolean"}
+      ],
+      "reserve_rows": 25,
+      "seed_rows": [
+        ["M-0012", "食品工場リスク診断サービス", "食品工場の製造ライン・品質管理体制を巡回点検し、異物混入・アレルゲン管理・BCP面の弱点を診断して改善提案する", "manufacturing_quality;supply_chain", "09", true]
+      ],
+      "seed_note": "M-0012は15章§3・§4・§8.1のmock必須行(17章T-14前提)。"
+    },
+
+    {
+      "name": "種目マスタ",
+      "spec_ref": "13章§3.1",
+      "columns": [
+        {"name": "line_id", "type": "String", "width": 10, "header_note": "L-NN(13章§1)"},
+        {"name": "line_name", "type": "String", "width": 30},
+        {"name": "market_note", "type": "String", "width": 44, "header_note": "市場環境メモ(引受の硬軟・相場観)。四半期更新しS3へ注入する。空欄の行はLinesText整形で省略される(13章§3.1・15章§4)"}
+      ],
+      "reserve_rows": 20,
+      "seed_rows": [
+        ["L-03", "生産物賠償責任保険(PL保険)", "再保険料率の上昇で限度額に慎重"]
+      ],
+      "seed_note": "L-03は15章§4・§8.1のmock必須行(17章T-14前提)。"
+    },
+
+    {
+      "name": "メニュー種目対応",
+      "spec_ref": "13章§3.1",
+      "columns": [
+        {"name": "menu_id", "type": "String", "width": 12, "header_note": "メニュー一覧実在"},
+        {"name": "line_id", "type": "String", "width": 10, "header_note": "種目マスタ実在"}
+      ],
+      "reserve_rows": 20,
+      "seed_rows": [
+        ["M-0012", "L-03"]
+      ],
+      "seed_note": "mock必須行M-0012とL-03の対応づけ(実在チェック整合のため付随投入)。"
+    },
+
+    {
+      "name": "成功事例",
+      "spec_ref": "13章§3.1",
+      "columns": [
+        {"name": "case_lib_id", "type": "String", "width": 12, "header_note": "K-NNNN(13章§1)"},
+        {"name": "industry_code", "type": "String", "width": 12, "header_note": "業種マスタ実在"},
+        {"name": "customer_profile", "type": "String", "width": 30, "header_note": "匿名"},
+        {"name": "risk_presented", "type": "String", "width": 36},
+        {"name": "proposal", "type": "String", "width": 36},
+        {"name": "why_it_worked", "type": "String", "width": 36},
+        {"name": "quote", "type": "String", "width": 36, "header_note": "顧客の実際の発言をそのまま引用"},
+        {"name": "registered_by", "type": "String", "width": 16},
+        {"name": "registered_at", "type": "String", "width": 18}
+      ],
+      "reserve_rows": 20,
+      "seed_rows": [
+        ["K-0003", "09", "浜松地区の中堅菓子製造業。EC直販比率が拡大中で工場は2拠点", "食品表示・アレルゲン混入によるリコールリスクを有報にも記載していなかった", "生産物賠償責任保険(PL保険。L-03)の増額と食品工場リスク診断サービス(M-0012)のセット提案", "診断で見つかった具体的な管理体制の弱点を先に示した上でPL増額を提案したため経営層が即座に納得した", "うちの管理体制の弱点をここまで具体的に指摘されたのは初めてです", "管理者", "2026-08-29"]
+      ],
+      "seed_note": "K-0003は15章§4・§8.1のmock必須行(17章T-14前提)。業種09(食品製造)の事例として作成。"
+    },
+
+    {
+      "name": "判断基準",
+      "spec_ref": "13章§3.2",
+      "columns": [
+        {"name": "rule_id", "type": "String", "width": 10, "header_note": "J-NN(13章§1・docs/05既存表記を継承)"},
+        {"name": "rule_class", "type": "String", "width": 20, "dv": "rule_class"},
+        {"name": "rule_text", "type": "String", "width": 46},
+        {"name": "workaround", "type": "String", "width": 16, "dv": "rule_workaround"},
+        {"name": "source", "type": "String", "width": 24}
+      ],
+      "reserve_rows": 30
+    },
+
+    {
+      "name": "パターンマスタ",
+      "spec_ref": "13章§3.3",
+      "columns": [
+        {"name": "pattern_id", "type": "String", "width": 8, "header_note": "P1-P15固定(docs/07)"},
+        {"name": "pattern_name", "type": "String", "width": 26},
+        {"name": "structure", "type": "String", "width": 46},
+        {"name": "conditions", "type": "String", "width": 40, "header_note": ";区切り"},
+        {"name": "examples_public", "type": "String", "width": 34},
+        {"name": "internal_refs", "type": "String", "width": 26, "header_note": "型IDの;区切り"}
+      ],
+      "reserve_rows": 15,
+      "seed_note": "15行固定(13章§3.3)。docs/07 パターン一覧を初期データとして全行投入。",
+      "seed_rows": [
+        ["P1", "エンベデッド(組込型)", "サービス/商品の購入・契約に保険が自動付帯。契約者=事業者または購入者", "母集団を強制的に広げられる接点(EC・デバイス・アプリ)がある", "家電量販の延長保証;フリマ配送保険;ライドシェア乗客補償", ""],
+        ["P2", "検知×補償バンドル", "検知・監視サービス(センサー/衛星/AI)とセットで、検知できない残余リスクを保険がカバー", "検知パートナーの実在;検知→引受条件化の接続", "漏水センサー×水濡れ;防犯×盗難", "S-0004"],
+        ["P3", "予防・行動変容還元型", "利用者の行動データで予防を促し、成果を保険料に還元", "行動が計測可能;改善が損害率に効く証拠", "テレマ保険;健康増進型医療保険", ""],
+        ["P4", "サービス裏受け(B2B2C費用保険)", "事業者が顧客に約束するサービス・保証の履行費用を保険が裏受け。契約者=事業者", "事業者に約束したいが原資が不安定な給付がある", "携帯キャリアの補償サービス;サブスク災害支援", ""],
+        ["P5", "履行保証・裏受け(個人向け債務)", "個人間・契約上の支払義務(慰謝料・養育費・家賃)の不履行を保険が受ける", "客観的な債務確定(公正証書等);回収スキーム", "家賃債務保証;養育費保証", ""],
+        ["P6", "パラメトリック(指標連動)", "客観指標(震度・雨量・警報・欠航)の該当で定額・自動給付", "機械可読トリガー;実損乖離の説明(国内は認可が壁)", "地震パラメトリック;天候デリバティブ;遅延補償", ""],
+        ["P7", "現物・役務給付型", "金銭でなくモノ・サービスで給付(代車・代替人材・復旧作業・宿泊)", "給付を履行するパートナー網", "代車特約;レッカー;ホームアシスタンス", ""],
+        ["P8", "団体・アフィニティプール型", "企業・組合・学校・PTAなど既存の集団を契約者に束ね、逆選択を回避", "集団の実在と加入動機;事務局", "GLTD;PTA保険;業界団体制度", ""],
+        ["P9", "自治体・住民プール型", "自治体を契約者に住民・地域資産を包括カバー。共助の制度化", "自治体の予算科目;政策課題との一致", "自治体向け見舞金制度;鳥獣害包括(候補)", ""],
+        ["P10", "プラットフォーム責任カバー型", "PF事業者(マッチング・EC・シェアリング)が取引の安全を保険で担保し、PFの信頼を商品化", "PFが契約者・データ提供者になる設計", "ギグワーカー補償;シェアリング事業者包括", ""],
+        ["P11", "認証・基準連動型", "保険会社が引受基準を認証制度として外部化し、認証取得者に料率優遇", "業界団体との協働;基準の言語化", "耐火認定と料率;セキュリティ認証割引", ""],
+        ["P12", "診断・コンサル前置型", "リスク診断(防災・サイバー・SC脆弱性)を入口に、改善提案と保険をセット販売", "診断メニューの実在;診断→料率の接続", "防災診断つき火災;サイバー診断つきサイバー保険", ""],
+        ["P13", "業界プール・共同引受型", "単社で受けられない巨大・新規リスクを業界プール/再保険/共同組成で受ける", "幹事間の協調;再保険手配", "原子力プール;地震再保険", ""],
+        ["P14", "データ還元・公共転用型", "保険事業で得たデータ(走行・支払・気象)を外部(自治体・業界)の課題解決に転用し、手数料・関係資本を得る", "データの独自性;受け手の予算", "走行データの道路点検転用", ""],
+        ["P15", "移行期リスク引受型", "新技術・新制度の普及初期(自動運転・ドローン・宇宙・AI)の未確立リスクを、個別引受＋データ蓄積で先行", "案件別UW体制;データ蓄積の意思", "ドローン包括;実証実験保険", ""]
+      ]
+    },
+
+    {
+      "name": "型ライブラリ",
+      "spec_ref": "13章§3.4",
+      "columns": [
+        {"name": "scheme_id", "type": "String", "width": 10, "header_note": "S-NNNN(13章§1)"},
+        {"name": "scheme_name", "type": "String", "width": 24},
+        {"name": "pattern_id", "type": "String", "width": 8, "header_note": "P1-P15(主となる文法)"},
+        {"name": "structure", "type": "String", "width": 44, "header_note": "300字以内"},
+        {"name": "conditions", "type": "String", "width": 40, "header_note": ";区切り3つ目安"},
+        {"name": "signals", "type": "String", "width": 36},
+        {"name": "example", "type": "String", "width": 30},
+        {"name": "status", "type": "String", "width": 12, "dv": "scheme_status"},
+        {"name": "vehicles", "type": "String", "width": 34, "header_note": ";区切り"},
+        {"name": "target_industries", "type": "String", "width": 20, "header_note": "空=指定なし"},
+        {"name": "target_lines", "type": "String", "width": 20, "header_note": "空=指定なし"},
+        {"name": "registered_by", "type": "String", "width": 14},
+        {"name": "registered_at", "type": "String", "width": 16}
+      ],
+      "reserve_rows": 25,
+      "seed_rows": [
+        ["S-0004", "見守りヤモリ型", "P2", "検知パートナー×有事補償バンドル。漏水・浸水等を検知するセンサー事業者と提携し、検知で防げなかった残余の水濡れ損害を保険が引き受ける", "検知パートナーの実在;検知→引受条件化の接続;運用体制の整備", "漏水センサー等の検知技術と契約している;老朽設備・水回り事故の懸念がある", "ASTERRA(海外)漏水検知×水濡れ保険を参考に自社実績として構築", "proven", "動産総合保険;水濡れ費用保険", "", "", "管理者", "2026-08-29"]
+      ],
+      "seed_note": "S-0004は15章§3・§4・§8.1のmock必須行(17章T-14前提)。"
+    },
+
+    {
+      "name": "機構ライブラリ",
+      "spec_ref": "13章§3.5",
+      "columns": [
+        {"name": "mech_id", "type": "String", "width": 10, "header_note": "MC-NNNN(13章§1)"},
+        {"name": "mech_text", "type": "String", "width": 40, "header_note": "機構の一言"},
+        {"name": "layer", "type": "String", "width": 12, "dv": "mech_layer"},
+        {"name": "source_uid", "type": "String", "width": 18, "header_note": "投稿ボックスuid"}
+      ],
+      "reserve_rows": 20,
+      "seed_rows": [
+        ["MC-0107", "振動センサーで設備異常を予兆検知", "detect", "UID-2025-0417"]
+      ],
+      "seed_note": "MC-0107は15章§6.1・§8.1のmock必須行(17章T-14前提)。"
+    },
+
+    {
+      "name": "適用先候補",
+      "spec_ref": "13章§3.6",
+      "columns": [
+        {"name": "target_id", "type": "String", "width": 12},
+        {"name": "company_name", "type": "String", "width": 22},
+        {"name": "service_summary", "type": "String", "width": 36},
+        {"name": "pattern_id", "type": "String", "width": 10, "header_note": "P1-P15"},
+        {"name": "scheme_id", "type": "String", "width": 10, "header_note": "適用したい型"},
+        {"name": "trigger_idea", "type": "String", "width": 30},
+        {"name": "status", "type": "String", "width": 12, "dv": "target_status"},
+        {"name": "note", "type": "String", "width": 30}
+      ],
+      "reserve_rows": 20
+    },
+
+    {
+      "name": "巡回リスト",
+      "spec_ref": "13章§3.7",
+      "columns": [
+        {"name": "watch_src_id", "type": "String", "width": 12},
+        {"name": "name", "type": "String", "width": 22},
+        {"name": "url", "type": "String", "width": 34},
+        {"name": "kind", "type": "String", "width": 14, "dv": "watch_source_kind"},
+        {"name": "巡回頻度メモ", "type": "String", "width": 26, "header_note": "13章§3.7の原文ママ。英字物理名が明記されていない(13章冒頭の「1行目=物理名ヘッダ・英小文字snake_case」原則との不整合。concerns参照)"}
+      ],
+      "reserve_rows": 15,
+      "seed_note": "Phase 1.5先行定義(13章§3.7)。最終列は13章原文が英字物理名を与えていないためやむを得ず日本語のまま採用(concerns参照)。"
+    },
+
+    {
+      "name": "ウォッチログ",
+      "spec_ref": "13章§3.8",
+      "columns": [
+        {"name": "watch_id", "type": "String", "width": 14, "header_note": "W-YYYYMM-NN(13章§1)"},
+        {"name": "watched_at", "type": "String", "width": 18},
+        {"name": "source_kind", "type": "String", "width": 14, "dv": "watch_source_kind", "header_note": "巡回リストのkindと同一語彙(3.7)"},
+        {"name": "summary", "type": "String", "width": 36},
+        {"name": "classification", "type": "String", "width": 18, "dv": "watch_classification"},
+        {"name": "pattern_id", "type": "String", "width": 10, "header_note": "P1-P15"},
+        {"name": "action_taken", "type": "String", "width": 26},
+        {"name": "reflected_to", "type": "String", "width": 20, "header_note": "反映先ID"}
+      ],
+      "reserve_rows": 15,
+      "seed_note": "Phase 1.5先行定義(13章§3.8)。"
+    },
+
+    {
+      "name": "新サービス候補",
+      "spec_ref": "13章§3.9",
+      "columns": [
+        {"name": "logged_at", "type": "String", "width": 18},
+        {"name": "case_id", "type": "String", "width": 22},
+        {"name": "industry_code", "type": "String", "width": 12},
+        {"name": "unmatched_risk", "type": "String", "width": 40},
+        {"name": "operator", "type": "String", "width": 16}
+      ],
+      "reserve_rows": 20,
+      "seed_note": "本体から自動追記(13章§3.9)。雛形は空(ヘッダのみ)で正しい。"
+    },
+
+    {
+      "name": "研究テーマ一覧",
+      "spec_ref": "13章§3.10",
+      "columns": [
+        {"name": "rt_id", "type": "String", "width": 10, "header_note": "RT-NN"},
+        {"name": "theme_name", "type": "String", "width": 30},
+        {"name": "status", "type": "String", "width": 14, "dv": "rt_status"},
+        {"name": "note", "type": "String", "width": 40}
+      ],
+      "reserve_rows": 20,
+      "seed_note": "初期データは投稿ボックス分析テーマ研究161件を代表テーマ約20行に集約してT-90で投入(13章§3.10)。W0では雛形のみ。"
+    }
+  ]
+}
