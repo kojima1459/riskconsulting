@@ -9,11 +9,15 @@
 # ビルド成果物(中間生成物 *.building.xlsm / 不良品 *.failed.xlsm を含む)
 /dist/
 
-# マクロ入りブックはリポジトリのどこにも置かない。
-# ※ build/template_skeleton.xlsm(本物のExcelで作った vbaProject.bin の供給元)も
-#   これに該当する。テンプレートはリポジトリ経由では配らず、開発機へ個別に
-#   置く運用とする(tools/README.md 参照)。
+# マクロ入りブック(=成果物 .xlsm)はリポジトリのどこにも置かない。
 *.xlsm
+
+# ※ 例外: build/template_skeleton.xlsm は「本物のExcelで作った vbaProject.bin の
+#   供給元」であり、成果物ではなくビルド入力(自己インストーラの土台)である。
+#   これだけは tracked にして配る(自己インストール機構を再現可能にするため。
+#   12章§2/裁定書4 項目12)。中身はキー走査クリーン(tools/ship_check.py ② が
+#   全パート展開して毎リリース検査する)。
+!build/template_skeleton.xlsm
 
 # ※ *.xlsx は一律には除外しない。docs/ 配下の .xlsx は「回収フォーマット」等の
 #   仕様入力であってビルド成果物ではないため、意図的に追跡対象へ残す。

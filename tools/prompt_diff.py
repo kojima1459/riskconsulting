@@ -36,6 +36,12 @@ prompt_diff.py - 15章のプロンプト/スキーマ本文と .bas 実装の一
     python3 tools/prompt_diff.py
     python3 tools/prompt_diff.py --strict   # 未実装関数も差分として数える
     exit code: 差分件数(0=一致)。125件を超えたら125で頭打ちにする
+
+    --strict は「未実装=差分」とみなす最終確認用スイッチ。突合先ディレクトリが
+    無い/対象 .bas が0本(=全関数未実装)のときも、--strict では不合格(exit 1)に
+    倒す。**--strict を付けない既定はこの状態を「T-23で実装予定のスキップ」として
+    exit 0 のまま通す**(W0〜W1では実装前なのが正常なため)。この非対称が無いと
+    「対象0件」を無条件に合格扱いにしてしまい --strict が骨抜きになる(裁定書4 項目13)。
 ================================================================================
 """
 
@@ -377,7 +383,9 @@ def main() -> int:
     ap.add_argument("--src", default=str(DEFAULT_SRC),
                     help="突合対象の .bas を置いたディレクトリ(既定: src/app)")
     ap.add_argument("--strict", action="store_true",
-                    help="未実装関数も差分として数える(T-23の最終確認用)")
+                    help="未実装関数も差分として数える(T-23の最終確認用)。"
+                         "突合先ディレクトリ不在・対象0件のときも不合格(exit 1)にする"
+                         "(--strict なしはこれらを exit 0 でスキップ)")
     args = ap.parse_args()
 
     spec_path = Path(args.spec).resolve()
@@ -398,15 +406,25 @@ def main() -> int:
         print(f"  注意: 節またはフェンスが見つからなかった関数: {section_missing}")
 
     if not src_dir.exists():
-        print(f"\n対象0件・スキップ: 突合先ディレクトリがありません({src_dir})。")
+        print(f"\n対象0件: 突合先ディレクトリがありません({src_dir})。")
         print("modPrompts* / modSchemas* は T-23 で実装します。")
+        if args.strict:
+            print("  --strict 指定: 突合先が存在しない=未実装を差分として扱い、不合格"
+                  "(exit 1)にします(T-23の最終確認用。実装が揃えば 0 diff を要求)。")
+            return 1
+        print("  スキップ(--strict なしのため exit 0)。")
         return 0
 
     files, code = extract_code_bodies(src_dir)
     if not files:
-        print(f"\n対象0件・スキップ: {src_dir} に modPrompts*.bas / modSchemas*.bas が"
+        print(f"\n対象0件: {src_dir} に modPrompts*.bas / modSchemas*.bas が"
               "1本もありません。")
         print("これらは T-23(W2)で実装します。実装後は本スクリプトが0 diffを要求します。")
+        if args.strict:
+            print("  --strict 指定: 突合対象が0本=未実装を差分として扱い、不合格"
+                  "(exit 1)にします(T-23の最終確認用)。")
+            return 1
+        print("  スキップ(--strict なしのため exit 0)。")
         return 0
 
     print(f"突合対象ファイル: {[f.name for f in files]}")

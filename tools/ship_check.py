@@ -23,8 +23,9 @@ ship_check.py - 出荷前検問(17章 T-46)のうち機械実行できる①②�
      **検出時はファイル名と行番号のみを出力し、キー値そのものは出力しない**
      (検問ログ自体が漏洩経路にならないようにする)。
   ③ `git check-ignore` で dist/ と成果物(*.xlsm / *.xlsx)が実際に除外されている
-     ことの確認。あわせて tracked に .xlsm が無いこと、tracked の .xlsx が
-     仕様入力(docs/ 配下)だけであることを確認する。
+     ことの確認。あわせて tracked の .xlsm がビルド入力の許可枠
+     (TRACKED_XLSM_ALLOWED = build/template_skeleton.xlsm。成果物ではない)
+     だけであること、tracked の .xlsx が仕様入力(docs/ 配下)だけであることを確認する。
 
   ④ wintest(実Excel・COM経由)全PASS  ... Windows実機。本スクリプトでは未実施
   ⑤ modTestsPure が FAIL 0・SKIP 0・実行本数=tests_expected ... 同上
@@ -55,6 +56,11 @@ import vba_lint   # noqa: E402  (①の実装を共有するため)
 ARTIFACT_SUFFIXES = (".xlsm", ".xlsx")
 # 仕様入力として tracked を許す .xlsx の置き場(成果物ではない)。
 TRACKED_XLSX_ALLOWED_PREFIXES = ("docs/",)
+# tracked を許す .xlsm(成果物ではなくビルド入力)。build/template_skeleton.xlsm は
+# 「本物の vbaProject.bin の供給元」で、自己インストール機構(12章§2・裁定書4 項目12)
+# の土台。これだけは意図的に tracked にする(.gitignore の !build/template_skeleton.xlsm)。
+# 中身は下の ② が全パート展開してキー走査する(除外ではなく検査対象に残す)。
+TRACKED_XLSM_ALLOWED = ("build/template_skeleton.xlsm",)
 
 # ------------------------------------------------------------------------------
 # ② 検出パターン(16章 NFR-S2 の逐語)
@@ -288,15 +294,22 @@ def check_item3() -> tuple[bool, list[str]]:
         if not ok:
             problems.append(f"{probe} が .gitignore で除外されていません")
 
+    allowed_xlsm = 0
     for rel in tracked_files():
         low = rel.lower()
         if low.endswith(".xlsm"):
+            if rel in TRACKED_XLSM_ALLOWED:
+                allowed_xlsm += 1
+                continue
             problems.append(f"tracked に .xlsm があります: {rel}")
         elif low.endswith(".xlsx"):
             if not any(rel.startswith(p) for p in TRACKED_XLSX_ALLOWED_PREFIXES):
                 problems.append(
                     f"tracked の .xlsx が仕様入力の置き場"
                     f"{TRACKED_XLSX_ALLOWED_PREFIXES} の外にあります: {rel}")
+    if allowed_xlsm:
+        print(f"  tracked のビルド入力 .xlsm(成果物ではない・②が全パート走査): "
+              f"{list(TRACKED_XLSM_ALLOWED)}")
 
     if problems:
         print(f"  FAIL: {len(problems)} 件")

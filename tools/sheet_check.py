@@ -506,6 +506,42 @@ class Ledger:
         s = self.by_name.get("config") or {}
         return {d["name"]: d.get("value") for d in s.get("defaults") or []}
 
+    def input_rule_omissions(self):
+        """入力規則の省略台帳(17章T-46/裁定書4 項目17)を (sheet, target, enum) の
+        集合と、宣言の整形不良の一覧で返す。"""
+        raw = self.data.get("input_rule_omissions") or []
+        decl, malformed = set(), []
+        for i, e in enumerate(raw):
+            if not all(k in e for k in ("sheet", "target", "enum")):
+                malformed.append(f"エントリ{i}に sheet/target/enum のいずれかがありません: {e}")
+                continue
+            decl.add((e["sheet"], e["target"], e["enum"]))
+        return decl, malformed
+
+    def dv_fields(self):
+        """台帳内の dv 指定のある列/フィールドを (sheet, target, enum, kind) で列挙する。
+        target は flat/anchor=列物理名 / block='ブロック名.列名' / form・header=名前付きレンジ名。
+        kind は 'flat'/'block'/'form' で、成果物側のセル解決の仕方を分ける。"""
+        out = []
+        for s in self.specs:
+            sheet = s["name"]
+            for i, c in enumerate(s.get("columns") or [], start=1):
+                if c.get("dv"):
+                    out.append((sheet, c["name"], c["dv"], ("flat", i)))
+            for b in s.get("blocks") or []:
+                for i, c in enumerate(b["columns"], start=1):
+                    if c.get("dv"):
+                        out.append((sheet, f"{b['name']}.{c['name']}", c["dv"],
+                                    ("block", b["name"], i)))
+            fields = []
+            for sec in s.get("sections") or []:
+                fields += sec.get("fields") or []
+            fields += s.get("header_fields") or []
+            for f in fields:
+                if f.get("dv"):
+                    out.append((sheet, f["range"], f["dv"], ("form", f["range"])))
+        return out
+
 
 # ------------------------------------------------------------------------------
 # 比較の道具
@@ -586,6 +622,72 @@ class Book:
             out.append(ws.cell(row=r, column=1).value)
             r += 1
         return out
+
+
+# ------------------------------------------------------------------------------
+# 入力規則の省略台帳(裁定書4 項目17)の実測ヘルパ
+# ------------------------------------------------------------------------------
+def _book_list_dv_cells(ws) -> set:
+    """成果物ブックのワークシートで list 型の入力規則が覆う (col_idx, row) の集合。"""
+    cells: set = set()
+    try:
+        dvs = ws.data_validations.dataValidation
+    except Exception:
+        return cells
+    for dv in dvs:
+        if getattr(dv, "type", None) != "list":
+            continue
+        for rng in dv.sqref.ranges:
+            for c in range(rng.min_col, rng.max_col + 1):
+                for r in range(rng.min_row, rng.max_row + 1):
+                    cells.add((c, r))
+    return cells
+
+
+def _coord_col_row(coord: str):
+    m = re.match(r"([A-Za-z]+)(\d+)", coord)
+    if not m:
+        return None
+    col = 0
+    for ch in m.group(1).upper():
+        col = col * 26 + (ord(ch) - 64)
+    return col, int(m.group(2))
+
+
+def _measured_dv_omissions(led: "Ledger", book) -> set:
+    """成果物ブックを実測し、台帳で dv 指定のある列/フィールドのうち、ブックに list
+    入力規則が実際に付いていないもの(=ビルドが省略したもの)を (sheet, target, enum)
+    の集合で返す。ビルドが入力規則を省略する唯一の理由は255字上限なので、この差分が
+    そのまま『ビルド実測の省略一覧』になる。"""
+    cache: dict = {}
+    measured: set = set()
+    for sheet, target, enum, kind in led.dv_fields():
+        if sheet not in book.wb.sheetnames:
+            continue
+        ws = book.wb[sheet]
+        covered = cache.get(sheet)
+        if covered is None:
+            covered = cache[sheet] = _book_list_dv_cells(ws)
+        cell = None
+        if kind[0] == "flat":
+            cell = (kind[1], 2)                       # 列index, 先頭データ行=2
+        elif kind[0] == "block":
+            loc = book.names.get(kind[1])             # ブロックアンカーの名前付きレンジ
+            if loc and loc[0] == sheet:
+                cell = (kind[2], book.row_of(loc[1]) + 1)
+        elif kind[0] == "form":
+            loc = book.names.get(kind[1])             # 値セルの名前付きレンジ
+            if loc and loc[0] == sheet:
+                cr = _coord_col_row(loc[1])
+                if cr:
+                    cell = cr
+        if cell is None:
+            # ブック側でセルを特定できない=名前付きレンジ不足。省略判定へは巻き込まず、
+            # [3][4]の名前付きレンジ検査側の失敗に委ねる。
+            continue
+        if cell not in covered:
+            measured.add((sheet, target, enum))
+    return measured
 
 
 # ------------------------------------------------------------------------------
@@ -728,6 +830,26 @@ def run(book_path: Path | None, rep: Report) -> None:
     # --- 6. 19章§4との相互確認(参考。19章§5チェックリストの追随漏れ検知) ------
     print("\n[6] 19章§4との相互確認(参考・WARNのみ。19章§5は13章と19章の同時更新を求める)")
     _cross_check_ch19(ch13, rep)
+
+    # --- 7. 入力規則の省略台帳(17章T-46・裁定書4 項目17) -----------------------
+    print("\n[7] 入力規則の省略台帳(255字上限で省略した列の宣言 ⇔ ビルド実測の一致)")
+    decl, malformed = led.input_rule_omissions()
+    for msg in malformed:
+        rep.check(False, "input_rule_omissions の宣言整形", msg)
+    enums = led.data.get("enums") or {}
+    for sheet, target, enum in sorted(decl):
+        rep.check(sheet in led.by_name, f"省略台帳: シート '{sheet}' が台帳に実在",
+                  f"target={target}")
+        rep.check(enum in enums, f"省略台帳: enum '{enum}' が enums に実在",
+                  f"{sheet}!{target}")
+    print(f"    宣言された省略: {len(decl)}件 {sorted(decl)}")
+    if book:
+        measured = _measured_dv_omissions(led, book)
+        print(f"    ビルド実測の省略(dv指定列で入力規則が付いていないもの): "
+              f"{len(measured)}件 {sorted(measured)}")
+        rep.eq_set("入力規則の省略台帳 ⇔ ビルド実測(成果物ブック)", decl, measured)
+    else:
+        rep.warn("--no-book のため入力規則の省略台帳とビルド実測の一致検査を省略しました")
 
 
 def _cross_check_ch19(ch13: Ch13, rep: Report) -> None:

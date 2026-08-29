@@ -44,6 +44,7 @@ import io
 import json
 import os
 import re
+import struct
 import sys
 import tempfile
 import zipfile
@@ -61,6 +62,13 @@ except ImportError:      # 検証の一部が使えなくなるだけでビル�
     olefile = None
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# build/ovba.py(自己完結のOVBA圧縮/解凍・CFBリーダー)を import できるようにする。
+# 通常は `python3 build/build_rpn.py` 実行時に sys.path[0] が build/ になるが、
+# 別ディレクトリからの import 実行でも解決できるよう明示的に足す。
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import ovba  # noqa: E402  (自己完結モジュール。ThisWorkbook外科パッチに使う)
+
 DEFAULT_ROOT = os.path.dirname(SCRIPT_DIR)
 DEFAULT_MODULES_JSON = os.path.join(SCRIPT_DIR, "modules.json")
 DEFAULT_SHEETS_JSON = os.path.join(SCRIPT_DIR, "sheets_main.json")
@@ -105,6 +113,234 @@ def _clean(s):
 
 class BuildError(Exception):
     """ビルド契約違反(モジュール欠落・文字数超過など)。呼び出し側でexit 1にする。"""
+
+
+# ===========================================================================
+# 自己インストーラ(VBA/ThisWorkbook ストリームの中身)と vbaProject.bin 外科パッチ
+# ---------------------------------------------------------------------------
+# 移植元: PoC「マイ本棚AI」 build/build_mybookshelf.py の自己インストーラ機構
+#   (ThisWorkbook ストリームの外科的差し替え + dir MOFFSET=0 + _VBA_PROJECT 無害化)。
+#   PoC固有の起動先(modViewport / modInstallCheck / RunFirstRunPromptEarly)は
+#   RPNには存在しないため落とし、起動先を **modBoot.Boot** に読み替えた
+#   (12章§2.1: modBoot が Workbook_Open から呼ぶ唯一の起動入口)。低レベルの
+#   OVBA圧縮/解凍・CFBリーダーは build/ovba.py(自己完結・実証済み)を使う。
+#
+# 建付け(12章§2 の自己インストール機構):
+#   ・ビルドは template_skeleton.xlsm の「本物の vbaProject.bin」をそのまま成果物へ
+#     持ち込む(どのExcelでも文句なく開けるのはこのため)。
+#   ・その ThisWorkbook ストリームだけを下記の自己インストーラソースへ差し替える。
+#     起動時(Workbook_Open)に vba_src シートの各モジュールをVBEへ注入し、
+#     以後は通常モジュールとして modBoot.Boot(§2.1の起動シーケンス)へ渡す。
+#
+# 注意: このVBAソースは ThisWorkbook ストリームへ「元と同じ圧縮後バイト長」で
+#   差し込む(in-place外科パッチ。ストリームを伸ばすとCFBのFATを組み直す必要が
+#   あり、Excelが読めなくなる)。ソースは必ずASCIIのみ(CP932安全)。長い説明を
+#   足すと圧縮後サイズ上限(テンプレ実測1,148B)を超えてビルドが落ちるため、
+#   意図の説明はコメント側(ここ)へ書く。
+#
+#   ・モジュール追加(Add/Name/DeleteLines/AddFromString)の失敗は1本ずつローカルに
+#     握って f を加算し、f>0 のときは Save しない。半端な注入状態をファイルへ
+#     焼き付けないため。あわせて ThisWorkbook.Saved=True を立て、閉じる際の
+#     「保存しますか?」の反射押しで半端状態が保存されるのを防ぐ(PoC実機由来)。
+#   ・本文があるはず(LenB(s)>0)なのに注入後 CountOfLines<1 の無言破損も f 加算。
+#   ・Boot は同期呼び出しだと注入直後に 1004 になることがあるため OnTime で1秒
+#     後ろへ切り離し、予約時刻を vba_src!E1 に置く(modBoot 側が任意で取り消す)。
+#     OnTime予約自体が失敗したら同期で modBoot.Boot を呼ぶフォールバックを持つ。
+# ===========================================================================
+_INSTALLER_SRC_TEXT = '''Attribute VB_Name = "ThisWorkbook"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+Private Sub Workbook_Open()
+  Install
+End Sub
+Public Sub Install()
+  Dim p As Object, w As Worksheet, c As Object, e As Object
+  Dim r As Long, n As String, s As String, l As Long, f As Long
+  On Error GoTo Trust
+  Set p = ThisWorkbook.VBProject
+  On Error GoTo Done
+  Set w = ThisWorkbook.Worksheets("vba_src")
+  l = w.Cells(w.Rows.Count, 1).End(-4162).Row
+  For r = 2 To l
+    n = CStr(w.Cells(r, 1).Value)
+    s = CStr(w.Cells(r, 3).Value)
+    If LenB(n) > 0 Then
+      On Error Resume Next
+      Set e = Nothing: Set e = p.VBComponents(n)
+      If Not e Is Nothing Then p.VBComponents.Remove e
+      Set c = Nothing
+      Set c = p.VBComponents.Add(1)
+      If c Is Nothing Then
+        f = f + 1
+      Else
+        Err.Clear
+        c.Name = n
+        If c.CodeModule.CountOfLines > 0 Then c.CodeModule.DeleteLines 1, c.CodeModule.CountOfLines
+        If LenB(s) > 0 Then c.CodeModule.AddFromString s
+        If Err.Number <> 0 Then
+          f = f + 1
+        ElseIf LenB(s) > 0 Then
+          If c.CodeModule.CountOfLines < 1 Then f = f + 1
+          If Err.Number <> 0 Then f = f + 1
+        End If
+      End If
+      Err.Clear
+      On Error GoTo Done
+    End If
+  Next r
+  On Error Resume Next
+  If f > 0 Then
+    MsgBox "Setup NG(" & f & "). Close WITHOUT saving, then reopen.", vbCritical
+    ThisWorkbook.Saved = True
+    Exit Sub
+  End If
+  ThisWorkbook.Save
+  Err.Clear
+  Dim bt As Date
+  bt = Now + TimeSerial(0, 0, 1)
+  Application.OnTime bt, "'" & ThisWorkbook.Name & "'!modBoot.Boot"
+  If Err.Number <> 0 Then
+    Err.Clear
+    Application.Run "modBoot.Boot"
+  Else
+    w.Cells(1, 5).Value = CDbl(bt)
+    Err.Clear
+  End If
+  Exit Sub
+Trust:
+  MsgBox "Trust the VBA project, then reopen.", vbCritical
+  Exit Sub
+Done:
+End Sub
+'''
+
+
+def build_installer_src() -> bytes:
+    """自己インストーラソースをCP932(実体はASCIIのみ)・CRLFのバイト列にする。"""
+    try:
+        _INSTALLER_SRC_TEXT.encode("ascii")
+    except UnicodeEncodeError as e:
+        raise BuildError(
+            f"自己インストーラソースはASCIIのみで書いてください(CP932安全): {e}")
+    return _INSTALLER_SRC_TEXT.replace("\n", "\r\n").encode("cp932")
+
+
+def _pad_to_exact_or_die(compressed: bytes, target: int, stream_name: str) -> bytes:
+    """ovba.pad_to_exact の到達不能差分(1/2/4/7バイト)を BuildError化して誘導する。
+    OVBA空チャンクは3/5バイト単位でしか長さを埋められないため、これらの差分は
+    原理的に到達不能。ovba.py はプロダクト固有ロジックを持たない自己完結モジュール
+    という設計方針のため、誘導文はここ(呼び出し側)で出す。"""
+    try:
+        return ovba.pad_to_exact(compressed, target)
+    except ValueError as e:
+        raise BuildError(
+            f"{stream_name}ストリームのpaddingが目標バイト数に到達できません({e})。"
+            "OVBA空チャンクは3バイト単位/5バイト単位の組合せでしか長さを埋められず、"
+            "元サイズとの差分が1/2/4/7バイトのときは到達不能です。"
+            "_INSTALLER_SRC_TEXT のコメント・変数名を1〜2バイト増減してから再実行してください。")
+
+
+# ---------------------------------------------------------------------------
+# _VBA_PROJECTストリームの無害化(幽霊コンパイルエラー根治。PoC R23c-F1由来)
+#   配布xlsmの vbaProject.bin は template_skeleton.xlsm 由来で、その
+#   _VBA_PROJECT ストリーム(3,061B)が当時のOfficeビルドのVersionスタンプと
+#   PerformanceCacheを保持したまま。MS-OVBAは「Versionが開き手のOfficeと一致
+#   すると PerformanceCache がソースより優先される」「書き手は Version=0xFFFF と
+#   し PerformanceCache を含めてはならない(MUST)」と定める。ユーザーのExcel
+#   ビルドと一致すると、注入した新ソースでなく古いキャッシュ側の名前解決が
+#   信用され、実在するはずのプロシージャが見つからないコンパイルエラーになる。
+#   対策(二重防御): Version を 0xFFFF へ書き換え、PerformanceCache 全体をゼロ埋め。
+#   ストリーム長は 3,061B のまま変えない(olefile.write_stream は同サイズ書込のみ)。
+# ---------------------------------------------------------------------------
+_VBA_PROJECT_STREAM_SIZE = 3061       # template_skeleton.xlsm 由来の固定長
+_VBA_PROJECT_RESERVED1 = 0x61CC       # MS-OVBA 2.3.4.1 Reserved1(固定値)
+_VBA_PROJECT_VERSION_IGNORE = 0xFFFF  # 「キャッシュを使うな」の相互運用値
+_VBA_PROJECT_CACHE_OFFSET = 7         # PerformanceCache の開始オフセット
+
+
+def _neutralize_vba_project(stream: bytes) -> bytes:
+    """_VBA_PROJECTストリームを同サイズのままキャッシュ無効化する。"""
+    if len(stream) != _VBA_PROJECT_STREAM_SIZE:
+        raise BuildError(
+            f"_VBA_PROJECTストリームのサイズが想定外です: "
+            f"期待={_VBA_PROJECT_STREAM_SIZE}バイト 実際={len(stream)}バイト "
+            "(template_skeleton.xlsm が差し替わった可能性。同サイズ書換の前提が崩れます)")
+    reserved1 = struct.unpack("<H", stream[0:2])[0]
+    if reserved1 != _VBA_PROJECT_RESERVED1:
+        raise BuildError(
+            f"_VBA_PROJECTストリームの先頭2バイトが 0x{_VBA_PROJECT_RESERVED1:04X} "
+            f"ではありません(実際=0x{reserved1:04X})。MS-OVBA の _VBA_PROJECT ヘッダ"
+            "として解釈できないため中断します。")
+    out = bytearray(stream)
+    struct.pack_into("<H", out, 2, _VBA_PROJECT_VERSION_IGNORE)
+    for i in range(_VBA_PROJECT_CACHE_OFFSET, len(out)):
+        out[i] = 0
+    return bytes(out)
+
+
+def patch_installer(vba_bin: bytes, installer_src: bytes) -> bytes:
+    """template由来の vbaProject.bin に外科パッチを当てる:
+    (1) VBA/ThisWorkbook を自己インストーラソースへ差し替え(元と同じ圧縮後バイト長)
+    (2) VBA/dir の ThisWorkbook.MOFFSET を 0 に書き換え
+    (3) VBA/_VBA_PROJECT の PerformanceCache 無害化
+    バイナリ全体のバイト長は不変(in-place)。"""
+    if olefile is None:
+        raise BuildError(
+            "olefile が import できないため vbaProject.bin の外科パッチを実施できません"
+            "(pip install olefile が必要。テンプレートを使うビルドには必須です)")
+    skel = ovba.CFBReader(vba_bin)
+
+    # (2) dir ストリームの ThisWorkbook.MOFFSET を 0 に。
+    dir_dec = ovba.ovba_decompress(skel.read("dir"))
+    needle = struct.pack("<HI", 0x0019, len("ThisWorkbook")) + b"ThisWorkbook"
+    idx = dir_dec.find(needle)
+    if idx < 0:
+        raise BuildError("dir stream: ThisWorkbook MNAME レコードが見つかりません"
+                         "(template_skeleton.xlsm が非互換の可能性)")
+    i = idx
+    found = False
+    while i < len(dir_dec):
+        rid = struct.unpack("<H", dir_dec[i:i + 2])[0]
+        sz = struct.unpack("<I", dir_dec[i + 2:i + 6])[0]
+        if rid == 0x0031:  # MOFFSET
+            patched = bytearray(dir_dec)
+            struct.pack_into("<I", patched, i + 6, 0)
+            dir_dec = bytes(patched)
+            found = True
+            break
+        i += 6 + sz
+    if not found:
+        raise BuildError("dir stream: ThisWorkbook MOFFSET レコードが見つかりません")
+
+    orig_dir_size = skel.entries["dir"]["size"]
+    orig_tw_size = skel.entries["ThisWorkbook"]["size"]
+    new_dir = _pad_to_exact_or_die(ovba.ovba_compress(dir_dec), orig_dir_size, "dir")
+
+    # (1) ThisWorkbook ストリームは「元と同じバイト数」でしか差し替えられない。
+    tw_compressed = ovba.ovba_compress(installer_src)
+    if len(tw_compressed) > orig_tw_size:
+        raise BuildError(
+            f"自己インストーラ(ThisWorkbookストリーム)が圧縮後{len(tw_compressed)}バイトで、"
+            f"差し替え可能な上限{orig_tw_size}バイトを{len(tw_compressed) - orig_tw_size}"
+            "バイト超過しました。_INSTALLER_SRC_TEXT のコメント/変数名を削るか、処理を "
+            "modBoot 側(vba_srcから注入される標準モジュール。サイズ上限が緩い)へ移してください。")
+    new_tw = _pad_to_exact_or_die(tw_compressed, orig_tw_size, "ThisWorkbook")
+
+    # (3) PerformanceCache 無害化。同サイズ書き込みのみ。
+    new_vbaproj = _neutralize_vba_project(skel.read("_VBA_PROJECT"))
+
+    buf = io.BytesIO(vba_bin)
+    ole = olefile.OleFileIO(buf, write_mode=True)
+    ole.write_stream("VBA/dir", new_dir)
+    ole.write_stream("VBA/ThisWorkbook", new_tw)
+    ole.write_stream("VBA/_VBA_PROJECT", new_vbaproj)
+    ole.close()
+    buf.seek(0)
+    return buf.read()
 
 
 # ---------------------------------------------------------------------------
@@ -952,8 +1188,67 @@ def _verify_layout(wb2, ctx):
     return errors
 
 
+def _verify_installer_patch(vba_bin, installer_src):
+    """成果物の vbaProject.bin に自己インストーラ外科パッチが正しく当たっているかを
+    別実装(ovba.CFBReader)で読み戻して検証する3項目(PoC由来):
+    (1) ThisWorkbookストリームの復元確認(先頭一致+末尾NULパディングのみ)
+    (2) dir ストリームの ThisWorkbook.MOFFSET が 0
+    (3) _VBA_PROJECT の無害化(サイズ不変・Version=0xFFFF・PerformanceCacheゼロ埋め)"""
+    errors = []
+    try:
+        cfb = ovba.CFBReader(vba_bin)
+
+        # (1) ThisWorkbook復元確認。空チャンクpaddingは解凍すると末尾に数バイトの
+        #     NULが付くため「先頭が完全一致し、余剰があるならNULのみ」で確認する。
+        tw_dec = ovba.ovba_decompress(cfb.read("ThisWorkbook"))
+        tail = tw_dec[len(installer_src):]
+        if not tw_dec.startswith(installer_src) or any(b != 0 for b in tail):
+            errors.append(
+                "ThisWorkbookストリームの復元結果が自己インストーラソースと不一致"
+                "(先頭一致+末尾NULパディングという想定パターンから外れています)")
+
+        # (2) dir MOFFSET=0確認。
+        dir_dec = ovba.ovba_decompress(cfb.read("dir"))
+        needle = struct.pack("<HI", 0x0019, len("ThisWorkbook")) + b"ThisWorkbook"
+        idx = dir_dec.find(needle)
+        moffset_ok = False
+        if idx >= 0:
+            i = idx
+            while i < len(dir_dec):
+                rid = struct.unpack("<H", dir_dec[i:i + 2])[0]
+                sz = struct.unpack("<I", dir_dec[i + 2:i + 6])[0]
+                if rid == 0x0031:
+                    moffset_ok = (struct.unpack("<I", dir_dec[i + 6:i + 10])[0] == 0)
+                    break
+                i += 6 + sz
+        if not moffset_ok:
+            errors.append("dirストリームのThisWorkbook.MOFFSETが0になっていません")
+
+        # (3) _VBA_PROJECT無害化確認。
+        vp = cfb.read("_VBA_PROJECT")
+        if len(vp) != _VBA_PROJECT_STREAM_SIZE:
+            errors.append(
+                f"_VBA_PROJECTストリームのサイズが変化しています: "
+                f"期待={_VBA_PROJECT_STREAM_SIZE}バイト 実際={len(vp)}バイト")
+        else:
+            ver = struct.unpack("<H", vp[2:4])[0]
+            if ver != _VBA_PROJECT_VERSION_IGNORE:
+                errors.append(
+                    f"_VBA_PROJECTのVersionが0x{_VBA_PROJECT_VERSION_IGNORE:04X}では"
+                    f"ありません(実際=0x{ver:04X})。開き手のOfficeビルドと一致すると"
+                    "PerformanceCacheがソースより優先され幽霊コンパイルエラーの原因になります")
+            nonzero = sum(1 for b in vp[_VBA_PROJECT_CACHE_OFFSET:] if b != 0)
+            if nonzero:
+                errors.append(
+                    f"_VBA_PROJECTのPerformanceCacheがゼロ埋めされていません(非ゼロ={nonzero}バイト)")
+    except Exception as e:                                          # pragma: no cover
+        errors.append(f"自己インストーラ外科パッチの検証中に例外: {e}")
+    return errors
+
+
 def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
-                 app_version, present_modules, root, has_vba_project, ctx=None):
+                 app_version, present_modules, root, has_vba_project, ctx=None,
+                 installer_src=None):
     errors = []
     try:
         wb2 = openpyxl.load_workbook(out_path, keep_vba=True)
@@ -1049,11 +1344,18 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
             if has_vba_project:
                 if "xl/vbaProject.bin" not in names:
                     errors.append("テンプレート由来の xl/vbaProject.bin が成果物にありません")
-                elif olefile is not None:
-                    ole = olefile.OleFileIO(io.BytesIO(z.read("xl/vbaProject.bin")))
-                    if not ole.exists("VBA/dir"):
-                        errors.append("vbaProject.bin に VBA/dir ストリームがありません")
-                    ole.close()
+                else:
+                    vba_bin = z.read("xl/vbaProject.bin")
+                    if olefile is not None:
+                        ole = olefile.OleFileIO(io.BytesIO(vba_bin))
+                        if not ole.exists("VBA/dir") or not ole.exists("VBA/ThisWorkbook"):
+                            errors.append(
+                                "vbaProject.bin に VBA/dir または VBA/ThisWorkbook "
+                                "ストリームがありません")
+                        ole.close()
+                    # 自己インストーラ外科パッチの読み戻し検証(3項目。PoC由来)。
+                    if installer_src is not None:
+                        errors.extend(_verify_installer_patch(vba_bin, installer_src))
             elif "xl/vbaProject.bin" in names:
                 errors.append(
                     "テンプレート無しのビルドなのに xl/vbaProject.bin が混入しています")
@@ -1180,8 +1482,8 @@ def main():
         for name in list(wb.sheetnames):
             del wb[name]
         print(f"  テンプレートの vbaProject.bin を引き継ぎます: {args.template}")
-        print("  注意: 自己インストーラ(ThisWorkbookストリームの外科パッチ)は本スクリプト"
-              "では行いません。移植元の build/ovba.py が引き継ぎ資産に含まれていないためです。")
+        print("  自己インストーラ(ThisWorkbookストリームの外科パッチ)は Stage 4 で当てます"
+              "(build/ovba.py 経由)。")
     else:
         wb = openpyxl.Workbook()
         for name in list(wb.sheetnames):
@@ -1224,12 +1526,29 @@ def main():
     wb.save(tmp_path)
     print(f"  一時保存: {tmp_path} ({os.path.getsize(tmp_path):,} bytes)")
 
-    print("Stage 4: パッケージ整形(.xlsm の content type)...")
+    print("Stage 4: パッケージ整形(.xlsm の content type / 自己インストーラ注入)...")
     with zipfile.ZipFile(tmp_path) as zin:
         parts = {n: zin.read(n) for n in zin.namelist()}
     _patch_content_types(parts)
     has_vba_project = "xl/vbaProject.bin" in parts
     print(f"  vbaProject.bin: {'あり' if has_vba_project else 'なし'}")
+
+    installer_src = None
+    if has_vba_project:
+        # テンプレート由来の本物の vbaProject.bin に、ThisWorkbook自己インストーラを
+        # 外科パッチする(dir MOFFSET=0・_VBA_PROJECT無害化を含む)。バイト長は不変。
+        try:
+            installer_src = build_installer_src()
+            skel_bin = parts["xl/vbaProject.bin"]
+            patched_bin = patch_installer(skel_bin, installer_src)
+        except BuildError as e:
+            sys.exit(f"ERROR: {e}")
+        if len(skel_bin) != len(patched_bin):
+            sys.exit("ERROR: vbaProject.bin のバイト長が外科パッチで変化しました"
+                     "(バイナリ整合性エラー)")
+        parts["xl/vbaProject.bin"] = patched_bin
+        print(f"  自己インストーラ注入: ThisWorkbook差替 + dir MOFFSET=0 + "
+              f"_VBA_PROJECT無害化(vbaProject.bin {len(skel_bin):,} bytes 不変)")
 
     print("Stage 5: 最終.xlsm書き出し(一時パスへ)...")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -1247,7 +1566,7 @@ def main():
 
     print("\nStage 6: ビルド後自己検証...")
     errors = verify_build(staging_path, injected, sheets, mock_llm, app_version,
-                          present, root, has_vba_project, ctx)
+                          present, root, has_vba_project, ctx, installer_src)
     if errors:
         print("自己検証 失敗:")
         for e in errors:
@@ -1276,6 +1595,10 @@ def main():
           "configキー列(順序含む)と全キーの説明・mock_llm・app_version / "
           "名前付きレンジの本数と参照先 / 1行目ヘッダとブロックアンカー先ヘッダ行 / "
           "パッケージ content type")
+    if has_vba_project:
+        print("  自己インストーラ外科パッチ検証(3項目): "
+              "ThisWorkbook復元確認 / dir MOFFSET=0 / "
+              "_VBA_PROJECT無害化(Version=0xFFFF・PerformanceCacheゼロ埋め・3,061B不変)")
     print("  ※13章との突合(シート名・列名・順序・configキー・名前付きレンジ)は "
           "tools/sheet_check.py が行う。")
     print("\nDone.")

@@ -15,6 +15,12 @@ vba_lint.py - リスク提案ナビ(RPN) VBAソースの静的Lint
     PoC固有の例外表)だけを削除・読み替えた。**既存規則の緩和はしていない**。
     RPN向けに強化した点は各検査の docstring に「RPNでの変更」として明記する。
 
+    削除した検査の記録:
+    ・PoC の check_safeleft_warning(SafeLeft 迂回のセル書込を WARN で促す助言)は
+      非移植とした。ERROR級の check_cell_write_guard(16章NFR-S7①: 外部由来テキストの
+      セル書込は SetCellSafe 以外を禁止)が上位互換(同種の書込経路を WARN より強く
+      全て捕捉)であり、弱い WARN を重ねる意味がないため。**緩和ではなく吸収**。
+
 RPNの規約(12章§2・§4 / 16章NFR-S7 / 17章T-46):
     R1 依存方向 ui -> app -> core の一方向(core は app/ui を参照しない)
     R3 Application.Run は modGatewayRPN のみ
@@ -118,6 +124,11 @@ CONTRACT: dict[str, dict] = {
             "SanitizeFileName", "NormalizeForHash", "Fnv1a64Hex",
         ],
     },
+    # modTypes は core層の汎用型(Public Type)のみを持つ(12章§2・§4。TCaseCtx等の
+    # ドメイン型は app層 modAppTypes へ移設)。14章§6は Public Function シグネチャを
+    # 定義していない(型モジュール)ため required は空。CONTRACT に載せるのは完全性
+    # 自己検査(MODULE_REGISTRY⇔CONTRACT)を満たすため。closed=False で追加 Public は許容。
+    "modTypes": {"closed": False, "required": []},
     # ---- app 層 ----
     "modValidate": {
         "closed": False,
@@ -182,6 +193,28 @@ CONTRACT: dict[str, dict] = {
     "modJudgeStore": {"closed": False, "required": ["NewJudgement"]},
     "modExportHtml": {"closed": False, "required": ["GenerateHtmlReport"]},
     "modExportHearing": {"closed": False, "required": ["BuildHearingSheet"]},
+    # modExportPpt: 14章§6の GeneratePpt は **Phase 1.5**(§6の注記・§1の表)。
+    # Phase 1 実装で required に入れると未実装ERRORになるため required は空にする
+    # (CONTRACTの方針: Phase 1.5関数は required に入れない)。closed=False。
+    "modExportPpt": {"closed": False, "required": []},
+    # modAppTypes: TCaseCtx 等のドメイン型(Public Type)を持つ app層モジュール
+    # (14章§6 の TCaseCtx 定義)。Public Function シグネチャは章に無いため required は空。
+    "modAppTypes": {"closed": False, "required": []},
+    # modPii: 保存・外部送信・レポート出力前のPII走査本体(16章 E-05・12章§2/§4)。
+    # 14章§6は走査本体の Public Function シグネチャを固定していない(責務のみ規定)ため
+    # required は空。呼び出し側(modUICase/modUIInbox/modSparring/modJudgeStore/
+    # modExportHtml/modCompanyFile)が前段で必ず通す関係だけが規定される。
+    "modPii": {"closed": False, "required": []},
+    # modHtmlTemplate1: 18章§4.4 の分割表で「基底モジュール」が持つと明記された5関数。
+    # (SecXxxJs等のセクション関数は modHtmlTemplate2..n 側にあり流動的なので、
+    #  分割後モジュールには固定契約を課さない=CONTRACTに載せない。closed=False)。
+    "modHtmlTemplate1": {
+        "closed": False,
+        "required": ["BuildDocument", "HeadHtml", "BodyShellHtml", "SectionsJs",
+                     "RuntimeJs"],
+    },
+    # modHtmlTheme: 18章§5.2 の純文字列モジュール(テーマCSSの :root{...} だけを返す)。
+    "modHtmlTheme": {"closed": False, "required": ["ThemeNames", "ThemeCss"]},
     # ---- ui 層 ----
     "modBoot": {"closed": False, "required": ["Boot"]},
     "modUIProgress": {
@@ -197,6 +230,8 @@ CONTRACT: dict[str, dict] = {
             "SetExpectedCount",
         ],
     },
+    # modTestsExcel: 14章§6のtest層契約(層(b)=実Excel E2Eスモークの入口。17章T-47)。
+    "modTestsExcel": {"closed": False, "required": ["RunAllExcelTests"]},
 }
 
 # ==============================================================================
@@ -2113,6 +2148,19 @@ def run_lint(src_root: Path) -> int:
         if DUMP_ARGC_SKIPS:
             for rel, ln, nm, why in ARGC_SKIPPED:
                 print(f"        - {rel}:{ln} {nm} ({why})")
+
+    # CONTRACT完全性の自己検査(裁定書4 項目14): MODULE_REGISTRY(12章§2の一覧)の
+    # 各モジュール名に CONTRACT 定義があるか。欠けている=公開契約が未整備のモジュールを
+    # 起動時に1件のWARNで一覧化する(将来の契約追加漏れを機械で気付けるようにする)。
+    # ERRORにはしない: 実装より契約が先に固まるとは限らず、また型モジュール等は
+    # そもそも Public Function 契約を持たないため(それらは required 空で CONTRACT 済)。
+    contract_missing = sorted(MODULE_REGISTRY - set(CONTRACT))
+    if contract_missing:
+        print("\n[CONTRACT完全性 - MODULE_REGISTRYにあるがCONTRACT未定義]")
+        print(f"  WARN  L1: {len(contract_missing)}件のモジュールに公開契約(CONTRACT)が"
+              "未定義です(14章§6/18章の契約が固まり次第 CONTRACT へ追加): "
+              f"{contract_missing}")
+        total_warn += 1
 
     if not_yet:
         print("\n[未実装モジュール(契約はあるがファイル無し) - SKIP]")

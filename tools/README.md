@@ -9,7 +9,7 @@
 | Python | **3.9 以上**(検証環境は 3.11) | 全ツール | 標準ライブラリのみで動く(下記の例外を除く) |
 | LibreOffice(`soffice`) | 7.x 以降 | `run_lo_tests.py` | ヘッドレス実行。`/usr/bin/soffice` か PATH 上にあること |
 | `openpyxl` | 3.x | `build/build_rpn.py` / `sheet_check.py` | ブックの組み立てと自己検証 / 成果物ブックの読み出し |
-| `olefile` | 0.4 以降 | `build/build_rpn.py` | `vbaProject.bin` を引き継ぐビルドの検証用。無くてもビルドは通る |
+| `olefile` | 0.4 以降 | `build/build_rpn.py` | テンプレート由来 `vbaProject.bin` への自己インストーラ外科パッチに**必須**(テンプレート無しの縮退ビルドなら無くても通る) |
 | `git` | 任意のバージョン | `ship_check.py` | `git ls-files` / `git check-ignore` を使う |
 | `coreutils` の `timeout` | - | `run_lo_tests.py` | soffice のハング検知とプロセス後始末を委譲している |
 
@@ -45,8 +45,10 @@ python3 tools/vba_lint.py --dump-argcount-skips
 
 検査するもの(主なもの):
 
-- **契約**: 14章§6 / 15章§10.2 の公開関数が実装されているか(`CONTRACT`)。
-  ファイルがまだ無いモジュールは SKIP でエラーにしない
+- **契約**: 14章§6 / 15章§10.2 / 18章§4.4・§5.2 の公開関数が実装されているか
+  (`CONTRACT`)。ファイルがまだ無いモジュールは SKIP でエラーにしない。
+  起動時に「`MODULE_REGISTRY` の各モジュールに `CONTRACT` 定義があるか」を自己検査し、
+  未定義があれば1件の **WARN** で一覧化する(公開契約の整備漏れの検出。裁定書4 項目14)
 - **R1** 依存方向 ui -> app -> core の一方向。製品コードからテスト層を参照しない
 - **R3** `Application.Run` は `modGatewayRPN` のみ
 - **R4** Excelトークンは ui層 と `R4_EXCEL_ALLOWED_MODULES` のみ
@@ -93,6 +95,12 @@ python3 tools/prompt_diff.py --strict   # 未実装も差分に数える(T-23の
 比較する。関数は `s = s & "..." & vbLf` 方式(Const禁止・14章§7)で組み立てる
 前提で評価する。制御構文や未対応の項があると「評価できません」として差分に数える。
 
+- **`--strict` の対象0件の扱い**(裁定書4 項目13): 突合先ディレクトリが無い、または
+  対象 `.bas` が1本も無い(=全関数未実装)ときも、`--strict` では**不合格(exit 1)**に
+  倒す。`--strict` を付けない既定はこの状態を「T-23で実装予定のスキップ」として
+  **exit 0** で通す(W0〜W1では実装前が正常なため)。この非対称が無いと「対象0件」を
+  無条件に合格扱いにして `--strict` が骨抜きになる。
+
 ### `sheet_check.py` - 13章とシート実体の照合(T-02 / T-03)
 
 ```bash
@@ -138,7 +146,13 @@ python3 tools/ship_check.py
 
 ## 補足: `build/template_skeleton.xlsm` について
 
-`build/build_rpn.py` はテンプレートがあればその `vbaProject.bin` を引き継ぐ。
-ただし `.gitignore` が `*.xlsm` を除外するため、**テンプレートはリポジトリ経由では
-配らない**(16章 NFR-S2「配布物・リポジトリにキーを入れない」を成立させるための
-割り切り)。開発機へ個別に置く運用とする。
+`build/build_rpn.py` はテンプレートの**本物の `vbaProject.bin`** を成果物へ引き継ぎ、
+その `ThisWorkbook` ストリームだけを自己インストーラへ外科パッチする(`dir` の
+`MOFFSET=0`・`_VBA_PROJECT` の無害化を含む。12章§2 の自己インストール機構)。
+低レベルの OVBA 圧縮/解凍・CFB リーダーは `build/ovba.py`(自己完結・実証済み)。
+
+このテンプレートは成果物ではなく**ビルド入力**なので、`.gitignore` の
+`!build/template_skeleton.xlsm` 例外で **tracked** にして配る(自己インストール機構を
+再現可能にするため。裁定書4 項目12)。中身はキー走査クリーンで、`ship_check.py` の②が
+全パート展開して毎リリース検査し、③は `TRACKED_XLSM_ALLOWED` の許可枠として扱う
+(成果物 `.xlsm` の tracked は引き続き禁止)。`olefile` はこの外科パッチに必須。
