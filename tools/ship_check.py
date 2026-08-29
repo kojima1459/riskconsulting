@@ -162,6 +162,25 @@ def tracked_files() -> list[str]:
     return [f.decode("utf-8") for f in out.stdout.split(b"\0") if f]
 
 
+# 未trackedでも走査する作業ツリーのディレクトリ(裁定書5 項目9)。
+# 理由: ②のキー走査が tracked だけを見ていると、実装中の新規ファイル(コミット
+# 前)がまるごと素通りする。W1では新設11本の .bas が untracked のままで、
+# 成果物 dist/ の vba_src に載っていたおかげで偶然拾えていただけだった。
+# ビルド前に ship_check を回す運用や、vba_src に載らないファイル(tools/ の
+# スクリプト等)では救済経路が無い。source 側の作業ディレクトリを直接足す。
+UNTRACKED_SCAN_DIRS = ("src", "build", "tools", "wintest")
+
+
+def untracked_worktree_files() -> list[str]:
+    """UNTRACKED_SCAN_DIRS 配下の未trackedファイル(.gitignore 対象は除く)。"""
+    out = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "-z", "--others",
+         "--exclude-standard", "--"] + list(UNTRACKED_SCAN_DIRS),
+        capture_output=True,
+    )
+    return [f.decode("utf-8") for f in out.stdout.split(b"\0") if f]
+
+
 def is_ignored(rel: str) -> bool:
     r = subprocess.run(["git", "-C", str(REPO_ROOT), "check-ignore", "-q", rel],
                        capture_output=True)
@@ -210,6 +229,10 @@ def check_item2(dist_dir: Path) -> tuple[bool, list[str]]:
 
     hits: list[str] = []
     files = tracked_files()
+    tracked_count = len(files)
+    # 作業ツリーの未trackedファイル(src/build/tools/wintest 配下)も対象に加える。
+    extra = [f for f in untracked_worktree_files() if f not in set(files)]
+    files = files + extra
     scanned = 0
     for rel in files:
         p = REPO_ROOT / rel
@@ -225,7 +248,8 @@ def check_item2(dist_dir: Path) -> tuple[bool, list[str]]:
             continue
         hits.extend(scan_text(rel, text))
         scanned += 1
-    print(f"  走査(tracked): {scanned}ファイル")
+    print(f"  走査(tracked {tracked_count}件 + 未tracked {len(extra)}件"
+          f"[{'/'.join(UNTRACKED_SCAN_DIRS)}]): {scanned}ファイル")
 
     # 成果物(未trackedでも必ず走査する。配布物こそが本命)。
     art = 0

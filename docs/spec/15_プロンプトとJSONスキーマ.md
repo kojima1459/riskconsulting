@@ -1,5 +1,7 @@
 # 15. プロンプトとJSONスキーマ v2.4（本製品の核心）
 
+> v2.4.1（裁定書5: W1整合）: §8.1の11 IDが `modMockLlm.ResponseById` のキーの正であること（バリアント選択は modGatewayRPN の責務）を明記し、§8.2を**状態レス規約**へ改訂（「最初の1回のみ」型の回数依存を廃止。リトライ系の検証は `mock_fault` を空へ切り替えた2ラン構成で行う）。`limit` の応答実体を `#LIMIT: 本日のAIリボン利用上限に達しました(LimitCheck)` の1文字列に固定した（14章§2の判定と同一の語彙源）。
+
 > v2.3: 2026-08-27部会フィードバック（内田部長・高橋PL）反映。リスクユニバース10分類化・保険移転可能性(insurability)・リスクステータス(ラウンド間ライフサイクル)・5段階スコア・引受目線(do_not_propose)・追加リサーチプロンプト生成(research_requests)・拠点ハザード観点(hazard)を追加。変更の経緯はdocs/20章。
 > v2.4: 実装前監査の反映。CP932浄化・純関数方式への変更・S3へのS1要約注入・S4バリアント全文（BLOCK_S4_PROPOSAL/ALLIANCE）・各Check節の検証ルール表化（V-xx ケースID）・mock 7 step種＋障害注入・注入予算と切詰め（§0.7）・PF/壁打ち注入書式（§6.1）・抽出規約と節⇔関数名対応表（§10）を追加。
 > v2.4（検証指摘の修正）: §0原則9のSanitizeInput対象を包括定義へ（1行属性の改行畳み込みを追加）、原則10の判定を3値へ、§1.1のBLOCK_CTX挿入先にS3Cを追加、§1.3のBLOCK_GUARDを7本のsystem限定（壁打ちは除外）へ、§8.1受入条件1を「各mockは自分の文脈で合格」へ、§10.1に複数フェンス規則と日本語ラベル形プレースホルダ（第3形）を追加、§10.2のBuildS3User引数順と `Block*` 7関数を修正。
@@ -1367,7 +1369,8 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | 11 | MK-S3C-CLEAN | s3c | lands全true | executive_reactions 3件すべて lands=true ／ issues=[] → 改訂スキップ経路（V-S3C-05） |
 
 - mock応答に現れるIDは、§3・§4・§6.1 の整形例と同じ **M-0012 / L-03 / S-0004 / K-0003 / P9 / MC-0107** のみを使う。mock実行時にこれらの行がナレッジシートに存在することを T-14 のセットアップで保証する（存在しないと V-S3-03 等が誤発火する）。
-- どのバリアントを返すかは、案件の `case_type` と `quality_mode`、および直前の呼び出し回数から決定的に決める（乱数を使わない）。
+- どのバリアントを返すかは、案件の `case_type` と `quality_mode`、および直前の呼び出し回数から決定的に決める（乱数を使わない）。**この選択は `modGatewayRPN.ResolveMockVariant` の責務**であり、mock 本体（14章§6の `modMockLlm.ResponseById(mockId)`）は**上表の mock ID を受け取って対応する応答を返すだけの決定的な関数**とする（mock 側に呼び出し回数の状態を持たせない。§8.2の状態レス規約と同じ理由）。
+- 上表の**11 IDが `ResponseById` のキーの正**である（14章§6）。表にIDを増減したときは同関数の分岐も同時に更新する。
 
 **受入条件**:
 1. **各mockは自分の文脈で合格すること**。すなわち `MK-*-NEW` は `case_type=new` の文脈、`MK-*-RNW` は `case_type=renewal` の文脈で、対応する modValidate 検査に合格する（§11 のケースIDが1件も発火しないこと。警告判定のケースも発火させない）。**文脈またぎの組合せ（NEW版をrenewal文脈で流す等）は対象外**とする（`current_coverage` / `gaps` の有無は case_type で正反対に検査されるため〈V-S1-03/04・V-S2-11/12〉、同一応答が両文脈で合格することは原理的にありえない。バリアントを分けているのはこのためである）。バリアントが「共通」の応答（MK-S3 / MK-S4 / MK-PF / MK-S2C-\* / MK-S3C-\*）は、new・renewal の両文脈で合格すること。**mock集合全体としては new と renewal の両文脈を網羅する**
@@ -1377,19 +1380,23 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 異常系のE2Eカバレッジを確保するため、`mock_fault` の値で固定の壊れた応答を返す。**mock_fault が空のときは 8.1 の正常応答のみを返す**（既定で異常系が混ざらない）。
 
+**状態レス規約（v2.4.1）**: `mock_fault` を指定している間、mock は**毎回同じ応答を返す**。「最初の1回だけ壊す」ような呼び出し回数依存の内部カウンタを mock は持たない（乱数・現在時刻を使わないのと同じ理由＝再現性。カウンタはテスト実行順に結果が依存し、単体テストからは初期化できず、失敗の再現ができなくなる）。**リトライ系（修復して2回目は正常）の検証は、`mock_fault` の値を当該値から空へ切り替えた2ラン構成で行う**。
+
 | 値 | 適用step | modMockLlm が返すもの | 期待挙動（テストで観測する事実） |
 |---|---|---|---|
 | （空） | - | 8.1の正常応答 | 全Step正常完走・s4_done に到達 |
-| `broken_json` | 最初の1回のみ | 末尾の閉じ括弧を欠いた不完全JSON | ExtractJsonBlock が `""` を返し不合格 → RepairSuffix 付きで再呼出 → 2回目は正常応答。run_log に validate_result=repaired が1行残り s4_done まで到達 |
-| `enum_violation` | s2 の1回目のみ | `category` に未定義値 `"quality"` | V-S2-03 で不合格 → 修復 → 2回目は正常。validate_result=repaired |
+| `broken_json` | 呼出step（毎回） | 末尾の閉じ括弧を欠いた不完全JSON | ExtractJsonBlock が `""` を返し不合格 → RepairSuffix 付きで再呼出。**修復呼出にも同じ破損応答が返るため修復後も不合格＝E0302で当該Step失敗**（sN_json_failed に生応答が残る）。修復の成功系は `broken_json_once` で検証する |
+| `broken_json_once` | 呼出step（**初回のみ**） | 初回呼出だけ上と同じ破損・2回目以降（修復呼出）は正常応答 | 修復リトライの成功系: run_log に validate_result=repaired が1行残り処理は続行。**本値のみ状態を1bit保持する（§8.2の状態レス原則の唯一の例外）**。`modMockLlm.ResetFaultOnce` または fault値の変更でリセット |
+| `enum_violation` | s2（**毎回**） | `category` に未定義値 `"quality"` | V-S2-03 で不合格 → 修復。`mock_fault` を空へ切り替えたランで validate_result=repaired |
 | `ghost_id` | s3（**毎回**） | `menu_ids` に不実在の `"M-9999"` | V-S3-03 で不合格 → 修復 → 2回目も同じ幽霊ID → **E0301 で停止・status=error**。S1/S2の結果は保持され、S3から再開できる |
-| `count_violation` | s3 の1回目のみ | `stories` が2件 | V-S3-01 で不合格 → 修復 → 2回目は正常。validate_result=repaired |
+| `count_violation` | s3（**毎回**） | `stories` が2件 | V-S3-01 で不合格 → 修復。`mock_fault` を空へ切り替えたランで validate_result=repaired |
 | `empty` | 呼出step（毎回） | 空文字列 | E-16相当。E0202 を err_log に記録し当該Stepは失敗。案件状態（前Stepまでの成果物）は保持 |
-| `limit` | 呼出step（毎回） | リボン利用上限を示す応答文字列 | E-15相当。E0204 を記録し、以降のStepを実行しない。last_ok_step は直前のStepのまま |
+| `limit` | 呼出step（毎回） | **`#LIMIT: 本日のAIリボン利用上限に達しました(LimitCheck)`**（この1文字列に固定。14章§2の `LooksLikeLimitError` はこの実体だけを見る＝語彙を2箇所に書かない） | E-15相当。E0204 を記録し、以降のStepを実行しない。last_ok_step は直前のStepのまま |
 | `fake_err` | 呼出step（毎回） | 先頭行が `#ERR:E0201:偽装エラーです` で、続く行に**正常なJSON本文**（トランスポートは `ok=True` で返す） | 帯域外成否規約の検査。`ok=True` なので成功として扱い、**エラーUIへ昇格させない**。ExtractJsonBlock が本文JSONを抽出して通常どおり検証・保存し、err_log に E0201 が**記録されないこと** |
 
-- 「最初の1回のみ」型（broken_json / enum_violation / count_violation）は修復リトライ経路の検査用、「毎回」型（ghost_id / empty / limit / fake_err）は停止・失敗経路の検査用である。
+- 表の7値以外（未知の値）は正常応答へフォールバックする（config の入力ミスでE2E全体を暴走させないため）。
 - `mock_fault` は mock 経路でのみ有効。`llm_transport` が ribbon / direct のときは無視する（本番設定に影響させない）。
+- 公開口は14章§6の `modMockLlm.FaultResponse(faultKind, stepName)`（状態レス。`faultKind` が空なら `""`）。`modGatewayRPN` は入口の `MockResponse(stepName, variantName, fault)` 経由でこれを呼ぶ。
 
 ## 9. WT・FG（Phase 1.5。スキーマは本章が正、実装は後続）
 

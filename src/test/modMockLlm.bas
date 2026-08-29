@@ -1,6 +1,10 @@
 Attribute VB_Name = "modMockLlm"
 Option Explicit
 
+' broken_json_once 専用の状態1bit(15章§8.2の状態レス原則の唯一の例外)。
+' 初回呼出だけ破損応答を返し、以降は正常応答。ResetFaultOnce でリセット。
+Private mOnceFired As Boolean
+
 ' ==============================================================================
 ' modMockLlm - 本体内mockトランスポート(14章§4(a)・15章§8)
 ' ------------------------------------------------------------------------------
@@ -12,179 +16,222 @@ Option Explicit
 '   12引数Application.Run配管の実機検証用)とは別物であり役割を兼ねない
 '   (14章§4(a)(b)・T-14b)。
 '
-' 公開契約(modGatewayRPNが前提とする唯一の公開口。14章§4・T-14):
-'   Public Function MockResponse(stepName, variantName, fault) As String
-'     stepName    : s1/s2/s2r/s3/s3r/s4/pf/s2c/s3c/sp(壁打ち)
-'     variantName : modGatewayRPN.ResolveMockVariant の戻り値
-'                   (new/renewal/hit/clean/common)
-'     fault       : config mock_fault の値(空文字なら15章§8.1の正常応答のみ)
+' 公開契約(14章§6。3本):
+'   MockResponse(stepName, variantName, fault) : modGatewayRPN のmock分岐が呼ぶ
+'     ゲートウェイ入口。応答本文を持たず下の2本へ振り分けるだけ。stepName は
+'     s1/s2/s2r/s3/s3r/s4/pf/s2c/s3c/sp、variantName は ResolveMockVariant の
+'     戻り値(new/renewal/hit/clean/common)、fault は config mock_fault の値。
+'   ResponseById(mockId)          : 15章§8.1の11 IDで正常応答。表外のIDは ""。
+'   FaultResponse(faultKind, step): 15章§8.2の8値の障害注入応答。空なら ""。
 '   戻り値は生応答そのもの。JSON防衛線(抽出・検証)は呼び出し側の責務であり、
 '   ここでは通さない(14章§5)。
 '
-' 正常応答(15章§8.1。7 step種・11応答):
-'   MK-S1-NEW / MK-S1-RNW / MK-S2-NEW / MK-S2-RNW / MK-S3 / MK-S4 / MK-PF /
-'   MK-S2C-HIT / MK-S2C-CLEAN / MK-S3C-HIT / MK-S3C-CLEAN。各応答は自分の
-'   バリアント文脈(NEWはcase_type=new、RNWはrenewal。共通応答は両文脈)で
-'   modValidateに合格する(受入条件1)。sp(壁打ち)はスキーマを持たないため
-'   自由文を返す。
+' 正常応答(15章§8.1。7 step種・11応答): MK-S1-NEW / MK-S1-RNW / MK-S2-NEW /
+'   MK-S2-RNW / MK-S3 / MK-S4 / MK-PF / MK-S2C-HIT / MK-S2C-CLEAN /
+'   MK-S3C-HIT / MK-S3C-CLEAN。各応答は自分のバリアント文脈(NEWはcase_type=new、
+'   RNWはrenewal。共通応答は両文脈)でmodValidateに合格する(受入条件1)。
+'   sp(壁打ち)はスキーマを持たないため自由文を返す(表外。IDを持たない)。
 '
-' 障害注入(15章§8.2。config mock_fault。既定は空=正常応答のみ):
-'   broken_json    : 全step通算で最初の1呼出だけ、末尾の閉じ括弧を欠いた
-'                    不完全JSONを返す(2回目以降は正常)
-'   enum_violation : stepName=s2 の最初の1呼出だけ、risk_no=1のcategoryを
-'                    enum外の"quality"に差し替えて返す(2回目以降・他stepは正常)
-'   count_violation: stepName=s3 の最初の1呼出だけ、storiesを2件に減らして
-'                    返す(2回目以降は正常)
-'   ghost_id       : stepName=s3 の呼出のたび毎回、menu_idsに実在しない
-'                    "M-9999"を混ぜて返す(修復リトライしても直らずE0301で
-'                    停止する経路の検査用)
-'   empty          : どのstepでも呼出のたび毎回、空文字列を返す
-'   limit          : どのstepでも呼出のたび毎回、利用上限を示す文字列を返す
-'   fake_err       : どのstepでも呼出のたび毎回、先頭行が"#ERR:E0201:..."で
-'                    続く行に正常なJSON本体を持つ文字列を返す(帯域外成否規約の
-'                    検査用。ok=Trueのまま素通しされ、エラーUIへ昇格しない)
-'   上記7値以外(未知の値)は正常応答へフォールバックする(config入力ミスで
-'   E2E全体を暴走させないため)。
+' 障害注入(15章§8.2の表が正。config mock_fault。既定は空=正常応答のみ)。8値と
+' 適用stepは FaultBody の Select Case が実体で、broken_json=末尾の閉じ括弧欠落 /
+' enum_violation=s2のcategoryをenum外"quality"へ / count_violation=s3のstories
+' 2件 / ghost_id=s3のmenu_idsに"M-9999"混入 / empty=空文字 / limit=固定の上限
+' 文字列 / fake_err=先頭行"#ERR:E0201:"+正常JSON本体。8値以外は正常応答へ
+' フォールバックする(config入力ミスでE2E全体を暴走させないため)。
 '
-' 「最初の1呼出のみ」型(broken_json/enum_violation/count_violation)は本体
-' ブックの起動中(=このVBAプロジェクトが生きている間)だけ有効なモジュール
-' レベル変数で数える。ブックを閉じる、またはVBAプロジェクトがリセットされると
-' 初回に戻る。s2r/s3r(15章§4.7 改訂パス)はNormalBodyの応答選択ではs2/s3と
-' 同じ応答を返すが、上表の「最初の1呼出」判定はs2/s3の呼出だけを数える
-' (表の「適用step」欄が厳密にs2/s3とだけ書いているため。s2r/s3rでの発火は
-' 対象外)。
+' 【状態レス規約(15章§8.2)】fault指定中は毎回同じ応答を返す。「最初の1回だけ
+' 壊す」型の内部カウンタは持たない(乱数・現在時刻を使わないのと同じ理由=再現性。
+' カウンタはテスト実行順に結果が依存し、単体テストからは初期化できず失敗の再現が
+' できなくなる)。修復リトライ経路(2回目は正常)の検証は、config mock_fault を
+' 当該値から空へ切り替えた2ラン構成で行う。
 '
-' モジュール分割: 1モジュール30,000字契約(12章§2)のため、定型項目が多い
-' S3以降の6応答(+count_violation派生)はmodMockLlm2へ切り出した。判定ロジック
-' はこのモジュールに閉じ、modMockLlm2は単純な文字列返却関数の集まりに徹する。
+' モジュール分割(modMockLlm1..n。12章§2): 1モジュール30,000字契約のため、定型
+' 項目が多いS3以降の6応答(+count_violation派生)はmodMockLlm2へ切り出した。
+' 判定ロジックは本モジュールに閉じ、modMockLlm2は文字列返却関数の集まりに徹する。
 '
 ' 移植元: 新規(PoCに対応物なし。12章§2)。
 ' ==============================================================================
 
-' 「最初の1呼出のみ」型障害の発火済みフラグ(乱数を使わないための状態保持)。
-Private mBrokenFired As Boolean
-Private mEnumS2Fired As Boolean
-Private mCountS3Fired As Boolean
-
 ' ==============================================================================
-' MockResponse - 唯一の公開口(14章§4・T-14契約)
+' MockResponse - ゲートウェイ入口(14章§6・§4・T-14契約)
+' ------------------------------------------------------------------------------
+'   自分では応答本文を持たず、fault の有無で ResponseById / FaultResponse へ
+'   振り分けるだけ。fault 指定時も variantName を尊重した本文へ障害を注入する
+'   (renewal案件にnew文脈の本文を返すと、fake_err のように「本文は正常」で
+'   あるべき障害でmodValidateが落ちてしまうため)。
 ' ==============================================================================
 Public Function MockResponse(ByVal stepName As String, ByVal variantName As String, _
                              ByVal fault As String) As String
     Dim stepKey As String
     Dim f As String
-    Dim body As String
 
     stepKey = LCase$(Trim$(stepName))
     f = Trim$(fault)
 
     If LenB(f) = 0 Then
-        MockResponse = NormalBody(stepKey, variantName)
+        MockResponse = BodyFor(stepKey, variantName)
+    Else
+        MockResponse = FaultBody(f, stepKey, variantName)
+    End If
+End Function
+
+' ==============================================================================
+' ResponseById - 15章§8.1の表の mock ID で正常応答を返す(14章§6)
+' ------------------------------------------------------------------------------
+'   キーの正は15章§8.1の11 ID。表に無いIDは "" を返す(呼び元の
+'   ClassifyResponse がE0202として扱う)。決定的=乱数・現在時刻・呼び出し回数に
+'   依存しない。壁打ち(sp)は表にIDを持たないため本関数の対象外。
+' ==============================================================================
+Public Function ResponseById(ByVal mockId As String) As String
+    Select Case UCase$(Trim$(mockId))
+        Case "MK-S1-NEW"
+            ResponseById = BuildS1NewJson()
+        Case "MK-S1-RNW"
+            ResponseById = BuildS1RnwJson()
+        Case "MK-S2-NEW"
+            ResponseById = BuildS2NewJson()
+        Case "MK-S2-RNW"
+            ResponseById = BuildS2RnwJson()
+        Case "MK-S3"
+            ResponseById = modMockLlm2.BuildS3Json()
+        Case "MK-S4"
+            ResponseById = modMockLlm2.BuildS4Json()
+        Case "MK-PF"
+            ResponseById = modMockLlm2.BuildPfJson()
+        Case "MK-S2C-HIT"
+            ResponseById = modMockLlm2.BuildS2CHitJson()
+        Case "MK-S2C-CLEAN"
+            ResponseById = modMockLlm2.BuildS2CCleanJson()
+        Case "MK-S3C-HIT"
+            ResponseById = modMockLlm2.BuildS3CHitJson()
+        Case "MK-S3C-CLEAN"
+            ResponseById = modMockLlm2.BuildS3CCleanJson()
+        Case Else
+            ResponseById = ""
+    End Select
+End Function
+
+' ==============================================================================
+' FaultResponse - 15章§8.2の障害注入応答(14章§6)
+' ------------------------------------------------------------------------------
+'   【状態レス】同じ引数なら常に同じ応答を返す。faultKind が空なら ""(15章§8.2
+'   の「mock_fault が空のときは正常応答のみ」はゲートウェイ入口 MockResponse の
+'   責務であって、本関数は障害の形だけを返す口である)。
+'   バリアントは各stepの既定(s1/s2=new、s2c/s3c=clean)を使う。
+' ==============================================================================
+Public Function FaultResponse(ByVal faultKind As String, ByVal stepName As String) As String
+    Dim f As String
+
+    f = Trim$(faultKind)
+    If LenB(f) = 0 Then
+        FaultResponse = ""
         Exit Function
     End If
+    FaultResponse = FaultBody(f, LCase$(Trim$(stepName)), "")
+End Function
 
-    ' 「呼出のたび毎回」型のうち、正常応答を組み立てる前に決まる2値。
+' FaultBody - 障害注入の実体(15章§8.2)。MockResponse と FaultResponse が共有し
+'   注入の規則を1箇所に閉じる。stepKey は小文字化・トリム済みの前提。
+Private Function FaultBody(ByVal f As String, ByVal stepKey As String, _
+                           ByVal variantName As String) As String
+    Dim body As String
+
+    ' 正常応答を組み立てる前に決まる2値。
     If f = "empty" Then
-        MockResponse = ""
+        FaultBody = ""
         Exit Function
     ElseIf f = "limit" Then
-        MockResponse = LimitFaultText()
+        FaultBody = LimitFaultText()
         Exit Function
     End If
 
-    body = NormalBody(stepKey, variantName)
+    body = BodyFor(stepKey, variantName)
 
     Select Case f
         Case "fake_err"
             ' 帯域外成否規約の検査用。ok=Trueのまま素通しされる想定
             ' (14章§4・§6。判定材料にしないのはmodGatewayRPN側の責務)。
-            MockResponse = "#ERR:E0201:偽装エラーです" & vbLf & body
+            FaultBody = "#ERR:E0201:偽装エラーです" & vbLf & body
         Case "broken_json"
-            If Not mBrokenFired Then
-                mBrokenFired = True
-                MockResponse = BreakJsonTail(body)
+            FaultBody = BreakJsonTail(body)
+        Case "broken_json_once"
+            ' 初回のみ破損(修復リトライの成功系=validate_result=repairedの検証用)。
+            If mOnceFired Then
+                FaultBody = body
             Else
-                MockResponse = body
+                mOnceFired = True
+                FaultBody = BreakJsonTail(body)
             End If
         Case "enum_violation"
-            If stepKey = "s2" And Not mEnumS2Fired Then
-                mEnumS2Fired = True
-                MockResponse = InjectEnumViolationS2(body)
+            If stepKey = "s2" Then
+                FaultBody = InjectEnumViolationS2(body)
             Else
-                MockResponse = body
+                FaultBody = body
             End If
         Case "count_violation"
-            If stepKey = "s3" And Not mCountS3Fired Then
-                mCountS3Fired = True
-                MockResponse = modMockLlm2.BuildS3CountViolationJson()
+            If stepKey = "s3" Then
+                FaultBody = modMockLlm2.BuildS3CountViolationJson()
             Else
-                MockResponse = body
+                FaultBody = body
             End If
         Case "ghost_id"
             If stepKey = "s3" Then
-                MockResponse = InjectGhostIdS3(body)
+                FaultBody = InjectGhostIdS3(body)
             Else
-                MockResponse = body
+                FaultBody = body
             End If
         Case Else
             ' 未知の値は正常応答へフォールバック(config入力ミスの暴走防止)。
-            MockResponse = body
+            FaultBody = body
     End Select
 End Function
 
-' ------------------------------------------------------------------------------
-' NormalBody - fault抜きの正常応答を組み立てる(15章§8.1)。stepKeyは小文字化・
-'   トリム済みの前提(呼び元のMockResponseで正規化済み)。
-' ------------------------------------------------------------------------------
-Private Function NormalBody(ByVal stepKey As String, ByVal variantName As String) As String
+' BodyFor - stepKey とバリアントから正常応答本文を得る(15章§8.1)。表にIDを
+'   持たない壁打ち(sp)だけは直接返し、それ以外は mock ID へ写して ResponseById
+'   へ渡す(応答本文の分岐を1箇所=ResponseById に閉じる)。
+Private Function BodyFor(ByVal stepKey As String, ByVal variantName As String) As String
+    If stepKey = "sp" Then
+        BodyFor = SpTextMock()
+    Else
+        BodyFor = ResponseById(MockIdFor(stepKey, variantName))
+    End If
+End Function
+
+' MockIdFor - (stepKey, variantName) -> 15章§8.1の mock ID。表に無い組合せは ""
+'   (呼び元の ResponseById が "" を返し、ClassifyResponse がE0202とする)。
+'   s2r / s3r(15章§4.7 改訂パス)は s2 / s3 と同じ応答を使う。
+Private Function MockIdFor(ByVal stepKey As String, ByVal variantName As String) As String
     Dim v As String
     v = LCase$(Trim$(variantName))
 
     Select Case stepKey
         Case "s1"
-            If v = "renewal" Then
-                NormalBody = BuildS1RnwJson()
-            Else
-                NormalBody = BuildS1NewJson()
-            End If
+            If v = "renewal" Then MockIdFor = "MK-S1-RNW" Else MockIdFor = "MK-S1-NEW"
         Case "s2", "s2r"
-            If v = "renewal" Then
-                NormalBody = BuildS2RnwJson()
-            Else
-                NormalBody = BuildS2NewJson()
-            End If
+            If v = "renewal" Then MockIdFor = "MK-S2-RNW" Else MockIdFor = "MK-S2-NEW"
         Case "s3", "s3r"
-            NormalBody = modMockLlm2.BuildS3Json()
+            MockIdFor = "MK-S3"
         Case "s4"
-            NormalBody = modMockLlm2.BuildS4Json()
+            MockIdFor = "MK-S4"
         Case "pf"
-            NormalBody = modMockLlm2.BuildPfJson()
+            MockIdFor = "MK-PF"
         Case "s2c"
-            If v = "hit" Then
-                NormalBody = modMockLlm2.BuildS2CHitJson()
-            Else
-                NormalBody = modMockLlm2.BuildS2CCleanJson()
-            End If
+            If v = "hit" Then MockIdFor = "MK-S2C-HIT" Else MockIdFor = "MK-S2C-CLEAN"
         Case "s3c"
-            If v = "hit" Then
-                NormalBody = modMockLlm2.BuildS3CHitJson()
-            Else
-                NormalBody = modMockLlm2.BuildS3CCleanJson()
-            End If
-        Case "sp"
-            NormalBody = SpTextMock()
+            If v = "hit" Then MockIdFor = "MK-S3C-HIT" Else MockIdFor = "MK-S3C-CLEAN"
         Case Else
             ' 未定義のstepName(wt/fg等のPhase 1.5含む)は空文字を返す。
-            ' 呼び元のClassifyResponseがE0202(空応答)として扱う。
-            NormalBody = ""
+            MockIdFor = ""
     End Select
 End Function
 
 ' ------------------------------------------------------------------------------
 ' 障害注入ヘルパー(15章§8.2)
 ' ------------------------------------------------------------------------------
+' 利用上限を示す応答の実体(15章§8.2で1文字列に固定)。14章§2の
+' LooksLikeLimitError はこの文字列だけを見る(語彙を2箇所に書かない)。
 Private Function LimitFaultText() As String
-    LimitFaultText = "本日のAI利用回数が上限に達しました。時間をおいて再度お試しください。"
+    LimitFaultText = "#LIMIT: 本日のAIリボン利用上限に達しました(LimitCheck)"
 End Function
 
 ' 末尾の閉じ括弧を1文字落として不完全JSONにする(broken_json)。
@@ -283,3 +330,8 @@ Public Function BuildS2RnwJson() As String
 
     BuildS2RnwJson = s
 End Function
+
+' broken_json_once の状態リセット(14章§6)。テスト・E2Eシナリオの冒頭で呼ぶ。
+Public Sub ResetFaultOnce()
+    mOnceFired = False
+End Sub

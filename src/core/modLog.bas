@@ -59,6 +59,27 @@ Private Const LOG_SHEET_HIDDEN As Long = 0
 Private Const LOG_MAX_ROWS_DEFAULT As Long = 2000
 
 ' ============================================================================
+' 純ロジック(Excel非依存。LibreOffice実行テストで直接叩ける。14章§6)
+' ----------------------------------------------------------------------------
+' 切詰めとローテ判定は「本文を残さない」「古い行から消す」という規約の実体で
+' あり、シートI/Oと混ぜると層(a)から一切検査できなくなる。純関数として公開し、
+' 記録側(LogError / LogUsage / LogRun / TrimLog)は必ずこれを通す。
+' ============================================================================
+
+' detail 列の切詰め(最大400字。13章§2.4・16章 NFR-S3)。本文は残さない規約の
+' 実体で、記録側はこれを通してからシートへ書く。
+Public Function TruncDetail(ByVal s As String) As String
+    TruncDetail = modUtil.SafeLeft(s, LOG_DETAIL_MAX)
+End Function
+
+' ローテすべきか(config log_max_rows)。rowCount >= maxRows で True
+' (閾値ちょうどで回す)。maxRows <= 0 はローテ無効で常に False。
+Public Function ShouldRotate(ByVal rowCount As Long, ByVal maxRows As Long) As Boolean
+    If maxRows <= 0 Then Exit Function
+    ShouldRotate = (rowCount >= maxRows)
+End Function
+
+' ============================================================================
 ' LogError - err_log へ1行記録する(16章の全エラーコード共通の口)。
 ' ----------------------------------------------------------------------------
 '   errCode   : E01xx-E07xx(正は16章§1の code 列)
@@ -83,7 +104,7 @@ Public Sub LogError(ByVal errCode As String, ByVal source As String, ByVal detai
     PutText ws, hdr, r, "logged_at", modUtil.NowStamp()
     PutText ws, hdr, r, "err_code", errCode
     PutText ws, hdr, r, "source", modUtil.SafeLeft(source, LOG_SOURCE_MAX)
-    PutText ws, hdr, r, "detail", modUtil.SafeLeft(detail, LOG_DETAIL_MAX)
+    PutText ws, hdr, r, "detail", TruncDetail(detail)
     PutNum ws, hdr, r, "err_number", errNumber
     PutNum ws, hdr, r, "http_status", httpStatus
 
@@ -114,7 +135,7 @@ Public Sub LogUsage(ByVal eventName As String, ByVal caseId As String, ByVal det
     PutText ws, hdr, r, "logged_at", modUtil.NowStamp()
     PutText ws, hdr, r, "event", eventName
     PutText ws, hdr, r, "case_id", caseId
-    PutText ws, hdr, r, "detail", modUtil.SafeLeft(detail, LOG_DETAIL_MAX)
+    PutText ws, hdr, r, "detail", TruncDetail(detail)
 
     TrimLog ws
     Exit Sub
@@ -160,7 +181,7 @@ Public Sub LogRun(ByRef rec As TRunLogRec)
     PutNum ws, hdr, r, "output_chars", rec.output_chars
     PutText ws, hdr, r, "injected_kb_ids", rec.injected_kb_ids
     PutText ws, hdr, r, "validate_result", rec.validate_result
-    PutText ws, hdr, r, "detail", modUtil.SafeLeft(rec.detail, LOG_DETAIL_MAX)
+    PutText ws, hdr, r, "detail", TruncDetail(rec.detail)
     PutText ws, hdr, r, "operator", rec.operator
 
     TrimLog ws
@@ -277,7 +298,10 @@ Private Sub TrimLog(ByVal ws As Object)
     lastRow = ws.Cells(ws.Rows.count, 1).End(LOG_DIR_UP).row
     Dim dataRows As Long
     dataRows = lastRow - 1
-    If dataRows <= maxRows + (maxRows \ 10) Then Exit Sub
+    ' 判定は ShouldRotate に一本化する(閾値の意味を2箇所に書かない)。毎回削ると
+    ' 重いので、実際に削り始めるのは上限を1割超えてからにする=閾値側に余裕を
+    ' 足して渡す。削る先は上限ちょうど。
+    If Not ShouldRotate(dataRows, maxRows + (maxRows \ 10) + 1) Then Exit Sub
 
     ' 残すのは末尾 maxRows 行。ヘッダ(1行目)の直下から余った分だけ消す。
     Dim dropCount As Long

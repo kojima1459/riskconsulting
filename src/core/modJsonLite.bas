@@ -116,25 +116,25 @@ End Function
 '   ・同名キーが入れ子にもある場合は【最初に現れたもの】を返す。スキーマごとに
 '     必要なキーだけを引く用途に限る(汎用パーサではない)。
 ' ============================================================================
-Public Function GetStr(ByVal jsonText As String, ByVal keyName As String) As String
+Public Function GetStr(ByVal json As String, ByVal key As String) As String
     GetStr = vbNullString
 
     Dim valPos As Long
-    valPos = FindKeyValuePos(jsonText, keyName)
+    valPos = FindKeyValuePos(json, key)
     If valPos = 0 Then Exit Function
 
     Dim ch As String
-    ch = Mid$(jsonText, valPos, 1)
+    ch = Mid$(json, valPos, 1)
 
     If ch = """" Then
         Dim endPos As Long
-        GetStr = ReadStringValue(jsonText, valPos, endPos)
+        GetStr = ReadStringValue(json, valPos, endPos)
         Exit Function
     End If
     If ch = "{" Or ch = "[" Then Exit Function
 
     Dim tok As String
-    tok = ReadScalarToken(jsonText, valPos)
+    tok = ReadScalarToken(json, valPos)
     If LCase$(tok) = "null" Then Exit Function
     GetStr = tok
 End Function
@@ -145,12 +145,12 @@ End Function
 '   数値以外・空・Longの範囲外はすべて dflt。小数はゼロ方向へ切り捨てる。
 '   Val は小数点を "." で解釈する(ロケール非依存)ため CDbl ではなく Val を使う。
 ' ============================================================================
-Public Function GetLong(ByVal jsonText As String, ByVal keyName As String, _
+Public Function GetLong(ByVal json As String, ByVal key As String, _
                         ByVal dflt As Long) As Long
     GetLong = dflt
 
     Dim tok As String
-    tok = Trim$(GetStr(jsonText, keyName))
+    tok = Trim$(GetStr(json, key))
     If LenB(tok) = 0 Then Exit Function
     If Not IsNumberToken(tok) Then Exit Function
 
@@ -168,12 +168,12 @@ End Function
 '   命名(GetBool ではなく GetBoolJ が契約名)。
 '   LLMは true/false のかわりに "1"/"0"/"yes"/"no" を返すことがあるため受ける。
 ' ============================================================================
-Public Function GetBoolJ(ByVal jsonText As String, ByVal keyName As String, _
+Public Function GetBoolJ(ByVal json As String, ByVal key As String, _
                          ByVal dflt As Boolean) As Boolean
     GetBoolJ = dflt
 
     Dim v As String
-    v = LCase$(Trim$(GetStr(jsonText, keyName)))
+    v = LCase$(Trim$(GetStr(json, key)))
     Select Case v
         Case "true", "1", "yes"
             GetBoolJ = True
@@ -191,18 +191,18 @@ End Function
 '   ・キーが無い/配列でない/空配列のときは 0件のコレクションを返す。
 '     Nothing は返さない(呼び出し側の Is Nothing 判定漏れで落ちないため)。
 ' ============================================================================
-Public Function GetArrayItems(ByVal jsonText As String, ByVal keyName As String) As Collection
+Public Function GetArrayItems(ByVal json As String, ByVal key As String) As Collection
     Dim items As Collection
     Set items = New Collection
     Set GetArrayItems = items
 
     Dim valPos As Long
-    valPos = FindKeyValuePos(jsonText, keyName)
+    valPos = FindKeyValuePos(json, key)
     If valPos = 0 Then Exit Function
-    If Mid$(jsonText, valPos, 1) <> "[" Then Exit Function
+    If Mid$(json, valPos, 1) <> "[" Then Exit Function
 
     Dim n As Long
-    n = Len(jsonText)
+    n = Len(json)
 
     Dim depth As Long
     Dim itemStart As Long
@@ -212,12 +212,12 @@ Public Function GetArrayItems(ByVal jsonText As String, ByVal keyName As String)
 
     depth = 1
     i = valPos + 1
-    itemStart = SkipWs(jsonText, i)
+    itemStart = SkipWs(json, i)
 
     Do While i <= n
-        ch = Mid$(jsonText, i, 1)
+        ch = Mid$(json, i, 1)
         If ch = """" Then
-            q = StringEndPos(jsonText, i, False)
+            q = StringEndPos(json, i, False)
             If q = 0 Then Exit Do
             i = q + 1
         ElseIf ch = "{" Or ch = "[" Then
@@ -226,13 +226,13 @@ Public Function GetArrayItems(ByVal jsonText As String, ByVal keyName As String)
         ElseIf ch = "}" Or ch = "]" Then
             depth = depth - 1
             If depth <= 0 Then
-                AddArrayItem jsonText, itemStart, i - 1, items
+                AddArrayItem json, itemStart, i - 1, items
                 Exit Do
             End If
             i = i + 1
         ElseIf ch = "," And depth = 1 Then
-            AddArrayItem jsonText, itemStart, i - 1, items
-            itemStart = SkipWs(jsonText, i + 1)
+            AddArrayItem json, itemStart, i - 1, items
+            itemStart = SkipWs(json, i + 1)
             i = i + 1
         Else
             i = i + 1

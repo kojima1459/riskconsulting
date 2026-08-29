@@ -8,22 +8,20 @@ Option Explicit
 '   意識しない。3経路分岐・アドイン検出・利用上限チェック・run_log メタ作成。
 '
 ' R3(12章§2): Application.Run を書いてよい唯一のモジュール。R4: core層だが
-'   その責務のため Application.Run と Application.AddIns だけ使ってよい9本の
-'   1つ(12章§4)。Worksheets/Range/MsgBox には触れない。
+'   その責務のため Application.Run と Application.AddIns だけ使ってよい
+'   (12章§4の許可10本の1つ)。Worksheets/Range/MsgBox には触れない。
 '
-' 成否の帯域外規約(14章§6・最重要): 成否は ByRef ok As Boolean だけで運ぶ。
-'   戻り値文字列の内容(先頭の "#ERR:")では判定しない。LLM出力は内容を誘導
-'   できるため、平文プレフィクスで成否を決めるとエラーUIを騙った任意文面表示が
-'   成立する(姉妹PJ監査で実証)。したがって【LLM応答が "#ERR:" で始まっていても
-'   ok=True のまま素通しする】。"#ERR:Exxxx:説明" は ok=False のときだけ作る。
-'   例外は投げない(失敗= ok=False + 説明文字列 + modLog記録)。
+' 成否の帯域外規約(14章§6・最重要): 成否は ByRef ok As Boolean だけで運び、
+'   その値は DecideOk の戻り値でしか決めない(直接代入禁止)。戻り値文字列の内容
+'   (先頭の "#ERR:")では判定しない。LLM出力は内容を誘導できるため、平文
+'   プレフィクスで成否を決めるとエラーUIを騙った任意文面表示が成立する(姉妹PJ
+'   監査で実証)。"#ERR:Exxxx:説明" は ok=False のときだけ作る。例外は投げない。
 '
 ' 移植元: PoC src/core/modGateway.bas のアドイン検出/上限文字列判定の流儀。
 '   CallLLM を CallStep/CallChat へ分割し、引数値をconfig駆動に徹底(NFR-M3)、
-'   帯域外成否規約と run_log を追加、RAG検索系(埋め込み)は非移植。
-'
-' 純ロジック(経路決定・toolN組立・待ち時間解決・応答判定・mockバリアント決定・
-'   履歴切詰め)は Excel非依存の Public 関数へ切り出す(17章§1 の(c)で叩ける)。
+'   帯域外成否規約と run_log を追加、RAG検索系(埋め込み)は非移植。純ロジック
+'   (経路決定・toolN組立・待ち時間解決・成否判定・mockバリアント決定・履歴
+'   切詰め)は Excel非依存の Public 関数へ切り出す(17章§1 の(c)で叩ける)。
 ' ==============================================
 
 ' 経路の名前(13章§2.3 llm_transport の enum)。
@@ -33,8 +31,9 @@ Public Const GW_MOCK As String = "mock"
 ' 自由対話(PL-04)の履歴区切り。台帳の確定方式(新しい順・";;;"連結)。
 Public Const GW_HIST_SEP As String = ";;;"
 
-' 上限系の定型拒否文は短い。長文の正当な応答を誤爆させないための閾値。
-Private Const GW_LIMIT_PROBE_MAX As Long = 120
+' 上限系応答の語彙(14章§2で固定。実体の供給元は15章§8.2の limit 応答1箇所)。
+Private Const GW_LIMIT_PREFIX As String = "#LIMIT:"
+Private Const GW_LIMIT_PHRASE As String = "利用上限に達しました"
 ' 待ち時間の安全域(秒)。既定値は 13章§2.3 の llm_wait_sec と同値で、config が
 ' 読めないときの最後の砦(通常はconfigの値が使われる。NFR-M3)。
 Private Const GW_WAIT_MIN As Long = 30
@@ -66,7 +65,8 @@ Private mCtxOperator As String
 '   stepName  : 19章§4の12値(s1/s2/s3/s4/s2c/s3c/s2r/s3r/pf/sp/wt/fg)
 '   playId    : PL-01..08。run_log の play 列へそのまま入る
 '   schemaJson: direct経路の json_schema strict 用。ribbon/mockでは未使用
-'   ok        : 成否の【唯一の】判定材料。戻り値の内容で判定してはならない
+'   ok        : 成否の【唯一の】判定材料。戻り値の内容で判定してはならない。
+'               本関数内でも ok は DecideOk 経由でしか決めない(直接代入禁止)
 '   戻り値    : ok=True なら生応答そのまま(先頭が "#ERR:" でもそのまま)。
 '               ok=False なら "#ERR:Exxxx:説明"(人間向け・判定材料ではない)
 '   JSON防衛線(14章§5)はここでは通さない(抽出・正規化・検証は呼び出し側)。
@@ -82,6 +82,7 @@ Public Function CallStep(ByVal stepName As String, ByVal playId As String, _
     Dim errMsg As String
     Dim modelUsed As String
     Dim detailText As String
+    Dim transportOk As Boolean
 
     ok = False
     latencyMs = 0
@@ -95,7 +96,7 @@ Public Function CallStep(ByVal stepName As String, ByVal playId As String, _
     route = CurrentTransport()
     Select Case route
         Case GW_MOCK
-            rawBody = MockStep(stepName, modelUsed, detailText, errCode, errMsg)
+            rawBody = MockStep(stepName, modelUsed, detailText)
         Case GW_DIRECT
             rawBody = DirectStep(stepName, systemPrompt, userPrompt, schemaJson, _
                                  modelUsed, errCode, errMsg)
@@ -114,12 +115,25 @@ Failed:
 
 Finish:
     latencyMs = CLng(modUtil.ElapsedMsSince(t0))
-    If LenB(errCode) = 0 Then
-        ' 生応答が "#ERR:" で始まっていても【昇格させない】(帯域外規約)。
-        ok = True
+
+    ' 【重要】ok の最終値は DecideOk 経由でしか決めない(14章§6・T-42観点(2))。
+    ' ok への代入は冒頭の防御的初期化と次の1行だけ。rawBody の "#ERR:" を見た
+    ' 分岐や True/False の直接代入は禁止(判定点を1箇所に閉じる)。
+    transportOk = (LenB(errCode) = 0)
+    ok = DecideOk(transportOk, rawBody, errCode)
+    If ok Then
         CallStep = rawBody
     Else
-        ok = False
+        If transportOk Then
+            ' 応答内容に由来する失敗(E0202空応答 / E0204上限)はここが初出。
+            ' 経路側が申告済みの失敗は経路側で記録済みなので二重に書かない。
+            errMsg = ErrMessageFor(errCode)
+            modLog.LogError errCode, "modGatewayRPN.CallStep", _
+                            "step=" & stepName & " transport=" & route & _
+                            " len=" & CStr(Len(rawBody))
+        ElseIf LenB(errMsg) = 0 Then
+            errMsg = ErrMessageFor(errCode)
+        End If
         CallStep = "#ERR:" & errCode & ":" & errMsg
     End If
 
@@ -135,10 +149,11 @@ End Function
 '   histU/histA: 「新しい順」に GW_HIST_SEP 連結した履歴。config
 '                sparring_max_turns 往復を超える分はここで切り捨てる(16章E-44)。
 '   ok         : CallStepと同格の帯域外規約(自由対話は最も偽装しやすい経路)。
+'                DecideOk 経由でしか決めない点も同じ。
 '   errCode    : ok=False のときだけ E02xx を帯域外で返す(E-44の「往復数を
 '                減らして再開」分岐は E0204 で行う)。ok=True のときは ""。
 '   PII走査(16章E-05/E-31)は【呼び出し側の責務】。modPii は app層であり
-'   core層から参照できない(R1)ため、送信直前の走査は app層で行うこと。
+'   R1でcore層から参照できないため、送信直前の走査は app層で行うこと。
 '   run_log: 自由対話には検証段が無いので本関数だけは自分で1行書く。
 ' ==============================================
 Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
@@ -154,6 +169,7 @@ Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
     Dim prevU As String
     Dim prevA As String
     Dim rec As TRunLogRec
+    Dim transportOk As Boolean
 
     ok = False
     errCode = ""
@@ -172,7 +188,7 @@ Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
     Select Case route
         Case GW_MOCK
             modelUsed = GW_MOCK
-            rawBody = MockChat(errCode, errMsg)
+            rawBody = MockChat()
         Case GW_DIRECT
             rawBody = DirectStep("sp", systemPrompt, userMsg, "", _
                                  modelUsed, errCode, errMsg)
@@ -191,11 +207,20 @@ Failed:
 
 Finish:
     latencyMs = CLng(modUtil.ElapsedMsSince(t0))
-    If LenB(errCode) = 0 Then
-        ok = True
+
+    ' CallStepと同じく ok は DecideOk 経由でしか決めない(14章§6・T-42観点(2))。
+    transportOk = (LenB(errCode) = 0)
+    ok = DecideOk(transportOk, rawBody, errCode)
+    If ok Then
         CallChat = rawBody
     Else
-        ok = False
+        If transportOk Then
+            errMsg = ErrMessageFor(errCode)
+            modLog.LogError errCode, "modGatewayRPN.CallChat", _
+                            "step=sp transport=" & route & " len=" & CStr(Len(rawBody))
+        ElseIf LenB(errMsg) = 0 Then
+            errMsg = ErrMessageFor(errCode)
+        End If
         CallChat = "#ERR:" & errCode & ":" & errMsg
     End If
 
@@ -215,15 +240,11 @@ Finish:
     modLog.LogRun rec
 End Function
 
-' ==============================================
-' RibbonAvailable - リボンアドインの検出(14章§2・裁定D2)
-' ----------------------------------------------
-'   公式作法: Application.AddIns をループし、config ribbon_addin_name の
-'   部分一致 + Installed で判定する(API呼び出し不要・即時)。結果はセッション
-'   キャッシュ。AddIns へアクセスできない環境(LibreOffice等)は「検出失敗」で
-'   False を返すが E0201 のエラー扱いにはしない(誤ブロック防止。E0201 を
-'   記録するのは実際に呼び出す側)。
-' ==============================================
+' RibbonAvailable - リボンアドインの検出(14章§2・裁定D2)。Application.AddIns を
+'   ループし config ribbon_addin_name の部分一致 + Installed で判定する
+'   (API呼び出し不要・即時)。結果はセッションキャッシュ。AddIns へアクセスできない
+'   環境(LibreOffice等)は「検出失敗」で False を返すが E0201 のエラー扱いには
+'   しない(誤ブロック防止。E0201 を記録するのは実際に呼び出す側)。
 Public Function RibbonAvailable() As Boolean
     Dim addinName As String
     Dim ai As Object
@@ -261,15 +282,11 @@ DetectFail:
     RibbonAvailable = False
 End Function
 
-' ==============================================
-' RunLimitCheck - リボン公式 LimitCheck() の唯一の呼び出し口(裁定D3)
-'   戻り値: True=続行不可(利用期限切れ等) / False=続行可
-' ----------------------------------------------
-'   起動時(12章§2.1 modBoot手順(7))と実行時の案内に使う。True でも起動は
-'   止めない。ribbon経路以外 / config limit_check=FALSE / リボン未検出 /
-'   Application.Run 失敗(古いリボン)は、すべて False(続行可)へ倒す穏当運用
-'   (誤ブロック防止。エラー扱いにせず usage_log への情報記録に留める)。
-' ==============================================
+' RunLimitCheck - リボン公式 LimitCheck() の唯一の呼び出し口(裁定D3)。
+'   戻り値 True=続行不可(利用期限切れ等) / False=続行可。起動時(12章§2.1 modBoot
+'   手順(7))と実行時の案内に使う。True でも起動は止めない。ribbon経路以外 /
+'   config limit_check=FALSE / リボン未検出 / Application.Run 失敗(古いリボン)は
+'   すべて False(続行可)へ倒す(誤ブロック防止。記録は usage_log に留める)。
 Public Function RunLimitCheck() As Boolean
     Dim res As Variant
 
@@ -292,13 +309,13 @@ End Function
 ' ==============================================
 ' run_log の受け渡し(14章§1「1行=1 LLM呼び出し」を1行に保つための仕掛け)
 ' ----------------------------------------------
-'   validate_result は【検証が終わるまで確定しない】が、transport / model /
-'   latency_ms は gateway しか知らない。1呼び出し=1行に保つには受け渡しが要る:
+'   validate_result は検証が終わるまで確定しないが、transport / model /
+'   latency_ms は gateway しか知らない。1呼び出し=1行に保つ受け渡し:
 '     (1) 呼び出し側が SetRunContext で case_id / round_no / 注入ID等を預ける
 '     (2) CallStep は「gatewayが知る列」を埋めた行を保留する(StageRun)
-'     (3) 検証を終えた呼び出し側が TakeLastRun で受け取り、validate_result を
+'     (3) 検証を終えた呼び出し側が TakeLastRun で受け取り validate_result を
 '         埋めて modLog.LogRun へ1行だけ書く
-'     (4) 誰も回収しないまま次の呼び出しが来たら FlushPendingRun が
+'     (4) 回収されないまま次の呼び出しが来たら FlushPendingRun が
 '         validate_result 空のまま書き出す(行の取りこぼしを作らない)
 '   CallChat だけは検証段が無いので自分で書く。
 ' ==============================================
@@ -388,24 +405,30 @@ Public Function ResolveMaxTokens(ByVal stepMaxTokens As Long, ByVal globalMaxTok
     End If
 End Function
 
-' 応答が「利用上限の定型拒否文」らしいか(16章E-15)。定型拒否文は短いので短い
-' 応答に限って判定する(約款文言は「上限」「回数」を普通に含み、長文の正当な
-' 応答が誤爆していた実機事故がある)。JSONらしい応答も除外する。
+' 応答が「利用上限の定型拒否文」か(16章E-15・14章§2)。判定は2条件に固定する:
+'   (1) 先頭が "#LIMIT:"(前後の空白は無視)
+'   (2) 本文に「利用上限に達しました」を含む
+' 語彙の供給元は15章§8.2の limit 応答実体1箇所であり、mockとgatewayが同じ
+' 文字列を見る。「上限」「回数」「limit」のような部分語での曖昧判定はしない
+' (約款や提案本文はこれらの語を普通に含み、長文の正当な応答がE0204へ誤爆して
+' 全Stepが止まる実機事故があった)。
 Public Function LooksLikeLimitError(ByVal response As String) As Boolean
     Dim s As String
 
-    If Len(response) > GW_LIMIT_PROBE_MAX Then Exit Function
-    If LooksLikeJsonBody(response) Then Exit Function
+    s = Trim$(response)
+    If LenB(s) = 0 Then Exit Function
 
-    s = LCase$(response)
-    LooksLikeLimitError = (InStr(s, "上限") > 0) Or (InStr(s, "limit") > 0) Or _
-                          (InStr(s, "回数") > 0) Or (InStr(s, "rate") > 0) Or _
-                          (InStr(s, "quota") > 0)
+    If Left$(s, Len(GW_LIMIT_PREFIX)) = GW_LIMIT_PREFIX Then
+        LooksLikeLimitError = True
+        Exit Function
+    End If
+    LooksLikeLimitError = (InStr(1, s, GW_LIMIT_PHRASE, vbBinaryCompare) > 0)
 End Function
 
 ' 応答判定。戻り値 "" = 正常 / "E0202" = 空応答 / "E0204" = 利用上限。
 ' 【重要】ここでは "#ERR:" プレフィクスを一切見ない。LLMが "#ERR:E0201:..." で
 ' 始まる本文を返しても正常応答として扱う(14章§4 mock_fault=fake_err・§6)。
+' 本関数は DecideOk の内部分類であり、成否そのものは DecideOk が決める。
 Public Function ClassifyResponse(ByVal response As String) As String
     If LenB(Trim$(response)) = 0 Then
         ClassifyResponse = "E0202"
@@ -416,6 +439,42 @@ Public Function ClassifyResponse(ByVal response As String) As String
         Exit Function
     End If
     ClassifyResponse = ""
+End Function
+
+' ==============================================
+' DecideOk - 帯域外成否(ok)の【唯一の判定点】(14章§6)
+' ----------------------------------------------
+'   transportSucceeded: 経路が失敗を申告していないか(Falseなら errCode に
+'                       経路側のコードが入っている)。errCode は入出力で、
+'                       ok=True のときは "" にリセットする。
+'   判定順: (1)transport失敗 -> False(コードは経路側の値。空なら E0202) /
+'           (2)空応答 -> False+E0202 / (3)上限系の定型拒否文 -> False+E0204 /
+'           (4)上記以外 -> True + errCode=""
+'   【最重要】rawBody が "#ERR:" で始まっていても内容では判定せず(4)へ落として
+'   True にする。平文プレフィクスはLLM出力側から偽造可能で、成否に使うとエラーUIを
+'   騙った任意文面表示(フィッシング/恒久DoS)が成立する(15章§8.2 fake_err。
+'   姉妹PJ B6BE7監査「先人の轍」で実証)。CallStep / CallChat は直接代入をせず
+'   必ず本関数の戻り値で ok を決めること。
+' ==============================================
+Public Function DecideOk(ByVal transportSucceeded As Boolean, ByVal rawBody As String, _
+                         ByRef errCode As String) As Boolean
+    Dim code As String
+
+    If Not transportSucceeded Then
+        If LenB(errCode) = 0 Then errCode = "E0202"
+        DecideOk = False
+        Exit Function
+    End If
+
+    code = ClassifyResponse(rawBody)
+    If LenB(code) > 0 Then
+        errCode = code
+        DecideOk = False
+        Exit Function
+    End If
+
+    errCode = ""
+    DecideOk = True
 End Function
 
 ' mock のバリアント決定(15章§8.1)。乱数・現在時刻を使わない決定的な規則。
@@ -511,17 +570,6 @@ Private Function CurrentTransport() As String
                                         modConfig.GetStr("llm_transport", GW_RIBBON))
 End Function
 
-' JSONらしい本文か(上限誤爆の除外用)。先頭が波括弧・角括弧・コードフェンス。
-Private Function LooksLikeJsonBody(ByVal response As String) As Boolean
-    Dim t As String
-    Dim c As String
-
-    t = Trim$(response)
-    If LenB(t) = 0 Then Exit Function
-    c = Left$(t, 1)
-    LooksLikeJsonBody = (c = "{") Or (c = "[") Or (Left$(t, 3) = "```")
-End Function
-
 ' 推論調整の解決。Step別上書き(s2_effort 等)を優先し、無ければ全体値。config
 ' reasoning_tuning=FALSE のときは空文字を送る(エスケープハッチ)。
 Private Function ResolveTuning(ByVal stepName As String, ByVal kind As String) As String
@@ -545,18 +593,15 @@ End Function
 ' ----------------------------------------------
 ' RibbonStep - 主経路(本番)。14章§2の12引数呼び出し。
 ' ----------------------------------------------
-'   引数値はすべて modConfig 参照(10章 NFR-M3。リテラル直書き禁止)。
-'   位置引数の意味(確定台帳 RIBBON_API_CONFIRMED.md §1 #1・裁定D1):
-'     1 Text  2 roleSystem  3 Temperature(Double)  4 MaxTokens(Long。0=既定)
-'     5 Wait(秒)  6 optModel  7 prevU  8 prevA(Stepは各回独立のため "")
-'     9 toolN(管理側ログ識別。config app_tool_prefix + stepName)
-'    10 reasoning_effort  11 verbosity
+'   引数値はすべて modConfig 参照(10章 NFR-M3。リテラル直書き禁止)。位置引数の
+'   意味の正は14章§2の12引数表(確定台帳 RIBBON_API_CONFIRMED.md §1 #1・裁定D1)。
+'   prevU/prevA は Step が各回独立のため常に ""(会話継続は CallChat の担当)。
 '   リボン未検出は E0201 で停止し direct へ自動フォールバックしない(16章E-14)。
 '
 '   16章E-50: この Application.Run は最大 llm_wait_sec 秒 VBAをブロックする。
 '   進捗の確定表示(modUIProgress.SetStage)は【呼び出し側がこの前に】済ませて
-'   おく規約(core層から ui層は参照できない=R1)。ここでは書き切った表示を画面へ
-'   反映させるため呼出直前に DoEvents を1回挟む。ゴースト化抑止は ui層の担当。
+'   おく規約(R1のためcore層からui層は参照できない)。呼出直前の DoEvents は
+'   書き切った表示を画面へ反映させるため。
 ' ----------------------------------------------
 Private Function RibbonStep(ByVal stepName As String, ByVal systemPrompt As String, _
                             ByVal userPrompt As String, ByRef modelUsed As String, _
@@ -592,7 +637,7 @@ Private Function RibbonStep(ByVal stepName As String, ByVal systemPrompt As Stri
     res = Application.Run("ChatGPT", userPrompt, systemPrompt, temperature, maxTok, _
                           waitSec, modelUsed, "", "", toolN, effort, verbosity)
     s = CStr(res)
-    GoTo Classify
+    GoTo Delivered
 
 RunFailed:
     errCode = "E0202"
@@ -601,14 +646,9 @@ RunFailed:
                     "step=" & stepName & " tool=" & toolN, Err.Number
     Resume ExitPoint
 
-Classify:
-    errCode = ClassifyResponse(s)
-    If LenB(errCode) > 0 Then
-        errMsg = ErrMessageFor(errCode)
-        modLog.LogError errCode, "modGatewayRPN.CallStep", _
-                        "step=" & stepName & " len=" & CStr(Len(s))
-        Exit Function
-    End If
+Delivered:
+    ' 応答内容の分類(空応答・上限)はここでは行わない。成否の判定点は
+    ' DecideOk の1箇所だけ(14章§6)。ここは経路の失敗だけを申告する。
     RibbonStep = s
 
 ExitPoint:
@@ -651,7 +691,7 @@ Private Function RibbonChat(ByVal systemPrompt As String, ByVal userMsg As Strin
     res = Application.Run("ChatGPT", userMsg, systemPrompt, temperature, maxTok, _
                           waitSec, modelUsed, prevU, prevA, toolN, effort, verbosity)
     s = CStr(res)
-    GoTo Classify
+    GoTo Delivered
 
 RunFailed:
     errCode = "E0202"
@@ -659,29 +699,18 @@ RunFailed:
     modLog.LogError errCode, "modGatewayRPN.CallChat", "step=sp", Err.Number
     Resume ExitPoint
 
-Classify:
-    errCode = ClassifyResponse(s)
-    If LenB(errCode) > 0 Then
-        errMsg = ErrMessageFor(errCode)
-        modLog.LogError errCode, "modGatewayRPN.CallChat", "step=sp len=" & CStr(Len(s))
-        Exit Function
-    End If
+Delivered:
+    ' 応答内容の分類は DecideOk の1箇所に閉じる(14章§6)。
     RibbonChat = s
 
 ExitPoint:
 End Function
 
-' ----------------------------------------------
 ' DirectStep - 開発・検証用(14章§3)。HTTP・strict・リトライ・キー読込の実体は
-'   modGatewayDirect(T-13)が持ち、本モジュールは経路を選ぶだけ。
-' ----------------------------------------------
-'   T-13 への呼び出し契約(本モジュールが前提とする公開シグネチャ):
-'     CallDirect(stepName, systemPrompt, userPrompt, schemaJson, _
-'                ByRef modelUsed, ByRef errCode, ByRef errMsg) As String
-'   errCode は "" = 成功 / E0203(429・5xx リトライ尽き)/ E0205(キー無し)/
-'   E0206(refusal・finish_reason が stop 以外)/ E0202(その他)。err_log 記録と
-'   HTTPステータスの保持は modGatewayDirect 側の責務。
-' ----------------------------------------------
+'   modGatewayDirect(T-13)が持ち、本モジュールは経路を選ぶだけ。呼び出し契約は
+'   14章§6の CallDirect。errCode は "" = 成功 / E0203(429・5xxリトライ尽き)/
+'   E0205(キー無し)/ E0206(refusal・finish_reason が stop 以外)/ E0202(その他)。
+'   err_log 記録とHTTPステータスの保持は modGatewayDirect 側の責務。
 Private Function DirectStep(ByVal stepName As String, ByVal systemPrompt As String, _
                             ByVal userPrompt As String, ByVal schemaJson As String, _
                             ByRef modelUsed As String, ByRef errCode As String, _
@@ -695,24 +724,17 @@ Private Function DirectStep(ByVal stepName As String, ByVal systemPrompt As Stri
     End If
 End Function
 
-' ----------------------------------------------
-' MockStep - 本体内mockトランスポート(14章§4(a))。呼ぶ相手は modMockLlm だけ。
-' ----------------------------------------------
-'   T-14 への呼び出し契約(本モジュールが前提とする公開シグネチャ):
-'     MockResponse(stepName, variantName, fault) As String
-'   variantName は ResolveMockVariant の戻り値(new / renewal / hit / clean /
-'   common)。fault は config mock_fault の値(空なら正常応答)。
-'   障害注入の応答も【正常な戻り値】として扱い、空応答=E0202・上限文字列=
-'   E0204 の判定は ribbon経路と同じ ClassifyResponse に通す。fake_err
-'   (本文が "#ERR:E0201:..." で始まる正常JSON)は判定に使わないので ok=True の
-'   まま素通しする(14章§4・§6)。
-' ----------------------------------------------
+' MockStep - 本体内mockトランスポート(14章§4(a))。呼ぶ相手は modMockLlm だけで、
+'   呼び出し契約は14章§6の MockResponse(stepName, variantName, fault)。
+'   variantName は ResolveMockVariant の戻り値、fault は config mock_fault。
+'   障害注入の応答も【正常な戻り値】として扱い、空応答・上限文字列の判定は
+'   他経路と同じく DecideOk が行う。fake_err は ok=True のまま素通しする。
+'   R1について: この参照だけは core層 -> test層 が仕様の要求そのもの(12章§2・
+'   14章§4(a)・15章§8・T-14)。vba_lint.py に名指しペアの例外を1件だけ置いた。
 Private Function MockStep(ByVal stepName As String, ByRef modelUsed As String, _
-                          ByRef detailText As String, ByRef errCode As String, _
-                          ByRef errMsg As String) As String
+                          ByRef detailText As String) As String
     Dim fault As String
     Dim variantName As String
-    Dim s As String
 
     modelUsed = GW_MOCK
     fault = Trim$(modConfig.GetStr("mock_fault", ""))
@@ -721,16 +743,7 @@ Private Function MockStep(ByVal stepName As String, ByRef modelUsed As String, _
     detailText = "variant=" & variantName
     If LenB(fault) > 0 Then detailText = detailText & ";fault=" & fault
 
-    s = modMockLlm.MockResponse(stepName, variantName, fault)
-
-    errCode = ClassifyResponse(s)
-    If LenB(errCode) > 0 Then
-        errMsg = ErrMessageFor(errCode)
-        modLog.LogError errCode, "modGatewayRPN.CallStep", _
-                        "step=" & stepName & " " & detailText
-        Exit Function
-    End If
-    MockStep = s
+    MockStep = modMockLlm.MockResponse(stepName, variantName, fault)
 End Function
 
 ' 批判stepの呼び出し回数を1つ進めて返す(それ以外のstepは 0 で無関係)。
@@ -747,21 +760,13 @@ Private Function NextMockRound(ByVal stepName As String) As Long
     End Select
 End Function
 
-' 自由対話のmock。step は "sp"、バリアントは common 固定。
-Private Function MockChat(ByRef errCode As String, ByRef errMsg As String) As String
+' 自由対話のmock。step は "sp"、バリアントは common 固定。応答内容の分類は
+' しない(成否の判定点は DecideOk の1箇所。14章§6)。
+Private Function MockChat() As String
     Dim fault As String
-    Dim s As String
 
     fault = Trim$(modConfig.GetStr("mock_fault", ""))
-    s = modMockLlm.MockResponse("sp", "common", fault)
-
-    errCode = ClassifyResponse(s)
-    If LenB(errCode) > 0 Then
-        errMsg = ErrMessageFor(errCode)
-        modLog.LogError errCode, "modGatewayRPN.CallChat", "step=sp"
-        Exit Function
-    End If
-    MockChat = s
+    MockChat = modMockLlm.MockResponse("sp", "common", fault)
 End Function
 
 ' StageRun - run_log の行を組み立てて保留する(書き出しはしない)。

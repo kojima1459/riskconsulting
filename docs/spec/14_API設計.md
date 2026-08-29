@@ -1,5 +1,7 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
+> v2.4.1（裁定書5: W1整合）: §6を唯一の命名権者として確定し、`modGatewayRPN.DecideOk`（帯域外成否の唯一の判定点）・`modUtilText.SanitizeForCell`・`modLog.TruncDetail` / `ShouldRotate`・`modGatewayDirect.CallDirect` / `BackoffMs` / `RetryBudgetFor` / `ParseKeyLine` / `IsOSeriesModel` / `BuildRequestBody`・`modMockLlm.MockResponse` / `ResponseById` / `FaultResponse` を追記。`SanitizeInput` の宣言を実装の Optional ByRef 2本（16章E-04の件数記録）へ追随させ、`GetStr`（エスケープを解いて返す）・`GetArrayItems`（キー不在は空Collection）の未確定点を明文化。§5に括弧の対応判定が文字列リテラル内を数えない旨、§2に `LooksLikeLimitError` の判定（先頭 `#LIMIT:` または「利用上限に達しました」を含む）を固定した。
+
 > v2.4: 実装前監査72件の裁定を反映。§6の関数契約を15章のプロンプト本文が要求する引数へ全面改訂（BuildS1User/S2User/S3User/S4System・CallChatの帯域外成否）、NormalizeLlmJson・MenusSummaryFor・MechsText・LastInjectedIds・SanitizeFileName・TryEnterUiLock・FreezeRoundを新設、§7を定数から純関数へ、§2/§3のハードコードをconfig駆動へ、§5にExtractJsonBlock入力パターン表を新設。（検証指摘の修正）BuildS3Userの引数順を15章の貼付ブロック出現順（menus, lines, schemes, cases）へ修正、JsStringSafeの適用順を明示、modUIProgressにParkFocusを追加、§4のmock本数を「7 step種・11応答」へ、modHtmlTemplate/modHtmlThemeの関数契約の正が18章であることを明記。
 > v2.4（W0実装報告の裁定）: §6にtest層の入口 `modTestsExcel.RunAllExcelTests()`（層(b)実機E2Eスモーク。17章 T-47）を追加した。
 
@@ -52,6 +54,7 @@ result = Application.Run("ChatGPT", _
 - 温度・MaxTokensはGPT-5系では無視され effort/verbosity が効く（V2実運用で確認済み）。`reasoning_tuning` エスケープハッチはPoC同様に維持
 - **呼出中の画面**: リボン呼出はVBAを同期ブロックするため、呼出の前に `modUIProgress.SetStage` でStep名・開始時刻・最大待ち時間・「画面が白くなっても処理は続いている」旨を確定表示し、config `keep_window_alive`（既定TRUE）で画面ゴースト化を抑止する（16章 E-50）
 - エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）。**ただし成否判定は§6の帯域外フラグで行い、文字列プレフィクスを判定に使わない**
+- **`LooksLikeLimitError` の判定を固定する**: 「**先頭が `#LIMIT:`**（前後の空白は無視）**または本文に「利用上限に達しました」を含む**」の2条件のいずれかを満たすときだけ True。語彙の供給元は15章§8.2の `limit` 応答実体1箇所であり、mock と gateway が同じ文字列を見る（語彙を2箇所に書かない）。「上限」「回数」「limit」のような**部分語での曖昧判定はしない**。約款や提案本文はこれらの語を普通に含み、長文の正当な応答が E0204 に誤爆して全Stepが止まる事故が実機で起きているため。なお `#LIMIT:` は**人間向けの表示文字列であって成否の判定材料ではない**（成否は§6の帯域外フラグ。ここでの判定は「ok=False にしたうえでどのエラーコードを載せるか」の分類にのみ使う）
 
 ## 3. direct経路（開発・検証用）
 
@@ -87,9 +90,10 @@ Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログ�
 - **障害注入**: config `mock_fault`（既定=空。空なら正常応答）
   | 値 | 返すもの | 検査したい挙動 |
   |---|---|---|
-  | `broken_json` | 閉じ括弧が欠けた途中切れJSON | §5(1)が `""` を返し修復リトライ→E0302 |
+  | `broken_json` | 閉じ括弧が欠けた途中切れJSON（毎回） | §5(1)が `""` を返し修復リトライ→なお破損のためE0302で当該Step失敗 |
+  | `broken_json_once` | 初回呼出のみ途中切れJSON・修復呼出には正常応答（唯一の状態保持例外。modMockLlm.ResetFaultOnce でリセットし、fault値の変更でも解除） | 修復リトライの成功系（validate_result=repaired）の検証 |
   | `enum_violation` | enum外の値を含む正常JSON | §5(3)の不合格→修復リトライ |
-  | `ghost_id` | 実在しない `M-9999` を related_menu_id に含む | ID実在チェック（ホワイトリスト照合）の発火 |
+  | `ghost_id` | 実在しない `M-9999` を s3 の menu_ids に含む（15章§8.2と一致） | ID実在チェック（ホワイトリスト照合）の発火 |
   | `count_violation` | risks 件数が規定範囲外 | 件数検証の発火 |
   | `empty` | 空文字 | E0202（空応答） |
   | `limit` | 上限系エラー文字列 | E0204と「往復数を減らして再開」案内（E-44） |
@@ -130,6 +134,7 @@ raw → (1) modJsonLite.ExtractJsonBlock（説明文・コードフェンス除�
 
 - **前処理P0（⑥の実体）**: 抽出の前に `｛`→`{` / `｝`→`}` / `［`→`[` / `］`→`]` / 全角二重引用符（U+201C・U+201D・U+FF02）→`"` / `：`→`:` / `，`→`,` を一律置換する。値の日本語本文中の全角記号まで巻き込む可能性はあるが、JSON全体が壊れて修復リトライに落ちる損失のほうが大きいため一律置換を採る。置換件数を run_log detail に `fw_normalized=n` として記録する
 - **⑦の実体**: (2)のキー抽出で値を走査する際、エスケープされていない生のCR/LFは `\n` へ、生のタブは `\t` へ置換する。値の終端は「直後に `,` `}` `]` のいずれか（空白を挟んでよい）が続く `"`」で判定し、`\"` は終端とみなさない
+- **括弧の対応判定における文字列の扱い（①〜⑦共通）**: 対応が閉じる `}` を探す走査は**文字列リテラルの内側を数えない**。すなわち `"` で開いた文字列の中に現れる `{` `}` は深さに算入せず、`\"`（直前が奇数個の `\`）は文字列の終端とみなさない。値走査（⑦）で用いるのと同じ規則を対応判定にも適用する、という一文である。これを入れないと、本文中に「開店時間は{未定}です」のような波括弧を含む日本語値があるだけで深さが狂い、正常なJSONが④（`""`）へ落ちる
 - ①〜⑦はいずれも modJsonLite の純ロジックであり、Excel非依存＝modTestsPure で全数テストする（17章 T-11）
 
 ## 6. 内部インターフェース契約（公開関数シグネチャ）
@@ -157,13 +162,29 @@ Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
 ' errCode: ok=False のときだけ E0201/E0202/E0204/E0205/E0206 を帯域外で返す。16章E-44の
 '     「往復数を減らして再開」分岐はこの値（E0204）で行う。ok=True のとき errCode は ""
 ' 呼出前に modPii を必ず走査する（外部送信の直前。16章 E-05/E-31）
+Public Function DecideOk(ByVal transportSucceeded As Boolean, ByVal rawBody As String, _
+                         ByRef errCode As String) As Boolean
+' **帯域外成否（ok）の唯一の判定点**。CallStep / CallChat は ok を直接代入せず必ず本関数の
+' 戻り値で決める（`ok = True` の直接代入を禁止する。17章 T-42 観点(2)の検査対象）。判定順:
+'   (1) transportSucceeded=False（経路側が失敗を申告）  -> False。errCode は経路側の値を保つ
+'       （空だったときだけ E0202 を補う）
+'   (2) rawBody が空（Trim後）                          -> False + errCode=E0202
+'   (3) rawBody が上限系の定型拒否文（LooksLikeLimitError）-> False + errCode=E0204
+'   (4) 上記以外                                        -> True + errCode=""
+' **rawBody が "#ERR:" で始まっていても内容では判定しない**（(4)へ落ちて True）。平文プレフィクスは
+' LLM出力側から偽造可能であり、これを成否に使うとエラーUIを騙った任意文面表示が成立する（本節冒頭の
+' エラー規約・15章§8.2 fake_err・16章 E-46 の同型欠陥）
 
 ' === core: modJsonLite ===
 Public Function ExtractJsonBlock(ByVal raw As String) As String        ' 失敗時 ""。入力パターンの正は§5の表
 Public Function GetStr(ByVal json As String, ByVal key As String) As String
+' 値の**エスケープを解いて返す**（`\"` `\\` `\n` `\t` `\uXXXX` を実体へ戻す＝UnescapeJsonStr 相当を
+' 内部で通す）。呼び出し側が二重に UnescapeJsonStr を掛けないこと。キー不在は ""
 Public Function GetLong(ByVal json As String, ByVal key As String, ByVal dflt As Long) As Long
 Public Function GetBoolJ(ByVal json As String, ByVal key As String, ByVal dflt As Boolean) As Boolean
 Public Function GetArrayItems(ByVal json As String, ByVal key As String) As Collection
+' キー不在・値が配列でない・壊れた入力は **空の Collection を返す**（Nothing を返さない）。
+' 呼び出し側に `Is Nothing` 分岐を強いないための契約（For Each がそのまま0回で回る）
 Public Function EscapeJsonStr(ByVal s As String) As String
 Public Function UnescapeJsonStr(ByVal s As String) As String
 
@@ -175,15 +196,55 @@ Public Function JsStringSafe(ByVal s As String) As String
 ' 通す（16章E-47）
 Public Function HtmlSafe(ByVal s As String) As String
 ' HTML本文用。& < > " ' をエンティティ化する。HTMLへ差し込む外部由来テキストは必ずこれを通す（16章E-47）
-Public Function SanitizeInput(ByVal s As String) As String
+Public Function SanitizeInput(ByVal s As String, _
+                              Optional ByRef removedCount As Long = 0, _
+                              Optional ByRef markerCount As Long = 0) As String
 ' 外部由来テキストの無害化（16章E-04）: 制御文字・私用領域文字を除去し、あわせて本文中の
 ' "■■■" を "[境界記号]" へ置換する（15章のデータ境界記号の偽装防止。E-43の多層防御の1枚）
-Public Function SanitizeFileName(ByVal name As String) As String
+' removedCount / markerCount は**件数だけ**を帯域外で返す省略可能な出口。16章E-04が
+' 「除去・置換の件数はrun_logのdetailに件数のみ記録し本文は残さない」を求めるため必須（本文は返さない
+' ＝NFR-S3）。省略した呼び出し（`SanitizeInput(s)`）も従来どおり動く
+Public Function SanitizeFileName(ByVal rawName As String) As String
 ' ファイル名の安全化。禁止文字 \ / : * ? " < > | と制御文字を "_" へ／前後空白と末尾ピリオドを除去／
 ' 32字で切詰め＋case_id由来8桁を付与して衝突回避／最終パスが240字を超える場合は company 部を
 ' Fnv1a64Hex 16桁へ置換。企業ドシエファイル名・report_path・ppt_path に必ず適用する
 Public Function NormalizeForHash(ByVal s As String) As String   ' 重複判定用の正規化（(2.5)のfnv1a64の前段）
 Public Function Fnv1a64Hex(ByVal s As String) As String         ' 16桁の16進文字列
+Public Function SanitizeForCell(ByVal s As String) As String
+' SetCellSafe がセルへ書く直前に通す**純変換部**（Excel非依存。CSV書出＝16章NFR-S7(2)も同じ関数を通す）。
+' ガード3点の**適用順は16章NFR-S7(1)が正**（NUL除去 -> 32,000字切詰め -> 先頭式記号の ' 前置）
+
+' === core: modLog ===
+Public Function TruncDetail(ByVal s As String) As String
+' run_log / err_log / usage_log の detail 列の切詰め（**最大400字**。13章§2.4・16章NFR-S3）。
+' 本文を残さない規約の実体であり、記録側は必ずこれを通す
+Public Function ShouldRotate(ByVal rowCount As Long, ByVal maxRows As Long) As Boolean
+' ログのローテ判定（config `log_max_rows`）。**rowCount >= maxRows で True**（閾値ちょうどで回す）。
+' maxRows <= 0 はローテ無効で常に False
+
+' === core: modGatewayDirect ===
+Public Function CallDirect(ByVal stepName As String, ByVal systemPrompt As String, _
+                           ByVal userPrompt As String, ByVal schemaJson As String, _
+                           ByRef modelUsed As String, ByRef errCode As String, _
+                           ByRef errMsg As String) As String   ' direct経路の唯一の入口（§3）
+Public Function BackoffMs(ByVal attemptNo As Long) As Long
+' 429/5xx の指数バックオフ間隔（ms）。**attemptNo は1始まり**で 1=2000 / 2=4000 / 3=8000、
+' 範囲外は0（§3の「2s/4s/8s」の実体）
+Public Function RetryBudgetFor(ByVal httpStatus As Long) As Long
+' そのHTTPステータスで**許される再試行回数**（初回の呼び出しを含まない）。§3の表の実体:
+' 429=3 / 500・502・503=3 / 408=1（タイムアウトも同じ扱い）/ その他4xx=0。
+' ShouldRetryDirect 等の判定はこの関数を唯一の値源とする（回数表を2箇所に書かない）
+Public Function ParseKeyLine(ByVal fileText As String) As String
+' キーファイルの生テキストから**1行目だけ**を取り出す（16章NFR-S2）。LF/CRLFの双方に対応し、
+' UTF-8 BOM を落とし、**前後の空白をTrimする**。値はセル・config・ログ・配布物へ一切出さない
+Public Function IsOSeriesModel(ByVal modelName As String) As Boolean   ' 先頭が "o" のモデル（§3。temperatureを送らない）
+Public Function BuildRequestBody(ByVal stepName As String, ByVal model As String, _
+                                 ByVal systemPrompt As String, ByVal userPrompt As String, _
+                                 ByVal schemaJson As String, ByVal temperature As Double, _
+                                 ByVal sendTemperature As Boolean, ByVal maxTokens As Long) As String
+' §3のリクエストボディ。sendTemperature は `Not IsOSeriesModel(model)` を呼び出し側から渡す
+' （1判断1箇所。この関数は model 名を見て自ら判定しない）。maxTokens=0 はキーごと送らない。
+' schemaJson が空のときは response_format を出力しない
 
 ' === app: modValidate ===  戻り値 ""=合格 / 非空=エラー列挙（修復プロンプト用の日本語）
 Public Function NormalizeLlmJson(ByVal stepName As String, ByVal json As String, _
@@ -340,6 +401,23 @@ Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
                             ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance。Phase 1.5
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 
+' === test: modMockLlm（本体内mockトランスポート。§4(a)・12章§2 test層） ===
+Public Function MockResponse(ByVal stepName As String, ByVal variantName As String, _
+                             ByVal fault As String) As String
+' modGatewayRPN のmock分岐が呼ぶ**ゲートウェイ入口**（12章§2の「唯一の相手」の実体）。
+' variantName は modGatewayRPN.ResolveMockVariant の戻り値（new/renewal/hit/clean/common）、
+' fault は config `mock_fault`。内部は下の2本へ振り分けるだけで、独自の応答本文を持たない
+Public Function ResponseById(ByVal mockId As String) As String
+' 15章§8.1の表の mock ID（MK-S1-NEW / MK-S1-RNW / MK-S2-NEW / MK-S2-RNW / MK-S3 / MK-S4 /
+' MK-PF / MK-S2C-HIT / MK-S2C-CLEAN / MK-S3C-HIT / MK-S3C-CLEAN の**11 ID**）で正常応答を返す。
+' 表に無いIDは ""。決定的（乱数・現在時刻・呼び出し回数に依存しない）
+Public Function FaultResponse(ByVal faultKind As String, ByVal stepName As String) As String
+' 15章§8.2の**8値**（broken_json / broken_json_once / enum_violation / ghost_id / count_violation / empty /
+' limit / fake_err）に対応する障害注入応答。**状態レス**＝同じ引数なら常に同じ応答を返す
+' （「最初の1回だけ」型の内部カウンタを持たない）。faultKind が空のときは "" を返す。
+' 8値以外の未知の値は正常応答へフォールバックする（config入力ミスでE2Eを暴走させない）
+
+Public Sub ResetFaultOnce()                                  ' broken_json_once の状態リセット(15章§8.2。テスト・T-24のシナリオ冒頭で呼ぶ)
 ' === test: modTestsExcel ===
 Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12章§2 test層・17章 T-47)。
                                 ' wintest実機(実Excel・COM経由)からのみ呼ぶ。層(a)の入口は

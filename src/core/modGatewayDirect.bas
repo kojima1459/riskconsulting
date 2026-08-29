@@ -25,17 +25,17 @@ Option Explicit
 '   Authorizationヘッダへ渡すだけで、値を変数以外(セル・ログ・戻り値)へ
 '   一切書かない。
 '
-' R4: modGatewayDirectはExcelトークン許可モジュール9本(12章§4)に含まれない。
+' R4: modGatewayDirectはExcelトークン許可モジュール10本(12章§4)に含まれない。
 '   Worksheets/Range/Application./ThisWorkbook/MsgBox/ActiveSheetのいずれにも
 '   触れない(CreateObjectでのCOM生成はExcelトークンではないため可)。
 '
 ' 純関数の分離方針(このタスクの指示どおり3種を分ける。いずれもExcel非依存の
 '   Public関数でLibreOffice実行テストから直接叩ける):
-'   (a) バックオフ計算  : ComputeBackoffMs / IsRetryableServerStatus /
+'   (a) バックオフ計算  : BackoffMs / IsRetryableServerStatus / RetryBudgetFor /
 '                          ShouldRetryDirect / RetryWaitMs / ClassifyDirectErrorCode
 '   (b) リクエストボディ組立: BuildRequestBody / BuildChatCompletionsUrl /
 '                          ResolveMaxTokensDirect / IsOSeriesModel / FormatTemperature
-'   (c) キーファイルのパース: ParseApiKeyFirstLine / ExpandAppDataToken
+'   (c) キーファイルのパース: ParseKeyLine / ExpandAppDataToken
 '   HTTP実体(CreateObject("MSXML2.ServerXMLHTTP.6.0"))とファイルI/O(Open/Close)・
 '   Sleepは上記の外側にあるPrivateの薄い手続きへ閉じ込め、純関数からは呼ばない。
 '
@@ -160,17 +160,18 @@ End Function
 ' (a) バックオフ計算(純関数。Excel非依存)
 ' ==============================================
 
-' 429/5xx用バックオフ間隔(ms)。retryIndex=1回目の再試行前/2/3。範囲外は0。
-Public Function ComputeBackoffMs(ByVal retryIndex As Long) As Long
-    Select Case retryIndex
+' 429/5xx用バックオフ間隔(ms)。attemptNo は【1始まり】で1回目の再試行前=2000 /
+' 2回目=4000 / 3回目=8000(14章§3・§6)。範囲外は0。
+Public Function BackoffMs(ByVal attemptNo As Long) As Long
+    Select Case attemptNo
         Case 1
-            ComputeBackoffMs = RETRY_BACKOFF_1_MS
+            BackoffMs = RETRY_BACKOFF_1_MS
         Case 2
-            ComputeBackoffMs = RETRY_BACKOFF_2_MS
+            BackoffMs = RETRY_BACKOFF_2_MS
         Case 3
-            ComputeBackoffMs = RETRY_BACKOFF_3_MS
+            BackoffMs = RETRY_BACKOFF_3_MS
         Case Else
-            ComputeBackoffMs = 0
+            BackoffMs = 0
     End Select
 End Function
 
@@ -180,19 +181,30 @@ Public Function IsRetryableServerStatus(ByVal httpStatus As Long) As Boolean
                               (httpStatus = 502) Or (httpStatus = 503)
 End Function
 
+' そのHTTPステータスで許される【再試行回数】(初回の呼び出しは含まない。14章§3・§6)。
+'   429 / 500 / 502 / 503 : 3回(指数バックオフ 2s/4s/8s)
+'   408                   : 1回(タイムアウトも同じ扱い)
+'   その他4xx・不明        : 0回(再試行しない)
+' 回数表はここ1箇所にだけ書く。ShouldRetryDirect はこの値を参照する。
+Public Function RetryBudgetFor(ByVal httpStatus As Long) As Long
+    If httpStatus = 408 Then
+        RetryBudgetFor = RETRY_MAX_ATTEMPTS_TIMEOUT - 1
+    ElseIf IsRetryableServerStatus(httpStatus) Then
+        RetryBudgetFor = RETRY_MAX_ATTEMPTS_5XX - 1
+    Else
+        RetryBudgetFor = 0
+    End If
+End Function
+
 ' 次の試行を行ってよいか。attemptsSoFar=直前までに完了した試行回数(1始まり)。
-'   408/タイムアウト: 1回だけ再試行(合計2試行)。
-'   429/5xx         : 最大3回まで再試行(合計4試行)。
-'   その他4xx等      : 再試行なし。
+' 回数の正は RetryBudgetFor(表を2箇所に書かない)。タイムアウトは408と同じ扱い。
 Public Function ShouldRetryDirect(ByVal httpStatus As Long, ByVal wasTimeout As Boolean, _
                                   ByVal attemptsSoFar As Long) As Boolean
-    If wasTimeout Or httpStatus = 408 Then
-        ShouldRetryDirect = (attemptsSoFar < RETRY_MAX_ATTEMPTS_TIMEOUT)
-    ElseIf IsRetryableServerStatus(httpStatus) Then
-        ShouldRetryDirect = (attemptsSoFar < RETRY_MAX_ATTEMPTS_5XX)
-    Else
-        ShouldRetryDirect = False
-    End If
+    Dim st As Long
+
+    st = httpStatus
+    If wasTimeout Then st = 408
+    ShouldRetryDirect = (attemptsSoFar <= RetryBudgetFor(st))
 End Function
 
 ' 次の試行までの待ち時間(ms)。ShouldRetryDirectがTrueのときだけ意味を持つ。
@@ -201,7 +213,7 @@ Public Function RetryWaitMs(ByVal httpStatus As Long, ByVal wasTimeout As Boolea
     If wasTimeout Or httpStatus = 408 Then
         RetryWaitMs = RETRY_TIMEOUT_WAIT_MS
     Else
-        RetryWaitMs = ComputeBackoffMs(attemptsSoFar)
+        RetryWaitMs = BackoffMs(attemptsSoFar)
     End If
 End Function
 
@@ -319,7 +331,7 @@ End Function
 
 ' キーファイルの生テキストから1行目のキーだけを取り出す(NFR-S2: 1行目のみが
 ' 正)。UTF-8 BOM・CRLF/LFいずれも吸収する。前後空白は落とす。
-Public Function ParseApiKeyFirstLine(ByVal rawContent As String) As String
+Public Function ParseKeyLine(ByVal rawContent As String) As String
     Dim s As String
     s = rawContent
     If Len(s) > 0 Then
@@ -335,7 +347,7 @@ Public Function ParseApiKeyFirstLine(ByVal rawContent As String) As String
         firstLine = s
     End If
     firstLine = Replace(firstLine, vbCr, vbNullString)
-    ParseApiKeyFirstLine = Trim$(firstLine)
+    ParseKeyLine = Trim$(firstLine)
 End Function
 
 ' ==============================================
@@ -366,7 +378,7 @@ Private Function LoadApiKey() As String
     Close #fnum
     On Error GoTo 0
 
-    LoadApiKey = ParseApiKeyFirstLine(lineText)
+    LoadApiKey = ParseKeyLine(lineText)
     Exit Function
 
 Failed:

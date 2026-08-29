@@ -714,7 +714,7 @@
         {"name": "ppt_template_path", "value": "", "note": "空=白紙生成"},
         {"name": "html_out_dir", "value": "%USERPROFILE%\\Documents\\RPN出力", "note": "HTMLリスクレポートの出力先(10章FR-37・18章)。不存在時は16章 E-21"},
         {"name": "html_theme", "value": "standard", "note": "HTMLレポートの配色・体裁テーマ(18章の定数モジュールが持つテーマ名)"},
-        {"name": "mock_fault", "value": "", "note": "mock時の障害注入(15章§8)。enum: (空)/broken_json/enum_violation/ghost_id/count_violation/empty/limit/fake_err"},
+        {"name": "mock_fault", "value": "", "note": "mock時の障害注入(15章§8)。enum: (空)/broken_json/broken_json_once/enum_violation/ghost_id/count_violation/empty/limit/fake_err"},
         {"name": "keep_window_alive", "value": true, "note": "長時間呼び出し中の画面ゴースト化抑止(16章 E-50)。FALSEでオプトアウト"},
         {"name": "ribbon_addin_name", "value": "リボンちゃん", "note": "リボンアドインの表示名"},
         {"name": "limit_check", "value": true, "note": "リボン利用上限の検査を行うか"},

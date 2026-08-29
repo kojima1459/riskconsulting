@@ -78,9 +78,10 @@ MODULE_REGISTRY = {
     "modTestRunner", "modTestsExcel", "modMockLlm",
 }
 # 分割される可能性のあるモジュール名(末尾に1以上の数字が付く)。
+# modMockLlm1..n は 12章§2(v2.4.1)が 30,000字契約による分割を明記している。
 MODULE_REGISTRY_PREFIXES = re.compile(
     r"^(modTestsPure|modSchemas|modHtmlTemplate|modPromptsCore|modPromptsBlocks"
-    r"|modPromptsOps)\d*$"
+    r"|modPromptsOps|modMockLlm)\d*$"
 )
 
 # ==============================================================================
@@ -262,6 +263,11 @@ R4_EXCEL_ALLOWED_MODULES = {
     "modCompanyFile",
     # modExportHearing: ヒアリングシート(本体ブック内のシート)を組み立てる。
     "modExportHearing",
+    # modUtilText: SetCellSafe 内のセル書込に限る(12章§4 v2.4.1・16章NFR-S7(1))。
+    #   「外部由来テキストのセル書込口はこの1関数」と定めた以上、その関数本体だけは
+    #   セルに触れざるを得ない。純変換部は SanitizeForCell として分離してあり、
+    #   そちらはExcel非依存=層(a)でテストする。
+    "modUtilText",
     # ※ modExportHtml / modExportPpt は「案件JSONを受け取って外部ファイルを
     #   書く」役なので既定では許可しない。シートを直接読む必要が出たら
     #   modCaseStore 経由にするか、理由を添えてここへ足すこと。
@@ -348,6 +354,27 @@ CORE_PRODUCT_VOCAB = [
 # PoC の modUiLock / modSkin.ShowToast / modProgressBar / modWorkExcel の
 # R1例外表も、対応するモジュールが RPN に存在しないため削除した。
 # ==============================================================================
+
+# ==============================================================================
+# R1例外表(製品コード -> test層。名指しペアのみ。裁定書5 項目7)
+# ------------------------------------------------------------------------------
+# 原則は「どの層からも test層を参照してはならない」だが、mockトランスポートの
+# 参照だけは【仕様が明示的に命じたもの】であり例外として1件だけ許可する。
+#
+# 根拠(仕様書4箇所):
+#   12章§2 移植対応表「modMockLlm(src/test/)。modGatewayRPN のmock分岐が呼ぶ
+#           唯一の相手」/ 14章§4(a) 同旨 / 15章§8 冒頭 / 17章 T-14
+# 禁止理由が当てはまらないこと: 本ルールの根拠は「製品コードがテストに依存すると
+#   配布物からテストを外せなくなる」だが、modMockLlm は build/modules.json に
+#   登録され vba_src へ焼き込まれて【配布物に同梱される本体内mockトランスポート】
+#   であり、外す対象ではない。
+# 例外の粒度: (参照元モジュール, 参照先モジュール, メンバ) の完全一致のみ。
+#   他の core->test 参照、および modGatewayRPN から modMockLlm の別メンバへの
+#   参照は引き続き ERROR。緩和を1行増やすには司令塔の裁定を要する。
+# ==============================================================================
+R1_TEST_LAYER_EXCEPTIONS = {
+    ("modGatewayRPN", "modMockLlm", "MockResponse"),
+}
 
 # 型落ち検出: Dim/Static文
 DIM_STMT_PATTERN = re.compile(r"^(Dim|Static)\s+(.*)$", re.IGNORECASE)
@@ -1926,6 +1953,7 @@ def check_layer_dependency(info: ModuleInfo, known_modules: dict[str, ModuleInfo
 
     test層は全層を参照してよいので対象外。逆に、どの層からも test層を参照しては
     ならない(製品コードがテストに依存すると配布物からテストを外せなくなる)。
+    唯一の例外は R1_TEST_LAYER_EXCEPTIONS の名指しペア(裁定書5 項目7)。
     """
     cur_layer = info.layer
     if cur_layer is None:
@@ -1944,6 +1972,10 @@ def check_layer_dependency(info: ModuleInfo, known_modules: dict[str, ModuleInfo
                 continue
 
             if target.layer == LAYER_TEST and cur_layer != LAYER_TEST:
+                if (self_name, prefix, member) in R1_TEST_LAYER_EXCEPTIONS:
+                    # 仕様が明示的に命じた参照(12章§2・14章§4(a)・15章§8・T-14)。
+                    # 例外表の根拠コメントは R1_TEST_LAYER_EXCEPTIONS の定義箇所。
+                    continue
                 info.add(
                     "ERROR", lineno,
                     f"R1違反: 製品コード({LAYER_LABEL[cur_layer]})からテスト層を参照: "
