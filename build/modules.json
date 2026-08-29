@@ -65,6 +65,48 @@
       "wave": "T-10"
     },
     {
+      "name": "modCaseStore",
+      "path": "src/app/modCaseStore.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-20"
+    },
+    {
+      "name": "modKnowledge",
+      "path": "src/app/modKnowledge.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-21"
+    },
+    {
+      "name": "modPromptsBlocks",
+      "path": "src/app/modPromptsBlocks.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-23"
+    },
+    {
+      "name": "modPromptsCore",
+      "path": "src/app/modPromptsCore.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-23"
+    },
+    {
+      "name": "modPromptsOps",
+      "path": "src/app/modPromptsOps.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-23"
+    },
+    {
+      "name": "modSchemas",
+      "path": "src/app/modSchemas.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-23"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",
@@ -77,6 +119,20 @@
       "role": "test",
       "type": "std",
       "wave": "T-01"
+    },
+    {
+      "name": "modTestsPure2",
+      "path": "src/test/modTestsPure2.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-01"
+    },
+    {
+      "name": "modTestsPure3",
+      "path": "src/test/modTestsPure3.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-20"
     },
     {
       "name": "modMockLlm",
