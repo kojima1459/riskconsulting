@@ -285,6 +285,11 @@ R4_EXCEL_ALLOWED_MODULES = {
     "modCaseStore", "modInboxStore", "modJudgeStore", "modKnowledge",
     # modCompanyFile: 企業ドシエファイル(1社1.xlsx)の書出・取込(13章§2.8)。
     "modCompanyFile",
+    # modCompanyFile2: 上と同一責務の分割先(T-29の実装が1本では30,000字契約を
+    #   超えたため、下位のブック・シートI/Oだけを切り出したもの)。許可の幅は
+    #   modCompanyFile と同じ「企業ドシエファイルのシートI/O」で広がっていない。
+    #   分割の是非は12章§2のモジュール一覧に載っていないためWARNとして残る。
+    "modCompanyFile2",
     # modExportHearing: ヒアリングシート(本体ブック内のシート)を組み立てる。
     "modExportHearing",
     # modUtilText: SetCellSafe 内のセル書込に限る(12章§4 v2.4.1・16章NFR-S7(1))。

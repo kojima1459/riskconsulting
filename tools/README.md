@@ -21,6 +21,7 @@ Windows実機テスト(層(b))の要件は `wintest/README.md` を参照。
 vba_lint.py 緑
   -> run_lo_tests.py 緑(全モジュール構文コンパイル + 純ロジック実行)
   -> modTestsPure(FAIL 0 / SKIP 0 / 実行本数 = tests_expected)
+  -> prompt_diff.py --strict / validate_check.py(17章§4-2の一致検査)
   -> build/build_rpn.py でビルド
   -> sheet_check.py(13章 <-> シート台帳 <-> 成果物ブックの照合。T-02/T-03)
   -> ship_check.py(T-46 の(1)(2)(3))
@@ -114,6 +115,34 @@ python3 tools/prompt_diff.py --strict   # 未実装も差分に数える(T-23の
   最後の砦になる(実測: `additionalProperties` を両側 true にした変異を検出)。
 - **突合対象の31関数はすべて無引数**(14章§6の二層分離・裁定書6 B)。実値の埋め込みは
   `modPromptsOps` の `Fill` / `Asm*`(組立層)が行い、突合対象外である。
+
+### `validate_check.py` - 15章§11の検証ルール表と modValidate/modTestsPure の照合(T-22)
+
+```bash
+python3 tools/validate_check.py                  # (a)(b)(c)(d) すべて
+python3 tools/validate_check.py --no-tests       # (b)を省く(modValidate 実装先行時)
+python3 tools/validate_check.py --no-templates   # (d)を省く
+# exit code: 0 = 全一致 / 1 = 不一致あり
+```
+
+17章§4-2「15章§11の検証ルール表 ⇔ modValidate の照合」の実体。15章§11の表を
+**唯一の正**としてケースIDを展開し(範囲記法 `V-S1-01 ～ V-S1-11(11件)` を開く)、
+
+- **(a) 実装**: 判定が「不合格」「警告」のケースは `"[ケースID] ` で始まる文字列
+  リテラルが `src/app/modValidate*.bas` にあること。判定「合格」の
+  `V-S2C-05` / `V-S3C-05` は**エラー文を持たない**ので、逆にそのリテラルが
+  **あってはならない**(ただしIDはコメント等に現れていること)
+- **(b) テスト**: `src/test/modTestsPure*.bas` の Check系呼び出しの第1引数
+  (テスト名)にケースIDが含まれ、**1ケース1本**であること。1つのテスト名に
+  2つ以上のケースIDが同居していたら「1テスト1ケース」違反として落とす
+- **(c) 件数**: §11の各行の「(n件)」/ 合計行の「合計64件(不合格52/警告10/合格2)」/
+  各Check節の表のID集合 / ケースIDを含むテスト名の総数 が全部一致すること。
+  あわせて**判定3値の網羅**(各IDが不合格・警告・合格のどれか1列に必ず載る)も見る
+- **(d) エラー文テンプレの一字一句**: 各Check節の表の `エラー文テンプレ` を
+  `{...}` で切った固定部が実装ソースにそのまま現れること(文言の漂流検出)
+
+`--no-tests` は modValidate だけ先に出来ている段階のための逃げ道であり、
+**出荷前の検問では必ず外して回す**(§4-2はテスト側の存在まで求めている)。
 
 ### `sheet_check.py` - 13章とシート実体の照合(T-02 / T-03)
 

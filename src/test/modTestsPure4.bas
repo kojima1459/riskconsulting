@@ -68,6 +68,7 @@ G26:
     T_BufSep
 GDone:
     On Error GoTo 0
+    modTestsPure5.RunAll
     Exit Sub
 
 F18:

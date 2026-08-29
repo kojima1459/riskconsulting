@@ -114,6 +114,55 @@
       "wave": "T-23"
     },
     {
+      "name": "modValidate",
+      "path": "src/app/modValidate.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-22"
+    },
+    {
+      "name": "modValidate2",
+      "path": "src/app/modValidate2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-22"
+    },
+    {
+      "name": "modPipeline",
+      "path": "src/app/modPipeline.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-24"
+    },
+    {
+      "name": "modPii",
+      "path": "src/app/modPii.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-29"
+    },
+    {
+      "name": "modCompanyFile",
+      "path": "src/app/modCompanyFile.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-29"
+    },
+    {
+      "name": "modCompanyFile2",
+      "path": "src/app/modCompanyFile2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-29"
+    },
+    {
+      "name": "modBoot",
+      "path": "src/ui/modBoot.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-16"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",
@@ -147,6 +196,20 @@
       "role": "test",
       "type": "std",
       "wave": "T-23"
+    },
+    {
+      "name": "modTestsPure5",
+      "path": "src/test/modTestsPure5.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-22"
+    },
+    {
+      "name": "modTestsPure6",
+      "path": "src/test/modTestsPure6.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-22"
     },
     {
       "name": "modMockLlm",

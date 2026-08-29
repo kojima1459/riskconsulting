@@ -125,7 +125,7 @@ PURE_ALLOWLIST = [
     "modConfig", "modLog", "modGatewayRPN", "modGatewayDirect",
     # app の純文字列・純ロジック(W2)。
     "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
-    "modSchemas", "modValidate", "modPii",
+    "modSchemas", "modValidate", "modValidate2", "modPii",
     # app のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは14章§6が公開を
     # 宣言した純関数だけのモジュール(技術メモ4。裁定書6 項目6/7)。
     # modKnowledgeFmt は全体が純文字列(整形と15章§0.7の切詰め)。
