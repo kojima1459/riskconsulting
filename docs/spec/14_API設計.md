@@ -81,7 +81,7 @@ Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログ�
 
 **(a) 本体内のmockトランスポート = `modMockLlm`**（`src/test/` 配置・12章§2 test層）。`modGatewayRPN` のmock分岐が呼ぶ唯一の相手。step別に**決定的**なサンプルJSON（15章§8「浜松スイーツファクトリー」一式）を返す。乱数・現在時刻不使用。同一入力（正規化ハッシュ）→同一応答。
 
-- 応答は**7本**: S1 / S2 / S3 / S4 / PF / S2C / S3C（S2Cは issues 非空版と0件版、S3Cは lands=true 版と issues 0件版を持つ）。S1/S2は new用・renewal用の2文脈で modValidate に合格すること（15章§8）
+- 応答は**7 step種・11応答**（15章§8.1の表が正）: S1（new/renewal）／S2（new/renewal）／S3／S4／PF／S2C（issues非空版・0件版）／S3C（lands=true版・issues 0件版）。各応答は**自分のバリアント文脈**で modValidate に合格すること（15章§8.1受入条件1）
 - **障害注入**: config `mock_fault`（既定=空。空なら正常応答）
   | 値 | 返すもの | 検査したい挙動 |
   |---|---|---|
@@ -167,8 +167,9 @@ Public Function UnescapeJsonStr(ByVal s As String) As String
 
 ' === core: modUtilText ===
 Public Function JsStringSafe(ByVal s As String) As String
-' HTML内のJS文字列リテラル用。"</" を "<\/" へ、行区切り文字 U+2028 を "\u2028"・段落区切り文字 U+2029 を
-' "\u2029" へ、その他の制御文字を "\u00XX" へエスケープする。modExportHtml のJSON埋込は必ずこれを
+' HTML内のJS文字列リテラル用。**適用順の正は18章§5.3**（この順を守らないと二重エスケープになる）:
+' ① `\` を `\\` へ・`"` を `\"` へ ② "</" を "<\/" へ ③ 行区切り文字 U+2028 を "\u2028"・段落区切り文字
+' U+2029 を "\u2029" へ ④ その他の制御文字を "\u00XX" へ。modExportHtml のJSON埋込は必ずこれを
 ' 通す（16章E-47）
 Public Function HtmlSafe(ByVal s As String) As String
 ' HTML本文用。& < > " ' をエンティティ化する。HTMLへ差し込む外部由来テキストは必ずこれを通す（16章E-47）
@@ -261,8 +262,8 @@ Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal
 ' （confirmed/rejected/new）はこの2引数がなければ成立しない
 Public Function BuildS3System() As String                                        ' 15章§4 system
 Public Function BuildS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
-                            ByVal menus As String, ByVal lines As String, ByVal cases As String, _
-                            ByVal schemes As String) As String
+                            ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
+                            ByVal cases As String) As String
 ' 15章§4 S3 user。s1Summary=S1出力の business_summary / strategy_outlook / current_coverage /
 ' field_insights だけを抜き出した要約JSON（S3 systemルール7が field_insights の参照を命じており、
 ' S2 JSONには含まれないため必須）。menus=MenusFor()（S3は実在サービスの一覧。S2の要約とは別テキスト）
@@ -317,6 +318,9 @@ Public Function TryEnterUiLock(ByVal stepName As String) As Boolean
 ' （保持者Step名＋取得時のTimer値）で保持し、シートには書かない＝プロセス終了で自然消滅する（E-51）。
 ' 保持時間が `llm_wait_sec + 120` 秒を超えたロックは失効とみなして自動解除し、E0602 を記録して取得を許す
 Public Sub ExitUiLock()   ' 正常終了・異常終了のどちらでも必ずエラーハンドラから呼ぶ
+Public Sub ParkFocus()
+' 全アクション完了時のフォーカス退避。フォーカスを編集不可の待避セルへ戻し、セル編集モードでVBAが
+' 止まるのを防ぐ（11章§5・16章E-51）。実行開始時にも通してから処理へ入る
 
 ' === app: modExportHtml / modExportPpt / modExportHearing ===
 Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
@@ -335,6 +339,7 @@ Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 ```
 
+- **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
 - **`modValidate` の CheckS2C / CheckS3C**、**`modSchemas` の SchemaS2C / SchemaS3C** は入念モード用の追加分（15章§4.5〜4.6・§7の表）
 - 呼出前の走査: 外部へ送るテキスト（CallStep / CallChat の systemPrompt・userPrompt、企業ドシエファイルの書出、HTMLレポート出力）は送信・保存の直前に `modPii` を通す（16章 E-05／E-31。走査結果は run_log と dossier_meta に記録）
 
