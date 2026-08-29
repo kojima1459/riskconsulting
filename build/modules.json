@@ -2,6 +2,69 @@
   "_comment": "リスク提案ナビ(RPN) VBAモジュール台帳。12章§2のレイヤ構成とモジュール一覧に準拠し、パスは <repo> からの相対パス。ビルド時にここへ列挙された全ファイルの存在を検査する(--allow-missing で欠落を警告に緩和)。逆方向(src/ に実在するのに未登録)も check_unregistered で検査するため、モジュールを新設したら必ずここへ1行足すこと。role は 12章§2 の層(core/app/ui/test)。type=std の .bas だけが vba_src シートへ格納される。**実装済みのモジュールだけを載せる**(未着手のモジュールを先に載せるとビルドが常に欠落エラーになるため)。wave は 17章§3 のタスクID。",
   "modules": [
     {
+      "name": "modTypes",
+      "path": "src/core/modTypes.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-10"
+    },
+    {
+      "name": "modUtil",
+      "path": "src/core/modUtil.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-10"
+    },
+    {
+      "name": "modUtilText",
+      "path": "src/core/modUtilText.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-10"
+    },
+    {
+      "name": "modJsonLite",
+      "path": "src/core/modJsonLite.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-11"
+    },
+    {
+      "name": "modConfig",
+      "path": "src/core/modConfig.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-10"
+    },
+    {
+      "name": "modLog",
+      "path": "src/core/modLog.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-10"
+    },
+    {
+      "name": "modGatewayRPN",
+      "path": "src/core/modGatewayRPN.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-12"
+    },
+    {
+      "name": "modGatewayDirect",
+      "path": "src/core/modGatewayDirect.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-13"
+    },
+    {
+      "name": "modAppTypes",
+      "path": "src/app/modAppTypes.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-10"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",
@@ -14,6 +77,20 @@
       "role": "test",
       "type": "std",
       "wave": "T-01"
+    },
+    {
+      "name": "modMockLlm",
+      "path": "src/test/modMockLlm.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-14"
+    },
+    {
+      "name": "modMockLlm2",
+      "path": "src/test/modMockLlm2.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-14"
     }
   ]
 }

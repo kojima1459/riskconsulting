@@ -103,8 +103,11 @@ EXPECTED_SKIP_MAX = 0
 # 技術メモ4)。
 # ==============================================================================
 PURE_ALLOWLIST = [
-    # core(W1で移植予定)。純ロジックなのでそのまま実行テストにかけられる。
+    # core(W1で移植済)。純ロジックなのでそのまま実行テストにかけられる。
     "modTypes", "modUtil", "modUtilText", "modJsonLite",
+    # core のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは純関数だけの
+    # モジュール(技術メモ4。W1のG8/G9/G10/G11が叩く)。
+    "modConfig", "modLog", "modGatewayRPN", "modGatewayDirect",
     # app の純文字列・純ロジック(W2)。
     "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
     "modSchemas", "modValidate", "modPii",
@@ -112,7 +115,7 @@ PURE_ALLOWLIST = [
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",
     "modTestsPure5", "modTestsPure6", "modTestsPure7", "modTestsPure8",
-    "modMockLlm",
+    "modMockLlm", "modMockLlm2",
 ]
 
 TEMPLATE_PROFILE_DIR = Path(tempfile.gettempdir()) / "rpn_lo_template_profile"
