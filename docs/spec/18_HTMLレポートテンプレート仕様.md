@@ -1,5 +1,6 @@
 # 18. HTMLレポートテンプレート仕様 v1.0
 
+v1.0（ニューリスク=エマージング確定）: SEC-09「ニューリスク」の読むJSONパスを `s2.emerging_risks`（新種・新興リスク）へ差し替え、「第2ラウンド以降に表示」の文言を削除して空配列時の1行を「現時点で特筆すべきニューリスクは検出されていません」へ変更した。あわせて第2ラウンドの仮説ライフサイクル（`s2.risks[].status`）を見せる SEC-16「訪問で分かったこと（ラウンド更新）」を新設し、両者が別物であることを§3に明記した。
 v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR-37の「デザインは差し替え可能なテーマとして分離」を、セクション登録表・CSS変数の閉じた一覧・1モジュールに閉じたテーマ差替として具体化し、12章§2の純文字列モジュール `modHtmlTemplate1..n` / `modHtmlTheme`（17章 T-35）の内容面の正を定義した。
 
 **目的**: 本製品の主力出力であるHTMLリスクレポート（10章FR-37・14章§6 `modExportHtml.GenerateHtmlReport`）について、**出力物の見た目・構成・図表に対するフィードバックを1箇所の修正で吸収できる構造**を固定する。発注者・部会からの「この図を足したい」「この順番を入れ替えたい」「配色を変えたい」という要望が、そのつどHTML生成コードの改造にならないよう、変更点を (a) セクション登録表 (b) テーマのCSS変数 (c) 個々のテンプレ関数 の3種類だけに閉じ込める。
@@ -51,7 +52,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
     "generated_at": "2026/09/01 14:07:22", "app_version": "2.4.0", "theme": "standard"
   },
   "s1": { "company_name": "...", "business_summary": "...", "...": "Schema-S1 の全キー" },
-  "s2": { "risks": [], "gaps": [], "open_questions": [] },
+  "s2": { "risks": [], "gaps": [], "emerging_risks": [], "open_questions": [] },
   "s3": { "stories": [], "unmatched_risks": [], "do_not_propose": [] }
 }
 ```
@@ -64,7 +65,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 
 ## 3. セクションID一覧と読むJSONパス
 
-**セクションIDは `SEC-01` から `SEC-15`。既存IDの改番・再利用を禁止する。追加は `SEC-16` 以降を使う。** `slug` はHTMLの `id` 属性とJSの登録キーであり、IDと1対1で対応する（`<section id="sec-cover">`）。並び順は本表の上から下（10章FR-37の紙面順）。
+**セクションIDは `SEC-01` から `SEC-16`。既存IDの改番・再利用を禁止する。追加は `SEC-17` 以降を使う。** `slug` はHTMLの `id` 属性とJSの登録キーであり、IDと1対1で対応する（`<section id="sec-cover">`）。並び順は本表の上から下（10章FR-37の紙面順）。
 
 | ID | slug | 見出し（既定） | 読むJSONパス（15章のプロパティ名） | 空のときの挙動 | 図表種別 |
 |---|---|---|---|---|---|
@@ -76,7 +77,8 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 | SEC-06 | riskmap | 2軸リスクマップ（影響×頻度 5×5） | `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score` `insurability.transferability`） | `s2` が null なら非表示。`risks` が0件なら「該当なし」の空マップを描く | 5×5マトリクス（§3.3） |
 | SEC-07 | risks | リスク一覧 | `s2.risks[]` の全項目（`risk_no` `category` `risk_name` `scenario` `status` `frequency` `impact` `frequency_score` `impact_score` `evidence.quote` `evidence.source` `insurability.transferability` `insurability.line_note` `insurability.control_note` `loss_scale_note` `check_points[]` `preventions[].measure` `preventions[].related_menu_id`） | `s2` が null なら非表示 | 表（横スクロール可） |
 | SEC-08 | coverage | 保険カバレッジ表 | `s1.current_coverage[]`（`line_name` `coverage_summary` `limit_note` `special_note`） / `s2.gaps[]`（`gap_no` `gap_type` `target` `description` `risk_evidence` `coverage_evidence`） / `s2.risks[].insurability.transferability` `line_note` `control_note` | `current_coverage` が0件（新規案件）なら「新規案件のため現契約なし。以下は必要補償の見立て」の注記を出して `gaps` 側の表のみ描く。両方0件なら非表示 | 2枚組の表 |
-| SEC-09 | newrisk | ニューリスク（新たに立った仮説） | `s2.risks[]` のうち `status` が `new` のもの（`risk_no` `risk_name` `scenario` `category`） | 0件のときは「初回ラウンドでは該当なし（第2ラウンド以降に表示されます）」の1行を出す（**非表示にしない**。FR-35のラウンド設計を読み手に示すため） | カード |
+| SEC-09 | newrisk | ニューリスク（新種・新興リスク） | `s2.emerging_risks[]`（`risk_name` `category` `horizon` `scenario` `evidence_quote` `evidence_source` `proposal_hint`）。`category` と `horizon` は19章§3の日本語ラベルへ変換する | 0件（空配列）のときは「現時点で特筆すべきニューリスクは検出されていません」の1行を出す（**非表示にしない**。「見ていない」のではなく「見たうえで該当が無い」ことを読み手に示すため） | カード |
+| SEC-16 | round-update | 訪問で分かったこと（ラウンド更新） | `meta.round_no` ／ `s2.risks[]` のうち `status` が `new`（新たに浮上した仮説）／ `confirmed`（裏が取れたリスク）／ `rejected`（否定された仮説）のもの（`risk_no` `risk_name` `scenario` `category` `status`）。**スキーマ変更はなく `status` によるフィルタのみ** | `meta.round_no` が2未満（初回ラウンド）、または3つの `status` がいずれも0件なら**セクションごと非表示**（目次からも落とす） | 3ブロック（新たに浮上した仮説／裏が取れたリスク／否定された仮説。rejected は見出しに取り消し表現を付し、`scenario` 末尾に追記された否定の理由をそのまま残す） |
 | SEC-10 | story | 提案ストーリー（当社にできること） | `s3.stories[]` の全項目（`story_no` `proposal_kind` `headline` `hook_question` `target_risk_nos[]` `target_gap_nos[]` `menu_ids[]` `line_ids[]` `scheme_id` `pitch` `similar_case_id` `expected_objection` `objection_response`）。`target_risk_nos` は `s2.risks[].risk_no` を、`target_gap_nos` は `s2.gaps[].gap_no` を引いて名称に解決する | `s3` が null なら非表示 | カード3枚 |
 | SEC-11 | prevent | 未然防止メニュー | `s2.risks[]`（`risk_no` `risk_name` `preventions[].measure` `preventions[].related_menu_id`） | `preventions` が全リスクで0件なら非表示 | 表 |
 | SEC-12 | limit | 当社にできないこと・提案を控えること | ①`s2.risks[]` のうち `insurability.transferability` が `hard`（`risk_no` `risk_name` `insurability.control_note`） ②`s3.unmatched_risks[]`（`risk_no` `risk_name` `why_unmatched`） ③`s3.do_not_propose[]`（`topic` `reason`） | 3ブロックとも0件なら「該当なし」の1行を出す（**非表示にしない**。10章FR-37「できないことを正直に書く」がこのセクションの存在理由であるため） | 3ブロック |
@@ -87,6 +89,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 - **S4は読まない**。本レポートは `GenerateHtmlReport` の契約どおり S1・S2・S3 だけから描く（14章§6）。S4の `hearing_questions` はヒアリングシート（13章§2.16・`modExportHearing`）の入力であり、S4未実行でもレポートが出せる状態を保つため本章では参照しない。
 - enum値は必ず19章§3・15章§0の日本語ラベルへ変換して表示する。生の英字enumを画面に出さない。
 - 「空のときの挙動」が「非表示」のセクションは、目次（§3.6）からも同時に落とす。
+- **SEC-09 と SEC-16 は別物である**: SEC-09「ニューリスク」は `s2.emerging_risks[]`＝サイバー・気候変動のような**新種・新興リスク**（ラウンドに関係なく初回から出る）、SEC-16「訪問で分かったこと」は `s2.risks[].status`＝**第2ラウンド以降の仮説ライフサイクル**（新規発見・確認済み・棄却）である。`status = "new"` のリスクは SEC-16 と SEC-07 リスク一覧の `status` 表示（バッジ）に留め、**SEC-09 には出さない**。
 
 ### 3.1 SEC-02 エグゼクティブサマリの構成（10章FR-37「3テーマ・A4 1枚相当の文字中心」）
 
@@ -158,7 +161,8 @@ s = s & "var SECTIONS=[" & vbLf
 s = s & " {id:'SEC-01',slug:'cover',    title:'',                  need:['meta'],   empty:'always',render:renderCover},"      & vbLf
 s = s & " {id:'SEC-02',slug:'exec',     title:'エグゼクティブサマリ',need:['s1'],    empty:'always',render:renderExec},"       & vbLf
 s = s & " {id:'SEC-06',slug:'riskmap',  title:'2軸リスクマップ',    need:['s2'],     empty:'hide',  render:renderRiskMap},"    & vbLf
-s = s & " {id:'SEC-09',slug:'newrisk',  title:'ニューリスク',       need:['s2'],     empty:'note',  note:'初回ラウンドでは該当なし（第2ラウンド以降に表示されます）',render:renderNewRisk}," & vbLf
+s = s & " {id:'SEC-09',slug:'newrisk',  title:'ニューリスク',       need:['s2'],     empty:'note',  note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
+s = s & " {id:'SEC-16',slug:'round-update',title:'訪問で分かったこと',need:['s2'],  empty:'hide',  render:renderRoundUpdate}," & vbLf
 s = s & "];" & vbLf
 ```
 
@@ -181,8 +185,8 @@ s = s & "];" & vbLf
 例: 「拠点ハザードの一覧図を足したい」という要望を受けた場合。
 
 1. **テンプレ関数を1本追加する（1箇所目）**: 空きのあるテンプレモジュール（§4.4の分割規約に従い、超過していれば新しい `modHtmlTemplateN`）に `Public Function SecHazardJs() As String` を追加し、`function renderHazard(DATA, el){...}` を返す。既存の描画関数・CSS・他セクションには一切触らない。
-2. **登録表に2行足す（2箇所目）**: `modHtmlTemplate1.SectionsJs()` に、(a) `s = s & modHtmlTemplateN.SecHazardJs()` の連結行と (b) `{id:'SEC-16',slug:'hazard',title:'拠点ハザード',need:['s1'],empty:'hide',render:renderHazard},` の登録行を、出したい位置に挿入する。
-3. **§3の表に1行足す**（本章の更新）。IDは `SEC-16`。既存IDは動かさない。
+2. **登録表に2行足す（2箇所目）**: `modHtmlTemplate1.SectionsJs()` に、(a) `s = s & modHtmlTemplateN.SecHazardJs()` の連結行と (b) `{id:'SEC-17',slug:'hazard',title:'拠点ハザード',need:['s1'],empty:'hide',render:renderHazard},` の登録行を、出したい位置に挿入する。
+3. **§3の表に1行足す**（本章の更新）。IDは次の空き番（現在は `SEC-17`）。既存IDは動かさない。
 
 `modExportHtml`・`modHtmlTheme`・他のテンプレ関数・CSSは変更しない。**新しい配色が必要な場合でも新しいCSS変数を足さず、§5.1の閉じた一覧から選ぶ**（一覧を増やすとテーマ側の全定義に追随が必要になり、テーマ差替が1モジュールで閉じなくなるため）。一覧の拡張が本当に必要なときは本章§5.1の改訂として扱い、`modHtmlTheme` の全テーマを同時に更新する。
 
@@ -199,7 +203,7 @@ s = s & "];" & vbLf
 | `modHtmlTemplate1` | `BuildDocument`（全体組立）／`HeadHtml`（`<meta charset>`・`<title>`・共通CSS・テーマCSSの差込口）／`BodyShellHtml`（骨格と `<noscript>`）／**`SectionsJs`（§4.2のセクション登録表。編集が最も多い1関数）**／`RuntimeJs`（目次生成・登録配列の走査・`need`/`empty` の判定・共通の描画ヘルパ） |
 | `modHtmlTemplate2` | SEC-01 cover ／ SEC-02 exec ／ SEC-03 profile ／ SEC-04 sufficiency |
 | `modHtmlTemplate3` | SEC-05 riskuniv ／ SEC-06 riskmap ／ SEC-07 risks ／ SEC-08 coverage |
-| `modHtmlTemplate4` | SEC-09 newrisk ／ SEC-10 story ／ SEC-11 prevent ／ SEC-12 limit ／ SEC-13 hearing ／ SEC-14 source ／ SEC-15 disclaimer |
+| `modHtmlTemplate4` | SEC-09 newrisk ／ SEC-16 round-update ／ SEC-10 story ／ SEC-11 prevent ／ SEC-12 limit ／ SEC-13 hearing ／ SEC-14 source ／ SEC-15 disclaimer |
 
 - 共通CSSは `modHtmlTemplate1.HeadHtml` に一元化し、セクション別のテンプレ関数に `<style>` を書かない（CSSが散ると見た目のフィードバックを1箇所で吸収できなくなる）。セクション固有のスタイルはクラス名を `sec-<slug>-*` の接頭辞で共通CSSに置く。
 - 文字列の組み立ては15章と同じ `s = s & "..." & vbLf` 方式とする（`Const` は1論理行1,023字・行継続25本の制約に当たるため使わない。14章§7と同じ理由）。

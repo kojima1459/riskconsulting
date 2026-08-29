@@ -3,6 +3,7 @@
 > v2.3: 2026-08-27部会フィードバック（内田部長・高橋PL）反映。リスクユニバース10分類化・保険移転可能性(insurability)・リスクステータス(ラウンド間ライフサイクル)・5段階スコア・引受目線(do_not_propose)・追加リサーチプロンプト生成(research_requests)・拠点ハザード観点(hazard)を追加。変更の経緯はdocs/20章。
 > v2.4: 実装前監査の反映。CP932浄化・純関数方式への変更・S3へのS1要約注入・S4バリアント全文（BLOCK_S4_PROPOSAL/ALLIANCE）・各Check節の検証ルール表化（V-xx ケースID）・mock 7 step種＋障害注入・注入予算と切詰め（§0.7）・PF/壁打ち注入書式（§6.1）・抽出規約と節⇔関数名対応表（§10）を追加。
 > v2.4（検証指摘の修正）: §0原則9のSanitizeInput対象を包括定義へ（1行属性の改行畳み込みを追加）、原則10の判定を3値へ、§1.1のBLOCK_CTX挿入先にS3Cを追加、§1.3のBLOCK_GUARDを7本のsystem限定（壁打ちは除外）へ、§8.1受入条件1を「各mockは自分の文脈で合格」へ、§10.1に複数フェンス規則と日本語ラベル形プレースホルダ（第3形）を追加、§10.2のBuildS3User引数順と `Block*` 7関数を修正。
+> v2.4（ニューリスク=エマージング確定）: 発注者確認により「ニューリスク」を新種・新興リスクの意味に確定。`SchemaS2()` に `emerging_risks`（0〜3件・required・空配列可・strict維持）を追加し、S2 system に第13ルール・S2 user の出力形式に該当ブロックを追加、§11に V-S2-16 / V-S2-17 を新設して CheckS2 を17件・全体を計64件へ、§8.1の MK-S2-NEW に emerging 1件・MK-S2-RNW に空配列を追加した。
 
 本章の文字列が実装の正。modPromptsCore / modPromptsBlocks / modPromptsOps / modSchemas には**本章のテキストを一字一句このまま**実装する。ただし `Const` は使わず、`Public Function SchemaS1() As String` のような**純関数**の中で `s = s & "..." & vbLf` 方式で組み立てて返す（`Const` は1論理行1,023字・行継続25本の制約に当たり、1行追加で壊れるため）。一致検査の正規化規則は§10.1（改行は vbLf・末尾改行なし）。本章とコードの一致検査はテスト対象（17章 T-23）。
 
@@ -433,6 +434,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    裏づけられたものを "confirmed"、否定されたものを "rejected"(削除はしない。理由を scenario
    末尾に追記)、回答から新たに発見したリスクを "new" とする。提案書が訪問のたびに成長する。
    これが本製品の中核思想である。
+13. リスクユニバース10分類の定番類型に加え、新種・新興のリスク(サイバー・気候変動・規制変化・
+   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0〜3件
+   emerging_risks に挙げる。一般論の羅列は禁止。当てはまりの根拠を書く。
+   該当が薄ければ空配列とする(無理に埋めない)。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -495,9 +500,22 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
       "coverage_evidence": "契約側の根拠(current_coverageからの引用。uninsuredの場合は\"該当契約なし\")"
     }
   ],
+  "emerging_risks": [
+    {
+      "risk_name": "新種・新興リスクの名称(30字以内)",
+      "category": "リスクユニバース10分類のいずれか",
+      "horizon": "already/near/mid_long",
+      "scenario": "この企業への当てはまり(事業内容・拠点・取引構造からの推論を根拠に具体的に・150字以内)",
+      "evidence_quote": "根拠となる原文の短い引用",
+      "evidence_source": "hp/yuho/memo/contract/prev_renewal/knowledge/inference",
+      "proposal_hint": "提案への接続メモ(無ければ\"\")"
+    }
+  ],
   "open_questions": ["リスク評価の精度向上のため顧客に確認すべき事項"]
 }
 ※新規案件では gaps は [] とする。
+※horizon は already=既に顕在化 / near=1〜3年 / mid_long=3年超 とする。
+※この企業に当てはまる新種・新興リスクが無ければ emerging_risks は [] とする。
 ```
 
 **プレースホルダのデータ源**:
@@ -559,9 +577,19 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
       "coverage_evidence": {"type": "string"}
     }, "required": ["gap_no", "gap_type", "target", "description", "risk_evidence", "coverage_evidence"],
        "additionalProperties": false}},
+    "emerging_risks": {"type": "array", "items": {"type": "object", "properties": {
+      "risk_name": {"type": "string"},
+      "category": {"type": "string", "enum": ["strategy_market", "supply_chain", "manufacturing_quality", "sales_customer", "facility_bcp", "hr_labor", "digital_info", "legal_regulatory", "finance_counterparty", "brand_social"]},
+      "horizon": {"type": "string", "enum": ["already", "near", "mid_long"]},
+      "scenario": {"type": "string"},
+      "evidence_quote": {"type": "string"},
+      "evidence_source": {"type": "string", "enum": ["hp", "yuho", "memo", "contract", "prev_renewal", "knowledge", "inference"]},
+      "proposal_hint": {"type": "string"}
+    }, "required": ["risk_name", "category", "horizon", "scenario", "evidence_quote", "evidence_source", "proposal_hint"],
+       "additionalProperties": false}},
     "open_questions": {"type": "array", "items": {"type": "string"}}
   },
-  "required": ["risks", "gaps", "open_questions"],
+  "required": ["risks", "gaps", "emerging_risks", "open_questions"],
   "additionalProperties": false
 }
 ```
@@ -585,8 +613,11 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 | V-S2-13 | gaps[] | gap_no の重複、または gap_type が enum 外 | 不合格 | `[V-S2-13] gaps の {key} が不正です: {value}` |
 | V-S2-14 | risks[].evidence.source | `inference` の比率が50%超 | 警告 | `[V-S2-14] inference 比率が{p}%です(50%以下が目安)` |
 | V-S2-15 | insurability.transferability | `hard` が0件 | 警告 | `[V-S2-15] transferability=hard のリスクが0件です` |
+| V-S2-16 | emerging_risks | 件数が3超 | 不合格 | `[V-S2-16] emerging_risks が{n}件です(0〜3件)` |
+| V-S2-17 | emerging_risks[] の enum 各キー | category / horizon / evidence_source のいずれかが enum 外 | 不合格 | `[V-S2-17] emerging_risks[{i}] の {key} が不正です: {value}` |
 
 補足: V-S2-15 は「保険で解けないリスクを明示すること」が分析の信頼性の証であるという方針に基づく警告（docs/20 高橋FB①）。V-S2-11 は真にギャップの無い優良契約がありうるため警告に留める。
+補足（emerging_risks＝ニューリスク）: `emerging_risks` は「サイバー・気候変動のような新種・新興リスク」を保持する専用配列であり、**0件（空配列）を正常とする**（当てはまりの薄い企業に一般論を書かせないため。V-S2-16 は上限3件の超過のみを不合格とし、0件は発火させない）。`risks[].status = "new"`（第2ラウンドで新たに浮上した仮説）とは**別概念**であり、両者を相互に検査しない（18章 SEC-09 と SEC-16 が別セクションとして描き分ける）。`evidence_quote` / `evidence_source` は `risks[].evidence` と同じ根拠設計（50字以内の原文引用＋出所enum）である。V-S2-17 は `category` / `horizon` / `evidence_source` の3キーを見る（direct経路はstrictスキーマが一次で弾くが、ribbon経路はスキーマ強制が無いためVBA側検査を省略しない）。
 
 ## 4. Step3 提案マッチング（S3）
 
@@ -1325,8 +1356,8 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 |---|---|---|---|---|
 | 1 | MK-S1-NEW | s1 | new | current_coverage=[] ／ input_quality.coverage 14件（overall=mid）／ research_requests 2件（各1,800字以内）／ field_insights 3件 |
 | 2 | MK-S1-RNW | s1 | renewal | current_coverage 3件 ／ overall=high ／ research_requests=[] |
-| 3 | MK-S2-NEW | s2 | new | risks 8件（10分類のうち6分類・status は全て proposed・transferability=hard を1件以上含む）／ gaps=[] |
-| 4 | MK-S2-RNW | s2 | renewal | risks 8件 ／ gaps 3件（uninsured / underinsured / overlap 各1） |
+| 3 | MK-S2-NEW | s2 | new | risks 8件（10分類のうち6分類・status は全て proposed・transferability=hard を1件以上含む）／ gaps=[] ／ **emerging_risks 1件**（`category=facility_bcp` / `horizon=mid_long` / 気候変動による原料(果実・乳製品)調達難と浜松2工場の高温化。`proposal_hint` 非空） |
+| 4 | MK-S2-RNW | s2 | renewal | risks 8件 ／ gaps 3件（uninsured / underinsured / overlap 各1） ／ **emerging_risks=[]**（空配列が合格であること〈V-S2-16 が0件で発火しないこと〉を mock で兼ねて担保する） |
 | 5 | MK-S3 | s3 | 共通 | stories 3件（upsell / cross_sell / scheme 各1）／ unmatched_risks 1件 ／ do_not_propose 1件 |
 | 6 | MK-S4 | s4 | 共通 | slides 5枚（slide_no=1..5）／ hearing_questions 8問。proposal / alliance のどちらでも同一応答 |
 | 7 | MK-PF | pf | 共通 | principle_checks 5件 ／ grammar_checks 4件 ／ duplicates 1件 ／ rework_suggestions 2件 ／ survival=mid |
@@ -1430,11 +1461,11 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | Check関数 | ケースID | 不合格 | 警告 | 合格判定 |
 |---|---|---|---|---|
 | CheckS1 | V-S1-01 〜 V-S1-11（11件） | 01/02/03/06/07/09/10 | 04/05/08/11 | - |
-| CheckS2 | V-S2-01 〜 V-S2-15（15件） | 01/02/03/04/05/06/07/08/09/12/13 | 10/11/14/15 | - |
+| CheckS2 | V-S2-01 〜 V-S2-17（17件） | 01/02/03/04/05/06/07/08/09/12/13/16/17 | 10/11/14/15 | - |
 | CheckS3 | V-S3-01 〜 V-S3-13（13件） | 01/02/03/04/05/06/07/08/09/10/11/12 | 13 | - |
 | CheckS4 | V-S4-01 〜 V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
 | CheckPF | V-PF-01 〜 V-PF-07（7件） | 01/02/03/04/05/06/07 | - | - |
 | CheckS2C | V-S2C-01 〜 V-S2C-05（5件） | 01/02/03 | 04 | 05（issues 0件=改訂スキップ） |
 | CheckS3C | V-S3C-01 〜 V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
 
-**合計62件**（不合格50件 / 警告10件 / 合格判定2件）。ケースIDは欠番を作らず、削除する場合も番号を再利用しない（追番のみ）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
+**合計64件**（不合格52件 / 警告10件 / 合格判定2件）。ケースIDは欠番を作らず、削除する場合も番号を再利用しない（追番のみ）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。

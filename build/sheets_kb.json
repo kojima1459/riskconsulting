@@ -236,11 +236,12 @@
         {"name": "mech_id", "type": "String", "width": 10, "header_note": "MC-NNNN(13章§1)"},
         {"name": "mech_text", "type": "String", "width": 40, "header_note": "機構の一言"},
         {"name": "layer", "type": "String", "width": 12, "dv": "mech_layer"},
+        {"name": "target_categories", "type": "String", "width": 34, "header_note": "適用リスク=リスクユニバース10分類を「;」区切り。空可(15章§6.1 {{mechs}} 整形例の「適用リスク」)"},
         {"name": "source_uid", "type": "String", "width": 18, "header_note": "投稿ボックスuid"}
       ],
       "reserve_rows": 20,
       "seed_rows": [
-        ["MC-0107", "振動センサーで設備異常を予兆検知", "detect", "UID-2025-0417"]
+        ["MC-0107", "振動センサーで設備異常を予兆検知", "detect", "facility_bcp;manufacturing_quality", "UID-2025-0417"]
       ],
       "seed_note": "MC-0107は15章§6.1・§8.1のmock必須行(17章T-14前提)。"
     },
@@ -269,10 +270,10 @@
         {"name": "name", "type": "String", "width": 22},
         {"name": "url", "type": "String", "width": 34},
         {"name": "kind", "type": "String", "width": 14, "dv": "watch_source_kind"},
-        {"name": "巡回頻度メモ", "type": "String", "width": 26, "header_note": "13章§3.7の原文ママ。英字物理名が明記されていない(13章冒頭の「1行目=物理名ヘッダ・英小文字snake_case」原則との不整合。concerns参照)"}
+        {"name": "patrol_freq_note", "type": "String", "width": 26, "header_note": "巡回頻度メモ(13章§3.7)"}
       ],
       "reserve_rows": 15,
-      "seed_note": "Phase 1.5先行定義(13章§3.7)。最終列は13章原文が英字物理名を与えていないためやむを得ず日本語のまま採用(concerns参照)。"
+      "seed_note": "Phase 1.5先行定義(13章§3.7)。最終列は13章§3.7が英字物理名 patrol_freq_note を与えた(司令塔裁定4-5)。"
     },
 
     {

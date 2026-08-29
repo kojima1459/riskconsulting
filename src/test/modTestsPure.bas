@@ -11,9 +11,9 @@ Option Explicit
 '
 ' 移植元: PoC「マイ本棚AI」 src/test/modTestsPure.bas の骨格
 '   (グループ単位の失敗隔離・Check の書き方・R4準拠の方針)。
-'   PoC固有のテスト本体(modChunker / modPii / 難読化キー復元 TestDeobfuscateSecret
-'   など)は移植していない。とくに **TestDeobfuscateSecret 系はOBF1機構ごと廃止**
-'   したため意図的に持ち込まない(16章NFR-S2: 本製品はキーをブックに入れない)。
+'   PoC固有のテスト本体(modChunker / modPii / 旧PoCの秘匿値復元テスト
+'   など)は移植していない。とくに 旧PoCの秘匿値復元テストは、本製品がキーを
+'   ブックに一切入れない設計(16章NFR-S2)のため機構ごと非移植とした。
 '
 ' W0時点の中身:
 '   src/core・src/app のモジュールはまだ1本も実装されていないため、ここには

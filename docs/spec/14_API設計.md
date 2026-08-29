@@ -1,6 +1,7 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
 > v2.4: 実装前監査72件の裁定を反映。§6の関数契約を15章のプロンプト本文が要求する引数へ全面改訂（BuildS1User/S2User/S3User/S4System・CallChatの帯域外成否）、NormalizeLlmJson・MenusSummaryFor・MechsText・LastInjectedIds・SanitizeFileName・TryEnterUiLock・FreezeRoundを新設、§7を定数から純関数へ、§2/§3のハードコードをconfig駆動へ、§5にExtractJsonBlock入力パターン表を新設。（検証指摘の修正）BuildS3Userの引数順を15章の貼付ブロック出現順（menus, lines, schemes, cases）へ修正、JsStringSafeの適用順を明示、modUIProgressにParkFocusを追加、§4のmock本数を「7 step種・11応答」へ、modHtmlTemplate/modHtmlThemeの関数契約の正が18章であることを明記。
+> v2.4（W0実装報告の裁定）: §6にtest層の入口 `modTestsExcel.RunAllExcelTests()`（層(b)実機E2Eスモーク。17章 T-47）を追加した。
 
 ## 1. LLM経路と分岐
 
@@ -338,6 +339,11 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
 Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
                             ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance。Phase 1.5
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
+
+' === test: modTestsExcel ===
+Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12章§2 test層・17章 T-47)。
+                                ' wintest実機(実Excel・COM経由)からのみ呼ぶ。層(a)の入口は
+                                ' modTestRunner.RunAllPureTests(17章§4-1のランナー要件)
 ```
 
 - **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
@@ -351,7 +357,7 @@ Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 | 関数名 | 対応step | strict検証済み観点 |
 |---|---|---|
 | `SchemaS1()` | s1 | current_coverage は常に必須（newは空配列） |
-| `SchemaS2()` | s2 | gaps は常に必須（newは空配列）。リスクユニバース10分類/頻度/影響/1〜5スコア/移転可能性/status/出所enum（v2.3） |
+| `SchemaS2()` | s2 | gaps は常に必須（newは空配列）。リスクユニバース10分類/頻度/影響/1〜5スコア/移転可能性/status/出所enum（v2.3）。**emerging_risks（ニューリスク0〜3件・空配列可・category/horizon/出所enum）を含む（v2.4）** |
 | `SchemaS3()` | s3 | proposal_kind enum。scheme_id は "" 許容 |
 | `SchemaS4()` | s4 | slides配列・hearing_questions |
 | `SchemaS2C()` | s2c | 入念モードの批判JSON。issue_type 6値のenum。issues は0件（指摘なし）を許容 |

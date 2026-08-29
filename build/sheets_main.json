@@ -70,6 +70,7 @@
       "人材・労務", "デジタル・情報", "法務・規制", "財務・取引先", "ブランド・社会"
     ],
     "risk_status_ja": ["仮説", "確認済み", "棄却（記録保持）", "新規発見"],
+    "horizon_ja": ["既に顕在化", "1〜3年", "3年超"],
     "frequency_ja": ["高", "中", "低"],
     "impact_ja": ["大", "中", "小"],
     "evidence_source_ja": ["HP", "有報", "営業メモ", "現契約", "前回更新メモ", "社内ナレッジ", "推定"],
@@ -389,6 +390,21 @@
           "columns": [
             {"name": "seq", "type": "Long", "width": 6},
             {"name": "question", "type": "String", "width": 60}
+          ]
+        },
+        {
+          "name": "s2_emerging",
+          "title": "ニューリスク(新種・新興) s2_emerging (0-3行。0行が正常でありうる)",
+          "reserve_rows": 5,
+          "columns": [
+            {"name": "emg_no", "type": "Long", "width": 7},
+            {"name": "risk_name", "type": "String", "width": 26},
+            {"name": "category", "type": "String", "width": 20, "dv": "risk_category_ja"},
+            {"name": "horizon", "type": "String", "width": 14, "dv": "horizon_ja"},
+            {"name": "scenario", "type": "String", "width": 50, "header_note": "セル内改行可"},
+            {"name": "evidence_quote", "type": "String", "width": 40},
+            {"name": "evidence_source", "type": "String", "width": 16, "dv": "evidence_source_ja"},
+            {"name": "proposal_hint", "type": "String", "width": 34, "header_note": "提案への接続メモ。無ければ空"}
           ]
         }
       ]
