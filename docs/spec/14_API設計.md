@@ -1,5 +1,7 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
+> v2.4.2（裁定書6: W2a整合）: §6を**二層**へ改訂した。(1) `Build*System` / `Build*User` / `ReviseSuffix` / `RepairSuffix` / `Block*` / `Schema*` は**引数なしのテンプレート関数**（`{{...}}` を素のまま返す＝`prompt_diff.py` の突合対象31関数）、(2) `modPromptsOps` に**組立層** `Fill` と `Asm*`（`AsmS1User` / `AsmS2User` / `AsmS3User` / `AsmS4System` / `AsmS4User` / `AsmS2CriticUser` / `AsmS3CriticUser` / `AsmSparringSystem` / `AsmPFUser`）を新設し、条件ブロック（renewal）・S4バリアント差替・想定外variantのproposalフォールバック（`fallbackNote` で帯域外に返し記録は modPipeline）をその責務とした。あわせて **`modKnowledgeFmt`**（整形の純関数10本＋`TrimKbLine`＋`TrimPlan`）を新設、`modKnowledge` の各注入関数へ `Optional maxRows`（15章§0.7の半減の口）を追加、`modCaseStore` の純ロジック4本（`BuildCaseId` / `IsValidCaseId` / `CanTransition` / `ResolveDataKey`）を公開、**`modUtil` の節を新設**して10関数を契約化した（`BufText` の区切りは vbLf）。
+
 > v2.4.1（裁定書5: W1整合）: §6を唯一の命名権者として確定し、`modGatewayRPN.DecideOk`（帯域外成否の唯一の判定点）・`modUtilText.SanitizeForCell`・`modLog.TruncDetail` / `ShouldRotate`・`modGatewayDirect.CallDirect` / `BackoffMs` / `RetryBudgetFor` / `ParseKeyLine` / `IsOSeriesModel` / `BuildRequestBody`・`modMockLlm.MockResponse` / `ResponseById` / `FaultResponse` を追記。`SanitizeInput` の宣言を実装の Optional ByRef 2本（16章E-04の件数記録）へ追随させ、`GetStr`（エスケープを解いて返す）・`GetArrayItems`（キー不在は空Collection）の未確定点を明文化。§5に括弧の対応判定が文字列リテラル内を数えない旨、§2に `LooksLikeLimitError` の判定（先頭 `#LIMIT:` または「利用上限に達しました」を含む）を固定した。
 
 > v2.4: 実装前監査72件の裁定を反映。§6の関数契約を15章のプロンプト本文が要求する引数へ全面改訂（BuildS1User/S2User/S3User/S4System・CallChatの帯域外成否）、NormalizeLlmJson・MenusSummaryFor・MechsText・LastInjectedIds・SanitizeFileName・TryEnterUiLock・FreezeRoundを新設、§7を定数から純関数へ、§2/§3のハードコードをconfig駆動へ、§5にExtractJsonBlock入力パターン表を新設。（検証指摘の修正）BuildS3Userの引数順を15章の貼付ブロック出現順（menus, lines, schemes, cases）へ修正、JsStringSafeの適用順を明示、modUIProgressにParkFocusを追加、§4のmock本数を「7 step種・11応答」へ、modHtmlTemplate/modHtmlThemeの関数契約の正が18章であることを明記。
@@ -114,7 +116,7 @@ raw → (1) modJsonLite.ExtractJsonBlock（説明文・コードフェンス除�
     → なおNG: E0302でstep失敗。生応答は case_data の `sN_json_failed`（PFは受信箱の pf_json）へ保存し、
               検証合格済みの `sN_json` を上書きしない（13章§2.2）
 ```
-- (1)〜(2.5)を通すのは **modPipeline / modPlayOps の責務**（modGatewayRPNは素通しのまま返す）。(2.5)は全step・両経路で必ず通す
+- (1)～(2.5)を通すのは **modPipeline / modPlayOps の責務**（modGatewayRPNは素通しのまま返す）。(2.5)は全step・両経路で必ず通す
 - directはstrictで(1)(2)がほぼ素通しになるが、**(3)の業務検証（ID実在・件数・整合）は両経路で必須**（スキーマでは表現できない）
 - validate_result（ok/repaired/failed）を run_log に記録し、月次でプロンプト改善のシグナルにする
 
@@ -134,8 +136,8 @@ raw → (1) modJsonLite.ExtractJsonBlock（説明文・コードフェンス除�
 
 - **前処理P0（⑥の実体）**: 抽出の前に `｛`→`{` / `｝`→`}` / `［`→`[` / `］`→`]` / 全角二重引用符（U+201C・U+201D・U+FF02）→`"` / `：`→`:` / `，`→`,` を一律置換する。値の日本語本文中の全角記号まで巻き込む可能性はあるが、JSON全体が壊れて修復リトライに落ちる損失のほうが大きいため一律置換を採る。置換件数を run_log detail に `fw_normalized=n` として記録する
 - **⑦の実体**: (2)のキー抽出で値を走査する際、エスケープされていない生のCR/LFは `\n` へ、生のタブは `\t` へ置換する。値の終端は「直後に `,` `}` `]` のいずれか（空白を挟んでよい）が続く `"`」で判定し、`\"` は終端とみなさない
-- **括弧の対応判定における文字列の扱い（①〜⑦共通）**: 対応が閉じる `}` を探す走査は**文字列リテラルの内側を数えない**。すなわち `"` で開いた文字列の中に現れる `{` `}` は深さに算入せず、`\"`（直前が奇数個の `\`）は文字列の終端とみなさない。値走査（⑦）で用いるのと同じ規則を対応判定にも適用する、という一文である。これを入れないと、本文中に「開店時間は{未定}です」のような波括弧を含む日本語値があるだけで深さが狂い、正常なJSONが④（`""`）へ落ちる
-- ①〜⑦はいずれも modJsonLite の純ロジックであり、Excel非依存＝modTestsPure で全数テストする（17章 T-11）
+- **括弧の対応判定における文字列の扱い（①～⑦共通）**: 対応が閉じる `}` を探す走査は**文字列リテラルの内側を数えない**。すなわち `"` で開いた文字列の中に現れる `{` `}` は深さに算入せず、`\"`（直前が奇数個の `\`）は文字列の終端とみなさない。値走査（⑦）で用いるのと同じ規則を対応判定にも適用する、という一文である。これを入れないと、本文中に「開店時間は{未定}です」のような波括弧を含む日本語値があるだけで深さが狂い、正常なJSONが④（`""`）へ落ちる
+- ①～⑦はいずれも modJsonLite の純ロジックであり、Excel非依存＝modTestsPure で全数テストする（17章 T-11）
 
 ## 6. 内部インターフェース契約（公開関数シグネチャ）
 
@@ -187,6 +189,39 @@ Public Function GetArrayItems(ByVal json As String, ByVal key As String) As Coll
 ' 呼び出し側に `Is Nothing` 分岐を強いないための契約（For Each がそのまま0回で回る）
 Public Function EscapeJsonStr(ByVal s As String) As String
 Public Function UnescapeJsonStr(ByVal s As String) As String
+
+' === core: modUtil（文字列以外の道具。裁定書6 項目8で契約化）===
+Public Function SplitForCells(ByVal s As String, ByVal chunkLen As Long) As String()
+' 1セル上限を超える本文の分割（13章§2.2 case_data・16章 E-22）。**空文字は0要素**を返す
+' （「1件の空断片」にしない）。chunkLen <= 0 は既定の 32,000 字を使う。切れ目でサロゲート
+' ペアを割らないため、各断片は chunkLen ちょうどではなく chunkLen-1 になることがある
+Public Function JoinCellChunks(ByRef parts() As String) As String
+' 断片の**単純連結**（区切りを入れない）。SplitForCells との往復で1字も欠けないことが契約。
+' 未初期化配列は ""
+Public Function SplitKeepNonEmpty(ByVal s As String, ByVal sep As String) As String()
+' 区切って空要素を捨てる。**各要素は Trim する**（13章§2.2 のセル格納規約「`; ` で分割し
+' 前後空白を除去」）。0件・sep が空のときは0要素
+Public Function AppendIdList(ByVal listText As String, ByVal idText As String) As String
+' `;` 区切りのID列へ1件足す。**既にある同一IDは追加しない**（大小文字を区別しない比較）。
+' 空IDも追加しない。既存の順序は保つ（run_log.injected_kb_ids・13章§2.4）
+Public Function ClampLong(ByVal v As Long, ByVal minV As Long, ByVal maxV As Long) As Long
+' 値を [minV, maxV] へ収める。**minV > maxV の指定は minV を優先**する
+Public Function SafeLeft(ByVal s As String, ByVal n As Long) As String
+' 先頭n字で切る。**n <= 0 は ""**。末尾に単独の高位サロゲートを残さない（残すとExcelの
+' 保存時に化け、開き直すまで気付けない）ため、切り口が高位サロゲートなら1字余分に落とす
+Public Sub BufInit(ByRef buf() As String, ByRef itemCount As Long)
+Public Sub BufAdd(ByRef buf() As String, ByRef itemCount As Long, ByVal s As String)
+Public Function BufText(ByRef buf() As String, ByVal itemCount As Long) As String
+' 行バッファ（16章 E-26 の32bitメモリ対策）。**BufText の区切りは vbLf**＝「1行1件の注入
+' テキストを順に積む」道具である（15章§6.1）。区切り無しで継ぎたい場合は JoinCellChunks を
+' 使う（BufText に区切りの分岐を持たせない）。itemCount <= 0 は ""
+Public Function FindHeaderCol(ByVal headerRow As Variant, ByVal headerName As String) As Long
+' 見出し行から列名の位置を引く（13章§6「列名ベース・列番号ハードコード禁止」の実体）。
+' 受けるのは **Range.Value 由来の2次元配列（1行ぶん）** または Array() の1次元配列。
+' 戻り値は**添字ではなく1始まりの列位置**（`Cells(r, col)` へそのまま渡せる）。不在は 0。
+' 比較は前後空白を無視した大小文字非依存
+Public Function ElapsedMsSince(ByVal t0 As Double) As Double   ' Timer基準の経過ms（日跨ぎ補正つき）
+Public Function NowStamp() As String                           ' "yyyy-mm-dd hh:nn:ss"（正は modUtilText.IsoDateTime）
 
 ' === core: modUtilText ===
 Public Function JsStringSafe(ByVal s As String) As String
@@ -263,20 +298,28 @@ Public Function CheckWT(ByVal json As String) As String          ' Phase1.5
 Public Function CheckFG(ByVal json As String) As String          ' Phase1.5
 
 ' === app: modKnowledge ===
+' 各注入関数の `Optional ByVal maxRows As Long = 0` は**15章§0.7の段階的な半減を外から
+' 掛けるための口**（0=config既定＝`kb_*_rows`。正の値を渡すとその行数で打ち切る）。
+' modPipeline は `modKnowledgeFmt.TrimPlan` が返した行数をここへ渡して再取得する。
+' 整形（1行の書式・0行の既定文言・空項目の省略）そのものは **modKnowledgeFmt** の純関数が
+' 行い、本モジュールは「読む・絞る・注入IDを積む」だけを担う（12章§2）。
 Public Function LoadKnowledge() As Boolean            ' 起動時/再読込。スナップショット保存込み
-Public Function RiskLibFor(ByVal industryCode As String) As String     ' 整形済注入テキスト（S2用。書式の正は15章§3）
-Public Function MenusSummaryFor(ByVal industryCode As String) As String
+Public Function RiskLibFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+' 整形済注入テキスト（S2用。書式の正は15章§3）
+Public Function MenusSummaryFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
 ' S2用のメニュー「要約」。preventions.related_menu_id が選べる候補一覧を与える唯一の口。
 ' これを注入せずに CheckS2 の「related_menu_id は "" または実在」を課すと候補ゼロで実在を要求する
 ' 矛盾になるため必須。整形書式の正は15章§3
-Public Function MenusFor(ByVal industryCode As String) As String        ' S3用のメニュー一覧（実在するサービス。S2の要約とは別テキスト。書式の正は15章§4）
-Public Function LinesText() As String
-Public Function CasesFor(ByVal industryCode As String) As String
-Public Function SchemesFor(ByVal industryCode As String) As String     ' status∈{proven,adopted}のみ
-Public Function PatternsText() As String                                ' P1-P15全件（PF/FG用）
-Public Function RulesText() As String                                   ' 判断基準（PF/FG用）
-Public Function ResearchingText() As String                             ' 研究テーマ一覧（PF用）
-Public Function MechsText() As String
+Public Function MenusFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+' S3用のメニュー一覧（実在するサービス。S2の要約とは別テキスト。書式の正は15章§4）
+Public Function LinesText(Optional ByVal maxRows As Long = 0) As String
+Public Function CasesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+Public Function SchemesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+' status∈{proven,adopted}のみ
+Public Function PatternsText(Optional ByVal maxRows As Long = 0) As String   ' P1-P15全件（PF/FG用）
+Public Function RulesText(Optional ByVal maxRows As Long = 0) As String      ' 判断基準（PF/FG用）
+Public Function ResearchingText(Optional ByVal maxRows As Long = 0) As String ' 研究テーマ一覧（PF用）
+Public Function MechsText(Optional ByVal maxRows As Long = 0) As String
 ' 機構ライブラリ抜粋 kb_mech_rows 件（PL-04壁打ちのsystemに注入）。機構シートはPhase1.5だが
 ' 壁打ちはPhase1のため、未装填・0行のときは "(登録なし)" を返して続行する（16章E-09）
 Public Function LastInjectedIds() As String
@@ -290,57 +333,146 @@ Public Function CaseLibIdExists(ByVal id As String) As Boolean
 Public Function PatternIdExists(ByVal id As String) As Boolean
 Public Sub AppendServiceGap(ByVal caseId As String, ByVal industryCode As String, ByVal riskDesc As String)
 
+' === app: modKnowledgeFmt（ナレッジ整形の純関数。Excel非依存＝層(a)から直接叩ける） ===
+' modKnowledge から「整形」だけを切り出したモジュール（12章§2）。シート・config・ログに
+' 一切触れない純文字列関数だけを置く。**15章の1行書式の唯一の実装**であり、書式を変えると
+' ここのテストが落ちる（W2aでは整形が Private のままだったため、区切り記号を ` | ` から
+' ` / ` へ壊してもどのゲートも気づかなかった）。
+' 共通の引数 `rows`: **Range.Value 由来の2次元 Variant 配列**（1行目=見出し行＝列名、
+'   2行目以降=データ行。添字は 1..n / 1..cols）。列は**列名で引く**（13章冒頭。列番号の
+'   ハードコード禁止＝`modUtil.FindHeaderCol`）。渡された全データ行を整形する（業種の絞込・
+'   is_active・status・行数上限は modKnowledge が適用済みで渡す）。配列でない／データ行0件の
+'   ときは各仕様の既定文言を返す。
+' 共通の戻り値: 15章の書式の**複数行文字列**（1行1件・行区切りは vbLf・末尾に改行を付けない）。
+'   行頭は `[ID] `、項目区切りは ` | `、項目内の複数値は `;`、**値が空の項目は項目ごと省略**する
+'   （`market_note` の空欄省略もこの規約の一適用。15章§4・§6.1）。
+Public Function FmtRiskLib(ByVal rows As Variant) As String     ' 15章§3。0行は "(この業種の登録知識はまだありません)"
+Public Function FmtMenus(ByVal rows As Variant) As String       ' 15章§4 menusText（概要つき）。0行は "(登録なし)"
+Public Function FmtMenusSummary(ByVal rows As Variant) As String ' 15章§3・§6.1 menusSummary。0行は "(登録なし)"
+Public Function FmtLines(ByVal rows As Variant) As String       ' 15章§4 linesText（market_note 空欄は省略）。0行は "(登録なし)"
+Public Function FmtCases(ByVal rows As Variant) As String       ' 15章§4 casesText。0行は "なし"（S3 userの見出し規約）
+Public Function FmtSchemes(ByVal rows As Variant) As String     ' 15章§4 schemesText。0行は "なし"
+Public Function FmtPatterns(ByVal rows As Variant) As String    ' 15章§6.1 patternsText。0行は "(登録なし)"
+Public Function FmtRules(ByVal rows As Variant) As String       ' 15章§6.1 rulesText。0行は "(登録なし)"
+Public Function FmtResearching(ByVal rows As Variant) As String ' 15章§6.1 researchingText。0行は "(登録なし)"
+Public Function FmtMechs(ByVal rows As Variant) As String       ' 15章§6.1 mechs。0行は "(登録なし)"（16章E-09）
+Public Function TrimKbLine(ByVal s As String) As String
+' 15章§0.7 の最終段「各行を先頭400字で切り『…』を付す」の実体。**400字以内はそのまま返す**
+' （何も足さない）。超える場合は先頭400字（`modUtil.SafeLeft` と同じサロゲート安全な切り方）へ
+' `…`（U+2026。CP932内）を付けて返すので、戻り値は最大401字になる。
+Public Function TrimPlan(ByRef counts() As Long, ByVal budgetChars As Long) As Long()
+' 15章§0.7「ナレッジ側の切詰め」を**計画するだけ**の純関数（実際に削るのは modKnowledge の
+' maxRows）。切詰め順は 成功事例→型→メニュー→種目→リスクライブラリ で固定。
+'   counts: 10要素（0始まり）。前半 counts(0..4)＝各対象の**現在の行数**、
+'           後半 counts(5..9)＝同じ並びの**現在の文字数**。並びは上の切詰め順。
+'           要素が5個以下のときは文字数を0とみなす（＝切詰め不要と判断する）。
+'   budgetChars: ナレッジ注入に許される**合計文字数**（15章§0.7「上限の3割」）。0以下は
+'           上限なしとして扱い、現在の行数をそのまま返す。
+' 戻り値: 5要素（0始まり）の「注入してよい行数」。**1～5を順に1段ずつ**適用し、そのつど
+'   総量を再計算して budgetChars 以下になった時点で止める（§0.7の本文どおり。1対象あたり
+'   半減は1回まで）。半減は端数切上げ、**下限は 0 / 0 / 5 / 5 / 5 行**（メニュー・種目・
+'   リスクライブラリを5行未満にすると S3のID実在制約と§0.5第2層が崩れるため）。
+'   文字数は行数に比例すると見積もる（削った行の実長は事前に測れないため）。5段すべてを
+'   適用してなお超過する場合も戻り値は下限どおりで、次の手当ては `TrimKbLine` の行内切詰め。
+
 ' === app: modPromptsCore / modPromptsBlocks / modPromptsOps / modSchemas ===
+' **テンプレート層と組立層の二層に分ける**（W2aで「Build* が受け取った引数を1つも使わず
+' プレースホルダを素のまま返す」欠陥が出たため、責務を名前で分離した）:
+'   (1) **テンプレート層 = 引数なしの純関数**。15章の本文を `{{プレースホルダ}}` を含んだ
+'       **素のまま**返す。`tools/prompt_diff.py` の突合対象は**この層の31関数だけ**であり、
+'       15章§10.2の対応表はこの層のまま不変。**31関数はすべて無引数**である（prompt_diff の
+'       評価器は文字列リテラルと vbLf 等の組込定数の連結しか評価できず、引数参照は評価不能=
+'       差分になる。使えない引数は持たせない）
+'   (2) **組立層 = modPromptsOps の `Fill` と `Asm*`**。テンプレートへ実値を埋め、条件ブロックの
+'       挿入とS4バリアントの差替を行う。**15章の本文は1文字も持たない**（本文を2箇所に書かない）
 ' 本文は15章と一字一句一致（T-23がdiffゼロを検査）。**Const は使わず、`s = s & "..." & vbLf` 方式の
 ' 純関数で組み立てて返す**（VBAの Const は1行1023字・行継続25本の制約に当たり、3,700字級の
 ' スキーマ本体を1宣言で書けないため）。一致検査の正規化は「改行=vbLf・末尾改行なし」。
-' 引数の順序は15章の貼付ブロックの出現順に一致させる（15章の全 {{プレースホルダ}} に対応する引数が
-' 存在することが受入条件。19章§5の文書間整合チェックリスト）。
+' 15章の全 {{プレースホルダ}} に対応する引数は (2) の Asm* が持つ（19章§5の文書間整合チェックリスト）。
+' --- (1) テンプレート層（prompt_diff の突合対象31関数。全て無引数）---
 Public Function BuildS1System() As String                                        ' 15章§2 system
-Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
-                            ByVal memoTxt As String, ByVal contractTxt As String, ByVal prevRenewalTxt As String, _
-                            ByVal dossierTxt As String, ByVal fieldNotes As String, ByVal coverageNote As String, _
-                            ByVal hearingAnswers As String) As String
+Public Function BuildS1User() As String                                          ' 15章§2 user
+Public Function BuildS2System() As String                                        ' 15章§3 system
+Public Function BuildS2User() As String                                          ' 15章§3 user
+Public Function BuildS3System() As String                                        ' 15章§4 system
+Public Function BuildS3User() As String                                          ' 15章§4 user
+Public Function BuildS2CriticSystem() As String                                  ' 15章§4.5 批判system
+Public Function BuildS2CriticUser() As String                                    ' 15章§4.5 批判user
+Public Function BuildS3CriticSystem() As String                                  ' 15章§4.6 批判system
+Public Function BuildS3CriticUser() As String                                    ' 15章§4.6 批判user
+Public Function ReviseSuffix() As String                                         ' 15章§4.7 改訂サフィックス
+Public Function BuildS4System() As String                                        ' 15章§5 system
+Public Function BuildS4User() As String                                          ' 15章§5 user
+Public Function BuildPFSystem() As String                                        ' 15章§6 PL-03 system
+Public Function BuildPFUser() As String                                          ' 15章§6 PL-03 user
+Public Function BuildSparringSystem() As String                                  ' 15章§6.5 壁打ちsystem
+Public Function RepairSuffix() As String                                         ' 15章§7 修復サフィックス
+Public Function SchemaS1() As String   ' 同様に SchemaS2 / S3 / S4 / S2C / S3C / PF / WT / FG（§7の表が正）
+' `Block*` 7本（BlockCtx / BlockRenewalS1..S3 / BlockGuard / BlockS4Proposal / BlockS4Alliance）は
+'   modPromptsBlocks の内部関数であり本節に宣言を持たない（正は15章§10.2）。同じく無引数。
+' `ReviseSuffix` / `RepairSuffix` は user 末尾へ連結する1ブロックであり専用の Asm* を置かない。
+'   `{{critiqueDigest}}` / `{{validationErrors}}` の埋め込みは呼び出し側が `Fill` で行う。
+' --- (2) 組立層（modPromptsOps。純関数=Excelトークン禁止・15章の本文を持たない）---
+Public Function Fill(ByVal tpl As String, ByRef names() As String, ByRef vals() As String, _
+                     Optional ByRef unresolved As Long = 0) As String
+' テンプレート中の `{{name}}` を対応する値へ**全置換**する唯一の口。names(i) と vals(i) は同じ
+' 添字で対応させる（要素数が食い違う場合は短いほうまでを処理する）。names の要素には
+' `{{` `}}` を含まない**識別子だけ**を渡す。値の中に `{{...}}` が含まれていても**再帰置換はしない**
+' （置換は names の順に1巡だけ行い、置換後の文字列を再走査しない。外部由来テキストが
+' プレースホルダを名乗って別の値を奪うのを防ぐ＝16章E-04と同じ考え方）。
+' unresolved には**置換後になお残っている `{{` の個数**を返す（0が正常。呼び出し側は
+' run_log の detail に記録する）。省略可能な出口なので `Fill(tpl, n, v)` でも動く。
+Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
+                          ByVal memoTxt As String, ByVal contractTxt As String, ByVal prevRenewalTxt As String, _
+                          ByVal dossierTxt As String, ByVal fieldNotes As String, ByVal coverageNote As String, _
+                          ByVal hearingAnswers As String) As String
 ' 15章§2 S1 userの9貼付ブロックを順に埋める（hp→yuho→memo→contract→prevRenewal→dossier→
 ' fieldNotes→coverageNote→hearingAnswers）。coverageNote=13章 input_coverage_note（付保の見立て。
-' 伝聞情報だが insurance_ctx 観点の充足度評価に算入するため省略不可）
-' 入念モード(quality_mode=deep)用（15章§4.5〜4.7）:
-Public Function BuildS2CriticSystem() As String                                  ' 15章§4.5 批判system
-Public Function BuildS2CriticUser(ByVal s1Json As String, ByVal s2Json As String, ByVal riskLib As String) As String
-Public Function BuildS3CriticSystem() As String                                  ' 15章§4.6 批判system
-Public Function BuildS3CriticUser(ByVal ctx As TCaseCtx, ByVal s1Summary As String, _
-                                  ByVal s2Json As String, ByVal s3Json As String) As String
-Public Function ReviseSuffix(ByVal critiqueDigest As String) As String           ' 15章§4.7 改訂サフィックス
-Public Function BuildSparringSystem(ByVal dossierSummary As String, ByVal s1s2s3Json As String, _
-                                    ByVal schemes As String, ByVal patterns As String, _
-                                    ByVal mechs As String, ByVal rules As String) As String
-' PL-04壁打ちのsystem（15章§6.5）。mechs は modKnowledge.MechsText()（Phase1は "(登録なし)"）
-Public Function BuildS2System() As String                                        ' 15章§3 system
-Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
-                            ByVal menus As String, ByVal prevS2Json As String, _
-                            ByVal hearingAnswers As String) As String
+' 伝聞情報だが insurance_ctx 観点の充足度評価に算入するため省略不可）。
+' **条件ブロック**: ctx.case_type="renewal" のとき `{{BLOCK_RENEWAL_S1}}` の行を BlockRenewalS1() の
+' 本文へ差し替え、それ以外では**その行ごと削除する**（空行を残さない。15章§10.1(d)）
+Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
+                          ByVal menus As String, ByVal prevS2Json As String, _
+                          ByVal hearingAnswers As String) As String
 ' 15章§3 S2 user。menus=MenusSummaryFor()（preventions.related_menu_id の候補一覧。空で渡すと
 ' CheckS2の「実在ID」検査が構造的に落ちる）。prevS2Json=case_data の s2_prev_json、
 ' hearingAnswers=input_hearing_answers（いずれも初回ラウンドは "なし"）。FR-35のstatusライフサイクル
-' （confirmed/rejected/new）はこの2引数がなければ成立しない
-Public Function BuildS3System() As String                                        ' 15章§4 system
-Public Function BuildS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
-                            ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
-                            ByVal cases As String) As String
+' （confirmed/rejected/new）はこの2引数がなければ成立しない。
+' `{{BLOCK_CTX}}` は BlockCtx() を ctx で埋めたものへ、`{{BLOCK_RENEWAL_S2}}` は AsmS1User と同じ規約
+Public Function AsmS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
+                          ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
+                          ByVal cases As String) As String
 ' 15章§4 S3 user。s1Summary=S1出力の business_summary / strategy_outlook / current_coverage /
 ' field_insights だけを抜き出した要約JSON（S3 systemルール7が field_insights の参照を命じており、
-' S2 JSONには含まれないため必須）。menus=MenusFor()（S3は実在サービスの一覧。S2の要約とは別テキスト）
-Public Function BuildS4System(ByVal variant As String, ByVal tier As String) As String
-' 15章§5。variant=proposal / alliance（案件一覧 s4_variant）で BLOCK_S4_PROPOSAL / BLOCK_S4_ALLIANCE を
-' 差し替える。tier=t1_quick / t2_full（t1=5枚固定 / t2=5〜config ppt_max_slides_t2 枚）。
-' 枚数の実値は modPrompts* から config 参照でよい（案件単位の値である variant / tier は引数で受ける）
-Public Function BuildS4User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, ByVal s3Json As String) As String
-Public Function BuildPFSystem() As String                                        ' 15章§6 PL-03
-Public Function BuildPFUser(ByVal theme As String, ByVal body As String, ByVal rules As String, _
-                            ByVal menusSummary As String, ByVal schemes As String, ByVal patterns As String, _
-                            ByVal researching As String) As String
-Public Function RepairSuffix(ByVal validationErrors As String) As String         ' 15章§7 修復サフィックス
-Public Function SchemaS1() As String   ' 同様に SchemaS2 / S3 / S4 / S2C / S3C / PF / WT / FG（§7の表が正）
+' S2 JSONには含まれないため必須）。menus=MenusFor()（S3は実在サービスの一覧。S2の要約とは別テキスト）。
+' `{{BLOCK_RENEWAL_S3}}` は AsmS1User と同じ規約
+Public Function AsmS4System(ByVal variantName As String, ByVal tier As String, _
+                            Optional ByRef fallbackNote As String = "") As String
+' 15章§5。**S4バリアント差替の唯一の担い手**。variantName="proposal" なら BlockS4Proposal()、
+' "alliance" なら BlockS4Alliance() を `{{BLOCK_S4_VARIANT}}` の位置へ差し込む。
+' **それ以外の値（空文字を含む）は proposal として扱い**、fallbackNote へ
+' `s4_variant_fallback:{value}` を返す（modPrompts* は run_log へ書けないため、記録は
+' 呼び出し側=modPipeline が行う。黙って既定に落とさない）。
+' tier=t1_quick / t2_full / t3_sparring（t3_sparring は t2_full と同じ扱い）。
+' `{{pptMaxSlidesT2}}` は modConfig の `ppt_max_slides_t2`（既定10）を展開する
+Public Function AsmS4User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, _
+                          ByVal s3Json As String) As String
+' 15章§5 user。`{{slideCountHint}}` は ctx.dossier_tier から決める（t1_quick は "5"、
+' それ以外は "5～" & ppt_max_slides_t2）。`{{company}}` は ctx.company
+Public Function AsmS2CriticUser(ByVal s1Json As String, ByVal s2Json As String, _
+                                ByVal riskLib As String) As String               ' 15章§4.5 批判user
+Public Function AsmS3CriticUser(ByVal ctx As TCaseCtx, ByVal s1Summary As String, _
+                                ByVal s2Json As String, ByVal s3Json As String) As String  ' 15章§4.6 批判user
+Public Function AsmSparringSystem(ByVal dossierSummary As String, ByVal s1s2s3Json As String, _
+                                  ByVal schemes As String, ByVal patterns As String, _
+                                  ByVal mechs As String, ByVal rules As String) As String
+' PL-04壁打ちのsystem（15章§6.5）。mechs は modKnowledge.MechsText()（Phase1は "(登録なし)"）
+Public Function AsmPFUser(ByVal theme As String, ByVal body As String, ByVal rules As String, _
+                          ByVal menusSummary As String, ByVal schemes As String, ByVal patterns As String, _
+                          ByVal researching As String) As String                 ' 15章§6 PL-03 user
+' Asm* 共通: **enum→日本語ラベルの変換は行わない**（変換表の正は19章§3・実体は modUICase であり、
+'   同じ表を2箇所に書かないため）。`{{case_typeの日本語}}` 等には ctx の値をそのまま埋めるので、
+'   ラベル済みの ctx を渡すのは呼び出し側（modPipeline）の責務である。
 ' TCaseCtx（**app層 modAppTypes**。ドメイン型なのでcore層 modTypes から移設。12章§2・§4）:
 '   case_type, dossier_tier, channel, kanji, bid, reins, other_insurers, company, industry_code, industry_name
 
@@ -370,6 +502,31 @@ Public Function NewInboxItem(ByVal sourceKind As String, ByVal theme As String, 
 Public Function SetInboxJudgement(ByVal inboxId As String, ByVal status As String, _
                                   ByVal dropType As String, ByVal reviveTag As String, ByVal reviveDue As Date) As Boolean
 Public Function NewJudgement(ByVal rec As TJudgement) As String
+' --- modCaseStore の純ロジック（Excel非依存。層(a)から直接叩く。裁定書6 項目7）---
+' 採番・参照優先・状態遷移は「規約そのもの」であり、シートI/Oの中に閉じ込めると誰も検査
+' できない（W2aでは参照優先の並びを入れ替えてもテストが1本も落ちなかった）。以下4本は
+' シートを1行も触らないので、シート側の関数は必ずこれらを通す（答えを2箇所に書かない）。
+Public Function BuildCaseId(ByVal dayText As String, ByVal seq As Long) As String
+' 13章§1 の `C-YYYYMMDD-NNN`。dayText は yyyymmdd の8桁ちょうど（数字のみ）、seq は 1..999。
+' 桁違い・範囲外は "" を返す（呼び出し側が枯渇・不正として扱う。例外は投げない）。
+' 第1引数名が `dayText` なのは **`datePart` がVBAの組込関数 `DatePart` と衝突する**ため
+' （`vba_lint.py` の予約語検査がERRORにする。VBA制約が命名に優先する）
+Public Function IsValidCaseId(ByVal id As String) As Boolean
+' `C-` + 数字8桁 + `-` + 数字3桁（連番は 001..999。000 は不正）ちょうどの形か。前後空白は許さない
+Public Function CanTransition(ByVal fromStatus As String, ByVal toStatus As String) As Boolean
+' 11章§4 の案件ステータス遷移表 + 16章 E-12。許すのは次の3種だけ:
+'   (1) 正順の1段進み: draft→s1_done→s2_done→s3_done→s4_done→exported→feedback_done
+'   (2) **任意の状態から error へ**（失敗はどこでも起こりうる）
+'   (3) error からの復帰: `failed_step` の再実行で戻る先＝draft..feedback_done の**いずれか**
+'       （完了済みStepの結果を保持したまま再導出するため。10章NFR-R3・16章 E-12(1)）
+' 同じ状態への遷移（自己遷移）と、段飛ばし・巻き戻し（error 経由を除く）は False。
+' 8値のenum（13章§2.1）に無い値はどちらの側でも False
+Public Function ResolveDataKey(ByVal stepNo As Long, ByVal hasEdited As Boolean, _
+                               ByVal hasRevised As Boolean, ByVal hasJson As Boolean) As String
+' 13章§2.2 の参照優先の**純核**。その3つの有無から「実際に読むべき data_key 名」を1つ返す。
+'   N=2,3: sN_edited > sNr_json > sN_json ／ N=1,4: sN_edited > sN_json（改訂は無いので
+'   hasRevised は無視する）。どれも無ければ ""。範囲外の stepNo も ""。
+' `ResolveStepJson` は必ずこの関数の答えに従う（分岐を2箇所に書かない）
 
 ' === ui: modUIProgress ===
 Public Sub SetStage(ByVal stepName As String, ByVal maxWaitSec As Long)
@@ -425,7 +582,7 @@ Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12�
 ```
 
 - **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
-- **`modValidate` の CheckS2C / CheckS3C**、**`modSchemas` の SchemaS2C / SchemaS3C** は入念モード用の追加分（15章§4.5〜4.6・§7の表）
+- **`modValidate` の CheckS2C / CheckS3C**、**`modSchemas` の SchemaS2C / SchemaS3C** は入念モード用の追加分（15章§4.5～4.6・§7の表）
 - 呼出前の走査: 外部へ送るテキスト（CallStep / CallChat の systemPrompt・userPrompt、企業ドシエファイルの書出、HTMLレポート出力）は送信・保存の直前に `modPii` を通す（16章 E-05／E-31。走査結果は run_log と dossier_meta に記録）
 
 ## 7. スキーマ・レジストリ（modSchemas。本文は15章）
@@ -435,7 +592,7 @@ Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12�
 | 関数名 | 対応step | strict検証済み観点 |
 |---|---|---|
 | `SchemaS1()` | s1 | current_coverage は常に必須（newは空配列） |
-| `SchemaS2()` | s2 | gaps は常に必須（newは空配列）。リスクユニバース10分類/頻度/影響/1〜5スコア/移転可能性/status/出所enum（v2.3）。**emerging_risks（ニューリスク0〜3件・空配列可・category/horizon/出所enum）を含む（v2.4）** |
+| `SchemaS2()` | s2 | gaps は常に必須（newは空配列）。リスクユニバース10分類/頻度/影響/1～5スコア/移転可能性/status/出所enum（v2.3）。**emerging_risks（ニューリスク0～3件・空配列可・category/horizon/出所enum）を含む（v2.4）** |
 | `SchemaS3()` | s3 | proposal_kind enum。scheme_id は "" 許容 |
 | `SchemaS4()` | s4 | slides配列・hearing_questions |
 | `SchemaS2C()` | s2c | 入念モードの批判JSON。issue_type 6値のenum。issues は0件（指摘なし）を許容 |

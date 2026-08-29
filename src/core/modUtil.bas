@@ -166,17 +166,23 @@ Public Function JoinCellChunks(ByRef parts() As String) As String
 End Function
 
 ' ============================================================================
-' バッファ連結(16章 E-26: 32bitメモリ制約)
+' 行バッファ連結(16章 E-26: 32bitメモリ制約)
 ' ----------------------------------------------------------------------------
 '   `s = s & piece` を数千回繰り返すと、そのたびに新しい文字列を確保し直す
 '   ため 32bit Excel では実メモリを使い切って「メモリが不足しています」で
 '   落ちる。断片を配列へ溜めて最後に一度だけ Join する方式に統一する。
 '
+'   **BufText の区切りは vbLf**(14章§6。裁定書6 項目8)。用途は「1行1件の
+'   注入テキストを順に積む」であり、15章§6.1 の共通規約(1行1件)を満たす
+'   最小の道具として契約する。区切り無しで断片を継ぎたい場合は
+'   JoinCellChunks(単純連結)を使う(答えを2箇所に書かないため BufText へ
+'   区切りの分岐を持たせない)。
+'
 '   使い方:
 '     Dim buf() As String, n As Long
 '     modUtil.BufInit buf, n
-'     modUtil.BufAdd buf, n, "..."
-'     result = modUtil.BufText(buf, n)
+'     modUtil.BufAdd buf, n, "[M-0012] ..."
+'     result = modUtil.BufText(buf, n)   ' 行はvbLfで連結される
 ' ============================================================================
 Public Sub BufInit(ByRef buf() As String, ByRef itemCount As Long)
     ReDim buf(0 To 63)
@@ -207,7 +213,7 @@ Public Function BufText(ByRef buf() As String, ByVal itemCount As Long) As Strin
     For i = 0 To itemCount - 1
         tmp(i) = buf(i)
     Next i
-    BufText = Join(tmp, vbNullString)
+    BufText = Join(tmp, vbLf)
 End Function
 
 ' ============================================================================

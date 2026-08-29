@@ -50,6 +50,21 @@ run_lo_tests.py - LibreOffice headless によるVBA実行テスト(17章§1 テ�
        (ハングする)。.xba へ変換するときにだけ `As T()` を `As Variant` へ
        機械的に書き換える(_fix_array_return_types)。元の .bas は変更しない。
        実Excel側は元の宣言のままビルドされるため、公開契約は変更していない。
+    7. **Public Type はモジュールを跨いで「実行時に」解決されない**(技術メモ2は
+       コンパイル停止が消えるだけで、実行時の型解決までは直らない)。定義側とは
+       別のモジュールで `Dim c As TCaseCtx` と書くと、LO Basic は型を解決できず
+       空のオブジェクトを作り(TypeName=Object / IsObject=True)、最初の
+       フィールド代入 `c.case_type = ...` で実行時エラー91
+       (Object variable not set)になる。定義モジュール側にダミーのFunctionを
+       置いて先に呼び出しても解消しない(遅延ロードの問題ではない)。
+       対処: .xba へ変換するときにだけ、**その型を参照していて自分では定義して
+       いないモジュールへ Public Type ブロックの写しを前置する**
+       (_collect_public_type_blocks / _inject_type_blocks)。同一ライブラリ内で
+       同名 Type が複数モジュールに重複定義されても LO は衝突させず、
+       写しを持つモジュール同士なら UDT を ByRef/ByVal で受け渡しできることを
+       実測で確認した。元の .bas は変更しないので、実Excel側は本物の
+       modTypes/modAppTypes を単一の定義元として参照したままである
+       (=公開契約も12章§4の依存規則も変えていない)。
 
 使い方:
     python3 tools/run_lo_tests.py                  # モード1+モード2 両方
@@ -111,6 +126,10 @@ PURE_ALLOWLIST = [
     # app の純文字列・純ロジック(W2)。
     "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
     "modSchemas", "modValidate", "modPii",
+    # app のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは14章§6が公開を
+    # 宣言した純関数だけのモジュール(技術メモ4。裁定書6 項目6/7)。
+    # modKnowledgeFmt は全体が純文字列(整形と15章§0.7の切詰め)。
+    "modKnowledgeFmt", "modCaseStore",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",
@@ -126,6 +145,16 @@ ARRAY_RETURN_TYPE_PATTERN = re.compile(
     r"(Function\s+\w+\s*\((?:[^()]|\([^()]*\))*\)\s*)As\s+([A-Za-z_]\w*)\s*\(\s*\)",
     re.IGNORECASE | re.DOTALL,
 )
+
+# 技術メモ7: モジュール跨ぎで共有される Public Type ブロック(`Private Type` は
+# モジュール内に閉じた型なので写さない。宣言子を省いた `Type Foo` は標準モジュール
+# では Public 扱いなので対象に含める)。
+PUBLIC_TYPE_BLOCK_PATTERN = re.compile(
+    r"^[ \t]*(?:Public[ \t]+)?Type[ \t]+(\w+)[ \t]*$.*?^[ \t]*End[ \t]+Type[ \t]*$",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
+)
+# 型ブロックを差し込んでよい位置(先頭の Option 行・空行・行コメントの直後)。
+LEADING_NONCODE_PATTERN = re.compile(r"^[ \t]*(?:'|Option[ \t]|$)", re.IGNORECASE)
 
 XBA_TEMPLATE = (
     '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -208,24 +237,82 @@ def fix_array_return_types(text: str) -> str:
     return ARRAY_RETURN_TYPE_PATTERN.sub(lambda m: m.group(1) + "As Variant", text)
 
 
-def to_module_body(source_text: str) -> str:
+def collect_public_type_blocks(all_modules: dict[str, Path]) -> dict[str, str]:
+    """src全体から {型名: "Public Type ... End Type"} を集める(技術メモ7)。
+
+    型名が2箇所以上で定義されていたら、どちらを写すかを機械が決められないので
+    素通しせず落とす(黙って片方を選ぶと、実Excelとの差が誰にも見えなくなる)。
+    """
+    blocks: dict[str, str] = {}
+    owners: dict[str, list[str]] = {}
+    for name in sorted(all_modules):
+        text = all_modules[name].read_text(encoding="utf-8", errors="replace")
+        for m in PUBLIC_TYPE_BLOCK_PATTERN.finditer(text):
+            type_name = m.group(1)
+            owners.setdefault(type_name, []).append(name)
+            blocks[type_name] = m.group(0).rstrip()
+    dup = {t: mods for t, mods in owners.items() if len(mods) > 1}
+    if dup:
+        for t, mods in sorted(dup.items()):
+            print(f"[run_lo_tests] FAIL: Public Type {t} が複数モジュールで定義されています"
+                  f"({', '.join(mods)})。写す先を機械が決められません。")
+        sys.exit(2)
+    return blocks
+
+
+def module_defines_type(body: str, type_name: str) -> bool:
+    return any(m.group(1).lower() == type_name.lower()
+               for m in PUBLIC_TYPE_BLOCK_PATTERN.finditer(body))
+
+
+def code_only(body: str) -> str:
+    """行コメントを落とした本文(型名が本当に「使われて」いるかの判定用)。"""
+    return "\n".join(l for l in body.splitlines() if not l.lstrip().startswith("'"))
+
+
+def inject_type_blocks(body: str, type_blocks: dict[str, str]) -> str:
+    """自分では定義していないが参照している Public Type の写しを前置する。"""
+    code = code_only(body)
+    wanted = []
+    for type_name, block in type_blocks.items():
+        if not re.search(r"\b" + re.escape(type_name) + r"\b", code):
+            continue
+        if module_defines_type(body, type_name):
+            continue
+        wanted.append(block)
+    if not wanted:
+        return body
+    lines = body.splitlines()
+    at = 0
+    while at < len(lines) and LEADING_NONCODE_PATTERN.match(lines[at]):
+        at += 1
+    header = ["' --- run_lo_tests.py が注入した型定義の写し(技術メモ7)。",
+              "'     元の .bas は変更していない。実Excelは定義元1本を参照する。"]
+    return "\n".join(lines[:at] + header + wanted + [""] + lines[at:])
+
+
+def to_module_body(source_text: str, type_blocks: dict[str, str] | None = None) -> str:
     body = strip_attributes(source_text)
     body = fix_array_return_types(body)
+    if type_blocks:
+        body = inject_type_blocks(body, type_blocks)
     return "Option VBASupport 1\n" + body
 
 
-def write_module_xba(lib_dir: Path, name: str, source_text: str) -> None:
-    body = xml_escape(to_module_body(source_text))
+def write_module_xba(lib_dir: Path, name: str, source_text: str,
+                     type_blocks: dict[str, str] | None = None) -> None:
+    body = xml_escape(to_module_body(source_text, type_blocks))
     (lib_dir / f"{name}.xba").write_text(XBA_TEMPLATE.format(name=name, body=body),
                                          encoding="utf-8")
 
 
-def write_library(profile_dir: Path, lib_name: str, modules: dict[str, str]) -> None:
+def write_library(profile_dir: Path, lib_name: str, modules: dict[str, str],
+                  type_blocks: dict[str, str] | None = None) -> None:
     lib_dir = profile_dir / "user" / "basic" / lib_name
     lib_dir.mkdir(parents=True, exist_ok=True)
     elements = []
     for name, src in modules.items():
-        write_module_xba(lib_dir, name, src)
+        write_module_xba(lib_dir, name, src, type_blocks)
         elements.append(f' <library:element library:name="{name}"/>')
     xlb = XLB_TEMPLATE.format(libname=lib_name, elements="\n".join(elements))
     (lib_dir / "script.xlb").write_text(xlb, encoding="utf-8")
@@ -291,7 +378,8 @@ def discover_modules(src_root: Path) -> list[tuple[str, Path]]:
 # モード1: 純ロジック実行(RunAllPureTests -> ReportText)
 # ==============================================================================
 def run_pure_mode(soffice: str, template: Path, all_modules: dict[str, Path],
-                  work_dir: Path, timeout_sec: int, verbose: bool):
+                  work_dir: Path, timeout_sec: int, verbose: bool,
+                  type_blocks: dict[str, str] | None = None):
     print("=" * 78)
     print("モード1: LibreOffice上で純ロジックテスト(modTestRunner.RunAllPureTests)を実行")
     print("=" * 78)
@@ -349,7 +437,7 @@ def run_pure_mode(soffice: str, template: Path, all_modules: dict[str, Path],
     fresh_profile_copy(template, profile_dir)
     modules = dict(pure_srcs)
     modules["TestMain"] = test_main_src
-    write_library(profile_dir, "RpnPureRun", modules)
+    write_library(profile_dir, "RpnPureRun", modules, type_blocks)
     register_libraries(profile_dir, ["RpnPureRun"])
 
     uri = "vnd.sun.star.script:RpnPureRun.TestMain.Main?language=Basic&location=application"
@@ -406,7 +494,8 @@ def safe_lib_name(module_name: str) -> str:
 
 
 def run_compile_mode(soffice: str, template: Path, all_modules: dict[str, Path],
-                     work_dir: Path, timeout_sec: int, verbose: bool):
+                     work_dir: Path, timeout_sec: int, verbose: bool,
+                     type_blocks: dict[str, str] | None = None):
     print("\n" + "=" * 78)
     print("モード2: 全モジュールの構文コンパイルチェック(実行はしない)")
     print("=" * 78)
@@ -430,7 +519,7 @@ def run_compile_mode(soffice: str, template: Path, all_modules: dict[str, Path],
 
         profile_dir = work_dir / f"profile_{lib_name}"
         fresh_profile_copy(template, profile_dir)
-        write_library(profile_dir, lib_name, modules_for_lib)
+        write_library(profile_dir, lib_name, modules_for_lib, type_blocks)
         register_libraries(profile_dir, [lib_name])
 
         uri = f"vnd.sun.star.script:{lib_name}.Chk_Driver.Probe?language=Basic&location=application"
@@ -479,16 +568,21 @@ def main() -> int:
     print(f"[run_lo_tests] soffice={soffice}")
     print(f"[run_lo_tests] 対象モジュール数: {len(all_modules)} (in {src_root})")
 
+    type_blocks = collect_public_type_blocks(all_modules)
+    if type_blocks:
+        print(f"[run_lo_tests] 跨ぎ参照へ写す Public Type(技術メモ7): "
+              f"{', '.join(sorted(type_blocks))}")
+
     work_dir = Path(tempfile.mkdtemp(prefix="rpn_lo_run_"))
     overall_ok = True
     try:
         if args.mode in ("pure", "all"):
             ok, _report = run_pure_mode(soffice, template, all_modules, work_dir,
-                                        args.pure_timeout, args.verbose)
+                                        args.pure_timeout, args.verbose, type_blocks)
             overall_ok = overall_ok and ok
         if args.mode in ("compile", "all"):
             ok, _results = run_compile_mode(soffice, template, all_modules, work_dir,
-                                            args.compile_timeout, args.verbose)
+                                            args.compile_timeout, args.verbose, type_blocks)
             overall_ok = overall_ok and ok
     finally:
         if args.keep_profile:

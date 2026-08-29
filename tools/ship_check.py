@@ -41,10 +41,12 @@ ship_check.py - 出荷前検問(17章 T-46)のうち機械実行できる①②�
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import subprocess
 import sys
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -79,6 +81,19 @@ PAT_BUILD_KEY_READ = re.compile(
 
 
 WORDLIKE_SEGMENT_RE = re.compile(r"^(?:[A-Za-z]+|[0-9]+)$")
+# 識別子の形(先頭が英字・以降は英数字と _ ・24文字以内)。VBAの関数名や
+# モジュール名(AsmS1User / modTestsPure4 / PptMaxSlidesT2 …)がこれに当たる。
+IDENTIFIER_SEGMENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,23}$")
+# 識別子列とみなしてよいシャノンエントロピーの上限(bit/文字)。下の実測を参照。
+IDENTIFIER_LIST_MAX_ENTROPY = 4.4
+
+
+def _shannon_entropy(s: str) -> float:
+    """文字出現頻度のシャノンエントロピー(bit/文字)。"""
+    if not s:
+        return 0.0
+    n = len(s)
+    return -sum((c / n) * math.log2(c / n) for c in Counter(s).values())
 
 
 def _b64_looks_like_secret(s: str) -> bool:
@@ -87,12 +102,30 @@ def _b64_looks_like_secret(s: str) -> bool:
     素の「40文字以上の [A-Za-z0-9+/] の連なり」は、スラッシュ区切りの語の列にも
     当たる。実測で本リポジトリでは9件、成果物のOOXMLでは名前空間URLの断片
     (`org/officeDocument/2006/relationships/worksheet` 等)が当たった。
-    そこで2つの条件を課す。どちらもランダムな鍵素材はまず満たさない。
+    そこで3つの条件を課す。どれもランダムな鍵素材はまず満たさない。
       (1) 数字・英大文字・英小文字の3種すべてを含むこと
           (40文字でいずれか1種も含まない確率は 1e-9 未満。全小文字16進の鍵は
            PAT_HEX32 が別途拾うので検出力は落ちない)
       (2) "/" で切った断片が「全部が純アルファベットか純数字」ではないこと
-          (=語の列。鍵素材の断片は英数が混ざる)
+          (=語の列。名前空間URLの断片はここで落ちる)
+      (3) 「断片が全部"識別子の形"」かつ「エントロピーが低い」のではないこと
+          (=関数名をスラッシュで並べた列。本リポジトリは14章§6の関数名一覧を
+           `Fill/AsmS1User/AsmS2User/AsmS4System/AsmS4User` の書き癖で書くため、
+           (2)だけでは AsmS1User のような英数混在の識別子を素通しできず、
+           コメント1行が毎回赤になっていた)
+
+    (3)の閾値の根拠(実測。乱数鍵 3,000,000 本 = os.urandom を base64 化した
+    長さ40〜92文字の列で計測):
+      ・(3)の「識別子の形の列」に偶然当たった鍵は 38,015 本(1.27%)。
+        その最小エントロピーは 4.234 bit/文字。
+      ・閾値 4.4 で取りこぼす鍵は 23 本 = 1/130,000(0.00077%)。
+        既に運用している(1)単体の取りこぼし率 0.019%(=1/5,300)より 25倍小さい
+        ので、ガードを足したことで検出力の桁は下がっていない。
+      ・一方、本リポジトリに実在する「識別子の形の列」23件のエントロピーは
+        3.68〜4.51 で、(1)を通過して(3)まで届く唯一の実在ヒット
+        (modTestsPure4 の関数名一覧)は 3.68。閾値まで 0.72 の余裕がある。
+      ・エントロピーが 4.4 以上の「識別子の形の列」は今まで通り赤のままにする
+        (=見逃しではなく人が1回見る)。
     """
     if not (any(c.isdigit() for c in s)
             and any(c.isupper() for c in s)
@@ -100,6 +133,10 @@ def _b64_looks_like_secret(s: str) -> bool:
         return False
     segs = [x for x in s.split("/") if x]
     if len(segs) >= 2 and all(WORDLIKE_SEGMENT_RE.match(x) for x in segs):
+        return False
+    if (len(segs) >= 2
+            and all(IDENTIFIER_SEGMENT_RE.match(x) for x in segs)
+            and _shannon_entropy(s) < IDENTIFIER_LIST_MAX_ENTROPY):
         return False
     return True
 

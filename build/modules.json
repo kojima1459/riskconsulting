@@ -79,6 +79,13 @@
       "wave": "T-21"
     },
     {
+      "name": "modKnowledgeFmt",
+      "path": "src/app/modKnowledgeFmt.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-21"
+    },
+    {
       "name": "modPromptsBlocks",
       "path": "src/app/modPromptsBlocks.bas",
       "role": "app",
@@ -133,6 +140,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-20"
+    },
+    {
+      "name": "modTestsPure4",
+      "path": "src/test/modTestsPure4.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-23"
     },
     {
       "name": "modMockLlm",

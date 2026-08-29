@@ -3,29 +3,18 @@ Option Explicit
 
 ' ============================================================================
 ' modCaseStore - 案件一覧 / case_data の唯一の入出力口(app層・T-20)
-' 責務(12章§2・13章§2.1/§2.2・14章§6): NewCase(採番。13章§1・E-23) /
-'   SaveData・LoadData(分割保存と透過結合。13章§2.2・E-22) /
-'   ResolveStepJson(参照優先。13章§2.2) / SetStatus /
-'   InvalidateDownstream(E-10) / RepairStates(E-12) / FreezeRound(FR-35)。
-'
-' 配置: 12章§2は本モジュールを app層 に置く。シート名(案件一覧 / case_data)
-'   という製品固有の語彙を持つため、core層へ置くと12章§4「core層に製品名・
-'   シート名を書かない」に違反する(lintがERROR)。よって src/app/。
-'
-' R4: 案件シートのI/Oが責務そのもののためExcelトークンを許可された10本の1つ
-'   (12章§4)。許可は「自身の責務範囲」に限られるので、見るのは 案件一覧 と
-'   case_data の2枚だけ。表示シートの再描画と確認ダイアログは ui層 modUICase。
-'
-' 列アクセスは列名ベース(13章冒頭。列番号のハードコード禁止)。セルへの書込は
-'   全て modUtilText.SetCellSafe を通す(16章 NFR-S7①)。数値列(seq/round_no/
-'   last_ok_step)だけは内部生成のLongなので、行末に ' SAFE:const を明示して
-'   PutNum が直接書く。
-'
-' 純ロジックの分離: 採番文字列・参照優先・状態遷移・無効化対象の列挙は、
-'   シートI/Oを1行も含まない関数へ切り出してある(下の「純ロジック」節)。
-'   14章§6が本モジュールへ宣言している公開関数は8本だけなので、§6に無い名前を
-'   勝手に公開しない規約(裁定書5)に従い Private に留めた。層(a)から直接叩く
-'   には §6への宣言追加が要る(実装報告の concerns 参照)。
+' 責務(12章§2・13章§2.1/§2.2・14章§6): NewCase(13章§1・E-23) / SaveData・
+'   LoadData(分割保存と透過結合。E-22) / ResolveStepJson(参照優先。13章§2.2) /
+'   SetStatus / InvalidateDownstream(E-10) / RepairStates(E-12) / FreezeRound。
+' 配置: app層(12章§2)。シート名という製品固有語彙を持つため core層 へ置けない。
+' R4: 案件シートI/Oが責務そのものでExcelトークン許可10本の1つ(12章§4)。見るのは
+'   案件一覧 と case_data の2枚だけ。再描画と確認ダイアログは ui層 modUICase。
+' 列アクセスは列名ベース(13章冒頭)。セル書込は全て modUtilText.SetCellSafe
+'   (16章 NFR-S7①)。数値列だけは内部生成のLongなので ' SAFE:const を明示。
+' 純ロジックの分離: 採番・参照優先・状態遷移・無効化対象はシートI/Oを含まない
+'   関数へ切り出し、うち BuildCaseId / IsValidCaseId / CanTransition /
+'   ResolveDataKey の4本は14章§6が公開を宣言している(裁定書6 項目7)。規約を
+'   シートI/Oに閉じ込めると層(a)から検査できない(W2aの実害)。
 ' ============================================================================
 
 ' --- シート名(13章§2.1・§2.2) ---
@@ -35,8 +24,7 @@ Private Const CS_SHEET_DATA As String = "case_data"
 ' 1セルに入れる最大字数(16章 E-22。物理上限32,767字の手前で切る)。
 Private Const CS_CHUNK_CHARS As Long = 32000
 
-' xlUp の数値。Excel組込定数名を書かず、LibreOffice側の構文チェックで未定義名に
-' ならないようにする(modLog と同じ方針)。
+' xlUp の数値(組込定数名を書かず LO の構文チェックで未定義名にしない)。
 Private Const CS_DIR_UP As Long = -4162
 
 ' 見出し行を読む幅。案件一覧23列に余裕を見た「探索範囲」で列番号ではない。
@@ -60,38 +48,112 @@ Private Const CS_CASE_TYPES As String = "new;renewal"
 ' status の enum 全8値(同)。
 Private Const CS_STATUSES As String = "draft;s1_done;s2_done;s3_done;s4_done;exported;feedback_done;error"
 
+' status の正順(11章§4)。error はこの並びの外側(任意の状態から入り、
+' failed_step の再実行で並びのどこへでも戻る)。
+Private Const CS_STATUS_ORDER As String = "draft;s1_done;s2_done;s3_done;s4_done;exported;feedback_done"
+
 ' status のうち s4_done より上位(RepairStates で降格させない2値)。
 Private Const CS_STATUSES_ABOVE_S4 As String = "exported;feedback_done"
 
-' data_key の enum 全28値(13章§2.2・19章§3と完全一致)。表に無いキーは
-' 受け付けない(綴り違いが黙って別データとして貯まるのを防ぐ)。
+' data_key の enum 全28値(13章§2.2・19章§3と完全一致)。表に無いキーは拒否。
 Private Const CS_DATA_KEYS As String = "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;input_dossier;input_field_notes;input_coverage_note;input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;s4_json_failed;sparring_u;sparring_a"
 
-' ============================================================================
-' 純ロジック(Excel非依存。シートを1行も触らない)。採番文字列・参照優先・状態
-' 遷移・無効化対象は「規約そのもの」であり、シートI/Oと混ぜると層(a)から一切
-' 検査できなくなる。シート操作側は必ずこれらを通す(答えを2箇所に書かない)。
-' ============================================================================
+' --- 純ロジック(Excel非依存)。シート操作側は必ずここを通す ---
 
-' 案件IDの組立(13章§1: C-YYYYMMDD-NNN)。dayText は yyyymmdd の8桁、
-' serialNo は 1..999。範囲外は ""(呼び出し側が枯渇として扱う)。
-Private Function CaseIdText(ByVal dayText As String, ByVal serialNo As Long) As String
+' BuildCaseId - 案件IDの組立(13章§1: C-YYYYMMDD-NNN。14章§6)。dayText は
+' yyyymmdd の8桁ちょうど(数字のみ)、seq は 1..999。範囲外は ""(呼び出し側が
+' 枯渇・不正として扱う。例外は投げない)。引数名が dayText なのは datePart が
+' VBA組込関数 DatePart と衝突するため(14章§6に同じ注記がある)。
+Public Function BuildCaseId(ByVal dayText As String, ByVal seq As Long) As String
     If Len(dayText) <> 8 Then Exit Function
-    If serialNo < 1 Or serialNo > CS_SERIAL_MAX Then Exit Function
-    CaseIdText = "C-" & dayText & "-" & Right$("00" & CStr(serialNo), 3)
+    If Not IsAllDigits(dayText) Then Exit Function
+    If seq < 1 Or seq > CS_SERIAL_MAX Then Exit Function
+    BuildCaseId = "C-" & dayText & "-" & Right$("00" & CStr(seq), 3)
 End Function
 
-' 案件IDから同日ぶんの連番を取り出す(日付不一致・形違いは0)。NewCase はこれで
-' 「その日の使用済み最大値」を求め、続きから採番する。
-Private Function SerialOfCaseId(ByVal caseId As String, ByVal dayText As String) As Long
-    Dim head As String
-    head = "C-" & dayText & "-"
-    If Len(caseId) <> Len(head) + 3 Then Exit Function
-    If Left$(caseId, Len(head)) <> head Then Exit Function
+' IsValidCaseId - "C-"+数字8桁+"-"+数字3桁(001..999)ちょうどか(14章§6)。
+' 前後の空白は許さない。
+Public Function IsValidCaseId(ByVal id As String) As Boolean
+    If Len(id) <> 14 Then Exit Function
+    If Left$(id, 2) <> "C-" Then Exit Function
+    If Mid$(id, 11, 1) <> "-" Then Exit Function
+    If Not IsAllDigits(Mid$(id, 3, 8)) Then Exit Function
     Dim tailText As String
-    tailText = Right$(caseId, 3)
-    If Not IsNumeric(tailText) Then Exit Function
-    SerialOfCaseId = CLng(tailText)
+    tailText = Right$(id, 3)
+    If Not IsAllDigits(tailText) Then Exit Function
+    IsValidCaseId = (CLng(tailText) >= 1)
+End Function
+
+' 半角数字だけで構成されているか(空は False)。
+Private Function IsAllDigits(ByVal s As String) As Boolean
+    If LenB(s) = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To Len(s)
+        If InStr(1, "0123456789", Mid$(s, i, 1), vbBinaryCompare) = 0 Then Exit Function
+    Next i
+    IsAllDigits = True
+End Function
+
+' CanTransition - 案件statusの遷移可否(11章§4 + 16章 E-12。14章§6)。許すのは
+' (1)正順の1段進み (2)任意の状態から error へ (3)error からの復帰(failed_step
+' の再実行なので戻り先は正順のどこでもよい。10章NFR-R3)。自己遷移・段飛ばし・
+' 巻き戻しは False。
+Public Function CanTransition(ByVal fromStatus As String, ByVal toStatus As String) As Boolean
+    Dim f As String, tgt As String
+    f = Trim$(fromStatus)
+    tgt = Trim$(toStatus)
+    If Not IsListedValue(CS_STATUSES, f) Then Exit Function
+    If Not IsListedValue(CS_STATUSES, tgt) Then Exit Function
+    If StrComp(f, tgt, vbBinaryCompare) = 0 Then Exit Function
+    If StrComp(tgt, CS_STATUS_ERROR, vbBinaryCompare) = 0 Then
+        CanTransition = True
+        Exit Function
+    End If
+    If StrComp(f, CS_STATUS_ERROR, vbBinaryCompare) = 0 Then
+        CanTransition = True
+        Exit Function
+    End If
+    CanTransition = (OrderOf(tgt) = OrderOf(f) + 1)
+End Function
+
+' CS_STATUS_ORDER 上の位置(0始まり)。並びに無い(=error)は -1。
+Private Function OrderOf(ByVal statusText As String) As Long
+    OrderOf = -1
+    Dim parts As Variant
+    Dim i As Long
+    parts = Split(CS_STATUS_ORDER, CS_SEP)
+    For i = 0 To UBound(parts)
+        If StrComp(CStr(parts(i)), statusText, vbBinaryCompare) = 0 Then OrderOf = i
+    Next i
+End Function
+
+' ResolveDataKey - 下流Stepが読むべき data_key を1つ返す純核(13章§2.2・14章§6)。
+' N=2,3 は sN_edited > sNr_json > sN_json / N=1,4 は sN_edited > sN_json
+' (S1/S4に改訂パスは無いので hasRevised は見ない)。無ければ ""。範囲外も ""。
+Public Function ResolveDataKey(ByVal stepNo As Long, ByVal hasEdited As Boolean, _
+                               ByVal hasRevised As Boolean, ByVal hasJson As Boolean) As String
+    If stepNo < 1 Or stepNo > 4 Then Exit Function
+    Dim n As String
+    n = CStr(stepNo)
+    If hasEdited Then
+        ResolveDataKey = "s" & n & "_edited"
+        Exit Function
+    End If
+    If stepNo = 2 Or stepNo = 3 Then
+        If hasRevised Then
+            ResolveDataKey = "s" & n & "r_json"
+            Exit Function
+        End If
+    End If
+    If hasJson Then ResolveDataKey = "s" & n & "_json"
+End Function
+
+' 案件IDから同日ぶんの連番を取り出す(日付不一致・形違いは0)。IDの形の判定は
+' IsValidCaseId が唯一の値源(2箇所で書かない)。
+Private Function SerialOfCaseId(ByVal caseId As String, ByVal dayText As String) As Long
+    If Not IsValidCaseId(caseId) Then Exit Function
+    If Mid$(caseId, 3, 8) <> dayText Then Exit Function
+    SerialOfCaseId = CLng(Right$(caseId, 3))
 End Function
 
 ' ";" 区切りの enum リストに値が含まれるか(前後空白は無視・大小文字は区別)。
@@ -102,24 +164,7 @@ Private Function IsListedValue(ByVal listText As String, ByVal valueText As Stri
     IsListedValue = (InStr(1, CS_SEP & listText & CS_SEP, CS_SEP & v & CS_SEP, vbBinaryCompare) > 0)
 End Function
 
-' 下流Stepが参照すべき data_key の優先順(13章§2.2が正)。
-'   N=2,3 は sN_edited > sNr_json > sN_json / S1・S4 は sN_edited > sN_json。
-' 呼び出し側で個別に分岐させないための唯一の値源。範囲外の stepNo は ""。
-Private Function StepJsonKeys(ByVal stepNo As Long) As String
-    Select Case stepNo
-        Case 1
-            StepJsonKeys = "s1_edited;s1_json"
-        Case 2
-            StepJsonKeys = "s2_edited;s2r_json;s2_json"
-        Case 3
-            StepJsonKeys = "s3_edited;s3r_json;s3_json"
-        Case 4
-            StepJsonKeys = "s4_edited;s4_json"
-    End Select
-End Function
-
-' その1Stepぶんの成果物 data_key(無効化の単位)。input_* と s2_prev_json は
-' 成果物ではないので絶対に含めない。
+' その1Stepぶんの成果物 data_key(無効化の単位)。input_* と s2_prev_json は含めない。
 Private Function StepArtifactKeys(ByVal stepNo As Long) As String
     Dim n As String
     Select Case stepNo
@@ -151,25 +196,18 @@ Private Function DownstreamKeys(ByVal fromStepNo As Long) As String
     DownstreamKeys = acc
 End Function
 
-' last_ok_step から status を再導出(13章§2.1)。0 -> draft、1..4 -> sN_done。
+' last_ok_step から status を再導出(13章§2.1)。0 -> draft、1..4 -> sN_done
+' (CS_STATUS_ORDER の並びがそのまま索引になる)。
 Private Function StatusForStep(ByVal stepNo As Long) As String
-    Select Case stepNo
-        Case 1
-            StatusForStep = "s1_done"
-        Case 2
-            StatusForStep = "s2_done"
-        Case 3
-            StatusForStep = "s3_done"
-        Case 4
-            StatusForStep = "s4_done"
-        Case Else
-            StatusForStep = CS_STATUS_NEW
-    End Select
+    StatusForStep = CS_STATUS_NEW
+    If stepNo < 1 Or stepNo > 4 Then Exit Function
+    Dim parts As Variant
+    parts = Split(CS_STATUS_ORDER, CS_SEP)
+    StatusForStep = CStr(parts(stepNo))
 End Function
 
-' 16章 E-12 の状態再導出。failed_step が非空なら error を維持する。既に
-' s4_done より上位(exported / feedback_done)まで進んだ案件は、effStep が4に
-' 達している限り降格させない(出力済みの事実を消さない)。
+' 16章 E-12 の状態再導出。failed_step が非空なら error を維持。s4_done より上位
+' (exported / feedback_done)は effStep が4なら降格させない(出力の事実を消さない)。
 Private Function RepairedStatus(ByVal currentStatus As String, ByVal failedStep As String, _
                                 ByVal effStep As Long) As String
     If LenB(Trim$(failedStep)) > 0 Then
@@ -185,21 +223,12 @@ Private Function RepairedStatus(ByVal currentStatus As String, ByVal failedStep 
     RepairedStatus = StatusForStep(effStep)
 End Function
 
-' 2値の小さいほう(E-12(1)の「突合」の実体)。
-Private Function MinStep(ByVal a As Long, ByVal b As Long) As Long
-    If a < b Then
-        MinStep = a
-    Else
-        MinStep = b
-    End If
-End Function
-
 ' NewCase - 案件を1件起こして case_id を返す(13章§1・16章 E-23)。採番は
-'   C-YYYYMMDD-NNN。当日の使用済み最大連番の次から始め、既存と衝突したら
-'   E0605 を記録して次の番号へ進む(重複時採番リトライ)。999で枯渇。失敗時は
-'   ""(例外は投げない。§6のエラー規約)。channel / kanji / bid / reins /
-'   industry_name は14章§6のシグネチャが受け取らないため空のまま起こす
-'   (案件入力の画面で埋める前提。concerns)。
+'   C-YYYYMMDD-NNN。当日の使用済み最大連番の次から始め、衝突したら E0605 を
+'   記録して次の番号へ(999で枯渇)。失敗時は ""(例外は投げない)。channel /
+'   kanji / bid / reins / industry_name は §6 のシグネチャが受け取らないため
+'   空のまま起こす(13章§2.1「必須(○)の適用時点」= 実行前検証で埋まっていれば
+'   よい。裁定書6 項目9)。
 Public Function NewCase(ByVal company As String, ByVal industryCode As String, _
                         ByVal caseType As String) As String
     On Error GoTo Failed
@@ -252,7 +281,7 @@ Public Function NewCase(ByVal company As String, ByVal industryCode As String, _
             modLog.LogError "E0605", "modCaseStore.NewCase", "serial_exhausted:" & dayText
             Exit Function
         End If
-        newId = CaseIdText(dayText, serialNo)
+        newId = BuildCaseId(dayText, serialNo)
         If LenB(newId) = 0 Then
             modLog.LogError "E0605", "modCaseStore.NewCase", "id_build_failed:" & dayText
             Exit Function
@@ -289,11 +318,10 @@ Failed:
 End Function
 
 ' SaveData - case_data へ1本のテキストを分割保存する(13章§2.2・16章 E-22)。
-'   同じ (case_id, data_key) の既存行を全て消してから、32,000字ごとの断片を
-'   seq=1.. で積み直す(追記ではなく置換。世代は持たない)。content が空なら
-'   削除だけを行って True。断片は SetCellSafe を通り、先頭が = + - @ の断片
-'   には "'" が前置されるが、Excelはこれを文字列前置符として解釈するため
-'   .Value で読み戻すと元へ戻る(往復一致は保たれる。NFR-S7①)。
+'   同じ (case_id, data_key) の既存行を全て消してから32,000字ごとの断片を
+'   seq=1.. で積み直す(追記ではなく置換)。content が空なら削除だけで True。
+'   断片は SetCellSafe を通り先頭が = + - @ なら "'" が前置されるが、.Value で
+'   読み戻すと元へ戻る(往復一致は保たれる。NFR-S7①)。
 Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
                          ByVal content As String) As Boolean
     On Error GoTo Failed
@@ -352,9 +380,8 @@ Failed:
     SaveData = False
 End Function
 
-' LoadData - 分割保存された断片を seq 順に結合して返す(結合は透過処理)。
-'   行の並び順ではなく seq の値で並べ直すため、行を手で動かしたブックでも
-'   復元できる。該当が無ければ ""。
+' LoadData - 断片を seq 順に結合して返す(透過処理)。行の並び順ではなく seq の値で
+'   並べ直すので手で行を動かしたブックでも復元できる。該当が無ければ ""。
 Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String
     On Error GoTo Failed
 
@@ -416,24 +443,27 @@ Failed:
 End Function
 
 ' ResolveStepJson - 下流Stepが参照すべきJSONを一元解決する(13章§2.2)。
-'   優先順は StepJsonKeys が唯一の値源。呼び出し側で個別に分岐しない。
+'   優先順の判断は純核 ResolveDataKey が唯一の値源。ここは「読んで渡す」だけで
+'   分岐を持たない(答えを2箇所に書かない)。
 Public Function ResolveStepJson(ByVal caseId As String, ByVal stepNo As Long) As String
-    Dim keyList As String
-    keyList = StepJsonKeys(stepNo)
-    If LenB(keyList) = 0 Then Exit Function
+    If stepNo < 1 Or stepNo > 4 Then Exit Function
+    Dim n As String
+    n = CStr(stepNo)
 
-    Dim keyArr() As String
-    keyArr = Split(keyList, CS_SEP)
+    Dim editedText As String, revisedText As String, jsonText As String
+    editedText = LoadData(caseId, "s" & n & "_edited")
+    If stepNo = 2 Or stepNo = 3 Then revisedText = LoadData(caseId, "s" & n & "r_json")
+    jsonText = LoadData(caseId, "s" & n & "_json")
 
-    Dim i As Long
-    For i = LBound(keyArr) To UBound(keyArr)
-        Dim body As String
-        body = LoadData(caseId, keyArr(i))
-        If LenB(Trim$(body)) > 0 Then
-            ResolveStepJson = body
-            Exit Function
-        End If
-    Next i
+    Select Case ResolveDataKey(stepNo, LenB(Trim$(editedText)) > 0, _
+                               LenB(Trim$(revisedText)) > 0, LenB(Trim$(jsonText)) > 0)
+        Case "s" & n & "_edited"
+            ResolveStepJson = editedText
+        Case "s" & n & "r_json"
+            ResolveStepJson = revisedText
+        Case "s" & n & "_json"
+            ResolveStepJson = jsonText
+    End Select
 End Function
 
 ' SetStatus - 案件一覧の status を書き換える(13章§2.1の enum 8値のみ)。
@@ -472,11 +502,10 @@ Failed:
 End Function
 
 ' InvalidateDownstream - 上流を再実行するとき下流の成果物を無効化する(E-10)。
-'   fromStepNo より下流のStepの成果物 data_key を case_data から消し、
-'   last_ok_step を fromStepNo まで戻して status を再導出する。実際に消した
-'   キーは E0601 の detail へ列挙する(黙って消さない)。input_* と
-'   s2_prev_json は成果物ではないので消さない。表示シートの再描画と確認
-'   ダイアログは ui層 modUICase の責務(R4の「自身の責務範囲」)。
+'   fromStepNo より下流の成果物 data_key を消し、last_ok_step を fromStepNo へ
+'   戻して status を再導出する。消したキーは E0601 の detail へ列挙(黙って
+'   消さない)。input_* と s2_prev_json は成果物ではないので消さない。再描画と
+'   確認ダイアログは ui層 modUICase。
 Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long)
     On Error GoTo Failed
 
@@ -516,14 +545,12 @@ Failed:
 End Sub
 
 ' RepairStates - 起動時の状態整合修復(16章 E-12・12章§2.1 手順③)。
-'   (1) sN_json(検証合格済のみ)が示す最大Stepと last_ok_step を突合し小さい
-'       ほうを採る (2) failed_step が非空なら status=error を維持し
-'       failed_step 自体は書き換えない(失敗の記憶を消さない) (3) 導出に使う
-'       のは sN_json だけ(sNc/sNr/sN_json_failed/sN_edited/s2_prev_json/
-'       input_* は見ない) (4) ui_lock は modUIProgress のモジュール変数で
-'       プロセス終了時に自然消滅する(E-11/E-51)。app層から ui層は呼べない
-'       (R1)ため何もしない=「無条件初期化」は満たされている (5) 修復件数を
-'       返す。0件でも起動は続行する。
+'   (1) sN_json(合格済のみ)の最大Stepと last_ok_step を突合し小さいほうを採る
+'   (2) failed_step が非空なら status=error を維持し failed_step 自体は
+'       書き換えない(失敗の記憶を消さない) (3) 導出に使うのは sN_json だけ
+'   (4) ui_lock は modUIProgress のモジュール変数でプロセス終了時に自然消滅
+'       (E-11/E-51)。app層から ui層は呼べない(R1)ので何もしない (5) 修復件数を
+'       返す(0件でも起動は続行)。
 Public Function RepairStates() As Long
     On Error GoTo Failed
 
@@ -559,7 +586,9 @@ Public Function RepairStates() As Long
             Dim effStep As Long
             Dim storedOk As Long
             storedOk = ToLongSafe(blk(r, cLastOk))
-            effStep = MinStep(MaxOkStepOf(rowCase), storedOk)
+            ' E-12(1) の「突合」= sN_json 側と last_ok_step 側の小さいほう。
+            effStep = MaxOkStepOf(rowCase)
+            If storedOk < effStep Then effStep = storedOk
             If effStep < 0 Then effStep = 0
 
             Dim failedText As String
@@ -599,10 +628,9 @@ Failed:
 End Function
 
 ' FreezeRound - ラウンドを確定する(FR-35マルチラウンド・13章§2.2)。
-'   (1) 参照優先で解決したS2の1本を s2_prev_json へ退避(1本のみ保持。世代
-'   管理はしない) (2) round_no を+1 (3) 新しい round_no を返す。案件が無い・
-'   退避に失敗したときは 0 を返し round_no を進めない(退避できていないのに
-'   ラウンドだけ進む状態を作らない)。
+'   (1) 参照優先で解決したS2の1本を s2_prev_json へ退避(1本のみ・世代管理なし)
+'   (2) round_no を+1 (3) 新しい round_no を返す。案件が無い・退避に失敗したら
+'   0 を返し round_no を進めない(退避できていないのに進む状態を作らない)。
 Public Function FreezeRound(ByVal caseId As String) As Long
     On Error GoTo Failed
 
@@ -651,8 +679,7 @@ End Function
 
 ' --- 内部ヘルパー(シートI/O) ---
 
-' 名前でシートを取る。無ければ Nothing(ここでは作らない。案件シートはビルドが
-' 焼く仕様で、実行時に生やすと列定義の欠けた表ができる)。
+' 名前でシートを取る。無ければ Nothing(実行時に生やすと列定義の欠けた表になる)。
 Private Function SheetOf(ByVal sheetName As String) As Object
     On Error GoTo NoSheet
     Set SheetOf = ThisWorkbook.Worksheets(sheetName)
@@ -682,8 +709,8 @@ One1:
     LastRowOf = 1
 End Function
 
-' 見出し行を含む矩形を一度だけ読む(セルを1つずつ触ると桁違いに遅い)。1セル
-' だけの Range は2次元配列にならないので、必ず2行以上を読む。
+' 見出し行を含む矩形を一度だけ読む。1セルだけの Range は2次元配列にならないので
+' 必ず2行以上を読む。
 Private Function ReadBlock(ByVal ws As Object, ByVal lastRow As Long) As Variant
     On Error GoTo Empty0
     Dim hi As Long
@@ -725,8 +752,7 @@ NoMatch:
     MatchesRow = False
 End Function
 
-' 同じ (case_id, data_key) の行を全て削除し件数を返す。下から上へ回すのは
-' 削除で行番号がずれるのを避けるため。
+' 同じ (case_id, data_key) の行を全削除し件数を返す(下から回すのは行ずれ回避)。
 Private Function DropRowsOf(ByVal ws As Object, ByVal caseId As String, _
                             ByVal dataKey As String) As Long
     On Error GoTo Done0
@@ -766,8 +792,7 @@ Private Function MaxOkStepOf(ByVal caseId As String) As Long
     Next n
 End Function
 
-' last_ok_step と status を「そのStepまで進んだ状態」へ揃える(判定の中身は
-' RepairedStatus が持つ。InvalidateDownstream から使う)。
+' last_ok_step と status を「そのStepまで進んだ状態」へ揃える(判定は RepairedStatus)。
 Private Function ApplyRepairedState(ByVal caseId As String, ByVal keepStep As Long) As Boolean
     On Error GoTo Failed
     Dim ws As Object
@@ -803,8 +828,7 @@ Failed:
     ApplyRepairedState = False
 End Function
 
-' 列名で位置を引いて1セル書く。列が無ければ何もしない(1列の欠落で案件操作を
-' 止めない)。書込は必ず modUtilText.SetCellSafe を通す(NFR-S7①)。
+' 列名で位置を引いて1セル書く。列が無ければ何もしない。書込は必ず SetCellSafe。
 Private Sub PutText(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
                     ByVal colName As String, ByVal textValue As String)
     Dim c As Long
@@ -813,8 +837,7 @@ Private Sub PutText(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
     modUtilText.SetCellSafe ws.Cells(r, c), textValue, ws.Name & "/" & colName
 End Sub
 
-' 数値列(seq / round_no / last_ok_step)。内部生成のLongであって外部由来
-' テキストではなく、並べ替え・突合のため数値型を保つ必要があるので
+' 数値列(seq / round_no / last_ok_step)。内部生成のLongで数値型を保つ必要があり
 ' SetCellSafe(文字列を返す)は通さない(modLog.PutNum と同じ理由)。
 Private Sub PutNum(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
                    ByVal colName As String, ByVal numValue As Long)

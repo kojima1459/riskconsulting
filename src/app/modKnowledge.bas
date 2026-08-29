@@ -3,27 +3,25 @@ Option Explicit
 
 ' ============================================================================
 ' modKnowledge - ナレッジブックの読込/キャッシュ/整形注入/実在チェック(T-21)
-' 正: 14章§6のmodKnowledge節(公開口19本。§6に無い名前は公開しない=裁定書5の
-'   命名権)/13章§3(列)/15章§3・§4・§6.1(整形書式)/15章§0.7(行数上限)/
+' 正: 14章§6のmodKnowledge節 / 13章§3(列) / 15章§0.7(行数上限) /
 '   16章 E-08(退避)・E-09(0行)・E-13(退避再送)・E-34(列検査)。
-' 配置: 12章§2により app層(シート名という製品固有の語彙を持つため core層 では
-'   12章§4でlintがERROR。指示書の src/core/ は採れない。concerns)。R4のExcel
-'   トークン許可10本の1つで、触るのは kb_path のブックと隠しシート2枚だけ。
-' 純ロジックの分離(本タスクの明示要求): 整形は「2次元配列(Range.Value)と書式
-'   スペックを受ける純関数 RowsText」1本へ集約し、ブック読込・シート書込と混ぜて
-'   いない。層(a)から純部を直接叩くには§6への宣言追加が要る(concerns)。
-' 書式スペック "ラベル=列名;..."(BodyOf): ラベル空なら値だけ。値が空の項目は
-'   項目ごと省略(§6.1「空の項目名を出さない」・§4 market_note 規約)。
-' 絞込スペック(RowsText)は "ind^tgt^act^sts^suf^ref" の位置指定(使わない位置は
-'   空)。ind=業種完全一致列 / tgt=対象業種列(";"区切り・空=指定なし) / act=真偽列
-'   (偽を捨てる) / sts=型のstatus列(許可値 KB_SCHEME_STATUS) / suf=行頭名称へ
-'   "(値)" を付す列 / ref=";"区切り参照IDも注入IDへ積む列。
-' 注入ID: 整形テキストへ実際に現れたIDを全て積む(行頭 [ID] に加え型行の (P2)・
-'   パターン行の 社内実績: の参照IDも)。17章 T-21「注入テキストのID集合と完全
-'   一致」のため。業種コードはIDではない。切詰め後の行のIDだけを積む。
+' 配置: app層(12章§2)。シート名という製品固有語彙を持つため core層 へ置けない。
+'   R4のExcelトークン許可10本の1つで、触るのは kb_path のブックと隠しシート2枚。
+' 責務の分離(12章§2・裁定書6 項目6): **整形は持たない**。ここは「読む / 絞る /
+'   行数上限を適用する / 注入IDを積む」まで。1行の書式・0行の既定文言・空項目の
+'   省略は modKnowledgeFmt(純文字列・Excel非依存)の責務。整形をここに閉じ込めると
+'   層(a)から検査できず、区切り記号を壊しても誰も気づかない(W2aの実害)。
+' 絞込スペック(SelectRows)は "ind^tgt^act^sts^suf^ref" の位置指定(未使用は空)。
+'   ind=業種完全一致列 / tgt=対象業種列(";"区切り・空=指定なし) / act=真偽列(偽を
+'   捨てる) / sts=型のstatus列(許可値 KB_SCHEME_STATUS) / suf=行頭名称へ "(値)" を
+'   付す列(整形は modKnowledgeFmt。ここでは注入IDとして積むためだけに見る) /
+'   ref=";"区切り参照IDも注入IDへ積む列。
+' 注入ID: 整形テキストへ現れるIDを全て積む(行頭 [ID] に加え型行の (P2)・パターン
+'   行の 社内実績: の参照IDも)。17章 T-21「ID集合と完全一致」のため。業種コードは
+'   IDではない。切詰め後の行のIDだけを積む。
 ' 15章§0.7: 行数上限(kb_*_rows)は本モジュールが適用。総量3割超のときの段階的な
-'   半減(順=事例→型→メニュー→種目→リスク、下限=0/0/5/5/5行)は modPipeline の
-'   責務だが、行数を外から指定する口が14章§6に無い(concerns)。
+'   半減を計画するのは modKnowledgeFmt.TrimPlan、適用するのは modPipeline であり、
+'   各注入関数の Optional maxRows がその口(0=config既定。14章§6)。
 ' ============================================================================
 
 ' --- シート索引(13章§3)。KB_SHEETS の並びと対応 ---
@@ -44,15 +42,7 @@ Private Const KB_REQCOLS As String = "industry_code;industry_name|risk_lib_id;in
 Private Const KB_SHEET_GAP As String = "新サービス候補"
 Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_risk,operator"
 
-' --- 15章§3/§4/§6.1 の1行書式(SP=スペース区切り部 / PP=" | "部) ---
-Private Const KB_SP_RISK As String = "カテゴリ=category;リスク=risk_name;典型シナリオ=typical_scenario;典型頻度=typical_freq;典型影響=typical_impact;確認点=check_points"
-Private Const KB_SP_CASE As String = "業種=industry_code;顧客像=customer_profile;提示リスク=risk_presented;提案=proposal;決め手=why_it_worked"
-Private Const KB_SP_RULE As String = "class=rule_class;基準=rule_text"
-Private Const KB_SP_RT As String = "=theme_name;status=status"
-Private Const KB_SP_MECH As String = "layer=layer;機構=mech_text"
-Private Const KB_PP_PAT As String = "構造=structure;成立条件=conditions;代表例=examples_public;社内実績=internal_refs"
-Private Const KB_PP_MENU2 As String = "概要=summary;対応カテゴリ=target_categories"
-Private Const KB_PP_SCHEME As String = "構造=structure;成立条件=conditions;適用シグナル=signals"
+' --- 絞込スペック(1行書式そのものは modKnowledgeFmt が持つ) ---
 Private Const KB_F_MENU As String = "^target_industries^is_active"
 Private Const KB_F_SCHEME As String = "^target_industries^^status^pattern_id"
 ' 型ライブラリのS3注入対象 status(13章§3.4)。絞込キー sts の許可値。
@@ -68,12 +58,6 @@ Private Const KB_SCAN_COLS As Long = 16
 ' xlUp の数値(Excel組込定数名を書かずLO側で未定義名にしない)。
 Private Const KB_DIR_UP As Long = -4162
 
-' 0行・未装填時の値(§6.1の表 / 15章§3のriskLib専用文言 / 15章§4のS3見出し)。
-Private Const KB_NONE As String = "(登録なし)"
-Private Const KB_NONE_RISK As String = "(この業種の登録知識はまだありません)"
-Private Const KB_NONE_S3 As String = "なし"
-
-Private Const KB_PIPE As String = " | "
 Private Const KB_SPACE As String = " "
 Private Const KB_SEMI As String = ";"
 Private Const KB_SRC As String = "modKnowledge"
@@ -129,15 +113,6 @@ Blank0:
     CellRaw = vbNullString
 End Function
 
-Private Function ItemText(ByVal labelText As String, ByVal valueText As String) As String
-    If LenB(valueText) = 0 Then Exit Function
-    If LenB(labelText) = 0 Then
-        ItemText = valueText
-    Else
-        ItemText = labelText & ":" & valueText
-    End If
-End Function
-
 Private Sub AppendPart(ByRef acc As String, ByVal sepText As String, ByVal partText As String)
     If LenB(partText) = 0 Then Exit Sub
     If LenB(acc) = 0 Then
@@ -146,22 +121,6 @@ Private Sub AppendPart(ByRef acc As String, ByVal sepText As String, ByVal partT
         acc = acc & sepText & partText
     End If
 End Sub
-
-Private Function BodyOf(ByVal blk As Variant, ByVal r As Long, ByVal specText As String, _
-                        ByVal sepText As String) As String
-    If LenB(specText) = 0 Then Exit Function
-    Dim parts As Variant, pair As Variant
-    Dim i As Long, acc As String
-    parts = Split(specText, KB_SEMI)
-    For i = LBound(parts) To UBound(parts)
-        pair = Split(CStr(parts(i)), "=")
-        If UBound(pair) >= 1 Then
-            AppendPart acc, sepText, ItemText(CStr(pair(0)), _
-                       CellAt(blk, r, modUtil.FindHeaderCol(blk, CStr(pair(1)))))
-        End If
-    Next i
-    BodyOf = acc
-End Function
 
 Private Sub AddId(ByRef idsOut As String, ByVal idText As String)
     idsOut = modUtil.AppendIdList(idsOut, idText)
@@ -210,12 +169,16 @@ Private Function ColOf(ByVal blk As Variant, ByVal colName As String) As Long
     If LenB(Trim$(colName)) > 0 Then ColOf = modUtil.FindHeaderCol(blk, Trim$(colName))
 End Function
 
-' 唯一の整形ドライバ。絞込スペック(冒頭)で全7シートを賄う(15章§3/§4/§6.1)。
-Private Function RowsText(ByVal blk As Variant, ByVal lastRow As Long, ByVal idCol As String, _
-                          ByVal filterSpec As String, ByVal industryCode As String, _
-                          ByVal maxRows As Long, ByVal spaceSpec As String, _
-                          ByVal pipeSpec As String, ByRef idsOut As String) As String
+' 絞込の純部。blk の2行目以降から条件に合う行を最大 maxRows 件選び、
+'   「見出し行 + 選ばれた行」だけの2次元配列を selOut へ返す(整形は
+'   modKnowledgeFmt の責務)。戻り=選ばれた行数。注入IDもここで積む。
+Private Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal idCol As String, _
+                            ByVal filterSpec As String, ByVal industryCode As String, _
+                            ByVal maxRows As Long, ByRef selOut As Variant, _
+                            ByRef idsOut As String) As Long
+    selOut = Empty
     If Not IsArray(blk) Then Exit Function
+
     Dim cId As Long, cInd As Long, cTgt As Long, cAct As Long
     Dim cSt As Long, cSuf As Long, cRef As Long
     Dim parts As Variant
@@ -228,7 +191,9 @@ Private Function RowsText(ByVal blk As Variant, ByVal lastRow As Long, ByVal idC
     cSuf = ColOf(blk, CStr(parts(4)))
     cRef = ColOf(blk, CStr(parts(5)))
 
-    Dim outText As String, idText As String, headText As String, sufText As String
+    Dim hits() As Long
+    ReDim hits(1 To lastRow + 1)
+    Dim idText As String, sufText As String
     Dim r As Long, n As Long
     Dim okAll As Boolean
     For r = 2 To lastRow
@@ -241,31 +206,34 @@ Private Function RowsText(ByVal blk As Variant, ByVal lastRow As Long, ByVal idC
             If okAll And cAct > 0 Then okAll = modConfig.ParseBoolText(CellAt(blk, r, cAct), True)
             If okAll And cSt > 0 Then okAll = IsListed(KB_SCHEME_STATUS, CellAt(blk, r, cSt))
             If okAll Then
-                headText = BodyOf(blk, r, spaceSpec, KB_SPACE)
                 If cSuf > 0 Then
                     sufText = CellAt(blk, r, cSuf)
-                    If LenB(sufText) > 0 Then
-                        headText = headText & "(" & sufText & ")"
-                        AddId idsOut, sufText
-                    End If
+                    If LenB(sufText) > 0 Then AddId idsOut, sufText
                 End If
-                AppendPart outText, vbLf, RowLine(blk, r, idText, headText, pipeSpec)
                 AddId idsOut, idText
                 If cRef > 0 Then AddIdList idsOut, CellAt(blk, r, cRef)
                 n = n + 1
+                hits(n) = r
             End If
         End If
     Next r
-    RowsText = outText
-End Function
+    If n = 0 Then Exit Function
 
-Private Function RowLine(ByVal blk As Variant, ByVal r As Long, ByVal idText As String, _
-                         ByVal headText As String, ByVal pipeSpec As String) As String
-    Dim lineText As String
-    lineText = "[" & idText & "]"
-    If LenB(headText) > 0 Then lineText = lineText & KB_SPACE & headText
-    AppendPart lineText, KB_PIPE, BodyOf(blk, r, pipeSpec, KB_PIPE)
-    RowLine = lineText
+    Dim cols As Long
+    cols = UBound(blk, 2)
+    Dim arr() As Variant
+    ReDim arr(1 To n + 1, 1 To cols)
+    Dim c As Long, k As Long
+    For c = 1 To cols
+        arr(1, c) = blk(1, c)
+    Next c
+    For k = 1 To n
+        For c = 1 To cols
+            arr(k + 1, c) = blk(hits(k), c)
+        Next c
+    Next k
+    selOut = arr
+    SelectRows = n
 End Function
 
 ' 16章 E-34(純部): 必須列のうち見つからなかった列名を ";" 区切りで返す。
@@ -324,7 +292,7 @@ End Function
 '   シートへ退避する。接続不可(E-08)は前回退避から復元し E0401 を警告記録する。
 '   戻り値 True=ナレッジが使える状態(起動は False でも止めない。12章§2.1 手順⑤)。
 '   末尾で新サービス候補の退避分も再送する(E-13。手順⑥の公開口が§6に無いため
-'   ここで引き取っている。concerns)。
+'   ここで引き取っている)。
 Public Function LoadKnowledge() As Boolean
     On Error GoTo Failed
     gKbLoaded = False
@@ -355,56 +323,68 @@ Failed:
     LoadKnowledge = gKbLoaded
 End Function
 
+' 注入関数の共通規約(14章§6): Optional maxRows は 15章§0.7 の半減を外から
+'   掛ける口。0=config既定(kb_*_rows)/上限を持たない4種は全行。正の値はその行数。
+
 ' RiskLibFor - S2用の業種リスク知識(15章§3)。0行は専用文言(E-09)。
-Public Function RiskLibFor(ByVal industryCode As String) As String
-    RiskLibFor = Inject(KB_I_RISK, "risk_lib_id", "industry_code", industryCode, RowCap("kb_risk_rows", 20), KB_SP_RISK, vbNullString, KB_NONE_RISK, "risk_lib")
+Public Function RiskLibFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+    RiskLibFor = Inject(KB_I_RISK, "risk_lib_id", "industry_code", industryCode, _
+                        CapCfg(maxRows, "kb_risk_rows", 20), "risk_lib")
 End Function
 
 ' MenusSummaryFor - S2用のメニュー要約(15章§3)。related_menu_id の候補一覧を与える
 '   唯一の口。industryCode="" は全業種(§6.1 {{menusSummary}})。
-Public Function MenusSummaryFor(ByVal industryCode As String) As String
-    MenusSummaryFor = Inject(KB_I_MENU, "menu_id", KB_F_MENU, industryCode, RowCap("kb_menu_rows", 60), "=menu_name", "対応カテゴリ=target_categories", KB_NONE, "menus_summary")
+Public Function MenusSummaryFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+    MenusSummaryFor = Inject(KB_I_MENU, "menu_id", KB_F_MENU, industryCode, _
+                             CapCfg(maxRows, "kb_menu_rows", 60), "menus_summary")
 End Function
 
 ' MenusFor - S3用のメニュー一覧(概要付き。15章§4。S2の要約とは別テキスト)。
-Public Function MenusFor(ByVal industryCode As String) As String
-    MenusFor = Inject(KB_I_MENU, "menu_id", KB_F_MENU, industryCode, RowCap("kb_menu_rows", 60), "=menu_name", KB_PP_MENU2, KB_NONE, "menus")
+Public Function MenusFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+    MenusFor = Inject(KB_I_MENU, "menu_id", KB_F_MENU, industryCode, _
+                      CapCfg(maxRows, "kb_menu_rows", 60), "menus")
 End Function
 
-' LinesText - S3用の種目一覧(15章§4。全行)。market_note 空欄は項目ごと省略。
-Public Function LinesText() As String
-    LinesText = Inject(KB_I_LINE, "line_id", vbNullString, vbNullString, -1, "=line_name", "市場環境=market_note", KB_NONE, "lines")
+' LinesText - S3用の種目一覧(15章§4。既定は全行)。market_note 空欄は項目ごと省略。
+Public Function LinesText(Optional ByVal maxRows As Long = 0) As String
+    LinesText = Inject(KB_I_LINE, "line_id", vbNullString, vbNullString, _
+                       CapAll(maxRows, KB_I_LINE), "lines")
 End Function
 
 ' CasesFor - S3用の成功事例(15章§4)。無い場合は「なし」(S3 userの見出し規約)。
-Public Function CasesFor(ByVal industryCode As String) As String
-    CasesFor = Inject(KB_I_CASE, "case_lib_id", "industry_code", industryCode, RowCap("kb_case_rows", 5), KB_SP_CASE, vbNullString, KB_NONE_S3, "cases")
+Public Function CasesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+    CasesFor = Inject(KB_I_CASE, "case_lib_id", "industry_code", industryCode, _
+                      CapCfg(maxRows, "kb_case_rows", 5), "cases")
 End Function
 
 ' SchemesFor - S3用の型ライブラリ(status=proven/adopted のみ。15章§4)。
-Public Function SchemesFor(ByVal industryCode As String) As String
-    SchemesFor = Inject(KB_I_SCHEME, "scheme_id", KB_F_SCHEME, industryCode, RowCap("kb_scheme_rows", 10), "=scheme_name", KB_PP_SCHEME, KB_NONE_S3, "schemes")
+Public Function SchemesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+    SchemesFor = Inject(KB_I_SCHEME, "scheme_id", KB_F_SCHEME, industryCode, _
+                        CapCfg(maxRows, "kb_scheme_rows", 10), "schemes")
 End Function
 
 ' PatternsText - P1-P15全件(PF/FG用。15章§6.1)。
-Public Function PatternsText() As String
-    PatternsText = Inject(KB_I_PAT, "pattern_id", "^^^^^internal_refs", vbNullString, -1, "=pattern_name", KB_PP_PAT, KB_NONE, "patterns")
+Public Function PatternsText(Optional ByVal maxRows As Long = 0) As String
+    PatternsText = Inject(KB_I_PAT, "pattern_id", "^^^^^internal_refs", vbNullString, _
+                          CapAll(maxRows, KB_I_PAT), "patterns")
 End Function
 
 ' RulesText - 判断基準(PF/FG用。15章§6.1)。
-Public Function RulesText() As String
-    RulesText = Inject(KB_I_RULE, "rule_id", vbNullString, vbNullString, -1, KB_SP_RULE, "破り方=workaround", KB_NONE, "rules")
+Public Function RulesText(Optional ByVal maxRows As Long = 0) As String
+    RulesText = Inject(KB_I_RULE, "rule_id", vbNullString, vbNullString, _
+                       CapAll(maxRows, KB_I_RULE), "rules")
 End Function
 
-' ResearchingText - 研究テーマ一覧(PF用。15章§6.1)。書式例の「判定日」「関連」は
-'   13章§3.10に供給元の列が無いため空項目の省略規約に従い出さない(concerns)。
-Public Function ResearchingText() As String
-    ResearchingText = Inject(KB_I_RT, "rt_id", vbNullString, vbNullString, -1, KB_SP_RT, "メモ=note", KB_NONE, "researching")
+' ResearchingText - 研究テーマ一覧(PF用。15章§6.1)。
+Public Function ResearchingText(Optional ByVal maxRows As Long = 0) As String
+    ResearchingText = Inject(KB_I_RT, "rt_id", vbNullString, vbNullString, _
+                             CapAll(maxRows, KB_I_RT), "researching")
 End Function
 
 ' MechsText - 機構ライブラリ抜粋(壁打ちsystem)。Phase 1.5のため常に「(登録なし)」。
-Public Function MechsText() As String
-    MechsText = Inject(KB_I_MECH, "mech_id", vbNullString, vbNullString, RowCap("kb_mech_rows", 40), KB_SP_MECH, "適用リスク=target_categories", KB_NONE, "mechs")
+Public Function MechsText(Optional ByVal maxRows As Long = 0) As String
+    MechsText = Inject(KB_I_MECH, "mech_id", vbNullString, vbNullString, _
+                       CapCfg(maxRows, "kb_mech_rows", 40), "mechs")
 End Function
 
 ' LastInjectedIds - run_log.injected_kb_ids(13章§2.4・10章FR-10)を埋める累積値。
@@ -453,36 +433,73 @@ End Sub
 
 ' === 内部(Excel I/O) ===
 
-' 公開の整形関数の共通部: キャッシュを純部 RowsText へ渡し、0行処理(E-09)と
-'   注入IDの累積まで通す。maxRows<0 は「全行」(§0.7が上限を持たない4種)。
+' 公開の注入関数の共通部: 絞込(SelectRows) -> 整形(modKnowledgeFmt) -> 0行処理
+'   (16章 E-09)と注入IDの累積。整形の書式は本モジュールが持たない。
 Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSpec As String, _
-                        ByVal industryCode As String, ByVal maxRows As Long, _
-                        ByVal spaceSpec As String, ByVal pipeSpec As String, _
-                        ByVal emptyText As String, ByVal fieldName As String) As String
-    Dim ids As String, outText As String
-    Dim nRows As Long, capRows As Long
-    nRows = gKbRows(idx)
-    capRows = maxRows
-    If capRows < 0 Then capRows = nRows
-    outText = RowsText(gKbBlocks(idx), nRows, idCol, filterSpec, industryCode, _
-                       capRows, spaceSpec, pipeSpec, ids)
-    If LenB(outText) = 0 Then
-        ' 0行は未装填文言を返し usage_log へ記録する(16章 E-09。整備優先度シグナル)
+                        ByVal industryCode As String, ByVal capRows As Long, _
+                        ByVal fieldName As String) As String
+    Dim ids As String
+    Dim sel As Variant
+    Dim n As Long
+    n = SelectRows(gKbBlocks(idx), gKbRows(idx), idCol, filterSpec, industryCode, _
+                   capRows, sel, ids)
+    Inject = FormatBy(fieldName, sel)
+    If n <= 0 Then
+        ' 0行は未装填文言(modKnowledgeFmt が返す)のまま usage_log へ記録する
+        ' (16章 E-09。ナレッジ整備の優先度シグナル)
         modLog.LogUsage "kb_zero_rows", vbNullString, _
                         "field=" & fieldName & " industry=" & industryCode
-        Inject = emptyText
         Exit Function
     End If
     AddIdList gInjectedIds, ids
-    Inject = outText
 End Function
 
-' config の行数上限(15章§0.7・13章§2.3)。0以下は既定値。
-Private Function RowCap(ByVal cfgKey As String, ByVal dfltRows As Long) As Long
+' 種類名から modKnowledgeFmt の整形関数へ振り分ける(書式の正は15章・実装は
+'   modKnowledgeFmt。ここには書式を書かない)。
+Private Function FormatBy(ByVal fieldName As String, ByVal rows As Variant) As String
+    Select Case fieldName
+        Case "risk_lib"
+            FormatBy = modKnowledgeFmt.FmtRiskLib(rows)
+        Case "menus_summary"
+            FormatBy = modKnowledgeFmt.FmtMenusSummary(rows)
+        Case "menus"
+            FormatBy = modKnowledgeFmt.FmtMenus(rows)
+        Case "lines"
+            FormatBy = modKnowledgeFmt.FmtLines(rows)
+        Case "cases"
+            FormatBy = modKnowledgeFmt.FmtCases(rows)
+        Case "schemes"
+            FormatBy = modKnowledgeFmt.FmtSchemes(rows)
+        Case "patterns"
+            FormatBy = modKnowledgeFmt.FmtPatterns(rows)
+        Case "rules"
+            FormatBy = modKnowledgeFmt.FmtRules(rows)
+        Case "researching"
+            FormatBy = modKnowledgeFmt.FmtResearching(rows)
+        Case "mechs"
+            FormatBy = modKnowledgeFmt.FmtMechs(rows)
+    End Select
+End Function
+
+' maxRows>0 はそのまま。0 は config の行数上限(15章§0.7・13章§2.3。0以下は既定値)。
+Private Function CapCfg(ByVal maxRows As Long, ByVal cfgKey As String, ByVal dfltRows As Long) As Long
+    If maxRows > 0 Then
+        CapCfg = maxRows
+        Exit Function
+    End If
     Dim v As Long
     v = modConfig.GetLong(cfgKey, dfltRows)
     If v <= 0 Then v = dfltRows
-    RowCap = v
+    CapCfg = v
+End Function
+
+' maxRows>0 はそのまま。0 は「全行」(§0.7が行数上限を持たない4種)。
+Private Function CapAll(ByVal maxRows As Long, ByVal idx As Long) As Long
+    If maxRows > 0 Then
+        CapAll = maxRows
+    Else
+        CapAll = gKbRows(idx)
+    End If
 End Function
 
 Private Sub LogKb(ByVal errCode As String, ByVal procName As String, ByVal detail As String)

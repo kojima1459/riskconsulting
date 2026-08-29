@@ -2,50 +2,40 @@ Attribute VB_Name = "modTestsPure3"
 Option Explicit
 
 ' ============================================================================
-' modTestsPure3 - W2a(T-20 modCaseStore / T-21 modKnowledge)の純ロジックテスト
-'                 (17章§4-1 層(a))G12-G17
+' modTestsPure3 - modUtil(14章§6 modUtil節)の契約テスト(17章§4-1 層(a))G12-G17
 ' ----------------------------------------------------------------------------
 ' 役割:
-'   W2a が土台にする「純ロジックの契約」を、実装コードを一切読まずに
-'   仕様(13章§2.2 / 15章§0.7・§3・§4・§6.1 / 16章 E-09/E-22 / 14章§6 /
-'   17章 T-20・T-21 の DoD)だけを根拠に固定する。
+'   **本ファイルが叩くのは modUtil の公開関数だけ**である。14章§6の modUtil節
+'   (裁定書6 項目8で契約化)が定める入出力を、実装コードを読まずに固定する。
+'   modUtil は case_data の分割保存・注入IDの累積・行バッファといった上位機能が
+'   共通に使う道具であり、ここが壊れると広範囲が壊れる。
 '
-'   入口は Public Sub RunAll()。modTestsPure2 と同じく、ランナーからは直接
-'   呼ばれない前提で書いてある(結線は統合者の担当。下の「統合者へ」を参照)。
+'   **重要(裁定書6 項目10)**: 本ファイルは modCaseStore / modKnowledge /
+'   modKnowledgeFmt の**振る舞いを検査しない**。それらの本体(採番・状態遷移・
+'   参照優先・15章の整形書式・§0.7の切詰め)は 14章§6 が公開した純関数
+'   (modCaseStore.BuildCaseId / IsValidCaseId / CanTransition / ResolveDataKey、
+'   modKnowledgeFmt.Fmt* / TrimKbLine / TrimPlan)に対する別ファイルのテストが
+'   受け持つ。ここでそれらを名乗ると「押さえてあるように見えて誰も見ていない」
+'   状態を作る(W2aで実際に起きた)。テスト名・根拠コメントは modUtil契約に限る。
 '
-' 統合者へ(本ファイル単体では1本も実行されない。3点セットで結線すること):
-'   (1) modTestsPure2.RunAll の末尾から modTestsPure3.RunAll を呼ぶ
-'       (modTestsPure.RunAll -> modTestsPure2.RunAll と同じ数珠つなぎ)。
-'   (2) build/modules.json へ 1件追加(name=modTestsPure3 /
-'       path=src/test/modTestsPure3.bas / role=test / type=std / wave=T-20)。
-'   (3) wintest/tests_expected.txt を 115 -> 184 へ更新。
-'   tools/run_lo_tests.py の PURE_ALLOWLIST には modTestsPure3 が既にある。
+'   入口は Public Sub RunAll()。modTestsPure2.RunAll の末尾から呼ばれる。
 '
 ' 設計判断(R4準拠): Worksheets / Range / Application / ThisWorkbook / MsgBox /
 '   ActiveSheet には一切触れない。改行は vbLf 基準。
-'   **modCaseStore / modKnowledge を参照しない**: 両モジュールの14章§6の公開
-'   関数はすべてシートI/Oを伴い、tools/run_lo_tests.py の PURE_ALLOWLIST にも
-'   載っていない(=層(a)へ注入されない)。したがって採番・状態遷移・
-'   ResolveStepJson・FreezeRound・整形・実在チェック・切詰めの「本体」は
-'   層(b)(wintest)の担当であり、本ファイルはそれらが依存する純プリミティブの
-'   契約だけを固定する。積み残しは報告書の concerns に列挙した。
 '
 ' 本ファイルのテスト本数: 69本(G12 40 / G13 8 / G14 4 / G15 6 / G16 6 / G17 5)
-'   ※ wintest/tests_expected.txt を +69 すること(現行115本 -> 184本)。
 '
-' グループ / 本数 / 根拠章:
-'   G12 case_data の32,000字分割・結合   40本 13章§2.2 / 16章E-22 / T-20 DoD
-'   G13 セル格納規約「; 」の分割          8本 13章§2.2 セル格納規約
-'   G14 注入IDの累積(LastInjectedIds)     4本 14章§6 / T-21 DoD
-'   G15 ナレッジ切詰めの下限・上限        6本 15章§0.7
-'   G16 先頭切詰め(表示2,000字/行400字)   6本 16章E-22 / 15章§0.7
-'   G17 注入テキストの行バッファ          5本 15章§3・§4・§6.1(1行1件)
+' グループ / 本数 / 根拠(すべて14章§6 modUtil節):
+'   G12 SplitForCells / JoinCellChunks の往復  40本 (+13章§2.2の32,000字単位)
+'   G13 SplitKeepNonEmpty の分割とTrim          8本 (+13章§2.2のセル格納規約)
+'   G14 AppendIdList の重複排除と ";" 区切り    4本
+'   G15 ClampLong の上下限                      6本
+'   G16 SafeLeft の先頭切詰め                   6本
+'   G17 BufInit / BufAdd / BufText の行バッファ 5本 (区切りは vbLf)
 '
-' 本ファイルが前提とする公開契約(すべて既存の modUtil。W1 T-10 の成果物):
-'   modUtil.SplitForCells / JoinCellChunks   ' T-10 DoD「分割結合ユーティリティ緑」
-'   modUtil.SplitKeepNonEmpty / AppendIdList
-'   modUtil.ClampLong / SafeLeft
-'   modUtil.BufInit / BufAdd / BufText
+' 本ファイルが前提とする公開契約(すべて modUtil。14章§6 modUtil節):
+'   modUtil.SplitForCells / JoinCellChunks / SplitKeepNonEmpty / AppendIdList
+'   modUtil.ClampLong / SafeLeft / BufInit / BufAdd / BufText
 '   modTestRunner.Check
 ' ============================================================================
 
@@ -53,10 +43,11 @@ Option Explicit
 Private Const CH_MAX As Long = 32000
 ' 16章E-22: セルの物理上限は32,767字(32,000字契約はこの内側に取ってある)。
 Private Const CELL_MAX As Long = 32767
-' 16章E-22 表示側: 表示セルは先頭2,000字+注記。
-Private Const DISP_MAX As Long = 2000
-' 15章§0.7: 5段の切詰めでなお超過するときは各行を先頭400字で切る。
-Private Const KB_LINE_MAX As Long = 400
+' SafeLeft へ渡す切り出し長のサンプル値(2,000)。
+Private Const CUT_2000 As Long = 2000
+' SafeLeft へ渡す切り出し長のサンプル値(400)。本ファイルは SafeLeft が「先頭n字で
+' 切る」ことだけを見る。ナレッジ行の400字切詰めの実装は modKnowledgeFmt.TrimKbLine。
+Private Const CUT_400 As Long = 400
 
 Public Sub RunAll()
     On Error GoTo F12
@@ -78,6 +69,7 @@ G17:
     T_LineBuffer
 GDone:
     On Error GoTo 0
+    modTestsPure4.RunAll
     Exit Sub
 
 F12:
@@ -316,31 +308,29 @@ Private Sub T_ChunkStore()
 End Sub
 
 ' ----------------------------------------------------------------------------
-' G13 セル格納規約「; 」の分割
-'   根拠: 13章§2.2 セル格納規約「要素を『; 』(半角セミコロン+半角スペース)で
-'   連結した1セル」「『; 』で分割し前後空白を除去。空セルは []」。
-'   逆シリアライズ本体(modUICase)はシートI/Oのため層(a)対象外。ここでは
-'   その土台の分割プリミティブだけを固定する。
+' G13 SplitKeepNonEmpty(14章§6 modUtil節)
+'   契約: 「区切って空要素を捨てる。各要素は Trim する。0件・sep が空のときは
+'   0要素」。区切り "; " は 13章§2.2 のセル格納規約が使う実際の値なので、
+'   代表値としてこれを渡している(検査対象は modUtil の分割そのもの)。
 ' ----------------------------------------------------------------------------
 Private Sub T_CellList()
     Dim items() As String
 
     items = modUtil.SplitKeepNonEmpty("", "; ")
-    ChkN "セル格納_空セルは要素0件_13章§2.2空配列規約", ArrN(items), 0
+    ChkN "SplitKeepNonEmpty_空文字は要素0件_14章§6modUtil", ArrN(items), 0
 
     items = modUtil.SplitKeepNonEmpty("冷凍食品; 惣菜; 調味料", "; ")
-    ChkN "セル格納_文字列配列3要素の件数_13章§2.2", ArrN(items), 3
-    ChkS "セル格納_文字列配列の1要素目_13章§2.2", ArrAt(items, 0), "冷凍食品"
-    ChkS "セル格納_文字列配列の2要素目_13章§2.2", ArrAt(items, 1), "惣菜"
-    ChkS "セル格納_文字列配列の3要素目_13章§2.2", ArrAt(items, 2), "調味料"
+    ChkN "SplitKeepNonEmpty_3要素の件数_14章§6modUtil", ArrN(items), 3
+    ChkS "SplitKeepNonEmpty_1要素目_14章§6modUtil", ArrAt(items, 0), "冷凍食品"
+    ChkS "SplitKeepNonEmpty_2要素目_14章§6modUtil", ArrAt(items, 1), "惣菜"
+    ChkS "SplitKeepNonEmpty_3要素目_14章§6modUtil", ArrAt(items, 2), "調味料"
 
     items = modUtil.SplitKeepNonEmpty("M-0012", "; ")
-    ChkN "セル格納_単一要素は1件_13章§2.2", ArrN(items), 1
+    ChkN "SplitKeepNonEmpty_単一要素は1件_14章§6modUtil", ArrN(items), 1
 
-    ' 整数配列(target_risk_nos / target_gap_nos)も同じ「; 」連結(例 `2; 5`)。
     items = modUtil.SplitKeepNonEmpty("2; 5", "; ")
-    ChkN "セル格納_整数配列2要素の件数_13章§2.2", ArrN(items), 2
-    ChkS "セル格納_整数配列の2要素目_13章§2.2", ArrAt(items, 1), "5"
+    ChkN "SplitKeepNonEmpty_数字並びも2要素_14章§6modUtil", ArrN(items), 2
+    ChkS "SplitKeepNonEmpty_数字並びの2要素目_14章§6modUtil", ArrAt(items, 1), "5"
 End Sub
 
 ' ----------------------------------------------------------------------------
@@ -364,66 +354,64 @@ Private Sub T_InjectedIds()
 End Sub
 
 ' ----------------------------------------------------------------------------
-' G15 ナレッジ切詰めの下限・上限
-'   根拠: 15章§0.7 の切詰め表。成功事例・型ライブラリは0行まで可、メニュー・
-'   種目・リスクライブラリは5行が下限、各行数上限は config
-'   (kb_menu_rows 既定60 / kb_risk_rows 既定20 / kb_case_rows 既定5)。
-'   段階適用のループ本体は modKnowledge / modPipeline 側(シートI/O)のため
-'   層(a)対象外。行数を範囲へ収めるプリミティブだけを固定する。
+' G15 ClampLong(14章§6 modUtil節)
+'   契約: 「値を [minV, maxV] へ収める。minV > maxV の指定は minV を優先」。
+'   下の 5 / 20 / 60 は代表値であって、ナレッジ切詰めの下限・上限そのものでは
+'   ない(15章§0.7 の計画は modKnowledgeFmt.TrimPlan が実装する)。
 ' ----------------------------------------------------------------------------
 Private Sub T_KbTrimFloor()
-    ChkN "切詰め下限_メニューは5行を下回らない_15章§0.7", _
+    ChkN "ClampLong_下限未満は下限へ_14章§6modUtil", _
         modUtil.ClampLong(2, 5, 60), 5
-    ChkN "切詰め下限_種目は5行を下回らない_15章§0.7", _
+    ChkN "ClampLong_下限未満は下限へ2_14章§6modUtil", _
         modUtil.ClampLong(3, 5, 60), 5
-    ChkN "切詰め下限_リスクライブラリは5行を下回らない_15章§0.7", _
+    ChkN "ClampLong_下限未満は下限へ3_14章§6modUtil", _
         modUtil.ClampLong(1, 5, 20), 5
-    ChkN "切詰め下限_成功事例は0行まで可_15章§0.7", _
+    ChkN "ClampLong_下限0のときは0を許す_14章§6modUtil", _
         modUtil.ClampLong(0, 0, 5), 0
-    ChkN "切詰め上限_kb_menu_rowsの60行を超えない_15章§0.7", _
+    ChkN "ClampLong_上限超過は上限へ_14章§6modUtil", _
         modUtil.ClampLong(80, 5, 60), 60
-    ChkN "切詰め_範囲内の行数はそのまま_15章§0.7", _
+    ChkN "ClampLong_範囲内はそのまま_14章§6modUtil", _
         modUtil.ClampLong(10, 5, 60), 10
 End Sub
 
 ' ----------------------------------------------------------------------------
-' G16 先頭切詰め
-'   根拠: 16章E-22 表示側「表示セルは先頭2,000字+注記」/ 15章§0.7
-'   「5まで適用してなお超過する場合は、各行を先頭400字で切り『...』を付す」。
+' G16 SafeLeft(14章§6 modUtil節)
+'   契約: 「先頭n字で切る。n <= 0 は ""。末尾に単独の高位サロゲートを残さない」。
+'   下の 2,000 / 400 は代表的な切り出し長であって、表示セルの2,000字(16章E-22)
+'   やナレッジ行の400字(15章§0.7 -> modKnowledgeFmt.TrimKbLine)の実装を
+'   検査するものではない。
 ' ----------------------------------------------------------------------------
 Private Sub T_HeadTrim()
     Dim src As String
 
     src = RepChar("a", 3000)
-    ChkN "表示切詰め_2000字超は2000字_16章E22", _
-        Len(modUtil.SafeLeft(src, DISP_MAX)), DISP_MAX
+    ChkN "SafeLeft_2000字超は2000字_14章§6modUtil", _
+        Len(modUtil.SafeLeft(src, CUT_2000)), CUT_2000
 
-    src = RepChar("a", DISP_MAX)
-    ChkN "表示切詰め_2000字ちょうどは切らない_16章E22", _
-        Len(modUtil.SafeLeft(src, DISP_MAX)), DISP_MAX
+    src = RepChar("a", CUT_2000)
+    ChkN "SafeLeft_ちょうどの長さは切らない_14章§6modUtil", _
+        Len(modUtil.SafeLeft(src, CUT_2000)), CUT_2000
 
-    ChkS "表示切詰め_短い本文は素通し_16章E22", _
-        modUtil.SafeLeft("あいうえお", DISP_MAX), "あいうえお"
+    ChkS "SafeLeft_短い本文は素通し_14章§6modUtil", _
+        modUtil.SafeLeft("あいうえお", CUT_2000), "あいうえお"
 
-    ChkS "表示切詰め_空文字は空文字_16章E22", _
-        modUtil.SafeLeft("", DISP_MAX), ""
+    ChkS "SafeLeft_空文字は空文字_14章§6modUtil", _
+        modUtil.SafeLeft("", CUT_2000), ""
 
     src = RepChar("b", 900)
-    ChkN "ナレッジ行切詰め_400字で切る_15章§0.7", _
-        Len(modUtil.SafeLeft(src, KB_LINE_MAX)), KB_LINE_MAX
+    ChkN "SafeLeft_400字で切る_14章§6modUtil", _
+        Len(modUtil.SafeLeft(src, CUT_400)), CUT_400
 
-    ChkS "ナレッジ行切詰め_行頭のIDが保たれる_15章§0.7", _
-        Left(modUtil.SafeLeft("[M-0012] 食品工場リスク診断サービス", KB_LINE_MAX), 8), _
+    ChkS "SafeLeft_切らない長さでは先頭が保たれる_14章§6modUtil", _
+        Left(modUtil.SafeLeft("[M-0012] 食品工場リスク診断サービス", CUT_400), 8), _
         "[M-0012]"
 End Sub
 
 ' ----------------------------------------------------------------------------
-' G17 注入テキストの行バッファ
-'   根拠: 15章§6.1 共通規約「1行1件、行頭は `[ID] `」/ 15章§3・§4 の整形例。
-'   整形本体(RiskLibFor / MenusFor / LinesText 等)はナレッジシート読込を伴う
-'   ため層(a)対象外。複数行を順序どおり積む土台だけを固定する。
-'   区切り文字(vbLf か否か)は14章§6にも15章にも規定が無いため、ここでは
-'   含有と順序だけを見る(concerns 参照)。
+' G17 BufInit / BufAdd / BufText(14章§6 modUtil節)
+'   契約: 「行バッファ(16章 E-26)。BufText の区切りは vbLf。itemCount <= 0 は ""」。
+'   ここで見るのは modUtil の積み上げと連結だけであり、ナレッジ注入テキストの
+'   書式(15章§6.1「1行1件・行頭 [ID] 」)は modKnowledgeFmt が実装する。
 ' ----------------------------------------------------------------------------
 Private Sub T_LineBuffer()
     Dim buf() As String
@@ -434,20 +422,20 @@ Private Sub T_LineBuffer()
     Dim p3 As Long
 
     modUtil.BufInit buf, cnt
-    ChkN "注入行バッファ_初期化直後の件数は0_15章§6.1", cnt, 0
-    ChkS "注入行バッファ_初期化直後は空文字_15章§6.1", modUtil.BufText(buf, cnt), ""
+    ChkN "BufInit_初期化直後の件数は0_14章§6modUtil", cnt, 0
+    ChkS "BufText_初期化直後は空文字_14章§6modUtil", modUtil.BufText(buf, cnt), ""
 
     modUtil.BufAdd buf, cnt, "[M-0012] 食品工場リスク診断サービス"
     modUtil.BufAdd buf, cnt, "[L-03] 生産物賠償責任保険(PL保険)"
     modUtil.BufAdd buf, cnt, "[S-0004] 見守りヤモリ型(P2)"
-    ChkN "注入行バッファ_追加件数が一致_15章§6.1", cnt, 3
+    ChkN "BufAdd_追加件数が一致_14章§6modUtil", cnt, 3
 
     txt = modUtil.BufText(buf, cnt)
     p1 = InStr(txt, "[M-0012]")
     p2 = InStr(txt, "[L-03]")
     p3 = InStr(txt, "[S-0004]")
-    ChkB "注入行バッファ_追加した全行を含む_15章§6.1", _
+    ChkB "BufText_追加した全行を含む_14章§6modUtil", _
         (p1 > 0 And p2 > 0 And p3 > 0), "実際=[" & HeadOf(txt) & "]"
-    ChkB "注入行バッファ_追加順が保たれる_15章§6.1", _
+    ChkB "BufText_追加順が保たれる_14章§6modUtil", _
         (p1 < p2 And p2 < p3), "実際=[" & HeadOf(txt) & "]"
 End Sub

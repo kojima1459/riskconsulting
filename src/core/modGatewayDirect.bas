@@ -271,7 +271,10 @@ Public Function FormatTemperature(ByVal v As Double) As String
 End Function
 
 ' リクエストボディ本体(14章§3のJSON形。32bitメモリ制約=16章E-26のためバッファ
-' 連結方式=modUtil.BufAdd/BufTextを使い、`s = s & ...`の逐次連結はしない)。
+' 連結方式=modUtil.BufAdd + JoinCellChunks を使い、`s = s & ...`の逐次連結は
+' しない。BufText は区切りがvbLf(14章§6の行バッファ契約)であり、JSONの
+' 文字列リテラルの途中で断片を継ぐここでは使えないので単純連結の
+' JoinCellChunks を通す。未使用の余りスロットは空文字なので結果は変わらない)。
 '   sendTemperature: IsOSeriesModelの否定を呼び出し側から渡す(このFunctionは
 '     modelを見て自ら判定せず、渡された値のみを使う=1判断1箇所)。
 '   schemaJsonが空文字(Trim後)のときは response_format を出力しない。
@@ -312,7 +315,7 @@ Public Function BuildRequestBody(ByVal stepName As String, ByVal model As String
     End If
 
     modUtil.BufAdd buf, n, "}"
-    BuildRequestBody = modUtil.BufText(buf, n)
+    BuildRequestBody = modUtil.JoinCellChunks(buf)
 End Function
 
 ' ==============================================

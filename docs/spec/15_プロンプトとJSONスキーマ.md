@@ -1,11 +1,13 @@
 # 15. プロンプトとJSONスキーマ v2.4（本製品の核心）
 
+> v2.4.2（裁定書6: W2a整合）: §0 原則7に「PythonのCP932コーデックは通すがWindows実機で化ける6字（U+301C / U+2016 / U+2212 / U+00A2 / U+00A3 / U+00AC）も禁止対象」と、**仕様側（本章と docs/08）のコードフェンス内にも同じ検問を掛ける**（`vba_lint.py` の `check_docs_prompt_cp932`）ことを明記。本章のフェンス内に残っていた U+301C はすべて **U+FF5E「～」** へ置換した。§5 の差替規約の主語を **`AsmS4System`**（組立層）へ改訂し、§10.2 の対応表の関数を**すべて無引数のテンプレート関数**へ書き換えた（プレースホルダの埋め込みとブロックの差し込みは `modPromptsOps` の `Fill` / `Asm*` が行う。契約は14章§6）。
+
 > v2.4.1（裁定書5: W1整合）: §8.1の11 IDが `modMockLlm.ResponseById` のキーの正であること（バリアント選択は modGatewayRPN の責務）を明記し、§8.2を**状態レス規約**へ改訂（「最初の1回のみ」型の回数依存を廃止。リトライ系の検証は `mock_fault` を空へ切り替えた2ラン構成で行う）。`limit` の応答実体を `#LIMIT: 本日のAIリボン利用上限に達しました(LimitCheck)` の1文字列に固定した（14章§2の判定と同一の語彙源）。
 
 > v2.3: 2026-08-27部会フィードバック（内田部長・高橋PL）反映。リスクユニバース10分類化・保険移転可能性(insurability)・リスクステータス(ラウンド間ライフサイクル)・5段階スコア・引受目線(do_not_propose)・追加リサーチプロンプト生成(research_requests)・拠点ハザード観点(hazard)を追加。変更の経緯はdocs/20章。
 > v2.4: 実装前監査の反映。CP932浄化・純関数方式への変更・S3へのS1要約注入・S4バリアント全文（BLOCK_S4_PROPOSAL/ALLIANCE）・各Check節の検証ルール表化（V-xx ケースID）・mock 7 step種＋障害注入・注入予算と切詰め（§0.7）・PF/壁打ち注入書式（§6.1）・抽出規約と節⇔関数名対応表（§10）を追加。
 > v2.4（検証指摘の修正）: §0原則9のSanitizeInput対象を包括定義へ（1行属性の改行畳み込みを追加）、原則10の判定を3値へ、§1.1のBLOCK_CTX挿入先にS3Cを追加、§1.3のBLOCK_GUARDを7本のsystem限定（壁打ちは除外）へ、§8.1受入条件1を「各mockは自分の文脈で合格」へ、§10.1に複数フェンス規則と日本語ラベル形プレースホルダ（第3形）を追加、§10.2のBuildS3User引数順と `Block*` 7関数を修正。
-> v2.4（ニューリスク=エマージング確定）: 発注者確認により「ニューリスク」を新種・新興リスクの意味に確定。`SchemaS2()` に `emerging_risks`（0〜3件・required・空配列可・strict維持）を追加し、S2 system に第13ルール・S2 user の出力形式に該当ブロックを追加、§11に V-S2-16 / V-S2-17 を新設して CheckS2 を17件・全体を計64件へ、§8.1の MK-S2-NEW に emerging 1件・MK-S2-RNW に空配列を追加した。
+> v2.4（ニューリスク=エマージング確定）: 発注者確認により「ニューリスク」を新種・新興リスクの意味に確定。`SchemaS2()` に `emerging_risks`（0～3件・required・空配列可・strict維持）を追加し、S2 system に第13ルール・S2 user の出力形式に該当ブロックを追加、§11に V-S2-16 / V-S2-17 を新設して CheckS2 を17件・全体を計64件へ、§8.1の MK-S2-NEW に emerging 1件・MK-S2-RNW に空配列を追加した。
 
 本章の文字列が実装の正。modPromptsCore / modPromptsBlocks / modPromptsOps / modSchemas には**本章のテキストを一字一句このまま**実装する。ただし `Const` は使わず、`Public Function SchemaS1() As String` のような**純関数**の中で `s = s & "..." & vbLf` 方式で組み立てて返す（`Const` は1論理行1,023字・行継続25本の制約に当たり、1行追加で壊れるため）。一致検査の正規化規則は§10.1（改行は vbLf・末尾改行なし）。本章とコードの一致検査はテスト対象（17章 T-23）。
 
@@ -18,6 +20,8 @@
 5. **enum統制**: 語彙はスキーマのenumで固定し、表示時に日本語ラベルへ変換（変換表は19章と一致必須）
 6. **単一スキーマ主義**: new/renewalでスキーマを分けない。renewal専用フィールド（current_coverage, gaps）は**常にrequired**とし、newでは空配列を返させる（分岐はプロンプト注入ブロックで行う）。スキーマ分裂による抜け漏れを防ぐ
 7. **CP932内の文字のみ**: プロンプト・スキーマ本文（コードフェンス内）にCP932に無い文字を書かない。絵文字・EMダッシュ(U+2014)・波ダッシュ(U+301C)・全角マイナス等は禁止する。VBEはソースをCP932で保持するため、注入時に "?" へ化けるうえ、ソースは正しく見えるので気づけない（姉妹PoCでLLMへの指示文まで20箇所が化けた実害あり）。ダッシュを使いたい箇所は句点・読点・中黒で言い換える。UIのアイコン（電球等）は ui 層で組み立てるものとし、本章の本文には書かない。17章 T-23 の受入条件に `vba_lint.py` の `check_cp932_safe` 0件を含める
+   - **PythonのCP932コーデックは通すがWindows実機で化ける6字も禁止対象とする**: U+301C（波ダッシュ）/ U+2016（DOUBLE VERTICAL LINE）/ U+2212（MINUS SIGN）/ U+00A2（セント）/ U+00A3（ポンド）/ U+00AC（NOT SIGN）。PythonのcodecはこれらをCP932へ変換してしまうため「`str.encode("cp932")` が通る」ことを合格条件にすると素通りする（W2aで15章自身のフェンス内にU+301Cが23行残り、写した `.bas` が全部赤くなった）。全角チルダを書きたいときは **U+FF5E「～」**（CP932の0x8160）を使う。判定の実体は `tools/vba_lint.py` の `_CP932_DENY` であり、この6字を明示的に拒否する。
+   - **仕様側にも同じ検問を掛ける**: `tools/vba_lint.py` は `.bas` に加えて**本章と `docs/08_ドシエ収集プロンプト集.md` のコードフェンス内**を同基準で検査する（`check_docs_prompt_cp932`。フェンスの内側だけが対象＝§10.1(a)と同じ境界）。1文字でも見つかれば ERROR で exit 1。本文の正が汚れたまま実装へ流れるのを、下流（`.bas`）ではなく発生源で止めるための検問である。
 8. **`※`注記の区別**: 本章の `※` には2種類ある。(i) コードフェンス内で**行頭**にある `※` の行は**プロンプト本文**であり、そのままLLMへ送る補足指示である（例: 「※新規案件では gaps は [] とする。」）。(ii) プレースホルダの内側（`{{識別子 ※...}}`）にある `※` は**VBA実装向けのメモ**であり、LLMへは送らない（抽出時に除去。§10.1(c)）。LLMに読ませたい指示は必ず system の「必ず守るルール」または (i) の形で本文に書く。プレースホルダ注記に指示を隠さない
 9. **データ境界の無害化**: **13章で外部由来（人が貼る・人が書く・LLM出力の再注入）とされる全テキストが対象**であり、プロンプトへ埋め込む前に必ず `modUtilText.SanitizeInput` を通す（文字列 `■■■` を `[境界記号]` へ置換。データ境界の偽装防止。16章 E-04）。**列挙は例示であって限定列挙ではない**。対象は次のとおり: HP・有報・営業メモ・現契約サマリ・前回更新メモ・追加ドシエ・現場メモ・付保の見立て・ヒアリング回答・投函本文・前段Stepの出力JSON、および**次の3つも対象に含む**: `{{other_insurers}}`（他社付保メモ。案件一覧の自由記述欄。§1.1 BLOCK_CTX）／`{{company}}`（企業名。利用者の手入力。§2 S1 user・§5 S4 user）／`{{theme}}`（投函テーマ。§6 PF user）。新しい注入先を足すときは、その値が外部由来かを13章で確認し、外部由来なら列挙の有無にかかわらず本原則が適用される。
    - **1行属性の扱い**: `{{other_insurers}}` のように `■■■` の対の外へ1行で埋める属性値は、**`SanitizeInput` に加えて改行（CR/LF）を空白へ畳んでから埋める**（改行で行を増やし、後続行を別の指示に見せかける偽装を防ぐ。対の内側に置かない値はこの規定でのみ守られる）。
@@ -72,7 +76,7 @@
 | 4 | 種目 linesText | （全行） | 同上 | 5行（同上） |
 | 5 | リスクライブラリ riskLibText | kb_risk_rows（既定20） | 同上 | 5行（業種プライアが消えると§0.5 第2層が崩れる） |
 
-1〜5を順に1段ずつ適用し、そのつど総量を再計算する。5まで適用してなお超過する場合は、各行を先頭400字で切り「…」を付す。それでも超過する場合は E0102 で実行前警告とし、勝手にStepを中止しない。
+1～5を順に1段ずつ適用し、そのつど総量を再計算する。5まで適用してなお超過する場合は、各行を先頭400字で切り「…」を付す。それでも超過する場合は E0102 で実行前警告とし、勝手にStepを中止しない。
 
 **記録**: 切詰めが発生したら run_log の detail に `truncated:cases=3,schemes=2` の形式（対象=削った行数）で記録する。`modKnowledge.LastInjectedIds()` には**切詰め後に実際に注入したIDのみ**を載せる（run_log.injected_kb_ids が「見せていない知識」を含まないようにするため）。黙って削らない。
 
@@ -130,7 +134,7 @@ BLOCK_RENEWAL_S3:
 
 ### 2.0 収集レシピ（入力収集の標準。案件入力シートに常設表示・利用ガイドに転載）
 
-「HPテキスト」の正体を定義する。以下の8項目を、それぞれの場所からコピーして貼付欄にまとめて貼る（見出しは付けなくてよい。順不同・重複可）。目安は合計5,000〜20,000字。
+「HPテキスト」の正体を定義する。以下の8項目を、それぞれの場所からコピーして貼付欄にまとめて貼る（見出しは付けなくてよい。順不同・重複可）。目安は合計5,000～20,000字。
 
 | # | aspect(内部キー) | 集めるもの | どこから |
 |---|---|---|---|
@@ -154,7 +158,7 @@ BLOCK_RENEWAL_S3:
 | 13 | insurance_ctx | 付保の経緯・他社提案・過去のヒアリングで得た課題感（**社内で得た情報。顧客の非公開情報の扱いは16章のマトリクス順守**） | 営業メモ・現契約・前回更新メモ |
 | 14 | hazard | 拠点ごとのハザード情報（浸水想定深・土砂災害警戒区域・地震/津波/液状化想定・過去被災歴） | docs/08 D-7（ディープリサーチ）＋重ねるハザードマップ（disaportal.gsi.go.jp）で住所検索し要点を転記 |
 
-T2の収集は**docs/08「ドシエ収集プロンプト集」でディープリサーチ社内アプリに行わせ、人はコピペ運搬のみ**（人の作業15分・放置1〜2時間）。収集結果は「追加ドシエ」貼付欄へ。
+T2の収集は**docs/08「ドシエ収集プロンプト集」でディープリサーチ社内アプリに行わせ、人はコピペ運搬のみ**（人の作業15分・放置1～2時間）。収集結果は「追加ドシエ」貼付欄へ。
 
 **調達・供給網（supply_chain）の扱い**: `SchemaS1()` の `supply_chain` と、S2のリスクユニバース10分類の `supply_chain` に対応する収集観点は、独立した aspect を立てず **`business` 観点に含める**（T2では docs/08 D-9「調達・供給網の構造」で収集し、その結果を「追加ドシエ」欄へ貼る）。したがって `input_quality.coverage` の aspect は **14観点のまま**であり、`SchemaS1()` の enum も14値から増やさない。S1は `business` の充足度を判定する際に、事業・製品の記述だけでなく調達・供給網の記述の有無も見る。
 
@@ -190,7 +194,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    status(ok=十分/partial=断片的/missing=無い)を付ける。
    overall(high=仮説を持って訪問できる/mid=一般論が混ざる/low=一般論しか出せない)は
    案件のティア基準で判定する(クイック=基本8観点で判定/フルドシエ=14観点で判定)。
-   advice に「何をどこから追加で貼るべきか」を具体的に1〜2文で書く。甘い判定をしない。
+   advice に「何をどこから追加で貼るべきか」を具体的に1～2文で書く。甘い判定をしない。
 5b. research_requests には、status が partial/missing の観点のうち外部調査で埋められるものについて、
    社内の調査AIアプリにそのまま貼って使える調査プロンプト文面を生成する。対象企業名・業種・
    拠点名など既知の固有情報を文面に埋め込み、出典(URL)を付けて回答するよう指示する具体文とする。
@@ -289,7 +293,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "input_quality": {
     "coverage": [{"aspect": "profile", "status": "ok/partial/missing"}],
     "overall": "high/mid/low",
-    "advice": "追加で貼るべき情報とその場所(1〜2文。十分なら\"追加不要\")"
+    "advice": "追加で貼るべき情報とその場所(1～2文。十分なら\"追加不要\")"
   },
   "research_requests": [{"purpose": "何を埋めるための調査か(対象aspectを含め1文)",
                          "prompt_text": "調査AIアプリにそのまま貼れるプロンプト全文(企業名・拠点等の固有情報を埋め込む)"}]
@@ -415,11 +419,11 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 6. open_questions には、リスク評価の精度を上げるために顧客へ確認すべき事項を書く。
 7. 企業プロファイルの field_insights(営業の現場メモ原文)は公開情報に無い最重要の手がかりである。
    risk_clue タグの項目は必ずリスク仮説として検討し、根拠に使う場合は source="memo" とする。
-8. 各リスクに preventions(未然防止策)を1〜3件付ける。「事故が起きたら払う」ではなく
+8. 各リスクに preventions(未然防止策)を1～3件付ける。「事故が起きたら払う」ではなく
    「検知し、予防し、行動を変え、残余を保険でカバーする」が当社の思想である。
    対応する社内サービスが■■■内の一覧に実在する場合のみ related_menu_id にIDを書く(創作禁止)。
-9. frequency_score / impact_score は1〜5の整数で、frequency/impact の3値と整合させる
-   (low/small=1〜2, mid=3, high/large=4〜5)。リスクマップ上の相対位置が意味を持つよう、
+9. frequency_score / impact_score は1～5の整数で、frequency/impact の3値と整合させる
+   (low/small=1～2, mid=3, high/large=4～5)。リスクマップ上の相対位置が意味を持つよう、
    全リスクを同じ物差しで採点する。
 10. 各リスクに insurability(保険による移転可能性)を付ける。
    transferability: cover=既存の保険で比較的移転しやすい / partial=条件付き・部分的 /
@@ -437,7 +441,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    末尾に追記)、回答から新たに発見したリスクを "new" とする。提案書が訪問のたびに成長する。
    これが本製品の中核思想である。
 13. リスクユニバース10分類の定番類型に加え、新種・新興のリスク(サイバー・気候変動・規制変化・
-   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0〜3件
+   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0～3件
    emerging_risks に挙げる。一般論の羅列は禁止。当てはまりの根拠を書く。
    該当が薄ければ空配列とする(無理に埋めない)。
 ```
@@ -468,7 +472,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 {{hearingAnswersText ※初回は「なし」}}
 ■■■前回ラウンドのリスク仮説とヒアリング回答ここまで■■■
 
-上記を材料に、この企業の潜在リスク仮説を8〜15件、指定のJSON形式で出力してください。
+上記を材料に、この企業の潜在リスク仮説を8～15件、指定のJSON形式で出力してください。
 
 出力するJSONの形式:
 {
@@ -516,7 +520,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "open_questions": ["リスク評価の精度向上のため顧客に確認すべき事項"]
 }
 ※新規案件では gaps は [] とする。
-※horizon は already=既に顕在化 / near=1〜3年 / mid_long=3年超 とする。
+※horizon は already=既に顕在化 / near=1～3年 / mid_long=3年超 とする。
 ※この企業に当てはまる新種・新興リスクが無ければ emerging_risks は [] とする。
 ```
 
@@ -600,11 +604,11 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 
 | ケースID | 対象キー | 条件（これに該当したら発火） | 判定 | エラー文テンプレ |
 |---|---|---|---|---|
-| V-S2-01 | risks | 件数が5未満または20超 | 不合格 | `[V-S2-01] risks が{n}件です(5〜20件)` |
+| V-S2-01 | risks | 件数が5未満または20超 | 不合格 | `[V-S2-01] risks が{n}件です(5～20件)` |
 | V-S2-02 | risks[].risk_no | 値の重複がある | 不合格 | `[V-S2-02] risk_no {value} が重複しています` |
 | V-S2-03 | risks[] の enum 各キー | category / status / frequency / impact / evidence.source / insurability.transferability のいずれかが enum 外 | 不合格 | `[V-S2-03] risk_no {no} の {key} が不正です: {value}` |
 | V-S2-04 | risks[].evidence.quote | 空文字列 | 不合格 | `[V-S2-04] risk_no {no} の evidence.quote が空です` |
-| V-S2-05 | risks[].preventions | 件数が1未満または3超 | 不合格 | `[V-S2-05] risk_no {no} の preventions が{n}件です(1〜3件)` |
+| V-S2-05 | risks[].preventions | 件数が1未満または3超 | 不合格 | `[V-S2-05] risk_no {no} の preventions が{n}件です(1～3件)` |
 | V-S2-06 | preventions[].related_menu_id | `""` でなく、注入した menusText に実在しない | 不合格 | `[V-S2-06] risk_no {no} の related_menu_id {value} は実在しません` |
 | V-S2-07 | risks[].frequency_score | frequency とバンド不整合（low∈{1,2} / mid=3 / high∈{4,5}） | 不合格 | `[V-S2-07] risk_no {no} の frequency_score {value} が frequency={freq} と不整合です` |
 | V-S2-08 | risks[].impact_score | impact とバンド不整合（small∈{1,2} / mid=3 / large∈{4,5}） | 不合格 | `[V-S2-08] risk_no {no} の impact_score {value} が impact={imp} と不整合です` |
@@ -615,7 +619,7 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 | V-S2-13 | gaps[] | gap_no の重複、または gap_type が enum 外 | 不合格 | `[V-S2-13] gaps の {key} が不正です: {value}` |
 | V-S2-14 | risks[].evidence.source | `inference` の比率が50%超 | 警告 | `[V-S2-14] inference 比率が{p}%です(50%以下が目安)` |
 | V-S2-15 | insurability.transferability | `hard` が0件 | 警告 | `[V-S2-15] transferability=hard のリスクが0件です` |
-| V-S2-16 | emerging_risks | 件数が3超 | 不合格 | `[V-S2-16] emerging_risks が{n}件です(0〜3件)` |
+| V-S2-16 | emerging_risks | 件数が3超 | 不合格 | `[V-S2-16] emerging_risks が{n}件です(0～3件)` |
 | V-S2-17 | emerging_risks[] の enum 各キー | category / horizon / evidence_source のいずれかが enum 外 | 不合格 | `[V-S2-17] emerging_risks[{i}] の {key} が不正です: {value}` |
 
 補足: V-S2-15 は「保険で解けないリスクを明示すること」が分析の信頼性の証であるという方針に基づく警告（docs/20 高橋FB①）。V-S2-11 は真にギャップの無い優良契約がありうるため警告に留める。
@@ -716,7 +720,7 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
     {"risk_no": 5, "risk_name": "リスク名", "why_unmatched": "適合メニュー・型が無い理由(1文)"}
   ],
   "do_not_propose": [
-    {"topic": "提案を控える種目・リスク(例: D&O)", "reason": "控える理由(引受目線・1〜2文)"}
+    {"topic": "提案を控える種目・リスク(例: D&O)", "reason": "控える理由(引受目線・1～2文)"}
   ]
 }
 ※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。
@@ -802,7 +806,7 @@ linesText の `| 市場環境:…` は種目マスタの `market_note`（管理�
 | V-S3-12 | unmatched_risks[].risk_no | s2Json の risk_no に存在しない | 不合格 | `[V-S3-12] unmatched_risks の risk_no {value} が S2 に存在しません` |
 | V-S3-13 | stories[].proposal_kind | case_type=renewal で upsell も cross_sell も0本 | 警告 | `[V-S3-13] 更新案件ですが upsell/cross_sell が0本です` |
 
-**ID実在チェックの停止規約**: V-S3-03〜V-S3-06 は**不合格→修復リトライ→なお不合格なら E0301 で停止**する（status=error。S1/S2の結果は保持し、S3から再開できる）。**幻覚IDの黙殺除去は禁止**（KPI「S3実在チェックのすり抜け0件」を直接担う分岐であるため）。
+**ID実在チェックの停止規約**: V-S3-03～V-S3-06 は**不合格→修復リトライ→なお不合格なら E0301 で停止**する（status=error。S1/S2の結果は保持し、S3から再開できる）。**幻覚IDの黙殺除去は禁止**（KPI「S3実在チェックのすり抜け0件」を直接担う分岐であるため）。
 補足: V-S3-13 の upsell 判定は {{s1SummaryJson}} の current_coverage を根拠に行われる（systemルール11）。S3 userにS1要約を注入していない実装ではこの判定が成立しないため、注入の有無は17章§4-2のプレースホルダ突合で検査する。
 
 ## 4.5 S2批判パス（S2C。quality_mode=deep 時のみ）
@@ -822,13 +826,13 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 3. 根拠の質: evidence の引用は本当にそのリスクを支えているか。こじつけはないか。
    inference が多すぎないか。loss_scale_note に根拠のない数字が書かれていないか。
 4. 整合性: frequency と impact はシナリオと整合しているか。frequency_score/impact_score の
-   相対関係は全リスク間で妥当か(全部4〜5のような判定の逃げがないか)。
+   相対関係は全リスク間で妥当か(全部4～5のような判定の逃げがないか)。
 5. ギャップ分析(更新案件): gap_type の分類は正しいか。current_coverage と突き合わせて
    見落としたギャップはないか。
 6. 移転可能性: transferability の判定は正しいか。保険化困難(hard)なリスクを安易に cover と
    していないか。逆に、条件・特約次第で移転できるものを hard と切り捨てていないか。
 7. 反転・取り違い: 補償の適否や条件に言及している箇所で、否定・限定(「支払わない」「対象外」
-   「〜に限り」「〜の場合を除く」)の向きが入力資料・ナレッジと逆になっていないか。
+   「～に限り」「～の場合を除く」)の向きが入力資料・ナレッジと逆になっていないか。
    条件分岐の「ただし書き」を本則と取り違えていないか。入力に無い数値・条文番号・金額・期間が
    書かれていたら、削除ではなく「記載なし・要確認」への置換を指示すること。
 甘い審査は部下のためにならない。ただし指摘には必ず改善の方向を添えること。
@@ -858,10 +862,10 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
   "issues": [
     {"target": "risk_no:3 / gap_no:1 / overall のいずれかの形式",
      "issue_type": "missing/generic/weak_evidence/inconsistent/gap_error/insurability_error",
-     "detail": "指摘(1〜2文)", "suggestion": "改善の方向(1文)"}
+     "detail": "指摘(1～2文)", "suggestion": "改善の方向(1文)"}
   ],
   "additional_risks": [
-    {"risk_name": "追加すべきリスク名", "why": "なぜ見落としと言えるか(根拠の引用つき・1〜2文)"}
+    {"risk_name": "追加すべきリスク名", "why": "なぜ見落としと言えるか(根拠の引用つき・1～2文)"}
   ]
 }
 ※問題が本当に無い観点については指摘を作らない(水増し禁止)。
@@ -915,7 +919,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 正しいか、hook_question は最初の30秒で経営者の顔を上げさせられるか、幹事・BID等の案件文脈と
 整合しているか、そして**引受部門が難色を示すはずの提案が混ざっていないか**(係争中の先のD&O、
 大事故直後の当該種目など。あれば do_not_propose に回すべき)を審査する。あわせて、補償内容の
-説明で否定・限定(「支払わない」「対象外」「〜に限り」)の向きがメニュー・種目ナレッジと逆に
+説明で否定・限定(「支払わない」「対象外」「～に限り」)の向きがメニュー・種目ナレッジと逆に
 なっていないか、ナレッジに無い補償範囲・金額を約束していないかを必ず点検する。
 それぞれの人格で率直に指摘し、改善の方向を添えること。
 ```
@@ -943,11 +947,11 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 出力するJSONの形式:
 {
   "executive_reactions": [
-    {"story_no": 1, "reaction": "経営者の率直な反応(1〜2文・話し言葉)", "lands": true}
+    {"story_no": 1, "reaction": "経営者の率直な反応(1～2文・話し言葉)", "lands": true}
   ],
   "issues": [
     {"target": "story_no:2 / overall", "issue_type": "wont_land/not_executable/wrong_priority/weak_hook/context_mismatch/uw_concern",
-     "detail": "指摘(1〜2文)", "suggestion": "改善の方向(1文)"}
+     "detail": "指摘(1～2文)", "suggestion": "改善の方向(1文)"}
   ]
 }
 ※executive_reactions は3ストーリー全てに出す。lands=そのストーリーが刺さりそうか。
@@ -1011,7 +1015,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 - **proposal（保険提案書・既定)**: 基本5枚構成。構成指示ブロックは **BLOCK_S4_PROPOSAL**
 - **alliance（協業提案書)**: scheme提案が主軸の案件用。構成指示ブロックは **BLOCK_S4_ALLIANCE**
 
-**差替規約（BuildS4System）**: `Public Function BuildS4System(ByVal variant As String, ByVal tier As String) As String`。共通のsystem本文にある `{{BLOCK_S4_VARIANT}}` の位置に、variant="proposal" なら BLOCK_S4_PROPOSAL を、variant="alliance" なら BLOCK_S4_ALLIANCE を差し込む。**それ以外の値（空文字を含む）は proposal として扱い**、run_log の detail に `s4_variant_fallback:{value}` を記録する（黙って既定に落とさない）。variant の値は案件一覧の `s4_variant` 列（13章§2.1）から modPipeline が取り出して渡す（modPrompts* は案件データを直接読まない。12章§4）。tier は `dossier_tier` の値をそのまま渡す（t1_quick / t2_full / t3_sparring。t3_sparring は t2_full と同じ扱い）。`{{pptMaxSlidesT2}}` は modConfig の `ppt_max_slides_t2`（既定10）を展開する。
+**差替規約（AsmS4System）**: `Public Function AsmS4System(ByVal variantName As String, ByVal tier As String, Optional ByRef fallbackNote As String = "") As String`（14章§6 の**組立層**）。テンプレート `BuildS4System()`（**無引数**。本節のフェンス本文をそのまま返す）が持つ `{{BLOCK_S4_VARIANT}}` の位置に、variantName="proposal" なら BLOCK_S4_PROPOSAL を、variantName="alliance" なら BLOCK_S4_ALLIANCE を差し込むのは **`AsmS4System` の責務**である（テンプレート関数は差替をしない。14章§6の二層分離）。**それ以外の値（空文字を含む）は proposal として扱い**、`s4_variant_fallback:{value}` を `fallbackNote` で帯域外に返す。modPrompts* は run_log へ書けない（12章§4のR4）ため、**run_log の detail への記録は呼び出し側 modPipeline が行う**（黙って既定に落とさない、という規約自体は変わらない）。variantName の値は案件一覧の `s4_variant` 列（13章§2.1）から modPipeline が取り出して渡す（modPrompts* は案件データを直接読まない。12章§4）。tier は `dossier_tier` の値をそのまま渡す（t1_quick / t2_full / t3_sparring。t3_sparring は t2_full と同じ扱い）。`{{pptMaxSlidesT2}}` は modConfig の `ppt_max_slides_t2`（既定10）を `AsmS4System` が展開する。
 
 ### 構成指示ブロック（BLOCK_S4_PROPOSAL。modPromptsBlocks）
 
@@ -1036,7 +1040,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 スライド1: 現状と課題(相手企業の事業と、当社が見ている課題。相手企業の顧客・エンドユーザーが
            困っていることを相手の言葉で書く。保険用語で書かない)
 スライド2: 座組の全体像(誰と誰が何を組むか。相手企業・当社・エンドユーザー・必要なら第三の
-           パートナーの役割を1枚で示す。適用する座組の型と座組パターンID(P1〜P15)を明記し、
+           パートナーの役割を1枚で示す。適用する座組の型と座組パターンID(P1～P15)を明記し、
            なぜこの型かを1文で述べる。型・パターンは提案ストーリーに出たものだけを使う)
 スライド3: スキーム(役割分担と、お金とデータの流れ)。「器」を必ず明示する
            =誰が契約者か / 保険料を誰が払うか / どの経路で加入するか / 給付は何を誰に出すか。
@@ -1057,10 +1061,10 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 分析結果を、商談用のPowerPoint骨子とヒアリング質問リストにまとめます。
 
 必ず守るルール:
-1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5〜{{pptMaxSlidesT2}}枚まで拡張可。
+1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5～{{pptMaxSlidesT2}}枚まで拡張可。
    6枚目以降は「付録: 分析の根拠・データ」として使う)。
 {{BLOCK_S4_VARIANT}}
-2. bullets は1枚あたり3〜6点、1点40字以内。提案書にそのまま貼れる体言止め・簡潔文。
+2. bullets は1枚あたり3～6点、1点40字以内。提案書にそのまま貼れる体言止め・簡潔文。
 3. notes は営業担当がそのスライドで話すトークのメモ(2文以内)。
 4. hearing_questions は、リスク仮説の check_points・open_questions・プロファイルの missing_info を
    統合し、商談でそのまま使える丁寧な質問文に整形する。最大10問。重複統合・重要度順。
@@ -1098,7 +1102,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 }
 ```
 
-`{{slideCountHint}}` は `BuildS4User` が**展開済みの文字列**を埋める（プレースホルダの入れ子にしない）。値は `ctx.dossier_tier` と config から決める: t1_quick のとき `5`、t2_full / t3_sparring のとき `5〜` ＋ `ppt_max_slides_t2` の値（既定なら `5〜10`）。ティアは TCaseCtx に含まれ、枚数上限は config 参照でよいため、BuildS4User の引数は増やさない（14章§6の契約どおり4引数）。
+`{{slideCountHint}}` は `BuildS4User` が**展開済みの文字列**を埋める（プレースホルダの入れ子にしない）。値は `ctx.dossier_tier` と config から決める: t1_quick のとき `5`、t2_full / t3_sparring のとき `5～` ＋ `ppt_max_slides_t2` の値（既定なら `5～10`）。ティアは TCaseCtx に含まれ、枚数上限は config 参照でよいため、BuildS4User の引数は増やさない（14章§6の契約どおり4引数）。
 alliance バリアントでも出力スキーマ・件数規約・CheckS4 は proposal と同一である（変わるのは system の構成指示ブロックのみ）。
 
 ### Schema-S4（`SchemaS4()`）
@@ -1129,10 +1133,10 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | ケースID | 対象キー | 条件（これに該当したら発火） | 判定 | エラー文テンプレ |
 |---|---|---|---|---|
 | V-S4-01 | slides | dossier_tier=t1_quick で件数が5でない | 不合格 | `[V-S4-01] slides が{n}枚です(クイック案件は5枚固定)` |
-| V-S4-02 | slides | dossier_tier=t2_full / t3_sparring で件数が5未満または `ppt_max_slides_t2`（既定10）超 | 不合格 | `[V-S4-02] slides が{n}枚です(5〜{max}枚)` |
+| V-S4-02 | slides | dossier_tier=t2_full / t3_sparring で件数が5未満または `ppt_max_slides_t2`（既定10）超 | 不合格 | `[V-S4-02] slides が{n}枚です(5～{max}枚)` |
 | V-S4-03 | slides[].slide_no | 1..N 各1回の連番でない（欠落・重複・順序違い） | 不合格 | `[V-S4-03] slide_no が1..{n}の連番ではありません: {value}` |
-| V-S4-04 | slides[].bullets | 件数が1未満または8超 | 不合格 | `[V-S4-04] slide_no {no} の bullets が{n}点です(1〜8点)` |
-| V-S4-05 | hearing_questions | 件数が1未満または10超 | 不合格 | `[V-S4-05] hearing_questions が{n}問です(1〜10問)` |
+| V-S4-04 | slides[].bullets | 件数が1未満または8超 | 不合格 | `[V-S4-04] slide_no {no} の bullets が{n}点です(1～8点)` |
+| V-S4-05 | hearing_questions | 件数が1未満または10超 | 不合格 | `[V-S4-05] hearing_questions が{n}問です(1～10問)` |
 | V-S4-06 | file_title | 空文字列 | 不合格 | `[V-S4-06] file_title が空です` |
 
 補足: V-S4-06 は file_title が出力ファイル名の元になるため（`modUtilText.SanitizeFileName` を通す。14章§6）。CheckS4 は s4_variant によって分岐しない。
@@ -1160,9 +1164,9 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
    d=保険料を払う法人・自治体が特定できる。
 4. duplicates には、■■■内の既存メニュー・型・研究中テーマと重複・近接するものを挙げる
    (IDは一覧に実在するもののみ。無ければ空配列)。
-5. predicted_drop_types には、このまま判定に回った場合に予測される棄却類型(T1〜T10)を挙げる。
+5. predicted_drop_types には、このまま判定に回った場合に予測される棄却類型(T1～T10)を挙げる。
 6. rework_suggestions には、壁を越える3手(加入経路を変える/給付形態を変える/引受主体を変える)と
-   座組パターン(P1〜P15)を使った具体的な組み替え案を1〜3件書く。
+   座組パターン(P1～P15)を使った具体的な組み替え案を1～3件書く。
 7. survival は組み替え前の現状評価とする(high/mid/low)。
 ```
 （末尾に BLOCK_GUARD）
@@ -1188,7 +1192,7 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 {{schemesText}}
 ■■■座組の型ライブラリここまで■■■
 
-■■■座組パターン(P1〜P15)ここから■■■
+■■■座組パターン(P1～P15)ここから■■■
 {{patternsText}}
 ■■■座組パターンここまで■■■
 
@@ -1218,7 +1222,7 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
   "survival": "high/mid/low",
   "advice_to_poster": "投稿者への一言(前向きに・100字以内)"
 }
-※principle_checks は必ず5問、grammar_checks は必ずa〜dの4件を出力する。
+※principle_checks は必ず5問、grammar_checks は必ずa～dの4件を出力する。
 ```
 
 ### Schema-PF（`SchemaPF()`）
@@ -1266,14 +1270,14 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | ケースID | 対象キー | 条件（これに該当したら発火） | 判定 | エラー文テンプレ |
 |---|---|---|---|---|
 | V-PF-01 | principle_checks | 件数が5でない、または q_no が1..5各1回でない | 不合格 | `[V-PF-01] principle_checks が{n}件です(q_no=1..5各1回)` |
-| V-PF-02 | grammar_checks | 件数が4でない、または key が a〜d 各1回でない | 不合格 | `[V-PF-02] grammar_checks が{n}件です(key=a〜d各1回)` |
+| V-PF-02 | grammar_checks | 件数が4でない、または key が a～d 各1回でない | 不合格 | `[V-PF-02] grammar_checks が{n}件です(key=a～d各1回)` |
 | V-PF-03 | duplicates[].ref_id | `M-` / `S-` / `K-` で始まるID形式なのに、注入した一覧に実在しない | 不合格 | `[V-PF-03] duplicates[{i}].ref_id {value} は実在しません` |
-| V-PF-04 | rework_suggestions | 件数が3超 | 不合格 | `[V-PF-04] rework_suggestions が{n}件です(0〜3件)` |
-| V-PF-05 | predicted_drop_types[] | enum（T1〜T10）以外 | 不合格 | `[V-PF-05] predicted_drop_types に不正な値があります: {value}` |
-| V-PF-06 | rework_suggestions[].pattern_id | `""` でも P1〜P15 でもない | 不合格 | `[V-PF-06] rework_suggestions[{i}].pattern_id が不正です: {value}` |
+| V-PF-04 | rework_suggestions | 件数が3超 | 不合格 | `[V-PF-04] rework_suggestions が{n}件です(0～3件)` |
+| V-PF-05 | predicted_drop_types[] | enum（T1～T10）以外 | 不合格 | `[V-PF-05] predicted_drop_types に不正な値があります: {value}` |
+| V-PF-06 | rework_suggestions[].pattern_id | `""` でも P1～P15 でもない | 不合格 | `[V-PF-06] rework_suggestions[{i}].pattern_id が不正です: {value}` |
 | V-PF-07 | survival / rework_suggestions[].approach / duplicates[].relation | いずれかが enum 外 | 不合格 | `[V-PF-07] {key} が不正です: {value}` |
 
-補足: V-PF-05〜V-PF-07 は direct 経路では strict スキーマが担保するが、**ribbon 経路には strict が無い**ため VBA 側でも必ず検査する（§0 原則4）。
+補足: V-PF-05～V-PF-07 は direct 経路では strict スキーマが担保するが、**ribbon 経路には strict が無い**ため VBA 側でも必ず検査する（§0 原則4）。
 
 ## 6.1 PF・壁打ちの注入テキスト整形（modKnowledge）
 
@@ -1407,7 +1411,7 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 ### FG（型生成・掛け合わせ）要旨
 - system: 「未解決リスク×機構×パターン（器）の組合せ候補を生成し、生存文法4条件でセルフ審査して S/A/B 格付・成立条件・最初に検証すべき仮説を付す。器（加入経路・被保険者の置き方）を必ず明示する」
 - Schema-FG: `{"candidates":[{"name","pattern_id","mechanism_refs":[MC-ID],"target_risk","structure","entry_path","trigger","benefit_form","grammar_check":{"a":bool,"b":bool,"c":bool,"d":bool},"grade":{"enum":["S","A","B"]},"first_hypothesis","similar_precedent"}]}`（strict・全required。mechanism_refs/pattern_idはVBAで実在チェック）
-- Phase 1.5着手時に本節をS1〜S4と同水準の全文へ昇格させる（17章 T-50）
+- Phase 1.5着手時に本節をS1～S4と同水準の全文へ昇格させる（17章 T-50）
 
 ## 10. プロンプト変更管理
 
@@ -1439,27 +1443,29 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | §1.2 更新指示ブロック | `BlockRenewalS1()` / `BlockRenewalS2()` / `BlockRenewalS3()` | modPromptsBlocks |
 | §1.3 データ境界規律 | `BlockGuard()` | modPromptsBlocks |
 | §2 system | `BuildS1System()` | modPromptsCore |
-| §2 user | `BuildS1User(ctx, hpTxt, yuhoTxt, memoTxt, contractTxt, prevRenewalTxt, dossierTxt, fieldNotes, coverageNote, hearingAnswers)` | modPromptsCore |
+| §2 user | `BuildS1User()` | modPromptsCore |
 | §2 Schema-S1 | `SchemaS1()` | modSchemas |
 | §3 system | `BuildS2System()` | modPromptsCore |
-| §3 user | `BuildS2User(ctx, s1Json, riskLib, menus, prevS2Json, hearingAnswers)` | modPromptsCore |
+| §3 user | `BuildS2User()` | modPromptsCore |
 | §3 Schema-S2 | `SchemaS2()` | modSchemas |
 | §4 system | `BuildS3System()` | modPromptsCore |
-| §4 user | `BuildS3User(ctx, s1Summary, s2Json, menus, lines, schemes, cases)` | modPromptsCore |
+| §4 user | `BuildS3User()` | modPromptsCore |
 | §4 Schema-S3 | `SchemaS3()` | modSchemas |
-| §4.5 system / user / スキーマ | `BuildS2CriticSystem()` / `BuildS2CriticUser(s1Json, s2Json, riskLib)` / `SchemaS2C()` | modPromptsOps / modSchemas |
-| §4.6 system / user / スキーマ | `BuildS3CriticSystem()` / `BuildS3CriticUser(ctx, s1Summary, s2Json, s3Json)` / `SchemaS3C()` | modPromptsOps / modSchemas |
-| §4.7 改訂パス | `ReviseSuffix(critiqueDigest)` | modPromptsOps |
+| §4.5 system / user / スキーマ | `BuildS2CriticSystem()` / `BuildS2CriticUser()` / `SchemaS2C()` | modPromptsOps / modSchemas |
+| §4.6 system / user / スキーマ | `BuildS3CriticSystem()` / `BuildS3CriticUser()` / `SchemaS3C()` | modPromptsOps / modSchemas |
+| §4.7 改訂パス | `ReviseSuffix()` | modPromptsOps |
 | §5 構成指示ブロック | `BlockS4Proposal()` / `BlockS4Alliance()` | modPromptsBlocks |
-| §5 system | `BuildS4System(variant, tier)` | modPromptsCore |
-| §5 user | `BuildS4User(ctx, s1Json, s2Json, s3Json)` | modPromptsCore |
+| §5 system | `BuildS4System()` | modPromptsCore |
+| §5 user | `BuildS4User()` | modPromptsCore |
 | §5 Schema-S4 | `SchemaS4()` | modSchemas |
-| §6 system / user / スキーマ | `BuildPFSystem()` / `BuildPFUser(theme, body, rules, menusSummary, schemes, patterns, researching)` / `SchemaPF()` | modPromptsOps / modSchemas |
-| §6.5 system | `BuildSparringSystem(dossierSummary, s1s2s3Json, schemes, patterns, mechs, rules)` | modPromptsOps |
-| §7 修復リトライ | `RepairSuffix(validationErrors)` | modPromptsOps |
+| §6 system / user / スキーマ | `BuildPFSystem()` / `BuildPFUser()` / `SchemaPF()` | modPromptsOps / modSchemas |
+| §6.5 system | `BuildSparringSystem()` | modPromptsOps |
+| §7 修復リトライ | `RepairSuffix()` | modPromptsOps |
 | §9 WT / FG（Phase 1.5） | `SchemaWT()` / `SchemaFG()` | modSchemas ※本節はまだコードフェンスを持たず要旨のみのため、**Phase 1.5の全文昇格（T-50）まで `prompt_diff.py` の突合対象外**とする |
 
-`Block*` の7関数（`BlockCtx` / `BlockRenewalS1` / `BlockRenewalS2` / `BlockRenewalS3` / `BlockGuard` / `BlockS4Proposal` / `BlockS4Alliance`）は14章§6に宣言のない modPromptsBlocks 内部の関数であり、いずれも**引数なしでテンプレート文字列（`{{...}}` を含んだまま）を返す**。プレースホルダの埋め込みは、そのブロックを差し込む側の `Build*System` / `Build*User` が行う（差し込みと置換を1箇所に閉じ、ブロック関数を純粋な文字列返却に保つ）。
+`Block*` の7関数（`BlockCtx` / `BlockRenewalS1` / `BlockRenewalS2` / `BlockRenewalS3` / `BlockGuard` / `BlockS4Proposal` / `BlockS4Alliance`）は14章§6に宣言のない modPromptsBlocks 内部の関数であり、いずれも**引数なしでテンプレート文字列（`{{...}}` を含んだまま）を返す**。
+
+**本表の31関数はすべて無引数のテンプレート関数である**（14章§6の二層分離）。プレースホルダの埋め込みとブロックの差し込みは、テンプレート関数の中ではなく **`modPromptsOps` の組立層（`Fill` / `Asm*`）が行う**。理由: `prompt_diff.py` の評価器は「文字列リテラルと `vbLf` 等の組込定数の連結」だけを評価するため、テンプレート関数の中に置換・分岐を書くと本文を突き合わせられなくなり、逆に引数を宣言だけして使わないと「引数を受け取るのに1つも使わない関数」という欺瞞が残る（W2aで実際に発生した）。テンプレート関数は本文の**写し**に徹し、実値の埋め込みは組立層に一元化する。組立層は15章の本文を1文字も持たない（本文を2箇所に書かない）。
 
 ## 11. 検証ルール ケースID一覧
 
@@ -1467,12 +1473,12 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 | Check関数 | ケースID | 不合格 | 警告 | 合格判定 |
 |---|---|---|---|---|
-| CheckS1 | V-S1-01 〜 V-S1-11（11件） | 01/02/03/06/07/09/10 | 04/05/08/11 | - |
-| CheckS2 | V-S2-01 〜 V-S2-17（17件） | 01/02/03/04/05/06/07/08/09/12/13/16/17 | 10/11/14/15 | - |
-| CheckS3 | V-S3-01 〜 V-S3-13（13件） | 01/02/03/04/05/06/07/08/09/10/11/12 | 13 | - |
-| CheckS4 | V-S4-01 〜 V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
-| CheckPF | V-PF-01 〜 V-PF-07（7件） | 01/02/03/04/05/06/07 | - | - |
-| CheckS2C | V-S2C-01 〜 V-S2C-05（5件） | 01/02/03 | 04 | 05（issues 0件=改訂スキップ） |
-| CheckS3C | V-S3C-01 〜 V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
+| CheckS1 | V-S1-01 ～ V-S1-11（11件） | 01/02/03/06/07/09/10 | 04/05/08/11 | - |
+| CheckS2 | V-S2-01 ～ V-S2-17（17件） | 01/02/03/04/05/06/07/08/09/12/13/16/17 | 10/11/14/15 | - |
+| CheckS3 | V-S3-01 ～ V-S3-13（13件） | 01/02/03/04/05/06/07/08/09/10/11/12 | 13 | - |
+| CheckS4 | V-S4-01 ～ V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
+| CheckPF | V-PF-01 ～ V-PF-07（7件） | 01/02/03/04/05/06/07 | - | - |
+| CheckS2C | V-S2C-01 ～ V-S2C-05（5件） | 01/02/03 | 04 | 05（issues 0件=改訂スキップ） |
+| CheckS3C | V-S3C-01 ～ V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
 
 **合計64件**（不合格52件 / 警告10件 / 合格判定2件）。ケースIDは欠番を作らず、削除する場合も番号を再利用しない（追番のみ）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。

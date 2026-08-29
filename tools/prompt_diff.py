@@ -37,10 +37,18 @@ prompt_diff.py - 15章のプロンプト/スキーマ本文と .bas 実装の一
     python3 tools/prompt_diff.py --strict   # 未実装関数も差分として数える
     exit code: 差分件数(0=一致)。125件を超えたら125で頭打ちにする
 
+スキーマのJSON検査(17章 T-23 DoD「schemaはJSONとしてパース可能」の機械化):
+    Schema* 系の抽出本文を json.loads でパースし、さらに 14章§3 が direct 経路の
+    必須要件と定める **strict要件**(すべてのオブジェクトで properties と required が
+    一致し、additionalProperties: false が付いている)を再帰的に検査する。
+    違反は差分と同じく exit code に算入する(--strict の合格条件に含まれる)。
+    これが無いと、スキーマ本体が壊れても「15章と一字一句一致」だけは通ってしまい、
+    実機のdirect経路で初めて落ちる。
+
     --strict は「未実装=差分」とみなす最終確認用スイッチ。突合先ディレクトリが
     無い/対象 .bas が0本(=全関数未実装)のときも、--strict では不合格(exit 1)に
     倒す。**--strict を付けない既定はこの状態を「T-23で実装予定のスキップ」として
-    exit 0 のまま通す**(W0〜W1では実装前なのが正常なため)。この非対称が無いと
+    exit 0 のまま通す**(W0～W1では実装前なのが正常なため)。この非対称が無いと
     「対象0件」を無条件に合格扱いにしてしまい --strict が骨抜きになる(裁定書4 項目13)。
 ================================================================================
 """
@@ -48,6 +56,7 @@ prompt_diff.py - 15章のプロンプト/スキーマ本文と .bas 実装の一
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -364,6 +373,80 @@ def extract_code_bodies(src_dir: Path):
     return files, result
 
 
+# ==============================================================================
+# Schema* のJSON検査(17章 T-23 DoD の機械化。14章§3 の strict 要件)
+# ==============================================================================
+SCHEMA_FUNCS = ("SchemaS1", "SchemaS2", "SchemaS3", "SchemaS4",
+                "SchemaS2C", "SchemaS3C", "SchemaPF", "SchemaWT", "SchemaFG")
+
+
+def _walk_schema(node, path: str, problems: list[str]) -> None:
+    if isinstance(node, dict):
+        if node.get("type") == "object" or "properties" in node:
+            props = node.get("properties")
+            if not isinstance(props, dict):
+                problems.append(f"{path}: type=object なのに properties がありません")
+            else:
+                req = node.get("required")
+                if not isinstance(req, list):
+                    problems.append(
+                        f"{path}: required がありません"
+                        "(strict:true は全プロパティを required に要求します)")
+                else:
+                    missing = [k for k in props if k not in req]
+                    extra = [k for k in req if k not in props]
+                    if missing:
+                        problems.append(f"{path}: required に無い properties: {missing}")
+                    if extra:
+                        problems.append(f"{path}: properties に無い required: {extra}")
+            if node.get("additionalProperties") is not False:
+                problems.append(f"{path}: additionalProperties: false がありません")
+        for k, v in node.items():
+            _walk_schema(v, f"{path}.{k}", problems)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            _walk_schema(v, f"{path}[{i}]", problems)
+
+
+def check_schema_body(name: str, body: str) -> list[str]:
+    """1本のスキーマ本文を検査して違反メッセージの一覧を返す(空=合格)。"""
+    try:
+        obj = json.loads(body)
+    except ValueError as e:
+        return [f"JSONとしてパースできません: {e}"]
+    problems: list[str] = []
+    _walk_schema(obj, name, problems)
+    return problems
+
+
+def run_schema_checks(code: dict) -> int:
+    """実装済みの Schema* を全部検査し、違反件数を返す。"""
+    print("-" * 78)
+    print("スキーマJSON検査 (json.loads + strict要件: properties=required / "
+          "additionalProperties:false)")
+    bad = 0
+    checked = 0
+    for fn in SCHEMA_FUNCS:
+        entry = code.get(fn)
+        if entry is None:
+            continue
+        path, body, _err = entry
+        if body is None:
+            continue
+        checked += 1
+        problems = check_schema_body(fn, body)
+        if problems:
+            bad += len(problems)
+            print(f"  NG    {fn} [{path.name}]: {len(problems)}件")
+            for msg in problems[:6]:
+                print(f"        - {msg}")
+        else:
+            print(f"  OK    {fn} [{path.name}] ({len(body)}字)")
+    if checked == 0:
+        print("  (実装済みの Schema* がありません)")
+    return bad
+
+
 def show_diff(name: str, want: str, got: str) -> None:
     wl, gl = want.split("\n"), got.split("\n")
     for i in range(max(len(wl), len(gl))):
@@ -456,8 +539,11 @@ def main() -> int:
                 continue
             matched += 1
 
+    diffs += run_schema_checks(code)
+
     print("-" * 78)
-    print(f"一致: {matched}件 / 差分: {diffs}件 / 未実装(スキップ): {len(skipped)}件")
+    print(f"一致: {matched}件 / 差分(スキーマJSON違反を含む): {diffs}件 / "
+          f"未実装(スキップ): {len(skipped)}件")
     if skipped:
         print(f"  未実装: {', '.join(skipped)}")
         if args.strict:

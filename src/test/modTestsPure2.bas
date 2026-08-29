@@ -2,11 +2,11 @@ Attribute VB_Name = "modTestsPure2"
 Option Explicit
 
 ' ============================================================================
-' modTestsPure2 - 純ロジックモジュールのユニットテスト(17章§4-1 層(a))G6〜G11
+' modTestsPure2 - 純ロジックモジュールのユニットテスト(17章§4-1 層(a))G6～G11
 ' ----------------------------------------------------------------------------
 ' 役割:
 '   modTestsPure.bas が30,000字契約の警告域(29,851字)に達したため、
-'   mock/log/gateway系のグループ(G6〜G11)をここへ切り出した。アサーション・
+'   mock/log/gateway系のグループ(G6～G11)をここへ切り出した。アサーション・
 '   期待値・テスト名は modTestsPure.bas から一字も変えていない。グループ単位の
 '   失敗隔離(On Error構造)もそのまま移設した。
 '
@@ -18,7 +18,7 @@ Option Explicit
 '   ActiveSheet には一切触れない。改行は vbLf 基準。
 '
 ' 本ファイルのテスト本数: 70本(G6 21 / G7 9 / G8 5 / G9 4 / G10 10 / G11 16 /
-'   Fnv1a64Hex系はG3で modTestsPure.bas 側)。modTestsPure.bas(G0〜G5) 45本と
+'   Fnv1a64Hex系はG3で modTestsPure.bas 側)。modTestsPure.bas(G0～G5) 45本と
 '   合わせて総記載 115本 = 実行 115本 / SKIP 0本(wintest/tests_expected.txt)。
 '
 ' グループ / 本数 / 根拠章:

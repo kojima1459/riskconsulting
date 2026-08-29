@@ -67,7 +67,8 @@ MODULE_REGISTRY = {
     "modUIProgress",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modInboxStore",
-    "modJudgeStore", "modKnowledge", "modValidate", "modCompanyFile", "modPii",
+    "modJudgeStore", "modKnowledge", "modKnowledgeFmt", "modValidate",
+    "modCompanyFile", "modPii",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
     "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
     "modHtmlTheme",
@@ -148,6 +149,23 @@ CONTRACT: dict[str, dict] = {
             "PatternIdExists", "AppendServiceGap",
         ],
     },
+    # 14章§6(裁定書6 B/C)。整形の純関数はここが唯一の実装。
+    # 14章§6 modUtil節(裁定書6 項目8で契約化)。10関数。
+    "modUtil": {
+        "closed": False,
+        "required": [
+            "SplitForCells", "JoinCellChunks", "SplitKeepNonEmpty", "AppendIdList",
+            "ClampLong", "SafeLeft", "BufInit", "BufAdd", "BufText", "FindHeaderCol",
+        ],
+    },
+    "modKnowledgeFmt": {
+        "closed": False,
+        "required": [
+            "FmtRiskLib", "FmtMenus", "FmtMenusSummary", "FmtLines", "FmtCases",
+            "FmtSchemes", "FmtPatterns", "FmtRules", "FmtResearching", "FmtMechs",
+            "TrimKbLine", "TrimPlan",
+        ],
+    },
     "modPromptsCore": {
         "closed": False,
         "required": [
@@ -169,6 +187,10 @@ CONTRACT: dict[str, dict] = {
             "BuildS2CriticSystem", "BuildS2CriticUser", "BuildS3CriticSystem",
             "BuildS3CriticUser", "ReviseSuffix", "BuildSparringSystem",
             "BuildPFSystem", "BuildPFUser", "RepairSuffix",
+            # 組立層(14章§6 (2)・裁定書6 B)。
+            "Fill", "AsmS1User", "AsmS2User", "AsmS3User", "AsmS4System",
+            "AsmS4User", "AsmS2CriticUser", "AsmS3CriticUser",
+            "AsmSparringSystem", "AsmPFUser",
         ],
     },
     "modSchemas": {
@@ -185,6 +207,8 @@ CONTRACT: dict[str, dict] = {
         "required": [
             "NewCase", "SaveData", "LoadData", "ResolveStepJson", "SetStatus",
             "InvalidateDownstream", "RepairStates", "FreezeRound",
+            # 純ロジックの公開(14章§6・裁定書6 項目7)。
+            "BuildCaseId", "IsValidCaseId", "CanTransition", "ResolveDataKey",
         ],
     },
     "modInboxStore": {
@@ -665,6 +689,55 @@ def check_cp932_safe(info: ModuleInfo) -> None:
             f"CP932に無い文字が実行文に含まれる: {shown} 。"
             f"VBEへの注入時に'?'へ化けます。ChrW()で組むかCP932内の字へ置き換えてください",
         )
+
+
+# ==============================================================================
+# 仕様側(docs)のプロンプト本文に対する同一基準の検問(裁定書6 A-2)
+# ------------------------------------------------------------------------------
+# check_cp932_safe は .bas しか見ない。しかし 15章・docs/08 は「本文の正」であり、
+# 実装は そこから一字一句 写す(17章 T-23)。したがって仕様側にCP932外の文字が
+# 混ざると、写した瞬間に .bas 側が赤くなる=原因が下流に出る。W2aでは実際に
+# 15章のコードフェンス内のU+301Cが23件のERRORとして実装側に現れた。
+# 再混入を仕様側で止めるため、プロンプト本文を持つ章のコードフェンス内を
+# .bas と同じ _cp932_encodable で検査する。
+# 対象はフェンス内のみ(フェンス外の解説文は LLM へ送らないため対象外。
+# 15章§10.1(a) の抽出規約と同じ境界を使う)。
+# ==============================================================================
+DOCS_PROMPT_FILES = (
+    "docs/spec/15_プロンプトとJSONスキーマ.md",
+    "docs/08_ドシエ収集プロンプト集.md",
+)
+_DOCS_FENCE_RE = re.compile(r"^\s*```")
+
+
+def check_docs_prompt_cp932(repo_root: Path) -> list[tuple[str, int, str]]:
+    """15章・docs/08 のコードフェンス内をCP932基準で検査する。
+
+    戻り値は (相対パス, 行番号, メッセージ) のリスト(すべてERROR相当)。
+    """
+    out: list[tuple[str, int, str]] = []
+    for rel in DOCS_PROMPT_FILES:
+        path = repo_root / rel
+        if not path.exists():
+            out.append((rel, 1, "プロンプト本文の正である章が見つかりません"
+                                "(パスを変えたら DOCS_PROMPT_FILES を更新してください)"))
+            continue
+        in_fence = False
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            if _DOCS_FENCE_RE.match(line):
+                in_fence = not in_fence
+                continue
+            if not in_fence:
+                continue
+            bad = sorted({ch for ch in line if not _cp932_encodable(ch)})
+            if not bad:
+                continue
+            shown = " ".join(f"{ch}(U+{ord(ch):04X})" for ch in bad[:6])
+            out.append((
+                rel, lineno,
+                f"プロンプト本文(コードフェンス内)にCP932に無い文字: {shown} 。"
+                f"15章§0 原則7。ここを写した .bas がVBEで '?' に化けます"))
+    return out
 
 
 MODULE_DECL_RE = re.compile(
@@ -2165,6 +2238,14 @@ def run_lint(src_root: Path) -> int:
         for f in sorted(info.findings,
                         key=lambda x: (x.level != "ERROR", x.level != "WARN", x.line)):
             print(f"  {f.level:<5} L{f.line}: {f.message}")
+
+    # 仕様側(15章・docs/08)のプロンプト本文の検問(裁定書6 A-2)。
+    docs_bad = check_docs_prompt_cp932(REPO_ROOT)
+    if docs_bad:
+        print("\n[仕様側プロンプト本文のCP932検査 - 15章§0 原則7]")
+        for rel, ln, msg in docs_bad:
+            print(f"  ERROR L{ln}: [{rel}] {msg}")
+        total_error += len(docs_bad)
 
     if ARGC_SKIPPED:
         # 引数数照合の実効範囲の申告。数え切れなかった呼び出しは黙って通して

@@ -16,14 +16,14 @@ Option Explicit
 '   改行は vbLf に統一し、末尾改行は付けない(15章§10.1 の正規化規則)。
 '   本文中の二重引用符は VBA の文字列規則どおり "" で二重化してある。
 '
-' 戻り値は {{...}} プレースホルダを含んだ**テンプレート**である:
-'   tools/prompt_diff.py は本モジュールの Public Function を「文字列リテラルと
-'   vbLf 等の組込定数の連結」だけで評価するため(制御構文・関数呼び出し・引数
-'   参照はいずれも評価不能として差分になる)、プレースホルダの実値埋め込みと
-'   ブロック差し込みを本関数の中で行うことはできない。置換責務の所在
-'   (本関数の中か modPipeline 側か)は 15章§10.2 の記述と prompt_diff.py の
-'   評価器が食い違っており、司令塔の裁定待ちである。14章§6のシグネチャは
-'   そのまま保ってあるので、裁定が「本関数の中」になれば引数はここで使える。
+' 戻り値は {{...}} プレースホルダを含んだ**テンプレート**である(14章§6の二層
+'   分離。裁定書6 B):
+'   本モジュールは(1)テンプレート層であり、**全ての Public Function は無引数**で
+'   15章の本文を素のまま返す。tools/prompt_diff.py は Public Function を
+'   「文字列リテラルと vbLf 等の組込定数の連結」だけで評価するため(制御構文・
+'   関数呼び出し・引数参照はいずれも評価不能として差分になる)、実値の埋め込みと
+'   ブロック差し込みはここでは行えない。引数を宣言だけして使わないのは欺瞞なので
+'   持たない。実値を埋めるのは(2)組立層 = modPromptsOps の Fill / Asm* である。
 '
 ' R4準拠(12章§2): Worksheets / Range( / Application. / ThisWorkbook / MsgBox /
 '   ActiveSheet には一切触れない純文字列モジュール。config やシートも読まない。
@@ -63,7 +63,7 @@ Public Function BuildS1System() As String
     s = s & "   status(ok=十分/partial=断片的/missing=無い)を付ける。" & vbLf
     s = s & "   overall(high=仮説を持って訪問できる/mid=一般論が混ざる/low=一般論しか出せない)は" & vbLf
     s = s & "   案件のティア基準で判定する(クイック=基本8観点で判定/フルドシエ=14観点で判定)。" & vbLf
-    s = s & "   advice に「何をどこから追加で貼るべきか」を具体的に1〜2文で書く。甘い判定をしない。" & vbLf
+    s = s & "   advice に「何をどこから追加で貼るべきか」を具体的に1～2文で書く。甘い判定をしない。" & vbLf
     s = s & "5b. research_requests には、status が partial/missing の観点のうち外部調査で埋められるものについて、" & vbLf
     s = s & "   社内の調査AIアプリにそのまま貼って使える調査プロンプト文面を生成する。対象企業名・業種・" & vbLf
     s = s & "   拠点名など既知の固有情報を文面に埋め込み、出典(URL)を付けて回答するよう指示する具体文とする。" & vbLf
@@ -102,7 +102,7 @@ End Function
 ' --------------------------------------------------------------------------
 ' BuildS1User - 15章§2 user
 ' --------------------------------------------------------------------------
-Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, ByVal memoTxt As String, ByVal contractTxt As String, ByVal prevRenewalTxt As String, ByVal dossierTxt As String, ByVal fieldNotes As String, ByVal coverageNote As String, ByVal hearingAnswers As String) As String
+Public Function BuildS1User() As String
     Dim s As String
     s = ""
     s = s & "次の企業情報を読み、指定のJSON形式で企業プロファイルを出力してください。" & vbLf
@@ -111,6 +111,7 @@ Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal 
     s = s & "業種: {{industryName}}" & vbLf
     s = s & "案件種別: {{case_typeの日本語}}" & vbLf
     s = s & "収集ティア: {{dossier_tierの日本語}}" & vbLf
+    s = s & "{{BLOCK_RENEWAL_S1}}" & vbLf
     s = s & vbLf
     s = s & "■■■企業情報ここから■■■" & vbLf
     s = s & "【HP等のテキスト】" & vbLf
@@ -164,7 +165,7 @@ Public Function BuildS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal 
     s = s & "  ""input_quality"": {" & vbLf
     s = s & "    ""coverage"": [{""aspect"": ""profile"", ""status"": ""ok/partial/missing""}]," & vbLf
     s = s & "    ""overall"": ""high/mid/low""," & vbLf
-    s = s & "    ""advice"": ""追加で貼るべき情報とその場所(1〜2文。十分なら\""追加不要\"")""" & vbLf
+    s = s & "    ""advice"": ""追加で貼るべき情報とその場所(1～2文。十分なら\""追加不要\"")""" & vbLf
     s = s & "  }," & vbLf
     s = s & "  ""research_requests"": [{""purpose"": ""何を埋めるための調査か(対象aspectを含め1文)""," & vbLf
     s = s & "                         ""prompt_text"": ""調査AIアプリにそのまま貼れるプロンプト全文(企業名・拠点等の固有情報を埋め込む)""}]" & vbLf
@@ -207,11 +208,11 @@ Public Function BuildS2System() As String
     s = s & "6. open_questions には、リスク評価の精度を上げるために顧客へ確認すべき事項を書く。" & vbLf
     s = s & "7. 企業プロファイルの field_insights(営業の現場メモ原文)は公開情報に無い最重要の手がかりである。" & vbLf
     s = s & "   risk_clue タグの項目は必ずリスク仮説として検討し、根拠に使う場合は source=""memo"" とする。" & vbLf
-    s = s & "8. 各リスクに preventions(未然防止策)を1〜3件付ける。「事故が起きたら払う」ではなく" & vbLf
+    s = s & "8. 各リスクに preventions(未然防止策)を1～3件付ける。「事故が起きたら払う」ではなく" & vbLf
     s = s & "   「検知し、予防し、行動を変え、残余を保険でカバーする」が当社の思想である。" & vbLf
     s = s & "   対応する社内サービスが■■■内の一覧に実在する場合のみ related_menu_id にIDを書く(創作禁止)。" & vbLf
-    s = s & "9. frequency_score / impact_score は1〜5の整数で、frequency/impact の3値と整合させる" & vbLf
-    s = s & "   (low/small=1〜2, mid=3, high/large=4〜5)。リスクマップ上の相対位置が意味を持つよう、" & vbLf
+    s = s & "9. frequency_score / impact_score は1～5の整数で、frequency/impact の3値と整合させる" & vbLf
+    s = s & "   (low/small=1～2, mid=3, high/large=4～5)。リスクマップ上の相対位置が意味を持つよう、" & vbLf
     s = s & "   全リスクを同じ物差しで採点する。" & vbLf
     s = s & "10. 各リスクに insurability(保険による移転可能性)を付ける。" & vbLf
     s = s & "   transferability: cover=既存の保険で比較的移転しやすい / partial=条件付き・部分的 /" & vbLf
@@ -229,7 +230,7 @@ Public Function BuildS2System() As String
     s = s & "   末尾に追記)、回答から新たに発見したリスクを ""new"" とする。提案書が訪問のたびに成長する。" & vbLf
     s = s & "   これが本製品の中核思想である。" & vbLf
     s = s & "13. リスクユニバース10分類の定番類型に加え、新種・新興のリスク(サイバー・気候変動・規制変化・" & vbLf
-    s = s & "   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0〜3件" & vbLf
+    s = s & "   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0～3件" & vbLf
     s = s & "   emerging_risks に挙げる。一般論の羅列は禁止。当てはまりの根拠を書く。" & vbLf
     s = s & "   該当が薄ければ空配列とする(無理に埋めない)。"
     BuildS2System = s
@@ -238,10 +239,11 @@ End Function
 ' --------------------------------------------------------------------------
 ' BuildS2User - 15章§3 user
 ' --------------------------------------------------------------------------
-Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, ByVal menus As String, ByVal prevS2Json As String, ByVal hearingAnswers As String) As String
+Public Function BuildS2User() As String
     Dim s As String
     s = ""
     s = s & "{{BLOCK_CTX}}" & vbLf
+    s = s & "{{BLOCK_RENEWAL_S2}}" & vbLf
     s = s & vbLf
     s = s & "■■■企業プロファイル(Step1の結果・人による修正済み)ここから■■■" & vbLf
     s = s & "{{s1Json}}" & vbLf
@@ -262,7 +264,7 @@ Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal
     s = s & "{{hearingAnswersText}}" & vbLf
     s = s & "■■■前回ラウンドのリスク仮説とヒアリング回答ここまで■■■" & vbLf
     s = s & vbLf
-    s = s & "上記を材料に、この企業の潜在リスク仮説を8〜15件、指定のJSON形式で出力してください。" & vbLf
+    s = s & "上記を材料に、この企業の潜在リスク仮説を8～15件、指定のJSON形式で出力してください。" & vbLf
     s = s & vbLf
     s = s & "出力するJSONの形式:" & vbLf
     s = s & "{" & vbLf
@@ -310,7 +312,7 @@ Public Function BuildS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal
     s = s & "  ""open_questions"": [""リスク評価の精度向上のため顧客に確認すべき事項""]" & vbLf
     s = s & "}" & vbLf
     s = s & "※新規案件では gaps は [] とする。" & vbLf
-    s = s & "※horizon は already=既に顕在化 / near=1〜3年 / mid_long=3年超 とする。" & vbLf
+    s = s & "※horizon は already=既に顕在化 / near=1～3年 / mid_long=3年超 とする。" & vbLf
     s = s & "※この企業に当てはまる新種・新興リスクが無ければ emerging_risks は [] とする。"
     BuildS2User = s
 End Function
@@ -359,10 +361,11 @@ End Function
 ' --------------------------------------------------------------------------
 ' BuildS3User - 15章§4 user
 ' --------------------------------------------------------------------------
-Public Function BuildS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, ByVal menus As String, ByVal lines As String, ByVal schemes As String, ByVal cases As String) As String
+Public Function BuildS3User() As String
     Dim s As String
     s = ""
     s = s & "{{BLOCK_CTX}}" & vbLf
+    s = s & "{{BLOCK_RENEWAL_S3}}" & vbLf
     s = s & vbLf
     s = s & "■■■企業プロファイル(要約: business_summary / strategy_outlook / current_coverage / field_insights)ここから■■■" & vbLf
     s = s & "{{s1SummaryJson}}" & vbLf
@@ -413,7 +416,7 @@ Public Function BuildS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, By
     s = s & "    {""risk_no"": 5, ""risk_name"": ""リスク名"", ""why_unmatched"": ""適合メニュー・型が無い理由(1文)""}" & vbLf
     s = s & "  ]," & vbLf
     s = s & "  ""do_not_propose"": [" & vbLf
-    s = s & "    {""topic"": ""提案を控える種目・リスク(例: D&O)"", ""reason"": ""控える理由(引受目線・1〜2文)""}" & vbLf
+    s = s & "    {""topic"": ""提案を控える種目・リスク(例: D&O)"", ""reason"": ""控える理由(引受目線・1～2文)""}" & vbLf
     s = s & "  ]" & vbLf
     s = s & "}" & vbLf
     s = s & "※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。" & vbLf
@@ -424,17 +427,17 @@ End Function
 ' --------------------------------------------------------------------------
 ' BuildS4System - 15章§5 system
 ' --------------------------------------------------------------------------
-Public Function BuildS4System(ByVal variantName As String, ByVal tier As String) As String
+Public Function BuildS4System() As String
     Dim s As String
     s = ""
     s = s & "あなたは大手損害保険グループの提案書づくりが上手いコンサルタントです。" & vbLf
     s = s & "分析結果を、商談用のPowerPoint骨子とヒアリング質問リストにまとめます。" & vbLf
     s = s & vbLf
     s = s & "必ず守るルール:" & vbLf
-    s = s & "1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5〜{{pptMaxSlidesT2}}枚まで拡張可。" & vbLf
+    s = s & "1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5～{{pptMaxSlidesT2}}枚まで拡張可。" & vbLf
     s = s & "   6枚目以降は「付録: 分析の根拠・データ」として使う)。" & vbLf
     s = s & "{{BLOCK_S4_VARIANT}}" & vbLf
-    s = s & "2. bullets は1枚あたり3〜6点、1点40字以内。提案書にそのまま貼れる体言止め・簡潔文。" & vbLf
+    s = s & "2. bullets は1枚あたり3～6点、1点40字以内。提案書にそのまま貼れる体言止め・簡潔文。" & vbLf
     s = s & "3. notes は営業担当がそのスライドで話すトークのメモ(2文以内)。" & vbLf
     s = s & "4. hearing_questions は、リスク仮説の check_points・open_questions・プロファイルの missing_info を" & vbLf
     s = s & "   統合し、商談でそのまま使える丁寧な質問文に整形する。最大10問。重複統合・重要度順。"
@@ -444,7 +447,7 @@ End Function
 ' --------------------------------------------------------------------------
 ' BuildS4User - 15章§5 user
 ' --------------------------------------------------------------------------
-Public Function BuildS4User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, ByVal s3Json As String) As String
+Public Function BuildS4User() As String
     Dim s As String
     s = ""
     s = s & "{{BLOCK_CTX}}" & vbLf
