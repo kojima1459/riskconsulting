@@ -132,6 +132,29 @@ PURE_ALLOWLIST = [
     # modPipeline は store/log/LLM経由でExcelに触れるが、テストが叩くのは
     # 14章§6が公開を宣言した判定核16本(純関数)だけ。
     "modKnowledgeFmt", "modCaseStore", "modPipeline",
+    # T-25/T-28(裁定書8 B-7/B-10)で 14章§6 が公開を宣言した判定核を持つ3本。
+    # いずれもモジュール全体としてはシート・LLMに触れるが、テストが叩くのは
+    # 純関数だけ(技術メモ4)。
+    #   modInboxStore : 採番 BuildInboxId / ID書式 IsValidInboxId / 状態遷移
+    #     CanInboxTransition / E-41 の JudgementError / 関心度の InterestKeyOf・
+    #     FmtInterestLine
+    #   modPlayOps    : PfSurvivalOf / PfPredTypesOf / PfRefIds / PfFailCodeOf /
+    #     CaseIdOfPfLine
+    #   modPipeline2  : CritiqueStepOf / ReviseStepOf / NeedsRevision /
+    #     CritiqueDigest / DeepOutcomeOf / DeepWarningOf / DeepRouteOf
+    "modInboxStore", "modPlayOps", "modPipeline2",
+    # T-27(裁定書8 B-9)で 14章§6 が公開を宣言した壁打ちの純核3本を持つ。
+    # モジュール全体は store/受信箱/LLM経由でExcelに触れるが、テストが叩くのは
+    #   modSparring : HistoryJoinOf(保存形式 -> 新しい順の";;;"連結)/
+    #     TrimHistoryOf(E-44の履歴上限)/CanContinueSparring(E-05(3)を含む
+    #     送信可否の fail-closed 判定)
+    # だけ(技術メモ4)。
+    "modSparring",
+    # T-26(裁定書8 B-8)。モジュール全体はシートに触れるが、テストが叩くのは
+    # 純関数だけ: BuildJudgeId / IsValidJudgeId / IsValidDecision /
+    # IsValidJudgeResult(採番・ID書式・19章§3のdecision enum検証・
+    # 13章§2.7のresult enum検証)。
+    "modJudgeStore",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",

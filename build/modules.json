@@ -72,6 +72,13 @@
       "wave": "T-20"
     },
     {
+      "name": "modCaseStore2",
+      "path": "src/app/modCaseStore2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-20"
+    },
+    {
       "name": "modCaseRead",
       "path": "src/app/modCaseRead.bas",
       "role": "app",
@@ -140,6 +147,41 @@
       "role": "app",
       "type": "std",
       "wave": "T-24"
+    },
+    {
+      "name": "modPipeline2",
+      "path": "src/app/modPipeline2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-28"
+    },
+    {
+      "name": "modInboxStore",
+      "path": "src/app/modInboxStore.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-25"
+    },
+    {
+      "name": "modPlayOps",
+      "path": "src/app/modPlayOps.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-25"
+    },
+    {
+      "name": "modSparring",
+      "path": "src/app/modSparring.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-27"
+    },
+    {
+      "name": "modJudgeStore",
+      "path": "src/app/modJudgeStore.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-26"
     },
     {
       "name": "modPii",
@@ -224,6 +266,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-24"
+    },
+    {
+      "name": "modTestsPure8",
+      "path": "src/test/modTestsPure8.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-28"
     },
     {
       "name": "modMockLlm",

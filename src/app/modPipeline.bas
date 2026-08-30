@@ -14,10 +14,12 @@ Option Explicit
 ' 判定核の分離(T-24): 修復要否・validate_result の3値分類・deep分岐・E-03の打切り
 '   計画・E0301/E0302の切分けはシートもログも触らない純関数で、**16本は14章§6が
 '   公開を宣言**(裁定書7 B-6)。層(a)=modTestsPure が直接叩く。
-' 【未結線1】last_ok_step / failed_step の**書込**APIは14章§6に未宣言(申請中)。
-'   失敗Stepは usage_log(event=failed_step)へ退避している。
-' 【未結線2】入念モード(15章§4.5-4.7・16章E-35/E-36)の批判・改訂は30,000字契約に
-'   収まらないため T-28 へ渡す(分岐判定の純核 DeepEnabled と分岐点だけ置く)。
+' last_ok_step / failed_step は modCaseStore.SetStepOutcome が唯一の書込口
+'   (16章E-06・裁定書8 A-2)。成功経路=(stepNo, "")・失敗経路=(-1, sN) で呼ぶ。
+' 入念モード(15章§4.5-4.7・16章E-35/E-36)の批判・改訂は modPipeline2 が持つ
+'   (裁定書8 A-1)。ここは DeepEnabled が True のときの**1行の委譲**だけを置く。
+' quality_mode は案件単位で上書きできる(13章§2.3・§2.10)。ui層が
+'   hm_quality_mode を読んで RunStep / RunAll の qualityOverride へ渡す。
 ' ============================================================================
 
 Private Const PL_SRC As String = "modPipeline"
@@ -80,25 +82,31 @@ Private Type TChkCtx
     lastErrs As String
 End Type
 
-' 案件一覧側の値のうち TCaseCtx に無い3つ。
+' 案件一覧側の値のうち TCaseCtx に無い3つ(mQualityMode は RunStep の
+' qualityOverride で上書きされたあとの【実効値】を持つ)。
 Private mRoundNo As String
 Private mS4Variant As String
 Private mQualityMode As String
 
 ' RunAll - S1からS4の通し実行(14章§6)。1つでも失敗したらそこで止める。Step間で
 '   DoEvents を挟む(16章E-50(c))。ui_lock と進捗表示は ui層の責務(R1)。
-Public Function RunAll(ByVal caseId As String) As Boolean
+'   qualityOverride は素通しで各Stepへ渡す(4Step同じ品質モードで走らせる)。
+Public Function RunAll(ByVal caseId As String, Optional ByVal qualityOverride As String) As Boolean
     Dim i As Long
 
     For i = 1 To 4
-        If Not RunStep(caseId, i) Then Exit Function
+        If Not RunStep(caseId, i, qualityOverride) Then Exit Function
         DoEvents
     Next i
     RunAll = True
 End Function
 
 ' RunStep - 1Stepの実行(14章§6)。True=検証合格まで到達
-Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
+'   qualityOverride: 案件単位の quality_mode 上書き(13章§2.3・§2.10。ui層が
+'     hm_quality_mode を読んで渡す)。空=config・ティア連動。案件一覧に保存は
+'     しない。LibreOffice制約により Optional に既定値リテラルは書かない。
+Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long, _
+                        Optional ByVal qualityOverride As String) As Boolean
     On Error GoTo Failed
 
     If Not modCaseStore.IsValidCaseId(caseId) Then
@@ -112,6 +120,8 @@ Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
 
     Dim ctx As TCaseCtx
     If Not LoadCtx(caseId, ctx) Then Exit Function
+    ' 案件単位の上書きは config より優先(空なら config・ティア連動のまま)。
+    If LenB(Trim$(qualityOverride)) > 0 Then mQualityMode = Trim$(qualityOverride)
     RunStep = ExecStep(caseId, ctx, stepNo)
     Exit Function
 
@@ -183,12 +193,14 @@ Private Function ExecStep(ByVal caseId As String, ByRef ctx As TCaseCtx, _
         Exit Function
     End If
 
-    ' 入念モードの批判・改訂は T-28(未結線2)。分岐判定だけ置く。
-    If DeepEnabled(ResolveQualityMode(mQualityMode, ctx.dossier_tier), stepNo) Then
-        modLog.LogUsage "deep_pending", caseId, c.stepName & ":批判・改訂は未結線(T-28)"
-    End If
-
+    ' E-06: 成功したStepまでを last_ok_step へ確定し failed_step を空へ戻す。
+    modCaseStore.SetStepOutcome caseId, stepNo, vbNullString
     modCaseStore.SetStatus caseId, StatusForStep(stepNo)
+
+    ' 入念モード(15章§4.5-4.7)は modPipeline2 へ1行で委譲(裁定書8 A-1)。戻り値は
+    ' 握りつぶす: 批判・改訂の不首尾で本体Stepを落とさない(E-35/E-36)。
+    If DeepEnabled(ResolveQualityMode(mQualityMode, ctx.dossier_tier), stepNo) Then modPipeline2.RunDeep caseId, stepNo
+
     ExecStep = True
 End Function
 
@@ -510,8 +522,8 @@ Private Sub FailStep(ByVal caseId As String, ByRef c As TChkCtx, ByVal rawText A
     modCaseStore.SaveData caseId, c.stepName & "_json_failed", rawText
     modLog.LogError FailCodeOf(c.lastErrs), PL_SRC & "." & c.stepName, _
                     "validate_failed:" & c.stepName
-    ' failed_step 列(13章§2.1)の書込APIが§6に無いため usage_log へ残す(申請中)。
-    modLog.LogUsage "failed_step", caseId, c.stepName
+    ' E-06: failed_step に当該Stepを書き、last_ok_step は更新しない(-1=据置)。
+    modCaseStore.SetStepOutcome caseId, -1, c.stepName
     modCaseStore.SetStatus caseId, PL_STATUS_ERROR
 End Sub
 

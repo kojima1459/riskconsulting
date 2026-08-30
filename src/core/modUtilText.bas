@@ -45,8 +45,8 @@ Private Const FULLPATH_MAX_CHARS As Long = 240
 ' FNV-1a 64bit の定数(offset_basis と prime = 2^40 + 435)。
 ' LibreOffice Basic は「宣言より前の行での参照」を解決できないため、
 ' 使用箇所より前=モジュール先頭に置く(PoCがLO実行テストで踏んだ罠)。
-Private Const FNV_OFFSET_HI As Long = &HCBF29CE4
-Private Const FNV_OFFSET_LO As Long = &H84222325
+Private Const FNV_OFFSET_HI As Long = &HCBF29CE4&
+Private Const FNV_OFFSET_LO As Long = &H84222325&
 Private Const FNV_PRIME_HI As Long = &H100
 Private Const FNV_PRIME_LO As Long = &H1B3
 

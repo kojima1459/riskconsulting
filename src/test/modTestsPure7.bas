@@ -79,6 +79,17 @@ Public Sub RunAll()
         End If
         On Error GoTo 0
     Next i
+
+    ' 姉妹モジュール(30,000字契約による分割)を同じ隔離作法で続けて回す。
+    ' 数珠つなぎ: modTestsPure -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8(裁定書8)。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure8.RunAll
+    If Err.Number <> 0 Then
+        GroupFail "modTestsPure8.RunAll"
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)

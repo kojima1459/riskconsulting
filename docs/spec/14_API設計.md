@@ -1,5 +1,13 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
+> v2.4.7（裁定書8 B-9: T-27 実装時の命名）: §6へ **`modSparring`**（PL-04 壁打ち）の節を新設し、実行制御4本（`ResumeSparring` / `SendSparring` / `SendToInbox` / `HistoryOf`）と純核3本（`CanContinueSparring` / `TrimHistoryOf` / `HistoryJoinOf`）を宣言した。あわせて `sparring_u` / `sparring_a`（13章§2.2）の**保存形式**（1発話＝1行 `seq <TAB> spoke_at <TAB> 本文`）を本節で確定した——§2.2 の列定義（`seq`＝32,000字の分割連番）と data_key 注記（「発話単位seqで保存」）の食い違いを、`SaveData` の契約（data_key 単位で全行を置換）を変えずに吸収するためである。**未解決2件**を本文中に明記した: (a) 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への**自動昇格の書込口**が本節に無い（`ResumeSparring` は昇格せず usage_log に事実を残す）、(b) 15章§6.5 の `{{schemes}}` は「全status」だが `modKnowledge.SchemesFor` は S3用の proven/adopted 絞込しか持たない（狭い側で注入し run_log へ事実を残す）。
+>
+> v2.4.6（裁定書8 B-8: T-26 実装時の命名）: 裁定書8が予約していた **`modJudgeStore.NewJudgement`**（`TJudgement`受取・`judge_id`返却）に加え、読取口 **`ReadJudgement`**・事後結果の更新口 **`SetJudgementResult`**・純ロジック4本（`BuildJudgeId` / `IsValidJudgeId` / `IsValidDecision` / `IsValidJudgeResult`）を宣言した。あわせて `modAppTypes` へ判断台帳9列（`judge_id`/`judged_at`を除く）の入れ物 **`TJudgement`** を新設した。判断台帳は13章§4のとおり削除しないため、本モジュールに Delete 相当の公開関数は無い。
+>
+> v2.4.5（裁定書8 B-7/B-10: T-25・T-28 実装時の命名）: 裁定書8 A-1 が「T-28 の実装時に本節へ足す」と予告していた **`modPipeline2` の判定核7本**（`CritiqueStepOf` / `ReviseStepOf` / `NeedsRevision` / `CritiqueDigest` / `DeepOutcomeOf` / `DeepWarningOf` / `DeepRouteOf`）を宣言した。あわせて T-25 の **`modInboxStore`**（シートI/O4本 `SavePfResult` / `ReadInboxItem` / `UndiagnosedIds` / `InterestText` ＋ 純ロジック6本 `BuildInboxId` / `IsValidInboxId` / `CanInboxTransition` / `JudgementError` / `InterestKeyOf` / `FmtInterestLine`）と **`modPlayOps`**（`RunPreflightAll` ＋ 判定核5本 `PfSurvivalOf` / `PfPredTypesOf` / `PfRefIds` / `PfFailCodeOf` / `CaseIdOfPfLine`）を宣言し、`RunPreflight` に契約（E-40の「失敗分は undiagnosed のまま」）を明記した。**未解決2件**は本文中に明記した: (a) `SetInboxJudgement` に `merged_into` を渡す引数が無く `merged` を fail-closed で拒否している、(b) `CallStep` に呼び出し単位の経路上書き口が無く config `deep_transport` が未結線（`DeepRouteOf` は解決だけを行い、指定がある間は usage_log に事実を残す）。
+
+> v2.4.4（裁定書8 A: W2c構造裁定）: §6へ **`modCaseStore.SetStepOutcome`**（16章E-06が要求する `last_ok_step` / `failed_step` の書込口。modPipeline の成功・失敗経路から結線し、usage_log への退避は廃止）と **`modPipeline2.RunDeep`**（入念モードの批判・改訂パイプ＝T-28 の入口。modPipeline からの委譲は1行フック）を宣言し、`RunAll` / `RunStep` に **`Optional ByVal qualityOverride As String`**（quality_mode の案件単位の上書き。ui層が `hm_quality_mode` を読んで実行時に渡す。案件一覧には保存しない）を追加した。あわせて 30,000字契約による分割先 **`modCaseStore2`**（案件2枚の下位シートI/O 11本。公開契約面には載せない）を追認した。
+
 > v2.4.3（裁定書7: W2b整合）: §6の `modValidate` を**引数渡し設計**へ正式改訂した（Check系の末尾 Optional＝実在ID一覧テキストとJSONの外側の文脈を宣言に昇格。「ID実在はmodKnowledge参照」は**呼出側＝modPipelineがmodKnowledgeから取得して渡す**の意であると明記）。ID実在検査を**fail-closed**（一覧未提供は当該ケースIDで不合格・16章E-07のKPI「すり抜け0件」と整合）とし、`CheckS4` のティア不明時は V-S4-01/02 の両方を当てる規約を確定。**LibreOffice制約**（Optional String に `= ""` を書かない）を注記。命名権の一括裁定として `modValidate2` の *Core 5本 / `modPipeline` の判定核16本 / `modPii` 5本 / `modCompanyFile` 4本（`modCompanyFile2` の下位I/Oは公開契約面に載せない）を宣言し、案件一覧の読取専用API **`modCaseRead.ReadCaseCtx`** を新設した（modPipeline.LoadCtx と modCompanyFile.ExportCompanyFile の死に経路を解消）。
 
 > v2.4.2（裁定書6: W2a整合）: §6を**二層**へ改訂した。(1) `Build*System` / `Build*User` / `ReviseSuffix` / `RepairSuffix` / `Block*` / `Schema*` は**引数なしのテンプレート関数**（`{{...}}` を素のまま返す＝`prompt_diff.py` の突合対象31関数）、(2) `modPromptsOps` に**組立層** `Fill` と `Asm*`（`AsmS1User` / `AsmS2User` / `AsmS3User` / `AsmS4System` / `AsmS4User` / `AsmS2CriticUser` / `AsmS3CriticUser` / `AsmSparringSystem` / `AsmPFUser`）を新設し、条件ブロック（renewal）・S4バリアント差替・想定外variantのproposalフォールバック（`fallbackNote` で帯域外に返し記録は modPipeline）をその責務とした。あわせて **`modKnowledgeFmt`**（整形の純関数10本＋`TrimKbLine`＋`TrimPlan`）を新設、`modKnowledge` の各注入関数へ `Optional maxRows`（15章§0.7の半減の口）を追加、`modCaseStore` の純ロジック4本（`BuildCaseId` / `IsValidCaseId` / `CanTransition` / `ResolveDataKey`）を公開、**`modUtil` の節を新設**して10関数を契約化した（`BufText` の区切りは vbLf）。
@@ -532,13 +540,46 @@ Public Function AsmPFUser(ByVal theme As String, ByVal body As String, ByVal rul
 ' TCaseCtx（**app層 modAppTypes**。ドメイン型なのでcore層 modTypes から移設。12章§2・§4）:
 '   case_type, dossier_tier, channel, kanji, bid, reins, other_insurers, company, industry_code, industry_name
 
-' === app: modPipeline / modPlayOps ===
-Public Function RunAll(ByVal caseId As String) As Boolean
-Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
+' === app: modPipeline / modPipeline2 / modPlayOps ===
+Public Function RunAll(ByVal caseId As String, Optional ByVal qualityOverride As String) As Boolean
+Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long, _
+                        Optional ByVal qualityOverride As String) As Boolean
     ' quality_mode=deep のとき、S2/S3は 生成→批判(CheckS2C/S3C合格の批判JSON)→
     ' 指摘ありなら改訂(ReviseSuffix)の3呼び出しで実行。批判・改訂はrun_logに
     ' step="s2c"/"s3c"/"s2r"/"s3r" として記録。deep_transport指定時は批判・改訂のみ経路変更
+' qualityOverride(裁定書8 A-3): quality_mode の**案件単位の上書き**(13章§2.3・§2.10)。
+'   ui層が HOME の `hm_quality_mode` を読んで実行時に渡す値であり、**案件一覧には
+'   保存しない**(実行時の指定であって案件の属性ではない)。空は config・ティア連動の
+'   ままで、解決は純核 `ResolveQualityMode` が唯一の値源。RunAll は素通しで各Stepへ
+'   渡す(4Stepを同じ品質モードで走らせる)。
+'   **LibreOffice制約**: Optional String に既定値リテラル(`= ""`)は書かない。
+'   空判定は IsMissing ではなく LenB(Trim$(...)) で行う。
 Public Function RunPreflight(ByVal inboxId As String) As Boolean
+' 受信箱1件のプリフライト診断（PL-03・step=pf。15章§6）。True=検証合格まで到達し
+'   `pf_json` / `pf_survival` / `pf_pred_types` を保存できた。False は**当該行を
+'   undiagnosed のまま残す**（16章 E-40 の「失敗分は undiagnosed のまま」を1件単位でも守る）。
+'   受信箱のI/Oは modInboxStore が唯一の口（modPlayOps は R4 でシートに触れない）
+Public Function RunPreflightAll() As Long
+' 未診断の投函の一括診断（17章 T-25・16章 E-40。裁定書8 B-7）。途中で止めず最後まで回し、
+'   **診断できた分は保存・失敗した分は undiagnosed のまま残す**。1件でも落ちたら E0701 を
+'   件数つきで記録する。戻り値=診断できた件数。Step間で DoEvents を挟む（E-50(c)）
+' --- modPlayOps の判定核5本（裁定書8 B-7。シート・ログ・LLMに触れない純関数） ---
+Public Function PfSurvivalOf(ByVal pfJson As String) As String
+' 診断JSONから受信箱の要約列 `pf_survival` を取り出す（13章§2.6）。enum（high/mid/low）
+'   以外は ""（未定義値を列へ書かない）
+Public Function PfPredTypesOf(ByVal pfJson As String) As String
+' 同 `pf_pred_types`（";"区切り T1～T10）。enum外は落とし重複は1件へ寄せる。T0 は PF の
+'   `predicted_drop_types` には現れない（19章§3）
+Public Function PfRefIds(ByVal rulesText As String, ByVal menusSummary As String, _
+                         ByVal schemesText As String, ByVal patternsText As String, _
+                         ByVal researchingText As String) As String
+' `CheckPF` の V-PF-03（ref_id 実在検査）へ渡す一覧テキスト。15章§6 が PF へ注入する5種を
+'   1行書式（15章§6.1）のまま vbLf で連結する。空の注入は行ごと落とす。**一覧を渡さない
+'   呼び出しは fail-closed で不合格**なので、PFを結線する側は必ずこの戻り値を渡す
+Public Function PfFailCodeOf(ByVal errText As String) As String
+' PFの不合格の内訳をコードへ。**ID幻覚（V-PF-03）を含めば E0301（16章E-07）、他は E0302**
+Public Function CaseIdOfPfLine(ByVal lineText As String) As String
+' 検証エラー1行の先頭 `[ケースID] ` からケースIDを取り出す（15章§0 原則10）。不一致は ""
 ' --- modPipeline の判定核16本（裁定書7 B-6。シート・ログ・LLMに触れない純関数）---
 ' 規約そのもの（打切り計画・修復要否・結果の分類・失敗コードの切分け・deep分岐）を実行制御の
 '   中に閉じ込めると層(a)から誰も検査できない（W2aの modKnowledge 整形と同じ轍）。以下は
@@ -580,6 +621,106 @@ Public Function S1SummaryOf(ByVal s1Json As String) As String
 ' 15章 S3/S3C の {{s1SummaryJson}}（business_summary / strategy_outlook / current_coverage /
 '   field_insights の4キーだけのJSON。他のキーを含めない）
 
+' === app: modPipeline2（入念モードの批判・改訂パイプ。T-28。裁定書8 A-1）===
+' 30,000字契約による modPipeline の分割先。**分割の継ぎ目**であり、呼んでよいのは
+'   modPipeline だけ(依存は modPipeline -> modPipeline2 の一方向)。R4でシートには
+'   触れない(案件データは modCaseStore / modCaseRead 経由)。
+Public Function RunDeep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
+' 入念モードの入口。modPipeline は sN_json を確定した直後、`DeepEnabled` が True の
+'   ときだけ**1行で委譲**する(分岐判定の純核は modPipeline の16本のまま)。stepNo は
+'   2 または 3(それ以外は False で何もしない)。15章§4.5-4.7 の 生成→批判→改訂 を
+'   回し、s2c/s3c/s2r/s3r を modCaseStore 経由で保存して run_log へ記録する。
+'   戻り値 True=パイプを完走した(改訂の採否は問わない)。**戻り値で本体Stepの成否を
+'   左右しない**のが契約(16章 E-35 批判不合格=生成版を確定して警告 / E-36 改訂不合格=
+'   改訂を破棄して改訂前を採用。どちらも本体Stepは成功のままで failed_step を立てない)。
+'   呼び出し側はこの値を握りつぶしてよい。
+' --- modPipeline2 の判定核7本（裁定書8 B-10。T-28 の実装時に本節へ足すと A-1 が
+'     予告していた「パイプ内部の関数構成」。シート・ログ・LLMに触れない純関数） ---
+' 規約そのもの（改訂へ進む条件・批判の日本語整形・E-35/E-36 の結末の分類とHOMEへ出す
+'   文言・deep_transport の解決）を実行制御の中に閉じ込めると層(a)から誰も検査できない。
+'   modTestsPure から直接叩く前提で公開し、run_lo_tests の PURE_ALLOWLIST にも
+'   modPipeline2 を登録する。**Private へ戻すことは契約違反**。
+Public Function CritiqueStepOf(ByVal stepNo As Long) As String   ' 2→s2c / 3→s3c / 他は ""（19章§4）
+Public Function ReviseStepOf(ByVal stepNo As Long) As String     ' 2→s2r / 3→s3r / 他は ""（同）
+Public Function NeedsRevision(ByVal critiqueJson As String, ByVal stepNo As Long) As Boolean
+' 改訂パスへ進むか。issues が1件でもあれば True。加えて S2C は `additional_risks` が
+'   非空なら、S3C は `lands=false` の反応があれば True（V-S2C-05 / V-S3C-05 のスキップ
+'   条件の裏返し）。範囲外の stepNo・空JSONは False
+Public Function CritiqueDigest(ByVal critiqueJson As String, ByVal stepNo As Long) As String
+' 15章§4.7 の `{{critiqueDigest}}`。批判JSONを日本語の箇条書き（行区切り vbLf）へ整形する。
+'   S2 は issues → additional_risks、S3 は lands=false の反応 → issues の順
+Public Function DeepOutcomeOf(ByVal critiqueOk As Boolean, ByVal revisionTried As Boolean, _
+                              ByVal revisionOk As Boolean) As String
+' パイプの結末の唯一の分類点。`critique_skipped`（E-35）/ `revision_skipped`（指摘0件）/
+'   `revised` / `revision_discarded`（E-36）の4値。**どの値でも本体Stepは成功のまま**
+Public Function DeepWarningOf(ByVal outcome As String) As String
+' HOME の `hm_warning` へ出す文言（16章 E-35/E-36 の逐語）。警告の要らない結末は ""。
+'   app層から ui層 は呼べない（R1）ので、値だけを供給して ui層（modUIHome）が読む
+Public Function DeepRouteOf(ByVal cfgDeepTransport As String) As String
+' config `deep_transport`（13章§2.3）の解決。`direct` のときだけ "direct"、他は ""。
+'   **経路の切替そのものは未結線**（本節の `CallStep` に呼び出し単位で経路を上書きする
+'   口が無い）。RunDeep は指定がある間その事実を usage_log に残す（黙って無視しない）
+
+' === app: modSparring（PL-04 壁打ち。T-27。裁定書8 B-9）===
+' 自由対話（スキーマなし）。呼び出しは `CallChat` の1本だけで、成否は `ByRef ok`
+'   （＝`DecideOk`）でしか判定しない。JSON防衛線（§5）は通さない。run_log は
+'   `CallChat` が自分で1行書くため本モジュールは書かない（1呼び出し＝2行にしない）。
+' R4: Excelトークン許可の13本（12章§4）に**入れない**。案件一覧は `modCaseRead`、
+'   case_data は `modCaseStore`、受信箱は `modInboxStore` を通す。
+Public Function ResumeSparring(ByVal caseId As String, ByRef contextNote As String) As Long
+' 「壁打ちを開始/再開」（11章 壁打ちワイヤー・15章§6.5）。戻り値＝保存済みの発話数
+'   （0＝履歴なし＝新規開始）。**-1＝案件一覧を読めない**（呼び出し側は fail-closed で
+'   開始させない）。contextNote＝13章§2.17 `sp_context_note` の表示文字列
+'   （例「ドシエ+S1-S3+型/機構 注入済」）。
+'   **未解決**: 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への自動昇格は
+'   案件一覧への**書込**だが、本節に tier の書込口が無い（`SetStatus` / `SetStepOutcome`
+'   はどちらも別列）。本関数は昇格を行わず usage_log に事実を残す（黙って昇格したことに
+'   しない）。書込口の追加は本節の裁定事項。
+Public Function SendSparring(ByVal caseId As String, ByVal utterance As String, _
+                             ByRef replyText As String, ByRef errCode As String) As Boolean
+' 発話1本の送信（15章§6.5）。True＝応答を受け取り、発話と応答を case_data へ保存できた。
+'   errCode: E0103＝送信前のPII検知で遮断（16章 E-05(3)。`CallChat` の**前**に `modPii` を
+'   通すのは本関数の責務）/ E0101＝前提不足 / E0604＝履歴の保存失敗 / E02xx＝`CallChat` が
+'   帯域外で返した経路失敗をそのまま透す。16章 E-44 の「往復数を減らして再開」の案内は
+'   E0204 のときに usage_log へ残す。
+Public Function SendToInbox(ByVal caseId As String, ByVal roleKind As String, _
+                            ByVal seqNo As Long) As String
+' 選択した発話を受信箱へ登録し inbox_id を返す（15章§6.5「受信箱へ」。source_kind=
+'   `field_voice` / theme=案件ID＋発話の要約）。失敗は ""。二重送信の抑止は 13章§2.17 の
+'   `inbox_id` 列（壁打ちシート側）が鍵なので本関数は持たない。本文にPIIを検知したら
+'   登録しない（16章 E-05(2)）
+Public Function HistoryOf(ByVal caseId As String, ByVal roleKind As String) As String
+' 保存済み履歴を**保存形式のまま**返す（ui が seq / spoke_at / 本文へ分解して 13章§2.17 の
+'   `sparring_log` を描く）。roleKind は 13章§2.17 の enum（user / ai）。表に無い値は ""。
+' **保存形式**（13章§2.2 の `sparring_u` / `sparring_a` の中身。読み書きの唯一点は本モジュール）:
+'   1発話＝1行＝`seq <TAB> spoke_at <TAB> 本文`、行区切りは vbLf、本文は
+'   `modJsonLite.EscapeJsonStr` で `\n` `\t` `\\` を畳む。seq は 13章§2.17 と同じ**発話単位の
+'   通し連番**で user と ai が1本の番号列を共有する（発話=n / その応答=n+1）。
+'   case_data の `seq` 列は §2.2 の定義どおり**分割連番**のままである（`SaveData` は data_key
+'   単位で全行を置換する契約であり、1発話＝1物理行を持たせる口が無い）。§2.2 の列定義と
+'   data_key 注記「発話単位seqで保存」の食い違いはこの行形式が吸収する。
+' --- modSparring の純核3本（裁定書8 B-9。シート・ログ・LLMに触れない純関数） ---
+' 送信可否・履歴上限・線上形式への変換は「規約そのもの」であり、実行制御の中に閉じ込めると
+'   層(a)から誰も検査できない。modTestsPure から直接叩く前提で公開し、run_lo_tests の
+'   PURE_ALLOWLIST にも modSparring を登録する。**Private へ戻すことは契約違反**。
+Public Function CanContinueSparring(ByVal caseIdText As String, ByVal utterance As String, _
+                                    ByVal hasPii As Boolean) As Boolean
+' 発話を1本送ってよいかの**唯一の判定点**（fail-closed）。(1) caseIdText が 13章§1 の案件ID
+'   書式（判定は `modCaseStore.IsValidCaseId`）(2) 発話が空白・改行だけでない (3) hasPii=False
+'   （16章 E-05(3) は壁打ちの発話送信前の検知で**送信をブロック**する）。走査そのものは
+'   `modPii` が唯一の実装なので、ここは結果の真偽だけを受け取る（検知規則を2箇所に書かない）
+Public Function TrimHistoryOf(ByVal storedText As String, ByVal maxTurns As Long) As String
+' 保存形式の履歴を**直近 maxTurns 発話**へ切り詰める（古い順のまま返す）。16章 E-44 の
+'   「渡す履歴を直近 `sparring_max_turns` 往復に制限」を保存形式の側で行う唯一の点で、
+'   全履歴は case_data に残る。maxTurns<=0 は全件。線上形式（";;;"連結）側の最終防衛は
+'   `modGatewayRPN.TrimHistoryPairs` が別に持つ（形式が違うので同じ実装は使えないが、
+'   **件数の値はどちらも config `sparring_max_turns` の1箇所**から来る）
+Public Function HistoryJoinOf(ByVal storedText As String, ByVal maxTurns As Long) As String
+' 保存形式から `CallChat` の histU / histA を組む唯一の点。直近 maxTurns 発話を**新しい順**に
+'   `modGatewayRPN.GW_HIST_SEP`（";;;"）で連結する（切詰めは `TrimHistoryOf` に委ねる）。
+'   本文はエスケープを解いて原文へ戻し、本文中に区切りが現れたら ";" へ潰す（線上形式だけの
+'   非可逆処理。case_data 側の原文は書き換えない）
+
 ' === app: modCaseRead（案件一覧の読取専用API。裁定書7 B-7）===
 Public Function ReadCaseCtx(ByVal caseId As String, ByRef ctx As TCaseCtx, _
                             ByRef roundNo As Long, ByRef qualityMode As String, _
@@ -593,8 +734,9 @@ Public Function ReadCaseCtx(ByVal caseId As String, ByRef ctx As TCaseCtx, _
 '   （空は proposal）/ dossierTier=dossier_tier（空は t1_quick。ctx.dossier_tier と同値）/
 '   qualityMode=config `quality_mode`（案件一覧に列は無い。空はティア連動＝ResolveQualityMode が解決）。
 '   戻り値 False=シート・見出し・当該行が無い（呼び出し側は fail-closed で中止する）
-' なお `last_ok_step` / `failed_step` の**書込**口（16章E-06）はまだ本節に無い。modPipeline は
-'   失敗Stepを usage_log（event=failed_step）へ退避している（次波で宣言する）
+' `last_ok_step` / `failed_step` の**書込**口（16章E-06）は modCaseStore.SetStepOutcome
+'   （本節の modCaseStore の項）。裁定書8 A-2 で新設し、modPipeline の成功経路・失敗経路
+'   から結線済み（usage_log への退避は廃止した）
 
 ' === app: modPii（PII走査の本体。16章E-05・12章§2/§4。裁定書7 B-5）===
 ' 走査の実施点は16章E-05の一覧（modUICase / modUIInbox / modSparring / modJudgeStore /
@@ -636,6 +778,15 @@ Public Function ResolveStepJson(ByVal caseId As String, ByVal stepNo As Long) As
 ' 下流Stepが参照すべきJSONを一元解決する（優先順の正は13章§2.2）。
 ' N=2,3 は sN_edited > sNr_json > sN_json、S1/S4 は sN_edited > sN_json。呼び出し側で個別に分岐しない
 Public Function SetStatus(ByVal caseId As String, ByVal status As String) As Boolean
+Public Function SetStepOutcome(ByVal caseId As String, ByVal lastOkStep As Long, _
+                               ByVal failedStep As String) As Boolean
+' 16章 E-06 が要求する案件一覧の `last_ok_step` / `failed_step` の【書込口】（裁定書8 A-2で
+'   新設）。modPipeline の成功経路が (stepNo, "")、失敗経路が (-1, "sN") で呼ぶ。
+'   lastOkStep: 0～4 を書く。**負値は「更新しない」**＝E-06 の「失敗時は last_ok_step を
+'     更新しない」を、呼び出し側の分岐ではなく引数で表す。4を超える値は E0101 で拒否。
+'   failedStep: "" は失敗の記憶を消す（13章§2.1「Step成功時に空へ戻す」）。非空は enum
+'     s1 / s2 / s3 / s4 / s2c / s3c のみ受け付け、表に無い値は E0101 で拒否して1列も
+'     書かない。**status は動かさない**（状態遷移の唯一の口は SetStatus）
 Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long)
 Public Function RepairStates() As Long                 ' 起動時整合修復（16章E-12・12章§2.1のmodBoot手順③）。戻り=修復件数
 Public Function FreezeRound(ByVal caseId As String) As Long
@@ -643,9 +794,86 @@ Public Function FreezeRound(ByVal caseId As String) As Long
 ' 退避し、案件一覧の round_no を +1 して新しい round_no を返す。次ラウンドのS2は
 ' BuildS2User の prevS2Json にこの退避分を渡す
 Public Function NewInboxItem(ByVal sourceKind As String, ByVal theme As String, ByVal body As String) As String
+' 投函を1件起票して inbox_id（13章§1 `I-YYYYMM-NNN`）を返す。当月の使用済み最大連番の次から
+'   採り、衝突は E0605 を記録して次番号へ（999で枯渇）。失敗は ""。`posted_by_group` は本節の
+'   シグネチャが受け取らないため空のまま起こす（`NewCase` の channel 等と同じ扱い）。
+'   body の32,000字打切りと先頭式記号の無害化は `SetCellSafe` が行う（13章§2.6・NFR-S7①）
 Public Function SetInboxJudgement(ByVal inboxId As String, ByVal status As String, _
                                   ByVal dropType As String, ByVal reviveTag As String, ByVal reviveDue As Date) As Boolean
+' 判定（統制語彙）を記録する。status は `adopted` / `conditional_hold` / `rejected` のみ。
+'   16章 E-41 の必須検査（`JudgementError`）に掛かったら**1列も書かない**（保存ブロック）。
+'   遷移可否は `CanInboxTransition` が唯一の判定点。判定に対応しない列（却下でない
+'   `drop_type` 等）は空へ戻す（前の判定の語彙を行に残さない）。
+'   **`merged` は受け付けない**: 13章§2.6 は merged に `merged_into` を必須とするが、本
+'   シグネチャは統合先を受け取る引数を持たない。空の `merged_into` を書くと13章の必須を
+'   満たさない行ができるため fail-closed で拒否し E0101 を記録する（引数の追加は本節の裁定事項）
+Public Function SavePfResult(ByVal inboxId As String, ByVal pfJson As String, _
+                             ByVal survival As String, ByVal predTypes As String) As Boolean
+' プリフライト診断の結果を格納する（13章§2.6）。あわせて status を undiagnosed →
+'   diagnosed へ進める（可否は `CanInboxTransition`）。判定済みの行は診断結果だけを
+'   上書きし status は動かさない（巻き戻さない）
+Public Function ReadInboxItem(ByVal inboxId As String, ByRef theme As String, _
+                              ByRef body As String, ByRef statusText As String) As Boolean
+' 1件の投函を読む【唯一の口】。modPlayOps は R4 でシートに触れないためここを通す。
+'   戻り値 False=シート・見出し・当該行が無い（呼び出し側は fail-closed で中止する）
+Public Function UndiagnosedIds() As String
+' 未診断（undiagnosed）の inbox_id を投函順に ";" 区切りで返す（一括診断の対象一覧）
+Public Function InterestText(Optional ByVal maxItems As Long = 0) As String
+' 関心度の集計表示（10章 FR-17・11章 受信箱ワイヤー「関心度: 熊対策12件 雹災5件」）。
+'   同一テーマの投函件数を多い順に maxItems 件（0=既定3件）まで並べた1行。**2件以上
+'   集まったテーマだけ**を載せる。本体シートの読取だけで完結しナレッジブックへは書かない（12章§4）
+' --- modInboxStore の純ロジック（Excel非依存。層(a)から直接叩く。裁定書8 B-7）---
+Public Function BuildInboxId(ByVal monthText As String, ByVal seq As Long) As String
+' 13章§1 の `I-YYYYMM-NNN`。monthText は yyyymm の6桁ちょうど（数字のみ）、seq は 1..999。
+' 桁違い・範囲外は ""。引数名が `monthText` なのは **`Month` がVBAの組込関数**で
+' `vba_lint.py` の予約語検査がERRORにするため（`BuildCaseId` の `dayText` と同じ理由）
+Public Function IsValidInboxId(ByVal id As String) As Boolean
+' `I-` + 数字6桁 + `-` + 数字3桁（連番は 001..999）ちょうどの形か。前後空白は許さない
+Public Function CanInboxTransition(ByVal fromStatus As String, ByVal toStatus As String) As Boolean
+' 11章§4 の受信箱ステータス遷移表。許すのは (1) undiagnosed→diagnosed (2) diagnosed→
+'   adopted / conditional_hold / rejected / merged の2種だけ。自己遷移・判定済みからの
+'   再判定・診断を飛ばした判定は False。13章§2.6 の enum に無い値はどちらの側でも False
+Public Function JudgementError(ByVal statusText As String, ByVal dropType As String, _
+                               ByVal reviveTag As String, ByVal hasDue As Boolean) As String
+' 16章 E-41（統制語彙の必須化）の唯一の判定。保存してよければ ""、止めるなら理由の1行。
+'   rejected は `drop_type`（T0～T10）必須、conditional_hold は `revive_tag`（5値）と
+'   見直し期日の両方が必須。`hasDue` は Date 型を純関数へ持ち込まないための真偽（呼び出し側が落とす）
+Public Function InterestKeyOf(ByVal themeText As String) As String
+' 関心度集計のテーマキー（FR-17）。改行・空白の揺れと大小文字だけを吸収する（意味の同一視は
+'   しない＝人が読める粒度で数える）。空テーマは ""
+Public Function FmtInterestLine(ByVal themeText As String, ByVal itemCount As Long) As String
+' 関心度1件の表示（`熊対策12件`）。件数0以下・テーマ空は ""
 Public Function NewJudgement(ByVal rec As TJudgement) As String
+' UW判断を1件起票して judge_id（13章§1 `J-YYYYMM-NNN`）を返す（裁定書8 B-8）。当月の
+'   使用済み最大連番の次から採り、衝突は E0605 を記録して次番号へ（999で枯渇）。失敗は ""。
+'   `TJudgement`（modAppTypes）は13章§2.7の11列から `judge_id`/`judged_at` を除いた9列。
+'   必須（line_id/situation/decision/key_reason/recorded_by）が1つでも空なら1列も書かない。
+'   `decision` は19章§3のenum（raise/close/restrict/keep/improve）のみ受け付ける。`result`
+'   は任意だが非空なら13章§2.7のenum（won/lost/pending）のみ受け付ける。
+'   **16章E-05(4)**: 保存直前に `situation`/`key_reason` を `modPii.HasPii` へ通し、検知したら
+'   1列も書かず `modPii.ScanReport` の返り値（本文を含まない）を E0103 の detail に記録する
+'   （伏字差し替えの例外は無い＝(1)～(4)と同じブロック仕様）
+Public Function ReadJudgement(ByVal judgeId As String, ByRef rec As TJudgement) As Boolean
+' 1件の判断を読む唯一の口（17章T-26 DoDの「入力→保存→再表示一致」）。戻り値 False=シート・
+'   見出し・当該行が無い（rec は全列空へ戻す。呼び出し側は fail-closed で中止する）
+Public Function SetJudgementResult(ByVal judgeId As String, ByVal resultText As String, _
+                                   ByVal postLoss As String) As Boolean
+' 事後結果（result/post_loss）だけを更新する（FR-22）。situation/decision/key_reason 等の
+'   起票内容は書き換えない。resultText が非空なら13章§2.7のenumのみ受け付け、不一致は保存
+'   ブロック。""を渡すと result 列を空へ戻す（pendingの取消）。result/post_loss は16章E-05(4)
+'   の走査対象外（situation/key_reasonの2列に限る）なので modPii は通さない
+' --- modJudgeStore の純ロジック（Excel非依存。層(a)から直接叩く。裁定書8 B-8）---
+Public Function BuildJudgeId(ByVal monthText As String, ByVal seq As Long) As String
+' 13章§1 の `J-YYYYMM-NNN`。monthText は yyyymm の6桁ちょうど（数字のみ）、seq は 1..999。
+'   桁違い・範囲外は ""。`modInboxStore.BuildInboxId` と同型
+Public Function IsValidJudgeId(ByVal id As String) As Boolean
+' `J-` + 数字6桁 + `-` + 数字3桁（連番は 001..999）ちょうどの形か。前後空白は許さない。
+'   19章§4の注記どおり判断基準ID（`J-NN`）とは桁数が異なるため字数で区別できる
+Public Function IsValidDecision(ByVal decisionText As String) As Boolean
+' 19章§3の decision enum（raise/close/restrict/keep/improve）に一致するか。空は False
+Public Function IsValidJudgeResult(ByVal resultText As String) As Boolean
+' 13章§2.7の result enum（won/lost/pending）に一致するか。空は False（resultは任意列なので、
+'   空を許すかどうかの判断は呼び出し側が「空なら検査自体をスキップする」形で行う）
 ' --- modCaseStore の純ロジック（Excel非依存。層(a)から直接叩く。裁定書6 項目7）---
 ' 採番・参照優先・状態遷移は「規約そのもの」であり、シートI/Oの中に閉じ込めると誰も検査
 ' できない（W2aでは参照優先の並びを入れ替えてもテストが1本も落ちなかった）。以下4本は
@@ -671,6 +899,10 @@ Public Function ResolveDataKey(ByVal stepNo As Long, ByVal hasEdited As Boolean,
 '   N=2,3: sN_edited > sNr_json > sN_json ／ N=1,4: sN_edited > sN_json（改訂は無いので
 '   hasRevised は無視する）。どれも無ければ ""。範囲外の stepNo も ""。
 ' `ResolveStepJson` は必ずこの関数の答えに従う（分岐を2箇所に書かない）
+' `modCaseStore2` は 30,000字契約による分割先（案件一覧 と case_data の下位シートI/O。
+'   シートを取る・最終行・矩形読み・行削除・列名で1セル書く・セル値をLongへ、の11本）。
+'   **本節の公開契約面には載せない**（modCompanyFile2 と同じく modCaseStore の下位実装で
+'   あり、呼んでよいのは modCaseStore だけ。vba_lint の CONTRACT は required=[] で登録する）
 
 ' === ui: modUIProgress ===
 Public Sub SetStage(ByVal stepName As String, ByVal maxWaitSec As Long)

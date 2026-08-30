@@ -50,3 +50,24 @@ Public Type TCaseCtx
     industry_code As String
     industry_name As String
 End Type
+
+' ----------------------------------------------------------------------------
+' TJudgement - 判断台帳1件の入出力レコード(13章§2.7・裁定書8 B-8)。
+' ----------------------------------------------------------------------------
+'   modJudgeStore.NewJudgement / ReadJudgement が使う唯一の入れ物(14章§6)。
+'   13章§2.7の11列のうち、システムが払い出す judge_id / judged_at の2列を
+'   除いた残り9列をそのまま持つ(TCaseCtxと同じく物理名=フィールド名)。
+'   enumの正は19章§3(decision)・13章§2.7(result)。空でよい列(case_ref /
+'   factor_note / result / post_loss)は空文字列のまま渡す。
+' ----------------------------------------------------------------------------
+Public Type TJudgement
+    line_id As String
+    case_ref As String
+    situation As String
+    decision As String
+    factor_note As String
+    key_reason As String
+    result As String
+    post_loss As String
+    recorded_by As String
+End Type

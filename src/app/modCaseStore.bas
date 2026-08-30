@@ -5,10 +5,15 @@ Option Explicit
 ' modCaseStore - 案件一覧 / case_data の唯一の入出力口(app層・T-20)
 ' 責務(12章§2・13章§2.1/§2.2・14章§6): NewCase(13章§1・E-23) / SaveData・
 '   LoadData(分割保存と透過結合。E-22) / ResolveStepJson(参照優先。13章§2.2) /
-'   SetStatus / InvalidateDownstream(E-10) / RepairStates(E-12) / FreezeRound。
+'   SetStatus / SetStepOutcome(E-06の書込口) / InvalidateDownstream(E-10) /
+'   RepairStates(E-12) / FreezeRound。
 ' 配置: app層(12章§2)。シート名という製品固有語彙を持つため core層 へ置けない。
-' R4: 案件シートI/Oが責務そのものでExcelトークン許可10本の1つ(12章§4)。見るのは
+' R4: 案件シートI/Oが責務そのもので12章§4のExcelトークン許可枠の1つ。見るのは
 '   案件一覧 と case_data の2枚だけ。再描画と確認ダイアログは ui層 modUICase。
+' 下位I/Oの分離(裁定書8 A-2): シートを取る・最終行・矩形読み・行削除・列名で
+'   1セル書く、の10本は modCaseStore2 へ移した(modCompanyFile2 と同型)。結果
+'   として本モジュールに素のExcelトークンは残っていないが、責務(案件2枚のI/O)
+'   は変わらないため12章§4の許可枠からは外さない。
 ' 列アクセスは列名ベース(13章冒頭)。セル書込は全て modUtilText.SetCellSafe
 '   (16章 NFR-S7①)。数値列だけは内部生成のLongなので ' SAFE:const を明示。
 ' 純ロジックの分離: 採番・参照優先・状態遷移・無効化対象はシートI/Oを含まない
@@ -23,12 +28,6 @@ Private Const CS_SHEET_DATA As String = "case_data"
 
 ' 1セルに入れる最大字数(16章 E-22。物理上限32,767字の手前で切る)。
 Private Const CS_CHUNK_CHARS As Long = 32000
-
-' xlUp の数値(組込定数名を書かず LO の構文チェックで未定義名にしない)。
-Private Const CS_DIR_UP As Long = -4162
-
-' 見出し行を読む幅。案件一覧23列に余裕を見た「探索範囲」で列番号ではない。
-Private Const CS_SCAN_COLS As Long = 32
 
 ' 同日連番の上限(16章 E-23「999まで対応」)。
 Private Const CS_SERIAL_MAX As Long = 999
@@ -51,6 +50,9 @@ Private Const CS_STATUSES As String = "draft;s1_done;s2_done;s3_done;s4_done;exp
 ' status の正順(11章§4)。error はこの並びの外側(任意の状態から入り、
 ' failed_step の再実行で並びのどこへでも戻る)。
 Private Const CS_STATUS_ORDER As String = "draft;s1_done;s2_done;s3_done;s4_done;exported;feedback_done"
+
+' failed_step の enum(13章§2.1)。空は「失敗なし」なのでこの表には含めない。
+Private Const CS_FAILED_STEPS As String = "s1;s2;s3;s4;s2c;s3c"
 
 ' status のうち s4_done より上位(RepairStates で降格させない2値)。
 Private Const CS_STATUSES_ABOVE_S4 As String = "exported;feedback_done"
@@ -243,16 +245,16 @@ Public Function NewCase(ByVal company As String, ByVal industryCode As String, _
     End If
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_CASES)
+    Set ws = modCaseStore2.SheetOf(CS_SHEET_CASES)
     If ws Is Nothing Then
         modLog.LogError "E0603", "modCaseStore.NewCase", "sheet_missing:cases"
         Exit Function
     End If
 
     Dim lastRow As Long
-    lastRow = LastRowOf(ws)
+    lastRow = modCaseStore2.LastRowOf(ws)
     Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
     Dim cId As Long
     cId = modUtil.FindHeaderCol(blk, "case_id")
     If cId <= 0 Then
@@ -286,7 +288,7 @@ Public Function NewCase(ByVal company As String, ByVal industryCode As String, _
             modLog.LogError "E0605", "modCaseStore.NewCase", "id_build_failed:" & dayText
             Exit Function
         End If
-        If RowOfCase(blk, lastRow, cId, newId) <= 0 Then Exit Do
+        If modCaseStore2.RowOfCase(blk, lastRow, cId, newId) <= 0 Then Exit Do
         ' 既存と衝突(E-23)。記録して次の番号へ。
         modLog.LogError "E0605", "modCaseStore.NewCase", "id_collision:" & CStr(serialNo)
     Loop
@@ -296,18 +298,18 @@ Public Function NewCase(ByVal company As String, ByVal industryCode As String, _
     Dim stampText As String
     stampText = modUtil.NowStamp()
 
-    PutText ws, blk, wr, "case_id", newId
-    PutText ws, blk, wr, "case_type", Trim$(caseType)
-    PutText ws, blk, wr, "dossier_tier", CS_TIER_DEFAULT
-    PutText ws, blk, wr, "company", company
-    PutText ws, blk, wr, "industry_code", industryCode
-    PutText ws, blk, wr, "status", CS_STATUS_NEW
-    PutText ws, blk, wr, "created_at", stampText
-    PutText ws, blk, wr, "updated_at", stampText
-    PutText ws, blk, wr, "owner", OwnerName()
-    PutText ws, blk, wr, "s4_variant", CS_VARIANT_DEFAULT
-    PutNum ws, blk, wr, "round_no", 1
-    PutNum ws, blk, wr, "last_ok_step", 0
+    modCaseStore2.PutText ws, blk, wr, "case_id", newId
+    modCaseStore2.PutText ws, blk, wr, "case_type", Trim$(caseType)
+    modCaseStore2.PutText ws, blk, wr, "dossier_tier", CS_TIER_DEFAULT
+    modCaseStore2.PutText ws, blk, wr, "company", company
+    modCaseStore2.PutText ws, blk, wr, "industry_code", industryCode
+    modCaseStore2.PutText ws, blk, wr, "status", CS_STATUS_NEW
+    modCaseStore2.PutText ws, blk, wr, "created_at", stampText
+    modCaseStore2.PutText ws, blk, wr, "updated_at", stampText
+    modCaseStore2.PutText ws, blk, wr, "owner", modCaseStore2.OwnerName()
+    modCaseStore2.PutText ws, blk, wr, "s4_variant", CS_VARIANT_DEFAULT
+    modCaseStore2.PutNum ws, blk, wr, "round_no", 1
+    modCaseStore2.PutNum ws, blk, wr, "last_ok_step", 0
 
     NewCase = newId
     Exit Function
@@ -336,13 +338,13 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
     End If
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_DATA)
+    Set ws = modCaseStore2.SheetOf(CS_SHEET_DATA)
     If ws Is Nothing Then
         modLog.LogError "E0603", "modCaseStore.SaveData", "sheet_missing:case_data"
         Exit Function
     End If
 
-    DropRowsOf ws, Trim$(caseId), Trim$(dataKey)
+    modCaseStore2.DropRowsOf ws, Trim$(caseId), Trim$(dataKey)
 
     If LenB(content) = 0 Then
         SaveData = True
@@ -353,9 +355,9 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
     parts = modUtil.SplitForCells(content, CS_CHUNK_CHARS)
 
     Dim lastRow As Long
-    lastRow = LastRowOf(ws)
+    lastRow = modCaseStore2.LastRowOf(ws)
     Dim hdr As Variant
-    hdr = ReadBlock(ws, 2)
+    hdr = modCaseStore2.ReadBlock(ws, 2)
     Dim stampText As String
     stampText = modUtil.NowStamp()
 
@@ -365,11 +367,11 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
         seqNo = i - LBound(parts) + 1
         Dim wr As Long
         wr = lastRow + seqNo
-        PutText ws, hdr, wr, "case_id", Trim$(caseId)
-        PutText ws, hdr, wr, "data_key", Trim$(dataKey)
-        PutNum ws, hdr, wr, "seq", seqNo
-        PutText ws, hdr, wr, "content", parts(i)
-        PutText ws, hdr, wr, "saved_at", stampText
+        modCaseStore2.PutText ws, hdr, wr, "case_id", Trim$(caseId)
+        modCaseStore2.PutText ws, hdr, wr, "data_key", Trim$(dataKey)
+        modCaseStore2.PutNum ws, hdr, wr, "seq", seqNo
+        modCaseStore2.PutText ws, hdr, wr, "content", parts(i)
+        modCaseStore2.PutText ws, hdr, wr, "saved_at", stampText
     Next i
 
     SaveData = True
@@ -388,15 +390,15 @@ Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As Str
     If LenB(Trim$(caseId)) = 0 Then Exit Function
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_DATA)
+    Set ws = modCaseStore2.SheetOf(CS_SHEET_DATA)
     If ws Is Nothing Then Exit Function
 
     Dim lastRow As Long
-    lastRow = LastRowOf(ws)
+    lastRow = modCaseStore2.LastRowOf(ws)
     If lastRow < 2 Then Exit Function
 
     Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
     Dim cCase As Long, cKey As Long, cSeq As Long, cBody As Long
     cCase = modUtil.FindHeaderCol(blk, "case_id")
     cKey = modUtil.FindHeaderCol(blk, "data_key")
@@ -415,9 +417,9 @@ Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As Str
     Dim maxSeq As Long
     Dim r As Long
     For r = 2 To lastRow
-        If MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
+        If modCaseStore2.MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
             Dim sq1 As Long
-            sq1 = ToLongSafe(blk(r, cSeq))
+            sq1 = modCaseStore2.ToLongSafe(blk(r, cSeq))
             If sq1 > maxSeq Then maxSeq = sq1
         End If
     Next r
@@ -427,9 +429,9 @@ Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As Str
     Dim parts() As String
     ReDim parts(1 To maxSeq)
     For r = 2 To lastRow
-        If MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
+        If modCaseStore2.MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
             Dim sq2 As Long
-            sq2 = ToLongSafe(blk(r, cSeq))
+            sq2 = modCaseStore2.ToLongSafe(blk(r, cSeq))
             If sq2 >= 1 And sq2 <= maxSeq Then parts(sq2) = CStr(blk(r, cBody))
         End If
     Next r
@@ -476,29 +478,63 @@ Public Function SetStatus(ByVal caseId As String, ByVal statusText As String) As
     End If
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_CASES)
-    If ws Is Nothing Then Exit Function
-
-    Dim lastRow As Long
-    lastRow = LastRowOf(ws)
     Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
-    Dim cId As Long
-    cId = modUtil.FindHeaderCol(blk, "case_id")
-    If cId <= 0 Then Exit Function
-
     Dim rowNo As Long
-    rowNo = RowOfCase(blk, lastRow, cId, Trim$(caseId))
-    If rowNo <= 0 Then Exit Function
+    If Not modCaseStore2.LocateRow(CS_SHEET_CASES, caseId, ws, blk, rowNo) Then Exit Function
 
-    PutText ws, blk, rowNo, "status", Trim$(statusText)
-    PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    modCaseStore2.PutText ws, blk, rowNo, "status", Trim$(statusText)
+    modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
     SetStatus = True
     Exit Function
 
 Failed:
     modLog.LogError "E0603", "modCaseStore.SetStatus", "write_failed", Err.Number
     SetStatus = False
+End Function
+
+' SetStepOutcome - 16章 E-06 が要求する last_ok_step / failed_step の【書込口】
+'   (裁定書8 A-2 で14章§6へ宣言・新設)。modPipeline の成功経路と失敗経路が
+'   ここを通る。status は動かさない(遷移の唯一の口は SetStatus)。
+'   lastOkStep: 0..4 を書く。**負値は「更新しない」**。E-06 の「失敗時は
+'     last_ok_step を更新しない」を、呼び出し側の分岐ではなく引数で表す。
+'   failedStep: "" は失敗の記憶を消す(13章§2.1「Step成功時に空へ戻す」)。
+'     非空は enum s1/s2/s3/s4/s2c/s3c のみ受け付け、表に無い値は E0101 で
+'     拒否して1列も書かない(黙って未定義値を残さない)。
+Public Function SetStepOutcome(ByVal caseId As String, ByVal lastOkStep As Long, _
+                               ByVal failedStep As String) As Boolean
+    On Error GoTo Failed
+
+    Dim failText As String
+    failText = Trim$(failedStep)
+    If LenB(failText) > 0 Then
+        If Not IsListedValue(CS_FAILED_STEPS, failText) Then
+            modLog.LogError "E0101", "modCaseStore.SetStepOutcome", _
+                            "invalid_failed_step:" & failText
+            Exit Function
+        End If
+    End If
+    If lastOkStep > 4 Then
+        modLog.LogError "E0101", "modCaseStore.SetStepOutcome", _
+                        "invalid_last_ok_step:" & CStr(lastOkStep)
+        Exit Function
+    End If
+
+    Dim ws As Object
+    Dim blk As Variant
+    Dim rowNo As Long
+    If Not modCaseStore2.LocateRow(CS_SHEET_CASES, caseId, ws, blk, rowNo) Then Exit Function
+
+    If lastOkStep >= 0 Then
+        modCaseStore2.PutNum ws, blk, rowNo, "last_ok_step", lastOkStep
+    End If
+    modCaseStore2.PutText ws, blk, rowNo, "failed_step", failText
+    modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    SetStepOutcome = True
+    Exit Function
+
+Failed:
+    modLog.LogError "E0603", "modCaseStore.SetStepOutcome", "write_failed", Err.Number
+    SetStepOutcome = False
 End Function
 
 ' InvalidateDownstream - 上流を再実行するとき下流の成果物を無効化する(E-10)。
@@ -519,7 +555,7 @@ Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long
     If LenB(keyList) = 0 Then Exit Sub
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_DATA)
+    Set ws = modCaseStore2.SheetOf(CS_SHEET_DATA)
     If ws Is Nothing Then Exit Sub
 
     Dim keyArr() As String
@@ -528,7 +564,7 @@ Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long
     Dim removed As String
     Dim i As Long
     For i = LBound(keyArr) To UBound(keyArr)
-        If DropRowsOf(ws, Trim$(caseId), keyArr(i)) > 0 Then
+        If modCaseStore2.DropRowsOf(ws, Trim$(caseId), keyArr(i)) > 0 Then
             removed = modUtil.AppendIdList(removed, keyArr(i))
         End If
     Next i
@@ -555,18 +591,18 @@ Public Function RepairStates() As Long
     On Error GoTo Failed
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_CASES)
+    Set ws = modCaseStore2.SheetOf(CS_SHEET_CASES)
     If ws Is Nothing Then
         modLog.LogError "E0603", "modCaseStore.RepairStates", "sheet_missing:cases"
         Exit Function
     End If
 
     Dim lastRow As Long
-    lastRow = LastRowOf(ws)
+    lastRow = modCaseStore2.LastRowOf(ws)
     If lastRow < 2 Then Exit Function
 
     Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
     Dim cId As Long, cStatus As Long, cLastOk As Long, cFailed As Long
     cId = modUtil.FindHeaderCol(blk, "case_id")
     cStatus = modUtil.FindHeaderCol(blk, "status")
@@ -585,7 +621,7 @@ Public Function RepairStates() As Long
         If LenB(rowCase) > 0 Then
             Dim effStep As Long
             Dim storedOk As Long
-            storedOk = ToLongSafe(blk(r, cLastOk))
+            storedOk = modCaseStore2.ToLongSafe(blk(r, cLastOk))
             ' E-12(1) の「突合」= sN_json 側と last_ok_step 側の小さいほう。
             effStep = MaxOkStepOf(rowCase)
             If storedOk < effStep Then effStep = storedOk
@@ -602,15 +638,15 @@ Public Function RepairStates() As Long
             Dim didFix As Boolean
             didFix = False
             If storedOk <> effStep Then
-                PutNum ws, blk, r, "last_ok_step", effStep
+                modCaseStore2.PutNum ws, blk, r, "last_ok_step", effStep
                 didFix = True
             End If
             If curStatus <> wantStatus Then
-                PutText ws, blk, r, "status", wantStatus
+                modCaseStore2.PutText ws, blk, r, "status", wantStatus
                 didFix = True
             End If
             If didFix Then
-                PutText ws, blk, r, "updated_at", modUtil.NowStamp()
+                modCaseStore2.PutText ws, blk, r, "updated_at", modUtil.NowStamp()
                 fixedCount = fixedCount + 1
             End If
         End If
@@ -635,13 +671,13 @@ Public Function FreezeRound(ByVal caseId As String) As Long
     On Error GoTo Failed
 
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_CASES)
+    Set ws = modCaseStore2.SheetOf(CS_SHEET_CASES)
     If ws Is Nothing Then Exit Function
 
     Dim lastRow As Long
-    lastRow = LastRowOf(ws)
+    lastRow = modCaseStore2.LastRowOf(ws)
     Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
     Dim cId As Long, cRound As Long
     cId = modUtil.FindHeaderCol(blk, "case_id")
     cRound = modUtil.FindHeaderCol(blk, "round_no")
@@ -651,7 +687,7 @@ Public Function FreezeRound(ByVal caseId As String) As Long
     End If
 
     Dim rowNo As Long
-    rowNo = RowOfCase(blk, lastRow, cId, Trim$(caseId))
+    rowNo = modCaseStore2.RowOfCase(blk, lastRow, cId, Trim$(caseId))
     If rowNo <= 0 Then Exit Function
 
     Dim s2Text As String
@@ -664,11 +700,11 @@ Public Function FreezeRound(ByVal caseId As String) As Long
     End If
 
     Dim curRound As Long
-    curRound = ToLongSafe(blk(rowNo, cRound))
+    curRound = modCaseStore2.ToLongSafe(blk(rowNo, cRound))
     If curRound < 1 Then curRound = 1
 
-    PutNum ws, blk, rowNo, "round_no", curRound + 1
-    PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    modCaseStore2.PutNum ws, blk, rowNo, "round_no", curRound + 1
+    modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
     FreezeRound = curRound + 1
     Exit Function
 
@@ -677,109 +713,7 @@ Failed:
     FreezeRound = 0
 End Function
 
-' --- 内部ヘルパー(シートI/O) ---
-
-' 名前でシートを取る。無ければ Nothing(実行時に生やすと列定義の欠けた表になる)。
-Private Function SheetOf(ByVal sheetName As String) As Object
-    On Error GoTo NoSheet
-    Set SheetOf = ThisWorkbook.Worksheets(sheetName)
-    Exit Function
-NoSheet:
-    Set SheetOf = Nothing
-End Function
-
-' Application.UserName(13章§2.1 owner)。取得できない環境では ""。
-Private Function OwnerName() As String
-    On Error GoTo NoName
-    OwnerName = CStr(Application.UserName)
-    Exit Function
-NoName:
-    OwnerName = vbNullString
-End Function
-
-' A列基準の最終行。データが無ければ1(見出し行)。
-Private Function LastRowOf(ByVal ws As Object) As Long
-    Dim r As Long
-    On Error GoTo One1
-    r = ws.Cells(ws.Rows.count, 1).End(CS_DIR_UP).row
-    If r < 1 Then r = 1
-    LastRowOf = r
-    Exit Function
-One1:
-    LastRowOf = 1
-End Function
-
-' 見出し行を含む矩形を一度だけ読む。1セルだけの Range は2次元配列にならないので
-' 必ず2行以上を読む。
-Private Function ReadBlock(ByVal ws As Object, ByVal lastRow As Long) As Variant
-    On Error GoTo Empty0
-    Dim hi As Long
-    hi = lastRow
-    If hi < 2 Then hi = 2
-    ReadBlock = ws.Range(ws.Cells(1, 1), ws.Cells(hi, CS_SCAN_COLS)).Value
-    Exit Function
-Empty0:
-    ReadBlock = Empty
-End Function
-
-' 読み込み済みブロックから case_id 一致行を探す。見つからなければ0。
-Private Function RowOfCase(ByVal blk As Variant, ByVal lastRow As Long, _
-                           ByVal caseCol As Long, ByVal caseId As String) As Long
-    On Error GoTo NotFound
-    If caseCol <= 0 Then Exit Function
-    Dim r As Long
-    For r = 2 To lastRow
-        If Trim$(CStr(blk(r, caseCol))) = caseId Then
-            RowOfCase = r
-            Exit Function
-        End If
-    Next r
-    Exit Function
-NotFound:
-    RowOfCase = 0
-End Function
-
-' case_data の1行が (case_id, data_key) に一致するか。
-Private Function MatchesRow(ByVal blk As Variant, ByVal r As Long, _
-                            ByVal caseCol As Long, ByVal keyCol As Long, _
-                            ByVal caseId As String, ByVal dataKey As String) As Boolean
-    On Error GoTo NoMatch
-    If Trim$(CStr(blk(r, caseCol))) <> caseId Then Exit Function
-    If Trim$(CStr(blk(r, keyCol))) <> dataKey Then Exit Function
-    MatchesRow = True
-    Exit Function
-NoMatch:
-    MatchesRow = False
-End Function
-
-' 同じ (case_id, data_key) の行を全削除し件数を返す(下から回すのは行ずれ回避)。
-Private Function DropRowsOf(ByVal ws As Object, ByVal caseId As String, _
-                            ByVal dataKey As String) As Long
-    On Error GoTo Done0
-    Dim lastRow As Long
-    lastRow = LastRowOf(ws)
-    If lastRow < 2 Then Exit Function
-
-    Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
-    Dim cCase As Long, cKey As Long
-    cCase = modUtil.FindHeaderCol(blk, "case_id")
-    cKey = modUtil.FindHeaderCol(blk, "data_key")
-    If cCase <= 0 Or cKey <= 0 Then Exit Function
-
-    Dim n As Long
-    Dim r As Long
-    For r = lastRow To 2 Step -1
-        If MatchesRow(blk, r, cCase, cKey, caseId, Trim$(dataKey)) Then
-            ws.Rows(r).Delete
-            n = n + 1
-        End If
-    Next r
-    DropRowsOf = n
-    Exit Function
-Done0:
-    DropRowsOf = 0
-End Function
+' --- 内部ヘルパー(状態導出。素のシートI/Oは modCaseStore2 側) ---
 
 ' sN_json(検証合格済のみ)が示す最大Step。1本も無ければ0(E-12(1)(3))。
 Private Function MaxOkStepOf(ByVal caseId As String) As Long
@@ -796,31 +730,23 @@ End Function
 Private Function ApplyRepairedState(ByVal caseId As String, ByVal keepStep As Long) As Boolean
     On Error GoTo Failed
     Dim ws As Object
-    Set ws = SheetOf(CS_SHEET_CASES)
-    If ws Is Nothing Then Exit Function
-
-    Dim lastRow As Long
-    lastRow = LastRowOf(ws)
     Dim blk As Variant
-    blk = ReadBlock(ws, lastRow)
-    Dim cId As Long, cStatus As Long, cFailed As Long
-    cId = modUtil.FindHeaderCol(blk, "case_id")
+    Dim rowNo As Long
+    If Not modCaseStore2.LocateRow(CS_SHEET_CASES, caseId, ws, blk, rowNo) Then Exit Function
+
+    Dim cStatus As Long, cFailed As Long
     cStatus = modUtil.FindHeaderCol(blk, "status")
     cFailed = modUtil.FindHeaderCol(blk, "failed_step")
-    If cId <= 0 Or cStatus <= 0 Then Exit Function
-
-    Dim rowNo As Long
-    rowNo = RowOfCase(blk, lastRow, cId, caseId)
-    If rowNo <= 0 Then Exit Function
+    If cStatus <= 0 Then Exit Function
 
     Dim failedText As String
     failedText = vbNullString
     If cFailed > 0 Then failedText = Trim$(CStr(blk(rowNo, cFailed)))
 
-    PutNum ws, blk, rowNo, "last_ok_step", keepStep
-    PutText ws, blk, rowNo, "status", _
+    modCaseStore2.PutNum ws, blk, rowNo, "last_ok_step", keepStep
+    modCaseStore2.PutText ws, blk, rowNo, "status", _
             RepairedStatus(Trim$(CStr(blk(rowNo, cStatus))), failedText, keepStep)
-    PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
     ApplyRepairedState = True
     Exit Function
 
@@ -828,34 +754,3 @@ Failed:
     ApplyRepairedState = False
 End Function
 
-' 列名で位置を引いて1セル書く。列が無ければ何もしない。書込は必ず SetCellSafe。
-Private Sub PutText(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
-                    ByVal colName As String, ByVal textValue As String)
-    Dim c As Long
-    c = modUtil.FindHeaderCol(hdr, colName)
-    If c <= 0 Then Exit Sub
-    modUtilText.SetCellSafe ws.Cells(r, c), textValue, ws.Name & "/" & colName
-End Sub
-
-' 数値列(seq / round_no / last_ok_step)。内部生成のLongで数値型を保つ必要があり
-' SetCellSafe(文字列を返す)は通さない(modLog.PutNum と同じ理由)。
-Private Sub PutNum(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
-                   ByVal colName As String, ByVal numValue As Long)
-    Dim c As Long
-    c = modUtil.FindHeaderCol(hdr, colName)
-    If c <= 0 Then Exit Sub
-    ws.Cells(r, c).Value = numValue   ' SAFE:const 内部生成のLong(外部由来テキストではない)
-End Sub
-
-' セル値を Long へ。空・非数値・取得失敗は0。
-Private Function ToLongSafe(ByVal v As Variant) As Long
-    On Error GoTo Zero0
-    Dim t As String
-    t = Trim$(CStr(v))
-    If LenB(t) = 0 Then Exit Function
-    If Not IsNumeric(t) Then Exit Function
-    ToLongSafe = CLng(t)
-    Exit Function
-Zero0:
-    ToLongSafe = 0
-End Function

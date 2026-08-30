@@ -73,6 +73,11 @@ MODULE_REGISTRY = {
     #   modValidate2 / modCompanyFile2 = 30,000字契約による分割先。
     #   modCaseRead = 案件一覧の読取専用API(app層。R4許可も併せて追加)。
     "modValidate2", "modCompanyFile", "modCompanyFile2", "modPii",
+    # 裁定書8 A-1/A-2 が承認した分割先(12章§2のモジュール一覧に追記済み)。
+    #   modPipeline2  = 入念モードの批判・改訂パイプ(T-28)。R4許可は与えない
+    #                   (modPipeline と同じくシートに触れない)。
+    #   modCaseStore2 = 案件2枚の下位シートI/O(R4許可も併せて追加)。
+    "modPipeline2", "modCaseStore2",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
     "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
     "modHtmlTheme",
@@ -225,22 +230,51 @@ CONTRACT: dict[str, dict] = {
             "PlayIdOf", "KbRowCount", "UsesSlot", "S1SummaryOf",
         ],
     },
+    # modPipeline2: 30,000字契約による分割先(裁定書8 A-1。入念モードの批判・改訂
+    #   パイプ=T-28)。**分割の継ぎ目**であり呼んでよいのは modPipeline だけ。
+    #   RunDeep は modPipeline からの1行フックの受け口なので required で固定する
+    #   (改名・Private化は契約違反)。パイプ内部の関数構成は T-28 に委ねるため
+    #   closed=False。
+    "modPipeline2": {"closed": False, "required": ["RunDeep"]},
     # modCaseRead: 案件一覧の読取専用API(裁定書7 B-7。14章§6が ReadCaseCtx を宣言)。
     "modCaseRead": {"closed": False, "required": ["ReadCaseCtx"]},
     "modPlayOps": {"closed": False, "required": ["RunPreflight"]},
+    # modSparring: PL-04 壁打ち(T-27。裁定書8 B-9 で14章§6へ宣言)。
+    #   実行制御3本(ResumeSparring / SendSparring / SendToInbox)＋履歴の読み出し
+    #   (HistoryOf)に加え、**純核3本を required に載せる**。純核を Private へ
+    #   戻すと層(a)の回帰網が消えるため、契約違反として機械で検出する
+    #   (modPipeline / modPipeline2 の判定核と同じ扱い)。
+    "modSparring": {
+        "closed": False,
+        "required": [
+            "ResumeSparring", "SendSparring", "SendToInbox", "HistoryOf",
+            "HistoryJoinOf", "TrimHistoryOf", "CanContinueSparring",
+        ],
+    },
     "modCaseStore": {
         "closed": False,
         "required": [
             "NewCase", "SaveData", "LoadData", "ResolveStepJson", "SetStatus",
             "InvalidateDownstream", "RepairStates", "FreezeRound",
+            # 16章E-06の書込口(裁定書8 A-2で14章§6へ宣言)。
+            "SetStepOutcome",
             # 純ロジックの公開(14章§6・裁定書6 項目7)。
             "BuildCaseId", "IsValidCaseId", "CanTransition", "ResolveDataKey",
         ],
     },
+    # modCaseStore2: 30,000字契約による分割先(裁定書8 A-2。案件2枚の下位シート
+    #   I/O)。modCompanyFile2 と同じく14章§6の公開契約面には載せないため
+    #   required は空(closed=False で追加 Public を許容する)。
+    "modCaseStore2": {"closed": False, "required": []},
     "modInboxStore": {
         "closed": False,
         "required": ["NewInboxItem", "SetInboxJudgement"],
     },
+    # modJudgeStore: 判断台帳CRUD(13章§2.7・裁定書8 B-8)。NewJudgement は
+    #   14章§6が予約した唯一の固定名(TJudgement受取・judge_id返却)。
+    #   ReadJudgement/SetJudgementResult/BuildJudgeId/IsValidJudgeId/
+    #   IsValidDecision/IsValidJudgeResult は本タスクで追加した公開口で、
+    #   closed=False につき required には含めない(14章§6へ実装内容を追記)。
     "modJudgeStore": {"closed": False, "required": ["NewJudgement"]},
     "modExportHtml": {"closed": False, "required": ["GenerateHtmlReport"]},
     "modExportHearing": {"closed": False, "required": ["BuildHearingSheet"]},
@@ -323,6 +357,10 @@ R4_EXCEL_ALLOWED_MODULES = {
     # 以下 store 系。案件・受信箱・判断台帳・ナレッジブックのシートI/Oが責務
     # (12章§2 の R4 但し書き「store系モジュール内は自身の責務範囲で可」)。
     "modCaseStore", "modInboxStore", "modJudgeStore", "modKnowledge",
+    # modCaseStore2: 上と同一責務の分割先(裁定書8 A-2。案件一覧 と case_data の
+    #   下位シートI/Oだけを切り出したもの)。許可の幅は modCaseStore と同じ
+    #   「本体ブックの案件2枚」で広がっていない。
+    "modCaseStore2",
     # modCaseRead: 案件一覧の**読取専用**API(裁定書7 B-7・14章§6 ReadCaseCtx)。
     #   許可の幅は modCaseStore と同じ「案件一覧の1枚」で、書込は一切持たない
     #   (Range への代入が入ったら NFR-S7 の書込口検査と本注記の両方に違反する)。
@@ -1875,6 +1913,67 @@ def check_msvbal_reserved_names(info: ModuleInfo) -> None:
             )
 
 
+# ==============================================================================
+# 16進リテラルの Long 接尾辞(裁定書8 A-5。W2bの実バグの再発防止)
+# ------------------------------------------------------------------------------
+# VBAは **16進リテラルの型を桁数で決める**。1～4桁は符号付き Integer なので
+# &H8000 以上は負値へ化ける(&H9FFF = -24577)。W2b では modPii の漢字域判定
+# `cp >= &H4E00 And cp <= &H9FFF` がこれで常に False になり、漢字姓の検知が
+# 全滅した(黒箱テストが発見。実害はPII走査の素通り=16章E-05の骨抜き)。
+# LibreOffice Basic は同じ式を素通りさせるため run_lo_tests では捕まらない
+# (LOの死角)。接尾辞 `&` を付けると Long として解釈され値が保たれる。
+#
+# 規則: 値が &H8000 以上の16進リテラルは接尾辞 `&` を必須とする。
+#   ・1～4桁 … `&` が無いと **値が変わる**(上記の実バグそのもの)
+#   ・5～8桁 … VBAは既に Long として読むので値は変わらないが、桁数で型が
+#              変わる読み手泣かせを残さないため同じ規則を課す
+#              (modPii の注記「codebase 全体で &H....& に統一」が house rule)。
+#   ・`%`(Integer)等の別の型接尾辞は `&` ではないので違反として扱う。
+# 例外: **ChrW() の唯一の引数**に置かれた素の16進リテラルだけは WARN に落とす。
+#   ChrW の引数は -32768～65535 を受け、負値は符号なし16bit相当として解釈される
+#   ため、この位置に限り値が保たれる(化けない)。とはいえ桁数依存の読みにくさは
+#   同じなので、黙って通さず WARN として毎回表に出す。
+# ==============================================================================
+HEX_SUFFIX_MIN_VALUE = 0x8000
+HEX_LITERAL_PATTERN = re.compile(r"&H([0-9A-Fa-f]+)(&?)")
+HEX_IN_CHRW_PATTERN = re.compile(
+    r"\bChrW\s*\(\s*&H[0-9A-Fa-f]+\s*\)", re.IGNORECASE)
+
+
+def check_hex_literal_suffix(info: ModuleInfo) -> None:
+    for lineno, stmt in info.statements:
+        masked = _blank_string_literals(stmt)
+        chrw_spans = [m.span() for m in HEX_IN_CHRW_PATTERN.finditer(masked)]
+        for m in HEX_LITERAL_PATTERN.finditer(masked):
+            digits, suffix = m.group(1), m.group(2)
+            if suffix == "&":
+                continue
+            value = int(digits, 16)
+            if value < HEX_SUFFIX_MIN_VALUE:
+                continue
+            if any(s <= m.start() and m.end() <= e for s, e in chrw_spans):
+                info.add(
+                    "WARN", lineno,
+                    f"16進リテラル &H{digits} に Long接尾辞 '&' がありません"
+                    f"(ChrW の引数位置なので値は保たれますが、桁数で型が変わる"
+                    f"読みにくさは同じです。&H{digits}& と書いてください): "
+                    f"「{stmt.strip()[:80]}」",
+                )
+                continue
+            if len(digits.lstrip("0")) <= 4:
+                why = (f"VBAは4桁以下の16進を符号付きIntegerとして読むため "
+                       f"&H{digits} は {value - 0x10000} に化けます"
+                       f"(W2bの実バグ: &H9FFF が -24577 になり漢字姓の検知が全滅)")
+            else:
+                why = ("5桁以上は既に Long として読まれますが、桁数で型が変わる"
+                       "書き方を残さないため接尾辞は統一で必須です")
+            info.add(
+                "ERROR", lineno,
+                f"16進リテラル &H{digits} に Long接尾辞 '&' がありません。{why}。"
+                f"&H{digits}& と書いてください: 「{stmt.strip()[:80]}」",
+            )
+
+
 def check_excel_tokens(info: ModuleInfo) -> None:
     """R4: Excelトークンは ui層 と R4_EXCEL_ALLOWED_MODULES のみ(12章§2)。"""
     name = module_name_for_display(info)
@@ -2247,6 +2346,7 @@ def run_lint(src_root: Path) -> int:
         check_reserved_identifiers(info)
         check_vba_reserved_words(info)
         check_msvbal_reserved_names(info)
+        check_hex_literal_suffix(info)
         check_excel_tokens(info)
         check_application_run_whitelist(info)
         check_cell_write_guard(info)
