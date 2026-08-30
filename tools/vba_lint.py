@@ -117,7 +117,7 @@ MODULE_REGISTRY = {
 # modMockLlm1..n は 12章§2(v2.4.1)が 30,000字契約による分割を明記している。
 MODULE_REGISTRY_PREFIXES = re.compile(
     r"^(modTestsPure|modSchemas|modHtmlTemplate|modPromptsCore|modPromptsBlocks"
-    r"|modPromptsOps|modMockLlm)\d*$"
+    r"|modPromptsOps|modMockLlm|modTestsExcel)\d*$"
 )
 
 # ==============================================================================
@@ -416,6 +416,9 @@ CONTRACT: dict[str, dict] = {
     },
     # modTestsExcel: 14章§6のtest層契約(層(b)=実Excel E2Eスモークの入口。17章T-47)。
     "modTestsExcel": {"closed": False, "required": ["RunAllExcelTests"]},
+    # modTestsExcel2: 30,000字契約(12章§2)による modTestsExcel の分割先。
+    # wintest からの入口は RunAllExcelTests のままで、本数だけ合流させる。
+    "modTestsExcel2": {"closed": False, "required": ["RunExcelTests2"]},
 }
 
 # ==============================================================================

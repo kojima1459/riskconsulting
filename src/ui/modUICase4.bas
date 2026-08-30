@@ -24,6 +24,7 @@ Private Const U4_SRC As String = "modUICase4"
 Private Const U4_FB As String = "フィードバック"
 Private Const U4_JUDGE As String = "判断台帳"
 Private Const U4_SCAN_COLS As Long = 32
+Private Const U4_CASEIN As String = "案件入力"
 
 ' ============================================================================
 ' 図形ボタン(11章 HOMEワイヤーの[商談の記録][判断台帳]から開いた先の操作)
@@ -259,6 +260,74 @@ Private Function ColText(ByVal ws As Object, ByVal hdr As Variant, ByVal rowNo A
     colNo = modUtil.FindHeaderCol(hdr, colName)
     If colNo <= 0 Then Exit Function
     ColText = modUISheet.CellText(ws, rowNo, colNo)
+End Function
+
+' ============================================================================
+' 追加収集の[コピー](17章 T-31 DoD)
+' ----------------------------------------------------------------------------
+' 裁定書11 Q1: 30,000字契約(12章§2)により modUICase3 から本モジュールへ移した
+' (案件入力の overflow 永続ガードを入れる余白が modUICase3 に無かった)。
+' 呼出は図形ボタンの OnAction "modUICase4.CopyResearchRow" のみ(14章§6)。
+' ----------------------------------------------------------------------------
+' クリックされた図形の位置から行を決める(OnActionは引数を運べないため、
+' Application.Caller が返す図形名で当該行を特定する)。
+' ============================================================================
+Public Sub CopyResearchRow()
+    If Not modUIProgress.TryEnterUiLock("調査プロンプトのコピー") Then Exit Sub
+    On Error GoTo Done
+
+    Dim ws As Object
+    Set ws = ActiveSheet
+    If ws Is Nothing Then GoTo Done
+
+    Dim shapeKey As String
+    shapeKey = CStr(Application.Caller)
+    If LenB(shapeKey) = 0 Then GoTo Done
+
+    Dim rowNo As Long
+    rowNo = ws.Shapes(shapeKey).TopLeftCell.row
+    If rowNo <= 0 Then GoTo Done
+
+    Dim colNo As Long
+    colNo = PromptColOn(ws)
+    If colNo <= 0 Then GoTo Done
+
+    Dim payload As String
+    payload = modUISheet.CellText(ws, rowNo, colNo)
+    If LenB(payload) = 0 Then GoTo Done
+
+    If Not modUISheet.CopyToClipboard(payload) Then
+        ws.Cells(rowNo, colNo).Select
+        Notice "クリップボードへ入れられませんでした。選択したセルを Ctrl+C でコピーしてください。"
+    End If
+
+Done:
+    modUIProgress.ExitUiLock
+End Sub
+
+' 調査プロンプト本文の列。案件入力は ci_research_anchor の1つ右、
+' S1は s1_research_requests ブロックの prompt_text 列。
+Private Function PromptColOn(ByVal ws As Object) As Long
+    On Error GoTo NoCol
+
+    If ws.Name = U4_CASEIN Then
+        Dim anchor As Object
+        Set anchor = modUISheet.NamedCell("ci_research_anchor")
+        If anchor Is Nothing Then Exit Function
+        PromptColOn = anchor.Column + 1
+        Exit Function
+    End If
+
+    Dim headerRow As Long
+    headerRow = modUISheet.BlockRow("s1_research_requests")
+    If headerRow <= 0 Then Exit Function
+
+    Dim hdr As Variant
+    hdr = modUISheet.HeaderOf(ws, headerRow, 1, U4_SCAN_COLS)
+    PromptColOn = modUISheet.ColOf(hdr, 1, "prompt_text")
+    Exit Function
+NoCol:
+    PromptColOn = 0
 End Function
 
 ' 利用者への案内。HOMEの警告欄へ書き、ダイアログでも知らせる。

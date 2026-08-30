@@ -237,6 +237,10 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "limit_check", "TRUE"
     modConfig.RegisterDefault "log_max_rows", "2000"
     modConfig.RegisterDefault "anonymize_default", "TRUE"
+    ' 裁定書11 Q7(裁定書10 m7・13章§2.3): 実施者。run_log の operator 列と
+    ' 受信箱の judged_by_group がこのキーを読む。個人名は入れない(部署・
+    ' グループ名まで)ため、既定値は空とし config で記入してもらう。
+    modConfig.RegisterDefault "operator", vbNullString
     modConfig.RegisterDefault "feature_inbox", "TRUE"
     modConfig.RegisterDefault "feature_judgelog", "TRUE"
 End Sub

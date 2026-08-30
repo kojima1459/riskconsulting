@@ -27,6 +27,8 @@ Option Explicit
 '   B12 = 裁定書9 B12 + 裁定書10 M5(AnswerMemoCount は案件を問わず数える)
 '   B13 = 裁定書9 B13 + 裁定書10 M6(2相書込の途中失敗痕跡は E0604 で止める)
 '   C1  = 裁定書10 C1 + 補遺P7(投函下書き行の常設と、投函の失敗経路での残存)
+'   Q9/Q1 = 裁定書11(貼付欄の往復一致と overflow の永続ガード)。実体は
+'           modTestsExcel2(30,000字契約による分割先)にあり、本数だけ合流する
 '
 ' LibreOffice(run_lo_tests.py)では走らない(層(b)は実Excel専用。tools/
 ' run_lo_tests.py のモジュール一覧にも含めない)。
@@ -48,7 +50,7 @@ Private Const TE_SNAP_MARK As String = "T47_SNAP_MARK"
 Private Const TE_BAND_SEQ As Long = 100001
 
 ' 本モジュールが打つ Check の総本数(自己照合用。テストを増減したら更新)。
-Private Const TE_EXPECTED As Long = 34
+Private Const TE_EXPECTED As Long = 44
 
 Private mRun As Long    ' ECheck が数える実行本数
 
@@ -64,6 +66,9 @@ Public Sub RunAllExcelTests()
     TestB12AnswerMemo
     TestB13TwoPhase
     TestC1DraftRow
+    ' 裁定書11 Q9/Q1: 30,000字契約による分割先(modTestsExcel2)の本数を足す
+    ' (wintest からの入口は本モジュールの1本のままにする=14章§6)。
+    mRun = mRun + modTestsExcel2.RunExcelTests2()
     ' 自己照合はランナーへ直接打つ(mRun には数えない)。
     modTestRunner.Check "T47-00_層(b)本数の自己照合(" & CStr(TE_EXPECTED) & "本)", _
         mRun = TE_EXPECTED, "実際=" & CStr(mRun) & _

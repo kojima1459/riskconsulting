@@ -611,6 +611,6 @@ Private Sub DrawResearchButtons()
     Dim r As Long
     For r = headerRow + 1 To lastRow
         modUISheet.EnsureButton ws, "btncopy_" & CStr(r), "コピー", r, 4, 52#, _
-                                "modUICase3.CopyResearchRow"
+                                "modUICase4.CopyResearchRow"
     Next r
 End Sub

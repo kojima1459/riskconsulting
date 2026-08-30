@@ -159,6 +159,9 @@ Public Function EnumPairsCsv() As String
     s = s & "inbox_judge_to,adopted,採択" & vbLf
     s = s & "inbox_judge_to,conditional_hold,条件付き保留" & vbLf
     s = s & "inbox_judge_to,rejected,却下" & vbLf
+    s = s & "inbox_source_kind,member_post,部内投稿" & vbLf
+    s = s & "inbox_source_kind,field_voice,現場の声" & vbLf
+    s = s & "inbox_source_kind,watch,ウォッチ" & vbLf
     EnumPairsCsv = s
 End Function
 
@@ -346,6 +349,9 @@ Private Function BindingTable() As String
     ' 無く、束ね種別 f で「シート名:列物理名」を指す。この1行が無いと
     ' inbox_judge_to の隠しレンジはどのセルにも束ねられない死んだ登録になる。
     s = s & "inbox_judge_to|f|受信箱:judge_to" & vbLf
+    ' 裁定書11 Q4: 投函下書き行の source_kind も利用者が選ぶ入力列なので
+    ' 日本語ラベルで束ねる(19章§3 inbox.source_kind)。
+    s = s & "inbox_source_kind|f|受信箱:source_kind" & vbLf
     BindingTable = s
 End Function
 
@@ -392,6 +398,34 @@ Public Function ApplyEnumValidation() As Long
 Failed:
     modLog.LogError "E0603", UC_SRC & ".ApplyEnumValidation", "bind_failed", Err.Number
     ApplyEnumValidation = 0
+End Function
+
+' ============================================================================
+' RebindFlatValidation - 1シートぶんのフラット表(f種別)の束ねを張り直す
+' ----------------------------------------------------------------------------
+' 裁定書11 Q3(a): 受信箱の下書き行を Rows(2).Insert で挿すと、挿入行は直上の
+' 見出し行から書式を継ぐため利用者が選ぶ列の入力規則が付かない。行を挿した
+' 側からこれを呼び、当該シートの f種別の束ねだけを張り直す(ApplyEnumValidation
+' 全体を起動時以外に走らせない)。戻り値=張れた本数。
+' ============================================================================
+Public Function RebindFlatValidation(ByVal sheetName As String) As Long
+    On Error GoTo Zero0
+    If LenB(sheetName) = 0 Then Exit Function
+
+    Dim binds() As String
+    binds = Split(BindingTable(), vbLf)
+
+    Dim i As Long
+    Dim done As Long
+    For i = LBound(binds) To UBound(binds)
+        If InStr(1, binds(i), "|f|" & sheetName & ":", vbBinaryCompare) > 0 Then
+            If BindOne(binds(i)) Then done = done + 1
+        End If
+    Next i
+    RebindFlatValidation = done
+    Exit Function
+Zero0:
+    RebindFlatValidation = 0
 End Function
 
 ' 束ね1件。書式は BindingTable のコメントのとおり。張れたら True。
@@ -456,13 +490,31 @@ Private Function BindOne(ByVal rowText As String) As Boolean
     colNo = modUISheet.ColOf(hdr, firstCol, colName)
     If colNo <= 0 Then Exit Function
 
-    modUISheet.BindBlockValidation ws, headerRow, colNo, UC_DV_ROWS, _
+    ' 裁定書11 Q5: フラット表(受信箱・判断台帳)は投函・壁打ち・watchが積み上がり
+    ' 行数の上限が無い表なので、DVは行2から UC_DV_ROWS までではなく**2行目以降の列全体**
+    ' へ張る(121行目以降で日本語ラベルの一覧が消え、手入力が EnumEn の完全一致で
+    ' 弾かれる乖離を無くす)。ブロック型(b)は行数が枠で決まるので現状維持。
+    Dim dvRows As Long
+    dvRows = UC_DV_ROWS
+    If kindText = "f" Then dvRows = ColumnRowsBelow(ws, headerRow)
+
+    modUISheet.BindBlockValidation ws, headerRow, colNo, dvRows, _
                                    rangeName, UC_DV_TITLE, UC_DV_MSG
     BindOne = True
     Exit Function
 
 Failed:
     BindOne = False
+End Function
+
+' 見出し行の下にある行数(=シート最終行まで)。取れなければ UC_DV_ROWS。
+Private Function ColumnRowsBelow(ByVal ws As Object, ByVal headerRow As Long) As Long
+    On Error GoTo Fallback0
+    ColumnRowsBelow = ws.Rows.count - headerRow
+    If ColumnRowsBelow <= 0 Then ColumnRowsBelow = UC_DV_ROWS
+    Exit Function
+Fallback0:
+    ColumnRowsBelow = UC_DV_ROWS
 End Function
 
 ' ============================================================================

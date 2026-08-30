@@ -19,23 +19,17 @@ Option Explicit
 '
 ' 案件一覧への書込について(申し送り):
 '   14章§6 は案件一覧の**属性列**(channel / kanji / bid / reins / industry_name /
-'   other_insurers / dossier_tier / s4_variant)の書込口を宣言していない。一方
-'   13章§2.1 は「値は案件入力の画面(11章)で人が埋める」と明記しており、書込経路が
-'   無いと画面が成立しない。そこで ui層が案件一覧の当該行へ直接書く形にし、その
-'   事実を本コメントと concerns に残す(modCaseStore へ書込口を足すかは§6の裁定
-'   事項)。**状態遷移・採番・case_data は従来どおり modCaseStore が唯一の口**で
-'   あり、ここで触るのは属性列だけである。
+'   other_insurers / dossier_tier / s4_variant)の書込口を宣言していないが、
+'   13章§2.1 は人が画面で埋めると明記しているため ui層が当該行へ直接書く
+'   (§6の裁定待ち)。**状態遷移・採番・case_data は modCaseStore が唯一の口**。
 ' ============================================================================
 
 Private Const U3_SRC As String = "modUICase3"
 Private Const U3_SHEET As String = "案件入力"
 Private Const U3_CASES As String = "案件一覧"
 Private Const U3_SCAN_COLS As Long = 32
-' 13章§2.11(裁定書10 M3): 続き欄への分割幅。JoinField は本欄と続き欄を
-' **区切り文字なし**で連結するため、SplitForCells の機械的な切断と完全に
-' 可逆であり、往復で1字も増えない。したがって余白を引かず1セル上限
-' 32,000字ちょうどを使う(裁定書9 B22 の 31992 は往復8回ぶんの猶予に
-' すぎず、9回目以降は再び溢れる緩和策だった)。
+' 13章§2.11(裁定書10 M3): 続き欄への分割幅。JoinField が**区切り文字なし**で
+' 連結し SplitForCells と完全に可逆なので、余白を引かず1セル上限ちょうど。
 Private Const U3_CHUNK As Long = 32000
 Private Const U3_THIN_HP As Long = 200        ' 16章 E-02: HPが薄いと判断する字数
 Private Const U3_RESEARCH_ROOM As Long = 20   ' 追加収集ブロックの表示上限行
@@ -272,6 +266,11 @@ Public Sub DrawCaseInput(ByVal caseId As String)
     gDrawState = U3_ST_FAILED
     gOverBuf = vbNullString
 
+    ' 裁定書11 Q1(m3と同作法): 表示case_id は**描き切ったときだけ**書く。ここで
+    ' 空へ戻しておけば、途中で抜けた画面・切捨てが起きた画面は「どの案件のもの
+    ' でもない」状態がブックに残り、SavePasteFields の一致検査が止め続ける。
+    modUISheet.WriteNamed "ci_case_id", vbNullString
+
     If Not modCaseStore.IsValidCaseId(caseId) Then Exit Sub
 
     Dim ctx As TCaseCtx
@@ -282,8 +281,6 @@ Public Sub DrawCaseInput(ByVal caseId As String)
     If Not modCaseRead.ReadCaseCtx(caseId, ctx, roundNo, qualityMode, s4Variant, tierText) Then
         Exit Sub
     End If
-
-    modUISheet.WriteNamed "ci_case_id", caseId
 
     ' 属性欄(機械値 -> 日本語ラベル)。
     Dim rows1() As String
@@ -323,6 +320,11 @@ Public Sub DrawCaseInput(ByVal caseId As String)
 
     DrawResearchBlock caseId
     CountChars
+
+    ' 裁定書11 Q1: 続き欄に収まらなかった欄がある描画では表示case_idを空のまま
+    ' にする。gOverBuf は揮発性(未捕捉エラー・再コンパイルで消える)なので、
+    ' 保存ブロックの根拠は**ブックに残るこのセル**が持つ(13章§2.11)。
+    If LenB(gOverBuf) = 0 Then modUISheet.WriteNamed "ci_case_id", caseId
 
     gDrawState = U3_ST_OK
 End Sub
@@ -415,7 +417,7 @@ Private Sub DrawResearchBlock(ByVal caseId As String)
                            modJsonLite.GetStr(CStr(items(i)), "prompt_text"), _
                            U3_SHEET & "/prompt_text"
         modUISheet.EnsureButton ws, "btncopy_" & CStr(r0 + i - 1), "コピー", _
-                                r0 + i - 1, c0 + 2, 52#, "modUICase3.CopyResearchRow"
+                                r0 + i - 1, c0 + 2, 52#, "modUICase4.CopyResearchRow"
     Next i
 End Sub
 
@@ -431,6 +433,14 @@ Public Sub CaseSave()
     Dim caseId As String
     caseId = modUISheet.ReadNamed("ci_case_id")
     If Not modCaseStore.IsValidCaseId(caseId) Then
+        ' 裁定書11 Q1: 表示case_idが空なのは、切捨て・失敗で描き切れなかった
+        ' 画面(直前の描画対象が判っているとき)。ここで新規採番へ倒すと、切り
+        ' 詰まった画面が別案件として確定してしまうので採番せずに止める。
+        If modCaseStore.IsValidCaseId(gDrawCaseId) Then
+            Notice "案件（" & gDrawCaseId & "）を最後まで表示できていません。" & _
+                   "HOMEの[案件入力を開く]で開き直してから保存してください。"
+            GoTo Done
+        End If
         caseId = CreateCaseFromSheet()
     End If
     If LenB(caseId) = 0 Then
@@ -493,7 +503,8 @@ Public Function SaveCaseInput(ByVal caseId As String) As Boolean
     SaveAttributes caseId
 
     ' (4) 貼付欄を case_data へ(E-04 の浄化と E-31 の匿名化を通す)。
-    SavePasteFields caseId
+    '     裁定書11 Q1: 一致検査で止まったときは成功案内を出さずに抜ける。
+    If Not SavePasteFields(caseId) Then Exit Function
 
     ' (5) 16章 E-02 入力が薄い場合の警告(続行可)。
     Dim hpLen As Long
@@ -627,7 +638,21 @@ Private Sub SaveAttributes(ByVal caseId As String)
 End Sub
 
 ' 貼付欄 -> case_data。E-04(浄化)と E-31(匿名化)を通してから保存する。
-Private Sub SavePasteFields(ByVal caseId As String)
+' True=保存した。False=表示case_idと保存先が一致せず1欄も書いていない。
+Private Function SavePasteFields(ByVal caseId As String) As Boolean
+    ' 裁定書11 Q1(m3と同作法): 貼付欄を上書きする前に、**ブックに残る**表示
+    ' case_id と保存先を突き合わせる。切捨て(overflow)や描画失敗のあとは
+    ' ci_case_id が空のままなので、揮発性の gOverBuf が消えていてもここで必ず
+    ' 止まり、画面に出ていない原文が case_data から消えることはない。
+    If StrComp(Trim$(modUISheet.ReadNamed("ci_case_id")), caseId, vbBinaryCompare) <> 0 Then
+        ' 文言は画面へ直書きする(13章§2.12 B1ガードと同作法。モーダルを出さない
+        ' ので、無人実行の層(b)テストからこのガードを検査できる)。
+        modLog.LogError "E0302", U3_SRC & ".SavePasteFields", "case_id_mismatch:ci"
+        modUISheet.WriteNamed "hm_warning", _
+            "画面の案件と保存先が一致しません。再描画してください"
+        Exit Function
+    End If
+
     Dim company As String
     company = modUISheet.ReadNamed("ci_company")
 
@@ -662,7 +687,8 @@ Private Sub SavePasteFields(ByVal caseId As String)
     If totalHits > 0 Then
         modLog.LogError "E0104", U3_SRC & ".SavePasteFields", "replaced=" & CStr(totalHits)
     End If
-End Sub
+    SavePasteFields = True
+End Function
 
 ' 16章 E-22 / 裁定書10 M3: 本欄・続き欄を末尾番号の昇順に **区切り文字なしで**
 ' 連結する(空欄はスキップ)。分割側 modUtil.SplitForCells は原文を字数で機械的に
@@ -764,70 +790,6 @@ Private Function LimitChars() As Long
     Else
         LimitChars = modConfig.GetLong("t2_max_context_chars", 100000)
     End If
-End Function
-
-' ============================================================================
-' 追加収集の[コピー](17章 T-31 DoD)
-' ----------------------------------------------------------------------------
-' クリックされた図形の位置から行を決める(OnActionは引数を運べないため、
-' Application.Caller が返す図形名で当該行を特定する)。
-' ============================================================================
-Public Sub CopyResearchRow()
-    If Not modUIProgress.TryEnterUiLock("調査プロンプトのコピー") Then Exit Sub
-    On Error GoTo Done
-
-    Dim ws As Object
-    Set ws = ActiveSheet
-    If ws Is Nothing Then GoTo Done
-
-    Dim shapeKey As String
-    shapeKey = CStr(Application.Caller)
-    If LenB(shapeKey) = 0 Then GoTo Done
-
-    Dim rowNo As Long
-    rowNo = ws.Shapes(shapeKey).TopLeftCell.row
-    If rowNo <= 0 Then GoTo Done
-
-    Dim colNo As Long
-    colNo = PromptColOn(ws)
-    If colNo <= 0 Then GoTo Done
-
-    Dim payload As String
-    payload = modUISheet.CellText(ws, rowNo, colNo)
-    If LenB(payload) = 0 Then GoTo Done
-
-    If Not modUISheet.CopyToClipboard(payload) Then
-        ws.Cells(rowNo, colNo).Select
-        Notice "クリップボードへ入れられませんでした。選択したセルを Ctrl+C でコピーしてください。"
-    End If
-
-Done:
-    modUIProgress.ExitUiLock
-End Sub
-
-' 調査プロンプト本文の列。案件入力は ci_research_anchor の1つ右、
-' S1は s1_research_requests ブロックの prompt_text 列。
-Private Function PromptColOn(ByVal ws As Object) As Long
-    On Error GoTo NoCol
-
-    If ws.Name = U3_SHEET Then
-        Dim anchor As Object
-        Set anchor = modUISheet.NamedCell("ci_research_anchor")
-        If anchor Is Nothing Then Exit Function
-        PromptColOn = anchor.Column + 1
-        Exit Function
-    End If
-
-    Dim headerRow As Long
-    headerRow = modUISheet.BlockRow("s1_research_requests")
-    If headerRow <= 0 Then Exit Function
-
-    Dim hdr As Variant
-    hdr = modUISheet.HeaderOf(ws, headerRow, 1, U3_SCAN_COLS)
-    PromptColOn = modUISheet.ColOf(hdr, 1, "prompt_text")
-    Exit Function
-NoCol:
-    PromptColOn = 0
 End Function
 
 ' ============================================================================

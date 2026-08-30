@@ -1,4 +1,6 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.1
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.2
+
+> v2.5.2（裁定書11: W4.3 最終パッチ）: §6の登記表へ新設・移設3件を登記した。**`modUICase.RebindFlatValidation`**（Q3(a)）・**`modUICase4.CopyResearchRow`**（Q1。30,000字契約により `modUICase3` から移設）・**`modTestsExcel2.RunExcelTests2`**（Q9/Q1。層(b)の分割先。wintest からの入口は `RunAllExcelTests` の1本のまま）。**本裁定で許可した新設・移設はこの3件のみ**。
 
 > v2.5.1（裁定書10: W4.2 収束ウェーブ）: §6へ **`modPipeline2.ResetDeepOutcome`**（N9。deep outcome の明示リセット口。M1により `RunStep` 冒頭の自動リセットを廃止し、`LastDeepOutcome` は「その実行で最後に立った非空 outcome」を返す契約へ改めた）を新設し、**`modUICase5` の Public 4本**（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`。W4.1の30,000字契約分割の追認）を「ui層内部ヘルパ」として登記した。N6（`ib_body_draft`）は**廃止**し「受信箱の投函下書き行」方式（13章§2.6・C1）へ差し替え。あわせて `AnswerMemoCount` を「常に数える」契約へ（M5。別案件判定は呼出側が `hs_case_id` で行う）、`LoadData` へ仮seq帯の残留検査（M6）を追記した。
 
@@ -1162,6 +1164,13 @@ Public Sub ResetFaultOnce()                                  ' broken_json_once 
 Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12章§2 test層・17章 T-47)。
                                 ' wintest実機(実Excel・COM経由)からのみ呼ぶ。層(a)の入口は
                                 ' modTestRunner.RunAllPureTests(17章§4-1のランナー要件)
+
+' === test: modTestsExcel2 ===
+Public Function RunExcelTests2() As Long
+' 30,000字契約(12章§2)による modTestsExcel の分割先の入口(v2.5.2・裁定書11)。
+' 呼んでよいのは modTestsExcel.RunAllExcelTests のみ(wintest からの入口は
+' 従来どおり RunAllExcelTests の1本)。戻り値=本モジュールが打った Check の本数で、
+' 呼出側の本数自己照合(TE_EXPECTED)へ合流させる
 ```
 
 - **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
@@ -1177,6 +1186,9 @@ Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12�
   | N7 | `btn_round_freeze` | HOMEの図形ボタン（caption「第2ラウンド開始」） | 11章§2 | `modCaseStore.FreezeRound` の起動口（A-2） |
   | N9 | `modPipeline2.ResetDeepOutcome` | 公開関数（宣言は本節の modPipeline2） | 本章§6 | deep outcome の明示リセット口。ui層が実行開始前に1回呼ぶ（裁定書10 M1） |
   | - | 業種ドロップダウンの隠しレンジ | 名前付きレンジ（既存作法の内部レンジ） | 13章§2.11 | `ci_industry_code` / `ci_industry_name` の入力規則の参照元（`RestoreDataKeyHiddenRange` と同作法であり、公開名を新設しない） |
+  | - | `modUICase.RebindFlatValidation` | 公開関数（ui層内部ヘルパ） | 本章§6 | フラット表（f種別）の入力規則を1シートぶん張り直す口。受信箱の投函下書き行を行挿入で用意したときに ui層から呼ぶ（v2.5.2・裁定書11 Q3(a)。13章§2.6） |
+  | - | `modUICase4.CopyResearchRow` | 公開関数（図形ボタンの OnAction） | 本章§6 | 追加収集の[コピー]。30,000字契約により `modUICase3` から移設（v2.5.2・裁定書11 Q1。移設前の名は `modUICase3.CopyResearchRow`。呼出は図形の OnAction 文字列のみ） |
+  | - | `modTestsExcel2.RunExcelTests2` | 公開関数（test層の分割先の入口） | 本章§6 | 30,000字契約による `modTestsExcel` の分割先。呼んでよいのは `RunAllExcelTests` のみ（v2.5.2・裁定書11 Q9/Q1） |
   | - | `modUICase5` の Public 4本（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`） | ui層内部ヘルパ（W4.1分割裁定） | 本章§6 | 30,000字契約による `modUICase2` の分割先。呼んでよいのは modUICase2 のみ（裁定書10 §1でM2を解消） |
 
   これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。

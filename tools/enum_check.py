@@ -98,6 +98,11 @@ REQUIRED: dict[str, str] = {
     #     受信箱の他列は機械値のまま(EXCLUDED)だが、judge_to は利用者が選ぶ
     #     入力列であり19章§3が日本語ラベル(採択/条件付き保留/却下)を持つため載せる。
     "inbox.judge_to": "inbox_judge_to",
+    # --- 受信箱の投函下書き行の入力列(v2.5.2・裁定書11 Q4。13章§2.6) ---
+    #     source_kind も judge_to と同じく利用者が下書き行で選ぶ入力列であり、
+    #     19章§3が日本語ラベル(部内投稿/現場の声/ウォッチ)を持つため載せる。
+    #     受信箱のデータ行は従来どおり機械値のまま(store が書く)。
+    "inbox.source_kind": "inbox_source_kind",
 }
 
 # 変換表に載せない行と、その理由(1行ずつ書く。理由の無い除外を作らない)。
@@ -112,7 +117,6 @@ EXCLUDED: dict[str, str] = {
     "fb.event": "13章§2.5 フィードバックの event 列は機械値のまま持つ(入力規則も機械値)",
     "judgement.decision": "13章§2.7 判断台帳の decision 列は機械値のまま持つ",
     "judgement.result": "同上(result 列)",
-    "inbox.source_kind": "13章§2.6 受信箱は機械値のまま持つ(11章のワイヤーも機械値で描く)",
     "inbox.status": "同上(status 列)",
     "drop_type": "同上(drop_type 列)。19章§3のenum欄が `T0～T10` の範囲表記で個別値を列挙しない",
     "revive_tag": "同上(revive_tag 列)",

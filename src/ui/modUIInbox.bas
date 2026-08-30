@@ -87,21 +87,55 @@ Private Function EnsureDraftRow(ByVal ws As Object) As Long
     lastRow = modUISheet.LastRowOf(ws)
     Dim r As Long
     For r = 2 To lastRow
-        If Trim$(modUISheet.CellText(ws, r, colNo)) = modInboxStore.IB_DRAFT_MARK Then
+        If IsDraftRow(ws, colNo, r) Then
             EnsureDraftRow = r
             Exit Function
         End If
     Next r
 
+    ' 裁定書11 Q3(b)・13章§2.6の回復規定: 利用者がマーカーを消すと、
+    ' inbox_id が空で body に書きかけの本文が残った**孤児行**になる。新しい
+    ' 下書き行を挿すと孤児行は誰からも触られないまま残置するので、先頭から
+    ' 探して見つかればその行をマーカーで下書き行として復帰させる。
+    Dim bodyCol As Long
+    bodyCol = modUtil.FindHeaderCol(hdr, "body")
+    If bodyCol > 0 Then
+        For r = 2 To lastRow
+            If LenB(Trim$(modUISheet.CellText(ws, r, colNo))) = 0 Then
+                If LenB(Trim$(modUISheet.CellText(ws, r, bodyCol))) > 0 Then
+                    modUISheet.PutText ws, r, colNo, modInboxStore.IB_DRAFT_MARK, _
+                                       UI2_SHEET & "/inbox_id"
+                    modLog.LogError "E0603", UI2_SRC & ".EnsureDraftRow", _
+                                    "draft_row_remarked:row=" & CStr(r)
+                    EnsureDraftRow = r
+                    Exit Function
+                End If
+            End If
+        Next r
+    End If
+
     ' 無ければヘッダ直下へ用意する。既存データが1行目の下に居るときだけ行を
     ' 差し込む(空のシートに空行を増やさない)。
-    If LenB(Trim$(modUISheet.CellText(ws, 2, colNo))) > 0 Then ws.Rows(2).Insert
+    If LenB(Trim$(modUISheet.CellText(ws, 2, colNo))) > 0 Then
+        ws.Rows(2).Insert
+        ' 裁定書11 Q3(a): 挿入行は直上=見出し行から書式を継ぐため、利用者が
+        ' 選ぶ列(source_kind / judge_to)の入力規則が付かない。受信箱の
+        ' フラット表(f種別)の束ねを張り直して下書き行にもDVを行き渡らせる。
+        modUICase.RebindFlatValidation UI2_SHEET
+    End If
     modUISheet.PutText ws, 2, colNo, modInboxStore.IB_DRAFT_MARK, _
                        UI2_SHEET & "/inbox_id"
     EnsureDraftRow = 2
     Exit Function
 Zero0:
     EnsureDraftRow = 0
+End Function
+
+' 当該行が投函下書き行か(13章§2.6。判定基準は id列マーカーの1点)。
+Private Function IsDraftRow(ByVal ws As Object, ByVal idCol As Long, _
+                            ByVal rowNo As Long) As Boolean
+    If idCol <= 0 Then Exit Function
+    IsDraftRow = (Trim$(modUISheet.CellText(ws, rowNo, idCol)) = modInboxStore.IB_DRAFT_MARK)
 End Function
 
 ' ============================================================================
@@ -138,13 +172,21 @@ Public Function CountByStatus(ByVal statusText As String) As Long
     colNo = modUtil.FindHeaderCol(hdr, "status")
     If colNo <= 0 Then Exit Function
 
+    ' 裁定書11 Q2(13章§2.6): 件数・集計を行う経路も下書き行を必ずスキップする。
+    ' status 列には入力規則もシート保護も無いので、下書き行に値が入りうる。
+    ' 数えてしまうと「一括診断は0件なのにHOMEは1件」という食い違いになる。
+    Dim idCol As Long
+    idCol = modUtil.FindHeaderCol(hdr, "inbox_id")
+
     Dim lastRow As Long
     lastRow = modUISheet.LastRowOf(ws)
 
     Dim n As Long
     Dim r As Long
     For r = 2 To lastRow
-        If Trim$(modUISheet.CellText(ws, r, colNo)) = statusText Then n = n + 1
+        If Not IsDraftRow(ws, idCol, r) Then
+            If Trim$(modUISheet.CellText(ws, r, colNo)) = statusText Then n = n + 1
+        End If
     Next r
     CountByStatus = n
     Exit Function
@@ -205,10 +247,24 @@ Public Sub InboxPost()
     End If
     If LenB(themeText) = 0 Then GoTo Done
 
-    ' source_kind は下書き行の入力列(機械値のenum)。空なら投函の既定値。
+    ' 裁定書11 Q4(19章§3 inbox.source_kind): source_kind は下書き行の**入力列**
+    ' なので judge_to と同作法にする。日本語ラベル(部内投稿/現場の声/ウォッチ)で
+    ' 選ばせ、modUICase.EnumEn で機械値へ戻す。表に無いラベルは "" が返るので
+    ' 推測で寄せずここで止める(fail-closed。store の E0101 で原因不明の案内に
+    ' なるのを避ける)。空欄は従来どおり投函の既定値。
+    Dim sourceKindJa As String
     Dim sourceKind As String
-    sourceKind = Trim$(ColText(ws, hdr, draftRow, "source_kind"))
-    If LenB(sourceKind) = 0 Then sourceKind = "member_post"
+    sourceKindJa = Trim$(ColText(ws, hdr, draftRow, "source_kind"))
+    If LenB(sourceKindJa) = 0 Then
+        sourceKind = "member_post"
+    Else
+        sourceKind = modUICase.EnumEn("inbox_source_kind", sourceKindJa)
+        If LenB(sourceKind) = 0 Then
+            Notice "発信元の種別は一覧から選んでください（部内投稿／現場の声／ウォッチ）: " & _
+                   sourceKindJa
+            GoTo Done
+        End If
+    End If
 
     If modPii.HasPii(themeText & vbLf & bodyText) Then
         modLog.LogError "E0103", UI2_SRC & ".InboxPost", _

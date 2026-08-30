@@ -537,16 +537,44 @@ Private Function BookStillOpen(ByVal pathText As String) As Boolean
     wantPath = Trim$(pathText)
     If LenB(wantPath) = 0 Then Exit Function
 
+    ' 裁定書11 Q8(両立案): フルパス一致=True。**ファイル名が一致してフルパスが
+    ' 一致しないときもTrue**へ倒す(UNC とマップドライブ・8.3短縮名など同じブック
+    ' でも表記が違いうるため、ここでFalseを返すと開いたままのブックに対して
+    ' VerifyRoundTrip が走り、B8が塞いだ2段検証の無効化が再現する)。
+    ' ファイル名まで違うときだけ False(別フォルダの同名ブックの誤検知は避ける)。
+    Dim wantName As String
+    wantName = BaseNameOf(wantPath)
+
     Dim i As Long
     For i = 1 To Application.Workbooks.Count
         If StrComp(Application.Workbooks(i).FullName, wantPath, vbTextCompare) = 0 Then
             BookStillOpen = True
             Exit Function
         End If
+        If LenB(wantName) > 0 Then
+            If StrComp(Application.Workbooks(i).Name, wantName, vbTextCompare) = 0 Then
+                BookStillOpen = True
+                Exit Function
+            End If
+        End If
     Next i
     Exit Function
 Unknown0:
     BookStillOpen = True
+End Function
+
+' パスの末尾(ファイル名)。区切りが無ければ全体。
+Private Function BaseNameOf(ByVal pathText As String) As String
+    Dim p As Long
+    p = InStrRev(pathText, "\")
+    Dim q As Long
+    q = InStrRev(pathText, "/")
+    If q > p Then p = q
+    If p <= 0 Then
+        BaseNameOf = pathText
+    Else
+        BaseNameOf = Mid$(pathText, p + 1)
+    End If
 End Function
 
 ' Application.UserName(13章§2.1 owner と同じ扱い)。取れない環境では ""。
