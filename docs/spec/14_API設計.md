@@ -8,6 +8,8 @@
 >
 > v2.4.5（裁定書8 B-7/B-10: T-25・T-28 実装時の命名）: 裁定書8 A-1 が「T-28 の実装時に本節へ足す」と予告していた **`modPipeline2` の判定核7本**（`CritiqueStepOf` / `ReviseStepOf` / `NeedsRevision` / `CritiqueDigest` / `DeepOutcomeOf` / `DeepWarningOf` / `DeepRouteOf`）を宣言した。あわせて T-25 の **`modInboxStore`**（シートI/O4本 `SavePfResult` / `ReadInboxItem` / `UndiagnosedIds` / `InterestText` ＋ 純ロジック6本 `BuildInboxId` / `IsValidInboxId` / `CanInboxTransition` / `JudgementError` / `InterestKeyOf` / `FmtInterestLine`）と **`modPlayOps`**（`RunPreflightAll` ＋ 判定核5本 `PfSurvivalOf` / `PfPredTypesOf` / `PfRefIds` / `PfFailCodeOf` / `CaseIdOfPfLine`）を宣言し、`RunPreflight` に契約（E-40の「失敗分は undiagnosed のまま」）を明記した。**未解決2件**は本文中に明記した: (a) `SetInboxJudgement` に `merged_into` を渡す引数が無く `merged` を fail-closed で拒否している、(b) `CallStep` に呼び出し単位の経路上書き口が無く config `deep_transport` が未結線（`DeepRouteOf` は解決だけを行い、指定がある間は usage_log に事実を残す）。
 
+> v2.4.5b（W3.1）: §6へ **`modCaseStore.SetReportPath`**（18章§1.1⑦の `report_path` 書込口）、**`modExportHtml.BuildMetaJson` / `BuildReportHtml`**（18章§2・§1.1④⑤の純組立2本。層(a)と `tools/render_report.py` が叩く実契約）、**`modUICase.EnumPairsCsv` / `EnumJa` / `EnumEn`**（11章§5の共通変換表。`tools/enum_check.py` の照合先が実装名に依存したままだったのを、命名権を本節へ戻して解消）を宣言した。あわせて `modUtilText.JsStringSafe` の適用順②を18章§5.3(1) v1.1（すべての `<` を `\u003C` へ）へ追随させた。
+>
 > v2.4.4（裁定書8 A: W2c構造裁定）: §6へ **`modCaseStore.SetStepOutcome`**（16章E-06が要求する `last_ok_step` / `failed_step` の書込口。modPipeline の成功・失敗経路から結線し、usage_log への退避は廃止）と **`modPipeline2.RunDeep`**（入念モードの批判・改訂パイプ＝T-28 の入口。modPipeline からの委譲は1行フック）を宣言し、`RunAll` / `RunStep` に **`Optional ByVal qualityOverride As String`**（quality_mode の案件単位の上書き。ui層が `hm_quality_mode` を読んで実行時に渡す。案件一覧には保存しない）を追加した。あわせて 30,000字契約による分割先 **`modCaseStore2`**（案件2枚の下位シートI/O 11本。公開契約面には載せない）を追認した。
 
 > v2.4.3（裁定書7: W2b整合）: §6の `modValidate` を**引数渡し設計**へ正式改訂した（Check系の末尾 Optional＝実在ID一覧テキストとJSONの外側の文脈を宣言に昇格。「ID実在はmodKnowledge参照」は**呼出側＝modPipelineがmodKnowledgeから取得して渡す**の意であると明記）。ID実在検査を**fail-closed**（一覧未提供は当該ケースIDで不合格・16章E-07のKPI「すり抜け0件」と整合）とし、`CheckS4` のティア不明時は V-S4-01/02 の両方を当てる規約を確定。**LibreOffice制約**（Optional String に `= ""` を書かない）を注記。命名権の一括裁定として `modValidate2` の *Core 5本 / `modPipeline` の判定核16本 / `modPii` 5本 / `modCompanyFile` 4本（`modCompanyFile2` の下位I/Oは公開契約面に載せない）を宣言し、案件一覧の読取専用API **`modCaseRead.ReadCaseCtx`** を新設した（modPipeline.LoadCtx と modCompanyFile.ExportCompanyFile の死に経路を解消）。
@@ -238,7 +240,7 @@ Public Function NowStamp() As String                           ' "yyyy-mm-dd hh:
 ' === core: modUtilText ===
 Public Function JsStringSafe(ByVal s As String) As String
 ' HTML内のJS文字列リテラル用。**適用順の正は18章§5.3**（この順を守らないと二重エスケープになる）:
-' ① `\` を `\\` へ・`"` を `\"` へ ② "</" を "<\/" へ ③ 行区切り文字 U+2028 を "\u2028"・段落区切り文字
+' ① `\` を `\\` へ・`"` を `\"` へ ② **すべての "<" を "\u003C" へ**（`</` 限定では `<!--<script>` で白紙化する。18章§5.3(1) v1.1）③ 行区切り文字 U+2028 を "\u2028"・段落区切り文字
 ' U+2029 を "\u2029" へ ④ その他の制御文字を "\u00XX" へ。modExportHtml のJSON埋込は必ずこれを
 ' 通す（16章E-47）
 Public Function HtmlSafe(ByVal s As String) As String
@@ -802,6 +804,13 @@ Public Function SetStepOutcome(ByVal caseId As String, ByVal lastOkStep As Long,
 '   failedStep: "" は失敗の記憶を消す（13章§2.1「Step成功時に空へ戻す」）。非空は enum
 '     s1 / s2 / s3 / s4 / s2c / s3c のみ受け付け、表に無い値は E0101 で拒否して1列も
 '     書かない。**status は動かさない**（状態遷移の唯一の口は SetStatus）
+Public Function SetReportPath(ByVal caseId As String, ByVal pathText As String) As Boolean
+' 18章§1.1⑦ が要求する案件一覧 `report_path` の【書込口】（W3.1で宣言）。`modExportHtml` は
+'   12章R4によりシートに触れないため、確定パスの記録は必ずここを通す。
+'   **status は動かさない**（出力の成否は状態遷移に影響しない＝16章 E-48）。書込に失敗しても
+'   生成済みのHTMLファイルは残るので、呼び出し側は警告に留めて生成を成功として扱う
+'   （戻り値 False は「記録できなかった」であって「出力できなかった」ではない）。
+'   pathText は `modUtilText.SanitizeFileName` を通したあとの**確定フルパス**
 Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long)
 Public Function RepairStates() As Long                 ' 起動時整合修復（16章E-12・12章§2.1のmodBoot手順③）。戻り=修復件数
 Public Function FreezeRound(ByVal caseId As String) As Long
@@ -947,6 +956,22 @@ Public Sub ParkFocus()
 ' 全アクション完了時のフォーカス退避。フォーカスを編集不可の待避セルへ戻し、セル編集モードでVBAが
 ' 止まるのを防ぐ（11章§5・16章E-51）。実行開始時にも通してから処理へ入る
 
+' === ui: modUICase（enum変換表。11章§5「日本語ラベル⇔enumの変換は modUICase の共通変換表
+'      （19章と一致必須）のみで行う」の実体。W3.1で宣言＝命名権を本節へ戻した） ===
+Public Function EnumPairsCsv() As String
+' 19章§3の変換表そのもの（`グループ,機械値,日本語` を vbLf 区切りで返す）。**この1本だけが
+'   値の出どころ**であり、`EnumJa` / `EnumEn` / `EnumLabels` / 入力規則の隠しレンジはすべて
+'   この戻り値を走査して答える。並び順も19章§3の記載順であること。
+'   **`tools/enum_check.py`（17章§4-2の一致検査）が静的評価する照合先が本関数**なので、
+'   Private化・改名すると検査が無言で対象を失う。行を足す・直すときは19章§3を直してから
+'   `python3 tools/enum_check.py --dump-bas` の出力で差し替える（手で写さない）
+Public Function EnumJa(ByVal groupName As String, ByVal enumValue As String) As String
+' 機械値 → 日本語ラベル。表に無い組み合わせは `""`
+Public Function EnumEn(ByVal groupName As String, ByVal labelText As String) As String
+' 日本語ラベル → 機械値。表に無いラベルは `""` を返し、**推測で近いものを返さない**
+'   （13章§2.2「表に無いラベルは検証不合格」。呼び出し側は `""` を受けたら原文をそのまま
+'   JSONへ載せ `modValidate` に弾かせる＝黙って直さない）
+
 ' === app: modExportHtml / modExportPpt / modExportHearing ===
 Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
     ' ""=成功 / 非空=失敗理由（コードは E0502。16章E-48）。S1+S2+S3のJSONを固定HTMLテンプレート
@@ -959,6 +984,25 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     ' CP932で書かれ非CP932文字が "?" 化するため使わない。テンプレ先頭に <meta charset="utf-8"> を必ず含める
     ' **埋め込み**: JSONは「1本のJS文字列リテラル＋JSON.parse」形式で埋め、modUtilText.JsStringSafe を
     ' 必ず通す。素のJSリテラル直書きは禁止。HTML本文に差し込む値は HtmlSafe を通す（16章E-47）
+Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
+                              ByVal industryCode As String, ByVal industryName As String, _
+                              ByVal caseType As String, ByVal dossierTier As String, _
+                              ByVal qualityMode As String, ByVal roundNo As Long, _
+                              ByVal s4Variant As String, ByVal generatedAt As String, _
+                              ByVal appVersion As String, ByVal themeName As String, _
+                              ByVal warnText As String) As String
+' 18章§2 の `meta` オブジェクトを1本のJSON文字列として組み立てる**純関数**（W3.1で宣言。
+'   Excel・configに触れず、値はすべて引数で受け取る＝層(a)から叩ける）。値の由来は18章§2の
+'   とおり（案件一覧の同名列／`hm_quality_mode`／config `app_version`・`html_theme`）。
+'   `warnText` は18章§2の `meta.warnings`（16章 E-05 のPII検知・E-31 の復元失敗など、
+'   生成をブロックしない警告）。**vbLf区切りの0本以上**を受け取り、空なら空配列を書く
+Public Function BuildReportHtml(ByVal metaJson As String, ByVal s1Json As String, _
+                                ByVal s2Json As String, ByVal s3Json As String, _
+                                ByVal themeName As String) As String
+' 18章§1.1④⑤ を1本にした**純関数**（W3.1で宣言）。`meta`/`s1`/`s2`/`s3` を§2のDATAへ
+'   組み、`modHtmlTemplate1.BuildDocument` へ渡してHTML全文を返す。未実行のStepは `null`
+'   （キー自体は必ず置く＝§2）。`""` を返したら組立失敗＝E0502（16章 E-48）。
+'   ファイル書出・`report_path` 記録・PII走査は含まない（`GenerateHtmlReport` の責務）
 Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
                             ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance。Phase 1.5
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean

@@ -4,26 +4,29 @@ Option Explicit
 ' ============================
 ' modTestsPure10 - W3 HTMLレポート(T-33/T-35)の純部の契約テスト(17章§4-1 層(a))
 ' ----------------------------
-' テスト本数: 62本 = G84 6 / G85 8 / G86 5 / G87 8 / G88 8 / G89 5 / G90 6 /
-'                    G91 5 / G92 4 / G93 4 / G94 3
+' テスト本数: 45本 = G87 8 / G88 9 / G89 5 / G90 6 / G91 6 / G92 4 / G93 4 / G94 3
+'   (G84 HtmlSafe / G85 JsStringSafe / G86 危険JSONの実弾 の20本は、W3.1の
+'    30,000字契約で modTestsPure11 へ関数単位で切り出した。攻撃素材
+'    DataJsonAttack もそちらが持ち、本群の G88 は Public のそれを借りる)
 ' 役割: modTestsPure8/9 と同じく**実装を1行も読まず**、18章全文・14章§6の宣言・
 '   16章E-46/E-47/NFR-S7・15章スキーマ・19章§3・11章だけを根拠に入出力を固定する。
 '   期待値が一意に決まらない項目はテストにせず末尾へ列挙する。
-'     G84 HtmlSafe(16章E-47(2))      G85 JsStringSafe(§5.3の適用順4段)
-'     G86 危険JSONの実弾             G87 テーマ(§5.1の28変数・§5.2の差替単位)
+'     G87 テーマ(§5.1の28変数・§5.2の差替単位)
 '     G88 BuildDocumentの全文組立    G89 HeadHtml/BodyShellHtml(§4.4・§5.1・§6)
 '     G90 セクション登録表(§4.2)     G91 SEC-09/SEC-16(§3のv1.0裁定)
 '     G92 描画規約(§4.1)             G93 固定文(§3.5・§3.4)
 '     G94 enum日本語ラベル(19章§3)
-' **署名の仮定・要裁定**: 18章§4.4/§5.2は関数名だけを固定し引数を規定していない
-'   (14章§6も「本章は宣言を持たない」)。§1.1⑤に逐語で現れる
-'   BuildDocument(themeName, dataJson, coverFields) だけを確定として扱い、
-'   HeadHtml / BodyShellHtml / RuntimeJs / SectionsJs は末尾(a)(b)の仮定による。
-' 結線(統合済み): modTestsPure9.RunAll の末尾から本 RunAll を呼ぶ(数珠つなぎ
-'   modTestsPure -> 2 .. -> 9 -> 10。単体では0本)。modules.json(role=test /
-'   wave=T-35)・12章§2・PURE_ALLOWLIST へ登録済み。tests_expected 505 -> 567。
-' 設計判断(R4): Excelトークン・乱数・時刻を使わず改行は vbLf。素材は架空値で、
-'   JSONは単引用符で書き AsJson() で二重引用符へ直す。
+' **署名の正**: 5関数(BuildDocument/HeadHtml/BodyShellHtml/SectionsJs/RuntimeJs)の
+'   署名は18章§5.2がW3.1で明文化した。本群はその署名に依る(末尾(a)(b)は解決済み)。
+' **W3.1改訂への追随**: §5.3(1)v1.1(すべての < を \u003C へ)・§4.2の見出しを§3の
+'   フル表記へ揃えた裁定・§3 SEC-16の round_no<2 分岐を、G88(生の < が1文字も
+'   残らない・素材は11)・G90/G91(逐語の見出し)・G91(分岐リテラル)で押さえる。期待値の
+'   根拠は改訂後の18章本文であり、実装を読んで合わせたものではない。
+' 結線: modTestsPure9.RunAll の末尾から本 RunAll を呼び、本 RunAll の末尾で
+'   modTestsPure11.RunAll を呼ぶ(数珠つなぎ modTestsPure -> 2 .. -> 10 -> 11。
+'   単体では0本)。modules.json(role=test / wave=T-35)・12章§2・PURE_ALLOWLIST へ
+'   登録済み。tests_expected は 570。
+' 設計判断(R4): Excelトークン・乱数・時刻を使わず改行は vbLf。素材は架空値。
 ' ============================
 
 ' ---- 素材の定数 ----
@@ -72,12 +75,13 @@ Private Const COVER_CO_ESC As String = "甲斐&lt;&amp;&gt;商店"
 Private mDoc As String
 Private mDocReady As Boolean
 
-' RunAll: グループ隔離実行(未実装/未注入は GroupFail で可視化)。末端。
+' RunAll: グループ隔離実行(未実装/未注入は GroupFail で可視化)。末尾で
+'   modTestsPure11(切り出したエスケープ契約20本)へ数珠つなぎする。
 Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
 
-    For i = 1 To 11
+    For i = 1 To 8
         grpName = "G?" & i
         On Error Resume Next
         Err.Clear
@@ -88,41 +92,41 @@ Public Sub RunAll()
         End If
         On Error GoTo 0
     Next i
+
+    On Error Resume Next
+    Err.Clear
+    modTestsPure11.RunAll
+    If Err.Number <> 0 Then
+        GroupFail "modTestsPure11(モジュール全体)"
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)
     Select Case grpNo
     Case 1
-        grpName = "G84 HtmlSafe"
-        T_HtmlSafe
-    Case 2
-        grpName = "G85 JsStringSafe"
-        T_JsSafe
-    Case 3
-        grpName = "G86 危険JSONの実弾"
-        T_Payload
-    Case 4
         grpName = "G87 テーマCSS"
         T_Theme
-    Case 5
+    Case 2
         grpName = "G88 文書組立"
         T_Document
-    Case 6
+    Case 3
         grpName = "G89 Head/BodyShell"
         T_Shell
-    Case 7
+    Case 4
         grpName = "G90 セクション登録表"
         T_Sections
-    Case 8
+    Case 5
         grpName = "G91 SEC-09/SEC-16"
         T_NewAndRound
-    Case 9
+    Case 6
         grpName = "G92 描画規約"
         T_Runtime
-    Case 10
+    Case 7
         grpName = "G93 固定文"
         T_FixedText
-    Case 11
+    Case 8
         grpName = "G94 enum日本語ラベル"
         T_Labels
     End Select
@@ -172,10 +176,6 @@ End Sub
 
 Private Function DQ() As String
     DQ = Chr$(34)
-End Function
-
-Private Function AsJson(ByVal s As String) As String
-    AsJson = Replace(s, "'", DQ())
 End Function
 
 ' §4.2の桁揃えに依存せず照合するため空白・改行・タブを畳む。
@@ -322,46 +322,6 @@ Private Function StripRoot(ByVal s As String) As String
     End If
 End Function
 
-' "\u00XX"(16進の大小はどちらでも可)を判定する。
-Private Function IsUEsc(ByVal act As String, ByVal hex2 As String) As Boolean
-    If Len(act) <> 6 Then Exit Function
-    If Left$(act, 4) <> "\u00" Then Exit Function
-    IsUEsc = (UCase$(Mid$(act, 5)) = UCase$(hex2))
-End Function
-
-' 素材: 18章§2 の DATA(キー名は15章スキーマのまま)。危険トークンは risk_name=
-'   閉じscript+img / scenario=引用符つきonerror / pitch=引用符と改行。構造側の
-'   生の改行で§5.3(1)④も通す。
-Private Function DataJsonAttack() As String
-    Dim s As String
-    s = "{'meta':{'case_id':'C-20260901-001'," & vbLf
-    s = s & "'company':'浜松スイーツファクトリー株式会社','industry_code':'09'," & vbLf
-    s = s & "'industry_name':'食料品製造業','case_type':'renewal'," & vbLf
-    s = s & "'dossier_tier':'t2_full','quality_mode':'deep','round_no':2," & vbLf
-    s = s & "'s4_variant':'proposal','generated_at':'2026/09/01 14:07:22'," & vbLf
-    s = s & "'app_version':'2.4.0','theme':'standard'}," & vbLf
-    s = s & "'s1':null," & vbLf
-    s = s & "'s2':{'risks':[{'risk_no':1,'category':'digital_info'," & vbLf
-    s = s & "'risk_name':'</script><img src=x onerror=alert(1)>'," & vbLf
-    s = s & "'scenario':'<img src=x onerror=\'alert(1)\'>'," & vbLf
-    s = s & "'status':'new','frequency':'mid','impact':'large'," & vbLf
-    s = s & "'frequency_score':3,'impact_score':5," & vbLf
-    s = s & "'evidence':{'quote':'A&B','source':'hp'}," & vbLf
-    s = s & "'insurability':{'transferability':'hard','line_note':''," & vbLf
-    s = s & "'control_note':''},'loss_scale_note':''," & vbLf
-    s = s & "'check_points':[],'preventions':[]}]," & vbLf
-    s = s & "'gaps':[],'emerging_risks':[],'open_questions':[]}," & vbLf
-    s = s & "'s3':{'stories':[{'story_no':1,'proposal_kind':'upsell'," & vbLf
-    s = s & "'headline':'物流停止に備える','hook_question':'在庫は何日分ですか'," & vbLf
-    s = s & "'target_risk_nos':[1],'target_gap_nos':[],'menu_ids':['M-0012']," & vbLf
-    s = s & "'line_ids':['L-03'],'scheme_id':''," & vbLf
-    s = s & "'pitch':'担当者は\'やる\'と言った\n次の行へ'," & vbLf
-    s = s & "'similar_case_id':'K-0003','expected_objection':''," & vbLf
-    s = s & "'objection_response':''}],'unmatched_risks':[]," & vbLf
-    s = s & "'do_not_propose':[]}}" & vbLf
-    DataJsonAttack = AsJson(s)
-End Function
-
 ' coverFields(§4.1(b)の3値)。vbTab区切りで [0]=会社名 [1]=案件ID [2]=生成日時
 '   (末尾(b)。期待値 COVER_CO / COVER_CO_ESC は動かしていない)。
 Private Function CoverFieldsAttack() As String
@@ -371,117 +331,28 @@ End Function
 
 Private Function DocText() As String
     If Not mDocReady Then
-        mDoc = modHtmlTemplate1.BuildDocument("standard", DataJsonAttack(), _
+        mDoc = modHtmlTemplate1.BuildDocument("standard", _
+                                              modTestsPure11.DataJsonAttack(), _
                                               CoverFieldsAttack())
         mDocReady = True
     End If
     DocText = mDoc
 End Function
 
-' ---- G84 HtmlSafe(16章E-47(2)・NFR-S7③・§5.3(2)) ----
-'   5字をエンティティ化。& を後回しにすると &lt; の & が二重化される。
-Private Sub T_HtmlSafe()
-    Dim ap As String
-    ap = modUtilText.HtmlSafe("'")
-
-    ChkS "G84_アンパサンドをエンティティ化する_16章E-47", _
-        modUtilText.HtmlSafe("&"), "&amp;"
-
-    ChkB "G84_不等号をエンティティ化する_16章E-47", _
-        ((modUtilText.HtmlSafe("<") = "&lt;") And _
-         (modUtilText.HtmlSafe(">") = "&gt;")), _
-        "lt=[" & modUtilText.HtmlSafe("<") & "] gt=[" & _
-        modUtilText.HtmlSafe(">") & "]"
-
-    ChkS "G84_二重引用符をエンティティ化する_16章E-47", _
-        modUtilText.HtmlSafe(DQ()), "&quot;"
-
-    ' 実体参照は &#39; と &apos; のどちらでもよい(末尾(d))。生で残らないことだけ。
-    ChkB "G84_単引用符が生のまま残らない_16章E-47", _
-        ((InStr(ap, "'") = 0) And (Left$(ap, 1) = "&") And _
-         (Right$(ap, 1) = ";")), "実際=[" & ap & "]"
-
-    ' 置換順の固定。& を後回しにすると "&amp;amp;lt;" になる。
-    ChkS "G84_アンパサンドを最初に置換する_18章§5.3", _
-        modUtilText.HtmlSafe("&lt;"), "&amp;lt;"
-
-    ChkB "G84_5字以外は素通しで空文字は空文字_16章E-47", _
-        ((modUtilText.HtmlSafe("工場/1-2") = "工場/1-2") And _
-         (LenB(modUtilText.HtmlSafe("")) = 0)), _
-        "実際=[" & modUtilText.HtmlSafe("工場/1-2") & "]"
-End Sub
-
-' ---- G85 JsStringSafe(§5.3(1)の適用順4段) ----
-'   ① \ -> \\ ・ " -> \"  ② </ -> <\/  ③ U+2028/U+2029  ④ 制御文字
-Private Sub T_JsSafe()
-    ChkS "G85_逆斜線を二重化する_18章§5.3", _
-        modUtilText.JsStringSafe("\"), "\\"
-
-    ChkS "G85_二重引用符を逆斜線で逃がす_18章§5.3", _
-        modUtilText.JsStringSafe(DQ()), "\" & DQ()
-
-    ' ①の内部順(逆斜線が先)。逆だと \" が \\" になり文字列が閉じる。
-    ChkS "G85_JSONのエスケープ済み引用符は逆斜線3本になる_18章§5.3", _
-        modUtilText.JsStringSafe("\" & DQ()), "\\\" & DQ()
-
-    ' ②が①の後であること。逆順なら "<\\/script>" になる。
-    ChkS "G85_閉じscriptタグを無害化する_18章§5.3", _
-        modUtilText.JsStringSafe("</script>"), "<\/script>"
-
-    ChkB "G85_置換対象は閉じ記号の対だけで単独記号は変えない_18章§5.3", _
-        ((modUtilText.JsStringSafe("<a/b>") = "<a/b>") And _
-         (modUtilText.JsStringSafe("a</b") = "a<\/b")), _
-        "実際=[" & modUtilText.JsStringSafe("<a/b>") & "]"
-
-    ChkB "G85_行区切りと段落区切りをエスケープする_18章§5.3", _
-        ((modUtilText.JsStringSafe(ChrW(&H2028&)) = "\u2028") And _
-         (modUtilText.JsStringSafe(ChrW(&H2029&)) = "\u2029")), _
-        "u2028=[" & modUtilText.JsStringSafe(ChrW(&H2028&)) & "]"
-
-    ' ④の逆斜線が①で再度倍化されていないこと(長さ6が証拠)。
-    ChkB "G85_制御文字をuXXXX形式へ落とす_18章§5.3", _
-        (IsUEsc(modUtilText.JsStringSafe(vbLf), "0A") And _
-         IsUEsc(modUtilText.JsStringSafe(vbCr), "0D") And _
-         IsUEsc(modUtilText.JsStringSafe(vbTab), "09") And _
-         IsUEsc(modUtilText.JsStringSafe(Chr$(0)), "00")), _
-        "LF=[" & modUtilText.JsStringSafe(vbLf) & "]"
-
-    ChkB "G85_通常文字は素通しで空文字は空文字_18章§5.3", _
-        ((modUtilText.JsStringSafe("工場 1-2") = "工場 1-2") And _
-         (LenB(modUtilText.JsStringSafe("")) = 0)), _
-        "実際=[" & modUtilText.JsStringSafe("工場 1-2") & "]"
-End Sub
-
-' ---- G86 実弾(§5.3(1)・16章E-47(1)) ----
-'   生の危険トークンが現れないことと、データが消えていない(無害化であって
-'   削除ではない)ことを同時に当てる。
-Private Sub T_Payload()
-    Dim e As String
-    e = modUtilText.JsStringSafe(DataJsonAttack())
-
-    ChkB "G86_出力に生の閉じタグ記号が1つも残らない_16章E-47", _
-        ((InStr(e, "</") = 0) And (InStr(e, "</script>") = 0)), _
-        "残存位置=" & InStr(e, "</") & " 出力頭=[" & HeadOf(e) & "]"
-
-    ChkB "G86_出力に生の改行が1つも残らない_18章§5.3", _
-        ((InStr(e, vbLf) = 0) And (InStr(e, vbCr) = 0)), _
-        "LF位置=" & InStr(e, vbLf) & " CR位置=" & InStr(e, vbCr)
-
-    ' 逃がし漏れが1つでもあればJS文字列リテラルが閉じる。
-    ChkB "G86_全ての二重引用符が逆斜線を伴う_18章§5.3", _
-        (CountOcc(e, DQ()) = CountOcc(e, "\" & DQ())), _
-        "引用符=" & CountOcc(e, DQ()) & " 逃がし済=" & CountOcc(e, "\" & DQ())
-
-    ChkB "G86_危険トークンは削除ではなく無害化される_18章§5.3", _
-        Ctn(e, "<\/script><img src=x onerror=alert(1)>"), _
-        "出力頭=[" & HeadOf(e) & "]"
-
-    ' 属性値の引用符は JSON の \" を経て \\\" になる。
-    ChkB "G86_属性値の引用符が逆斜線3本を伴う_18章§5.3", _
-        Ctn(e, "onerror=\\\" & DQ() & "alert(1)\\\" & DQ()), _
-        "onerror位置=" & InStr(e, "onerror")
-End Sub
-
+' §5.3(1)の埋込形 `var DATA=JSON.parse("...");` の**文字列リテラル本体**だけを返す。
+'   ここに生の < が1文字でもあると、`<!--<script>` の形でページが白紙化する。
+Private Function DataLiteral(ByVal doc As String) As String
+    Dim pre As String
+    Dim a As Long
+    Dim b As Long
+    pre = "var DATA=JSON.parse(" & DQ()
+    a = InStr(doc, pre)
+    If a = 0 Then Exit Function
+    a = a + Len(pre)
+    b = InStr(a, doc, DQ() & ");")
+    If b = 0 Then Exit Function
+    DataLiteral = Mid$(doc, a, b - a)
+End Function
 ' ---- G87 テーマ(§5.1の閉じた一覧28変数・§5.2の差替単位) ----
 Private Sub T_Theme()
     Dim names As String
@@ -565,6 +436,14 @@ Private Sub T_Document()
         (InStr(doc, "</script><img") = 0), _
         "検出位置=" & InStr(doc, "</script><img")
 
+    ' 18章§5.3(1)v1.1の受入条件そのもの。DATAの文字列リテラル内に生の < が
+    ' 1文字でもあれば、その形次第でページ全体が白紙化しうる。
+    ChkB "G88_DATAリテラル内に生の不等号が1文字も無い_18章§5.3", _
+        ((LenB(DataLiteral(doc)) > 0) And (InStr(DataLiteral(doc), "<") = 0) And _
+         Ctn(DataLiteral(doc), "\u003C!--\u003Cscript>")), _
+        "リテラル長=" & Len(DataLiteral(doc)) & " 生の記号位置=" & _
+        InStr(DataLiteral(doc), "<")
+
     ChkB "G88_全文に生の引用符つきonerror属性が現れない_16章E-47", _
         (InStr(doc, "onerror=" & DQ() & "alert(1)") = 0), _
         "検出位置=" & InStr(doc, "onerror=" & DQ() & "alert(1)")
@@ -639,17 +518,21 @@ Private Sub T_Sections()
 
     ChkAll "G90_登録行のキーは7つに固定_18章§4.2", sj, keys
 
-    ' §4.2 のコード例が示す登録行を逐語で当てる(桁揃えの空白だけを畳む)。
+    ' §4.2 のコード例が示す登録行を逐語で当てる(桁揃えの空白だけを畳む)。見出しは
+    ' §3の「見出し(既定)」列のフル表記が正で、§4.2の例もそれを写したもの(W3.1裁定)。
     ChkB "G90_SEC-01の登録行が§4.2の例どおり_18章§4.2", _
-        Ctn(sj, "{id:'SEC-01',slug:'cover',title:'',need:['meta']," & _
-                "empty:'always',render:renderCover},"), _
+        Ctn(sj, Squash("{id:'SEC-01',slug:'cover',title:'',need:['meta']," & _
+                       "empty:'always',render:renderCover},")), _
         "登録表頭=[" & HeadOf(sj) & "]"
 
+    ' 見出しに空白を含むもの(SEC-06「影響×頻度 5×5」)があるため期待値も Squash
+    ' を通す。ソース上の文言は§3・§4.2の逐語のまま残す。
     ChkB "G90_SEC-02とSEC-06の登録行が§4.2の例どおり_18章§4.2", _
-        (Ctn(sj, "{id:'SEC-02',slug:'exec',title:'エグゼクティブサマリ'," & _
-                 "need:['s1'],empty:'always',render:renderExec},") And _
-         Ctn(sj, "{id:'SEC-06',slug:'riskmap',title:'2軸リスクマップ'," & _
-                 "need:['s2'],empty:'hide',render:renderRiskMap},")), _
+        (Ctn(sj, Squash("{id:'SEC-02',slug:'exec',title:'エグゼクティブサマリ'," & _
+                        "need:['s1'],empty:'always',render:renderExec},")) And _
+         Ctn(sj, Squash("{id:'SEC-06',slug:'riskmap'," & _
+                        "title:'2軸リスクマップ（影響×頻度 5×5）'," & _
+                        "need:['s2'],empty:'hide',render:renderRiskMap},"))), _
         "02=" & InStr(sj, "id:'SEC-02'") & " 06=" & InStr(sj, "id:'SEC-06'")
 End Sub
 
@@ -663,13 +546,16 @@ Private Sub T_NewAndRound()
     doc = DocText()
 
     ChkB "G91_SEC-09の登録行が空配列時の案内文を持つ_18章§3", _
-        Ctn(sj, "{id:'SEC-09',slug:'newrisk',title:'ニューリスク',need:['s2']," & _
-                "empty:'note',note:'" & NOTE_SEC09 & "',render:renderNewRisk},"), _
+        Ctn(sj, Squash("{id:'SEC-09',slug:'newrisk'," & _
+                       "title:'ニューリスク（新種・新興リスク）'," & _
+                       "need:['s2'],empty:'note',note:'" & NOTE_SEC09 & _
+                       "',render:renderNewRisk},")), _
         "SEC-09位置=" & InStr(sj, "id:'SEC-09'") & " 文=" & InStr(sj, NOTE_SEC09)
 
     ChkB "G91_SEC-16の登録行が0件時は非表示_18章§3", _
-        Ctn(sj, "{id:'SEC-16',slug:'round-update',title:'訪問で分かったこと'," & _
-                "need:['s2'],empty:'hide',render:renderRoundUpdate},"), _
+        Ctn(sj, Squash("{id:'SEC-16',slug:'round-update'," & _
+                       "title:'訪問で分かったこと（ラウンド更新）'," & _
+                       "need:['s2'],empty:'hide',render:renderRoundUpdate},")), _
         "SEC-16位置=" & InStr(sj, "id:'SEC-16'")
 
     ' §3の表の並び: SEC-09 の次が SEC-16、その次が SEC-10(紙面順)。
@@ -686,6 +572,16 @@ Private Sub T_NewAndRound()
     ' SEC-09 は emerging_risks、SEC-16 は round_no と risks[].status を読む。
     ChkAll "G91_SEC-09はemergingをSEC-16はround_noとstatusを読む_18章§3", _
         doc, "emerging_risks;round_no;confirmed;rejected"
+
+    ' §3 SEC-16「round_no が2未満ならセクションごと非表示(目次からも落とす)」。
+    ' 登録表の empty:'hide' は0件時の挙動を言うだけで round_no の判定は描画関数の
+    ' 中にしか無く、消しても他の層(a)は1本も落ちない。実挙動は render_report.py の
+    ' DOMスタブ(round_no=1)が見る。ここはリテラルの存在を固定する。
+    ChkB "G91_SEC-16の描画は初回ラウンドで打ち切る_18章§3", _
+        Ctn(Squash(modHtmlTemplate4.SecRoundUpdateJs()), _
+            "if((m.round_no||0)<2){return;}"), _
+        "分岐位置=" & InStr(Squash(modHtmlTemplate4.SecRoundUpdateJs()), _
+                            "round_no||0)<2")
 End Sub
 
 ' ---- G92 描画規約(§4.1。T-46の出荷前検問を層(a)で先に回す) ----
@@ -750,33 +646,28 @@ End Sub
 
 ' ---- 意図的に未テスト(期待値が18章・14章§6・19章から一意に定まらないもの) ----
 '   甘い期待値を置いて実装を追認しないため、ここへ列挙して空白のまま残す。
-'   (a)【統合時に解決・要追認】HeadHtml / BodyShellHtml / RuntimeJs の引数。
-'      §4.4は関数名と持ち物だけ、14章§6は「本章は宣言を持たない」。実装側の
-'      HeadHtml(themeName, coverFields)/BodyShellHtml(coverFields)/RuntimeJs()
-'      へ呼び先を合わせた(執筆時の仮定 titleText から変更。期待値は不変)。
-'   (b)【統合時に解決・要追認】BuildDocument 第3引数 coverFields の書式。§1.1⑤は
-'      引数名だけ。実装の取り決め=vbTab区切りの3値へ素材を合わせた(執筆時の
-'      仮定はJSON。COVER_CO / COVER_CO_ESC の期待値は不変)。
+'   (a)(b)【W3.1で解決】HeadHtml/BodyShellHtml/RuntimeJs の引数と coverFields の
+'      書式(vbTab区切り3値)は18章§5.2の署名として明文化された。期待値は不変。
 '   (c)【要裁定】JsStringSafe をどちらが呼ぶか。§5.3(1)は「JsStringSafe(dataJson)
 '      の結果」、§1.1④は「DATAをJSON文字列として組立」。BuildDocument 側と読んだ。
 '   (d) HtmlSafe の単引用符の実体参照(&#39; か &apos; か)。16章E-47は
 '      「エンティティ化」としか書かない。生で残らないことだけを当てた。
 '   (e) SEC-03..08 / SEC-10..15 の登録行の全文。§4.2の例は5行分だけで、SEC-12
 '      の note 本文(該当なし)は逐語で無い。描画関数名も例の5本しか示されない。
-'   (f) SEC-16の「round_no<2で0件」の実行時分岐、SEC-13の20問上限と系統別上限
-'      (3/5/5/10)、SEC-02の降順、SEC-06の帯5段と帯番号、SEC-05の常に10行。JS側
-'      の実行時挙動で層(a)からは観測できない(実挙動はT-33のH検収へ回す)。
+'   (f) SEC-13の20問上限と系統別上限(3/5/5/10)、SEC-02の降順、SEC-06の帯5段と
+'      帯番号、SEC-05の常に10行。JS側の実行時挙動で層(a)からは観測できない
+'      (実挙動はT-33のH検収へ回す)。**SEC-16の round_no<2 は本欄から外した**
+'      (W3.1): 分岐リテラルを G91 が、実挙動を render_report.py のDOMスタブが
+'      押さえる二重の網へ変えたため。
 '   (g)【欠落・要裁定】ヒアリングシート生成の純部。13章§2.16 は
 '      BuildHearingSheet(caseId) が s4_hearing_questions から整形すると書くが、
 '      14章§6の宣言はこのBoolean 1本だけで、q_no採番(1..N・最大10)・seq引継ぎ・
 '      answer_memo空という純部の関数名が無い。命名権は§6なので1本も書いて
 '      いない(§3.4のSEC-13は G93 で当てた)。
-'   (h)【欠落・要裁定】modUICase の enum変換表の純関数名。19章§6/17章§4-2は
-'      「変換表を modUICase の定数として持ちdiffゼロをテスト」と命じるが、14章§6
-'      に modUICase の宣言が1本も無い。18章§3が要求するテンプレ側の日本語
-'      ラベルを G94 で当てるに留めた。
-'   (i) mock素材(ResponseById)からの組立。11 mock ID の本文は15章§8.1が要点
-'      しか書かず、DATA(18章§2)は meta を伴う別構造(値源は13章§2.1)なので、
-'      戻り値をそのまま BuildDocument へ渡す手順が章に無い。G86/G88 は15章
-'      スキーマのキー名どおりに自給した DATA で当てた。
+'   (h)【W3.1で解決】modUICase の EnumPairsCsv / EnumJa / EnumEn は14章§6へ宣言
+'      された(enum_check の照合先の命名権が§6に戻った)。本群は18章§3が要求する
+'      テンプレ側の日本語ラベルを G94 で当てるに留める(照合先が別モジュール)。
+'   (i) mock素材(ResponseById)からの組立。15章§8.1は11 mock IDの要点しか書かず、
+'      DATA(18章§2)は meta を伴う別構造(値源は13章§2.1)なので渡す手順が章に無い。
+'      G86/G88 は15章スキーマのキー名どおりに自給した DATA で当てた。
 ' ============================

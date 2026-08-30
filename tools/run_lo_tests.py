@@ -130,7 +130,7 @@ PURE_ALLOWLIST = [
     # とおりExcelトークンを1つも持たないので、そのまま実行テストにかけられる
     # (lint の R4 が Excelトークンの混入を機械的に禁止している)。
     "modHtmlTheme", "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
-    "modHtmlTemplate4", "modHtmlTemplate5",
+    "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
     # T-33(W3)。modExportHtml はファイルI/O(ADODB.Stream)とstore経由の読取を
     # 持つが、純組立関数(BuildReportHtml / BuildMetaJson)はどちらにも触れない
     # ため、テストが叩くのはその2本だけ(技術メモ4)。tools/render_report.py も
@@ -175,12 +175,17 @@ PURE_ALLOWLIST = [
     # 関心度の下請け2本・modJudgeStore の採番/ID書式/enum検証・modPlayOps の
     # PfPredTypesOf/PfRefIds/PfFailCodeOf/CaseIdOfPfLine)を叩く。
     "modTestsPure9",
-    # modTestsPure10: T-35(W3)HTMLレポートの純部の契約テスト62本。18章全文と
-    # 16章E-47・19章§3だけを根拠に modUtilText.HtmlSafe / JsStringSafe と
-    # modHtmlTheme.ThemeNames / ThemeCss、modHtmlTemplate1 の BuildDocument /
-    # HeadHtml / BodyShellHtml / SectionsJs / RuntimeJs を叩く(叩く製品
-    # モジュールはいずれも上で登録済み)。modTestsPure9.RunAll の末尾から呼ぶ。
+    # modTestsPure10: T-35(W3)HTMLレポートの純部の契約テスト45本。18章全文と
+    # 19章§3だけを根拠に modHtmlTheme.ThemeNames / ThemeCss、modHtmlTemplate1 の
+    # BuildDocument / HeadHtml / BodyShellHtml / SectionsJs / RuntimeJs、
+    # modHtmlTemplate4.SecRoundUpdateJs を叩く(叩く製品モジュールはいずれも上で
+    # 登録済み)。modTestsPure9.RunAll の末尾から呼ぶ。
     "modTestsPure10",
+    # modTestsPure11: 30,000字契約(12章§2)による modTestsPure10 の分割先。
+    # 16章E-47・18章§5.3のエスケープ契約20本(modUtilText.HtmlSafe / JsStringSafe)
+    # と、両群が共有する攻撃素材 DataJsonAttack を持つ。
+    # modTestsPure10.RunAll の末尾から呼ぶ。
+    "modTestsPure11",
     "modMockLlm", "modMockLlm2",
 ]
 

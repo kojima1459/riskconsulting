@@ -29,7 +29,7 @@ vba_lint.py 緑
   -> app_version 更新 -> 15分スモーク -> 署名 -> 共有フォルダ配置
 ```
 
-- `vba_lint.py` と `run_lo_tests.py` は**コミット条件**。
+- `vba_lint.py` と `run_lo_tests.py` は**コミット条件**。HTMLテンプレ系(modHtmlTemplate*/modHtmlTheme/modExportHtml)へ触れたコミットは `render_report.py`(standard・--faithful の両方)も**コミット条件**に含める(18章固定文の逐語照合・DATAリテラル検査・SEC-16非描画検査はここが唯一の検問。層(a)のG90/G91は空白畳み照合のため見出し内空白の漂流には盲)。
   これらが緑でも**実機 wintest(層b)を飛ばしてよい理由にはならない**(17章§1)。
 - 検問を1つでも飛ばした版は配布しない。
 
@@ -58,7 +58,9 @@ python3 tools/vba_lint.py --dump-argcount-skips
 - **R1** 依存方向 ui -> app -> core の一方向。製品コードからテスト層を参照しない
 - **R3** `Application.Run` は `modGatewayRPN` のみ
 - **R4** Excelトークンは ui層 と `R4_EXCEL_ALLOWED_MODULES` のみ
-- **30,000字契約**(28,000字で警告)
+- **30,000字契約**(28,000字で警告)。**`modHtmlTemplate*` だけは25,000字でERROR**
+  (18章§4.4の分割規約。17章 T-35 のDoDが本ツールへ検査を委ねている。28,000字の
+  WARN帯に届かない超過を見逃さないための専用閾値)
 - **CP932安全**: VBEはソースをCP932で保持するため、CP932外文字は実行時に "?" 化ける
 - **NFR-S7 ①③**(17章 T-46①を毎コミット走らせる): セルへの書込は `SetCellSafe`、
   HTML連結は `HtmlSafe` / `JsStringSafe` を通す。定数・ヘッダの書込は行末に
@@ -253,7 +255,7 @@ python3 tools/render_report.py --faithful      # 素材合成なし(素のmock�
 # exit code: 0 = 生成+検査OK / 1 = 生成できたが検査NG / 2 = 生成できず
 ```
 
-LibreOffice へ純文字列モジュール一式(`modHtmlTheme` / `modHtmlTemplate1..5` /
+LibreOffice へ純文字列モジュール一式(`modHtmlTheme` / `modHtmlTemplate1..6` /
 `modExportHtml`)を読み込ませ、mock素材(`modMockLlm.ResponseById`)を入力に
 **純組立関数** `modExportHtml.BuildMetaJson` / `BuildReportHtml` を実行して、
 人がブラウザで開ける実物を `dist/` に出す。実行機構(雛形プロファイル・.xba変換・
@@ -266,5 +268,20 @@ LibreOffice へ純文字列モジュール一式(`modHtmlTheme` / `modHtmlTempla
   `node` があれば最小DOMスタブでページのJSを実際に走らせ `sec-<slug>` が
   16本生成されること / `innerHTML` 系が1つも無いこと(18章§4.1) /
   §5.1の28変数を過不足なく定義し共通CSSに `#fff` 以外の生の色が無いこと。
+  **W3.1で3本追加**:
+  1. **DATAリテラルに生の `<` が1文字も無い**(18章§5.3(1) v1.1)。`</` だけを
+     逃がす旧規約では `<!--<script>`(`-->` を伴わない形)を含むLLM出力で
+     HTMLトークナイザが script data double escaped 状態へ入り、DATAブロックの
+     正規の `</script>` が終端として働かず**ページが白紙化**する。あわせて
+     `<script>` の対が文書全体でちょうど2組であることも見る。
+  2. **18章の固定文・見出しの逐語照合**(§3の見出し16件・§3.5の免責4行・
+     §3.4のヒアリング2文・SEC-08注記・SEC-09/SEC-12のnote)。**期待値は18章
+     Markdownからパースする**のでツール側に写経が無い(二重管理にしない)。
+     W3で見つかった「です。」の付加・半角括弧化のような漂流をここで止める。
+  3. **DOMスタブのパスB**: `DATA.meta.round_no` を1に落として同じページを
+     もう一度描き、SEC-16 が**本文からも目次からも**消えることを見る
+     (18章§3「round_no が2未満ならセクションごと非表示。目次からも落とす」。
+     この規定の回帰網はここだけで、`--faithful` の素材は status が全件
+     proposed のため後段のガードが先に効いて空振りする)。
 - `dist/` は `.gitignore` 済み(16章NFR-S2)。サンプルはコミットせず、必要なときに
   このコマンドで再生成する。

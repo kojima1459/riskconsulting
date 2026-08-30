@@ -247,6 +247,13 @@
       "wave": "T-35"
     },
     {
+      "name": "modHtmlTemplate6",
+      "path": "src/app/modHtmlTemplate6.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
       "name": "modExportHtml",
       "path": "src/app/modExportHtml.bas",
       "role": "app",
@@ -410,6 +417,13 @@
     {
       "name": "modTestsPure10",
       "path": "src/test/modTestsPure10.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modTestsPure11",
+      "path": "src/test/modTestsPure11.bas",
       "role": "test",
       "type": "std",
       "wave": "T-35"

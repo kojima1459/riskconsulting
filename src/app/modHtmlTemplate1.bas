@@ -8,6 +8,8 @@ Option Explicit
 ' テーマ / §6 印刷とブラウザ表示の両立)。14章§6は本モジュールの関数契約を
 ' 持たない(18章§4.4・§5.2が正)。本モジュールが持つのは§4.4の分割表が定めた
 ' BuildDocument / HeadHtml / BodyShellHtml / SectionsJs / RuntimeJs の5本。
+' 19章§3のenum変換表(LabelJs)は§4.4の25,000字規約により modHtmlTemplate6 へ
+'   関数単位で切り出した(RuntimeJs から呼ぶ。関数名は変えていない)。
 '
 ' 設計の要(18章§4.1): DATAはページ内のJSが JSON.parse で受け取り、セクションの
 '   描画はブラウザ側のJSが行う。VBAは値ごとのHTML断片を組み立てない。JS側の描画
@@ -200,8 +202,10 @@ End Function
 ' SectionsJs - セクション登録表(18章§4.2)。**編集が最も多い1関数**。(a)描画関数
 '   の連結行 と (b)登録配列 の2行1組で1セクションを表す。登録行のキーは
 '   id / slug / title / need / empty / note / render の7つに固定。並び順は18章§3
-'   の表の上から下(10章FR-37の紙面順)。`empty` は§3の「空のときの挙動」列と
-'   1対1で対応させる(§3が正)。
+'   の表の上から下(10章FR-37の紙面順)。`empty` は§3の「空のときの挙動」列と、
+'   `title` は§3の「見出し(既定)」列と1対1で対応させる(§3が正。括弧つきの
+'   フル表記まで逐語で写す=W3.1裁定。目次も同じ title を並べるため、ここが
+'   ずれると本文と目次が同時に漂流する)。
 Public Function SectionsJs() As String
     Dim s As String
     ' (a) 描画関数の連結行
@@ -229,12 +233,15 @@ Public Function SectionsJs() As String
     s = s & "{id:'SEC-03',slug:'profile',title:'企業理解',need:['s1'],empty:'hide',render:renderProfile}," & vbLf
     s = s & "{id:'SEC-04',slug:'sufficiency',title:'入力の充足度と要確認事項',need:['s1'],empty:'hide',render:renderSufficiency}," & vbLf
     s = s & "{id:'SEC-05',slug:'riskuniv',title:'リスクユニバース10分類',need:['s2'],empty:'hide',render:renderRiskUniv}," & vbLf
-    s = s & "{id:'SEC-06',slug:'riskmap',title:'2軸リスクマップ',need:['s2'],empty:'hide',render:renderRiskMap}," & vbLf
+    s = s & "{id:'SEC-06',slug:'riskmap',title:'2軸リスクマップ（影響×頻度 5×5）'," & vbLf
+    s = s & "need:['s2'],empty:'hide',render:renderRiskMap}," & vbLf
     s = s & "{id:'SEC-07',slug:'risks',title:'リスク一覧',need:['s2'],empty:'hide',render:renderRisks}," & vbLf
     s = s & "{id:'SEC-08',slug:'coverage',title:'保険カバレッジ表',need:['s1'],empty:'hide',render:renderCoverage}," & vbLf
-    s = s & "{id:'SEC-09',slug:'newrisk',title:'ニューリスク',need:['s2'],empty:'note'," & vbLf
+    s = s & "{id:'SEC-09',slug:'newrisk',title:'ニューリスク（新種・新興リスク）'," & vbLf
+    s = s & "need:['s2'],empty:'note'," & vbLf
     s = s & "note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
-    s = s & "{id:'SEC-16',slug:'round-update',title:'訪問で分かったこと',need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
+    s = s & "{id:'SEC-16',slug:'round-update',title:'訪問で分かったこと（ラウンド更新）'," & vbLf
+    s = s & "need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
     s = s & "{id:'SEC-10',slug:'story',title:'提案ストーリー（当社にできること）',need:['s3'],empty:'hide',render:renderStory}," & vbLf
     s = s & "{id:'SEC-11',slug:'prevent',title:'未然防止メニュー',need:['s2'],empty:'hide',render:renderPrevent}," & vbLf
     s = s & "{id:'SEC-12',slug:'limit',title:'当社にできないこと・提案を控えること',need:['s2'],empty:'note'," & vbLf
@@ -246,54 +253,16 @@ Public Function SectionsJs() As String
     SectionsJs = s
 End Function
 
-' RuntimeJs - 共通の描画ヘルパ・enum変換表・登録配列の走査・目次生成。描画は
+' RuntimeJs - 共通の描画ヘルパ・enum変換表(modHtmlTemplate6)・登録配列の走査・
+'   目次生成をこの順に連結する(§4.4)。描画は
 '   createElement / textContent / setAttribute だけで行う(18章§4.1)。末尾で
 '   run() を呼ぶ。関数宣言は巻き上げられるため SectionsJs が先でも問題ない。
 Public Function RuntimeJs() As String
     Dim s As String
-    s = s & LabelJs() ' SAFE:html
+    s = s & modHtmlTemplate6.LabelJs() ' SAFE:html
     s = s & HelperJs() ' SAFE:html
     s = s & DriverJs() ' SAFE:html
     RuntimeJs = s
-End Function
-
-' 19章§3のenum変換表(機械値 -> 日本語ラベル)。生の英字enumを画面に出さない
-' (18章§3)。並びは15章§0の変換表の記載順に固定(§3.2)。
-Private Function LabelJs() As String
-    Dim s As String
-    s = s & "var CATORDER=['strategy_market','supply_chain','manufacturing_quality'," & vbLf
-    s = s & "'sales_customer','facility_bcp','hr_labor','digital_info','legal_regulatory'," & vbLf
-    s = s & "'finance_counterparty','brand_social'];" & vbLf
-    s = s & "var LCAT={strategy_market:'戦略・市場',supply_chain:'調達・供給網'," & vbLf
-    s = s & "manufacturing_quality:'製造・品質',sales_customer:'販売・顧客'," & vbLf
-    s = s & "facility_bcp:'施設・自然災害・BCP',hr_labor:'人材・労務'," & vbLf
-    s = s & "digital_info:'デジタル・情報',legal_regulatory:'法務・規制'," & vbLf
-    s = s & "finance_counterparty:'財務・取引先',brand_social:'ブランド・社会'};" & vbLf
-    s = s & "var LTR={cover:'比較的移転しやすい',partial:'条件付き・部分的',hard:'保険化困難'};" & vbLf
-    s = s & "var TRCLS={cover:'bdg-cover',partial:'bdg-partial',hard:'bdg-hard'};" & vbLf
-    s = s & "var LST={proposed:'仮説',confirmed:'確認済み',rejected:'棄却（記録保持）','new':'新規発見'};" & vbLf
-    s = s & "var LHZ={already:'既に顕在化',near:'1～3年',mid_long:'3年超'};" & vbLf
-    s = s & "var LFQ={high:'高',mid:'中',low:'低'};" & vbLf
-    s = s & "var LIP={large:'大',mid:'中',small:'小'};" & vbLf
-    s = s & "var LSRC={hp:'HP',yuho:'有報',memo:'営業メモ',contract:'現契約'," & vbLf
-    s = s & "prev_renewal:'前回更新メモ',knowledge:'社内ナレッジ',inference:'推定'};" & vbLf
-    s = s & "var LGAP={uninsured:'無保険',underinsured:'過小',overlap:'重複'};" & vbLf
-    s = s & "var LPK={upsell:'補償拡大',cross_sell:'新種目提案',scheme:'座組提案'};" & vbLf
-    s = s & "var LIQ={ok:'十分',partial:'断片的',missing:'無い'};" & vbLf
-    s = s & "var IQCLS={ok:'bdg-ok',partial:'bdg-iqpartial',missing:'bdg-missing'};" & vbLf
-    s = s & "var LIQO={high:'充足度 高',mid:'充足度 中',low:'充足度 低'};" & vbLf
-    s = s & "var LCT={'new':'新規開拓',renewal:'更新'};" & vbLf
-    s = s & "var LTIER={t1_quick:'クイック',t2_full:'フルドシエ',t3_sparring:'壁打ち'};" & vbLf
-    s = s & "var LQM={standard:'標準',deep:'入念'};" & vbLf
-    s = s & "var ASPORDER=['profile','business','sites','history','news','hr'," & vbLf
-    s = s & "'finance_risk','sales_memo','sns','competitors','market','finance'," & vbLf
-    s = s & "'insurance_ctx','hazard'];" & vbLf
-    s = s & "var LASP={profile:'会社概要',business:'事業・製品',sites:'拠点・設備'," & vbLf
-    s = s & "history:'沿革',news:'直近の動き',hr:'採用・人員',finance_risk:'有報・財務リスク'," & vbLf
-    s = s & "sales_memo:'営業情報',sns:'SNS評判',competitors:'競合・業界事故'," & vbLf
-    s = s & "market:'市況・マクロ',finance:'財務状態',insurance_ctx:'付保・提案の経緯'," & vbLf
-    s = s & "hazard:'拠点ハザード'};" & vbLf
-    LabelJs = s
 End Function
 
 ' 共通の描画ヘルパ。innerHTML系は使わない(18章§4.1)。

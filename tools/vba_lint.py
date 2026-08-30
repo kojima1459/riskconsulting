@@ -54,6 +54,15 @@ MAX_MODULE_CHARS = 30000
 # 残り2,000字を切ったら警告する(バグ修正1件ぶんの余裕がある状態を保つため)。
 MODULE_WARN_CHARS = 28000
 
+# 18章§4.4「テンプレモジュールの分割規約」: modHtmlTemplate* は**25,000字**を
+# 超えたら次番のモジュールへ関数単位で切り出す(30,000字の契約に対して余白を
+# 持たせる)。17章 T-35 のDoDがこの検査を本ツールへ委ねているため、共通の
+# 28,000字WARNではなく専用のERROR閾値として機械強制する。
+# 経緯: W3では modHtmlTemplate1 が 25,358字 で§4.4に違反していたが、
+#   28,000字のWARN帯に届かないため9ゲートすべてが緑のままだった(W3検証 MINOR1)。
+TEMPLATE_MODULE_PATTERN = re.compile(r"^modHtmlTemplate\d+$")
+TEMPLATE_MAX_CHARS = 25000
+
 # ==============================================================================
 # 12章§2 モジュール一覧(レイヤ構成図の全モジュール)
 # ------------------------------------------------------------------------------
@@ -789,6 +798,14 @@ def check_basics(info: ModuleInfo) -> None:
             "WARN", 1,
             f"モジュールが{n}字で上限{MAX_MODULE_CHARS}字まで残り{MAX_MODULE_CHARS - n}字。"
             f"次の修正が入らなくなる前に凝集した機能を新モジュールへ切り出すこと",
+        )
+
+    # 18章§4.4 の専用閾値(17章 T-35 のDoDが本ツールへ委ねた検査)。
+    if TEMPLATE_MODULE_PATTERN.match(module_name_for_display(info)) and n > TEMPLATE_MAX_CHARS:
+        info.add(
+            "ERROR", 1,
+            f"テンプレモジュールが{n}字で18章§4.4の上限{TEMPLATE_MAX_CHARS}字を超過"
+            f"(次番の modHtmlTemplateN へ**関数単位で**切り出すこと。関数名は変えない)",
         )
 
 

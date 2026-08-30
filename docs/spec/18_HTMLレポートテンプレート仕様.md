@@ -1,11 +1,14 @@
-# 18. HTMLレポートテンプレート仕様 v1.0
+# 18. HTMLレポートテンプレート仕様 v1.1
+
+v1.1（W3.1裁定）: 4点を改訂した。**(1) §5.3(1)のエスケープ集合**を「`</` を `<\/` へ」から「**すべての `<` を `\u003C` へ**」へ改めた（旧集合では `<!--<script>`〔`-->` を伴わない形〕を含むLLM出力でHTMLトークナイザが script data double escaped 状態へ入り、DATAブロックの正規の `</script>` が終端として働かず**生成HTMLが実ブラウザ上で白紙化**した。16章 E-47 も同時改訂）。**(2) 見出しの正を§3の表「見出し（既定）」列に確定**し、柱書の『本章が正であるもの』へ「見出し」を加え、§4.2のコード例（SEC-06/09/16）を§3のフル表記へ揃えた。**(3) §4.4の25,000字規約**の検査先を `tools/vba_lint.py` の `modHtmlTemplate*` 専用ERROR閾値と明記し、既定の割り当て表を実態（1..6）へ更新した。**(4) §5.2にテンプレ5関数の署名**（`coverFields` はvbTab区切り3値）を、§2に `meta.warnings` を明文化した。あわせて `tools/render_report.py` に「DATAリテラルに生の `<` が無い」「18章の固定文・見出しの逐語照合」「`meta.round_no=1` でSEC-16が本文からも目次からも消える」の3検査を追加した。
 
 v1.0（ニューリスク=エマージング確定）: SEC-09「ニューリスク」の読むJSONパスを `s2.emerging_risks`（新種・新興リスク）へ差し替え、「第2ラウンド以降に表示」の文言を削除して空配列時の1行を「現時点で特筆すべきニューリスクは検出されていません」へ変更した。あわせて第2ラウンドの仮説ライフサイクル（`s2.risks[].status`）を見せる SEC-16「訪問で分かったこと（ラウンド更新）」を新設し、両者が別物であることを§3に明記した。
 v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR-37の「デザインは差し替え可能なテーマとして分離」を、セクション登録表・CSS変数の閉じた一覧・1モジュールに閉じたテーマ差替として具体化し、12章§2の純文字列モジュール `modHtmlTemplate1..n` / `modHtmlTheme`（17章 T-35）の内容面の正を定義した。
 
 **目的**: 本製品の主力出力であるHTMLリスクレポート（10章FR-37・14章§6 `modExportHtml.GenerateHtmlReport`）について、**出力物の見た目・構成・図表に対するフィードバックを1箇所の修正で吸収できる構造**を固定する。発注者・部会からの「この図を足したい」「この順番を入れ替えたい」「配色を変えたい」という要望が、そのつどHTML生成コードの改造にならないよう、変更点を (a) セクション登録表 (b) テーマのCSS変数 (c) 個々のテンプレ関数 の3種類だけに閉じ込める。
 
-**本章が正であるもの**: セクションID・セクションの並び・各セクションが読むJSONパス・CSS変数名の閉じた一覧とその既定値・テーマ差替の単位・テンプレモジュールの分割規約・図表追加手順・エスケープと文字コード・印刷とブラウザ表示の両立規約。
+**本章が正であるもの**: セクションID・セクションの並び・**セクションの見出し（§3の表「見出し（既定）」列が正。§4.2のコード例はこれを写したものであり、食い違ったら§3が正）**・各セクションが読むJSONパス・CSS変数名の閉じた一覧とその既定値・テーマ差替の単位・テンプレモジュールの分割規約・図表追加手順・エスケープと文字コード・印刷とブラウザ表示の両立規約。
+（本章が正であるものの続き）: **`modHtmlTemplate1..n` / `modHtmlTheme` の関数署名（§5.2。14章§6が本章へ委ねている）**。
 **本章が正でないもの**: JSONのプロパティ名（正=15章のスキーマ）・enumの日本語ラベル（正=19章§3・15章§0）・configキーの既定値（正=13章§2.3）・エラーコードと失敗時挙動（正=16章 E-21／E-47／E-48）・タスクとDoD（正=17章 T-33／T-35）。
 
 ---
@@ -49,7 +52,8 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
     "industry_code": "09", "industry_name": "食料品製造業",
     "case_type": "renewal", "dossier_tier": "t2_full", "quality_mode": "deep",
     "round_no": 1, "s4_variant": "proposal",
-    "generated_at": "2026/09/01 14:07:22", "app_version": "2.4.0", "theme": "standard"
+    "generated_at": "2026/09/01 14:07:22", "app_version": "2.4.0", "theme": "standard",
+    "warnings": []
   },
   "s1": { "company_name": "...", "business_summary": "...", "...": "Schema-S1 の全キー" },
   "s2": { "risks": [], "gaps": [], "emerging_risks": [], "open_questions": [] },
@@ -58,6 +62,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 ```
 
 - `meta` の由来: `case_id` / `case_type` / `dossier_tier` / `company` / `industry_code` / `industry_name` / `round_no` / `s4_variant` は13章§2.1『案件一覧』の同名列。`quality_mode` はHOMEの `hm_quality_mode`（13章§2.10。未上書きなら config `quality_mode`）。`app_version` は config `app_version`、`theme` は config `html_theme` を `modHtmlTheme.ThemeCss` で解決したあとの実テーマ名（§5.2のフォールバック後の値）、`generated_at` は生成時刻 `yyyy/mm/dd hh:mm:ss`。
+- `meta.warnings` は**生成をブロックしない警告**の文字列配列（0本以上。キー自体は必ず置き、無ければ空配列）。載せてよいのは§1.1の②③が定める「匿名化の復元ができませんでした」（16章 E-31）と `modPii` の検知（16章 E-05(6)。**検知種別と箇所だけで本文は載せない**＝NFR-S3）に限る。ページ側は本文の前に1枚のバナーとして出す（`hm_warning` と同じ内容を、レポート単体で配布したときにも読めるようにするためのもの。W3.1で追認）。**エラーコード・スタックトレース・入力原文をここへ入れない**（レポートは成果物であり障害報告書ではない＝16章NFR-S3）。
 - S3が未実行の案件では `"s3": null` とする（キー自体は必ず置く)。同様にS2未実行は `"s2": null`。`null` のときの各セクションの挙動は§3の「空のときの挙動」列が正。
 - **DATAに入れないもの**: 入力貼付テキストの原文（`input_hp` 等）・run_log・err_log・ナレッジ本文・APIキーに類する一切。レポートは成果物であり、入力の原本を持ち出す口にしない（16章NFR-S3）。ただし `s1.field_insights[]`（現場メモ由来の原文パススルー。10章FR-34）はS1の出力そのものなので含む。
 
@@ -160,9 +165,9 @@ s = s & modHtmlTemplate2.SecExecJs()
 s = s & "var SECTIONS=[" & vbLf
 s = s & " {id:'SEC-01',slug:'cover',    title:'',                  need:['meta'],   empty:'always',render:renderCover},"      & vbLf
 s = s & " {id:'SEC-02',slug:'exec',     title:'エグゼクティブサマリ',need:['s1'],    empty:'always',render:renderExec},"       & vbLf
-s = s & " {id:'SEC-06',slug:'riskmap',  title:'2軸リスクマップ',    need:['s2'],     empty:'hide',  render:renderRiskMap},"    & vbLf
-s = s & " {id:'SEC-09',slug:'newrisk',  title:'ニューリスク',       need:['s2'],     empty:'note',  note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
-s = s & " {id:'SEC-16',slug:'round-update',title:'訪問で分かったこと',need:['s2'],  empty:'hide',  render:renderRoundUpdate}," & vbLf
+s = s & " {id:'SEC-06',slug:'riskmap',  title:'2軸リスクマップ（影響×頻度 5×5）',need:['s2'],empty:'hide',render:renderRiskMap}," & vbLf
+s = s & " {id:'SEC-09',slug:'newrisk',  title:'ニューリスク（新種・新興リスク）',need:['s2'],empty:'note',note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
+s = s & " {id:'SEC-16',slug:'round-update',title:'訪問で分かったこと（ラウンド更新）',need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
 s = s & "];" & vbLf
 ```
 
@@ -172,13 +177,13 @@ s = s & "];" & vbLf
 |---|---|---|---|
 | `id` | 文字列 | ○ | `SEC-nn`。§3の表と一致させる。改番禁止 |
 | `slug` | 文字列 | ○ | `<section id="sec-<slug>">` と目次アンカーになる。英小文字とハイフンのみ |
-| `title` | 文字列 | ○ | 既定の見出し。空文字は見出しを出さない（SEC-01のみ） |
+| `title` | 文字列 | ○ | 既定の見出し。**§3の表の「見出し（既定）」列を逐語で写す**（括弧つきのフル表記まで含めて一致させる。上のコード例もその写しであり、食い違ったら§3が正）。空文字は見出しを出さない（SEC-01のみ） |
 | `need` | 配列 | ○ | 描画に必要なDATAのトップキー（`meta` / `s1` / `s2` / `s3`） |
 | `empty` | 文字列 | ○ | **`need` のいずれかが `null`、または描画対象が0件**のときの挙動。`always`=それでも描く（§3で常時表示と決めたもの） / `hide`=描かずに目次からも落とす / `note`=見出しと `note` の1行だけを描く |
 | `note` | 文字列 | `empty:'note'` のときのみ | 0件時に出す1行の本文 |
 | `render` | 関数名 | ○ | (a)の連結行で取り込んだ描画関数。引数は `(DATA, sectionEl)` の2つに固定し、戻り値を持たない |
 
-`empty` の値は§3の表の「空のときの挙動」列と1対1で対応させる（本表と§3が食い違ったら§3が正）。
+`empty` の値は§3の表の「空のときの挙動」列と、`title` の値は同表の「見出し（既定）」列と1対1で対応させる（本表・コード例と§3が食い違ったら§3が正）。目次（§3.6）は登録表の `title` をそのまま並べるため、この一致が崩れると本文と目次の両方が同時に漂流する。
 
 ### 4.3 図表テンプレートを1つ追加する手順（変更は2箇所で完結する）
 
@@ -194,16 +199,20 @@ s = s & "];" & vbLf
 
 ### 4.4 テンプレモジュールの分割規約（1モジュール30,000字契約）
 
-- 1モジュールが**25,000字**を超えたら次番のモジュールへ切り出す（30,000字の契約に対して余白を持たせる。17章 T-35 のDoDで文字数を検査する）。
-- 分割は**関数単位**で行い、関数名は変えずに移動だけする。同名の `Public Function` を2つ以上のモジュールに置かない。
-- 既定の割り当て:
+- 1モジュールが**25,000字**を超えたら次番のモジュールへ切り出す（30,000字の契約に対して余白を持たせる）。**この閾値は `tools/vba_lint.py` が `modHtmlTemplate*` 専用のERROR（`TEMPLATE_MAX_CHARS = 25000`）として機械強制する**（17章 T-35 のDoDが本章の閾値を明記したうえで検査をlintへ委ねる。W3では28,000字のWARN帯に届かず `modHtmlTemplate1` の25,358字が9ゲート全緑のまま素通りしたため、v1.1で委譲先を明示した）。
+- 分割は**関数単位**で行い、関数名は変えずに移動だけする。同名の `Public Function` を2つ以上のモジュールに置かない。切り出しに伴う `Private` → `Public` の変更は関数名の変更ではないので可。
+- 既定の割り当て（v1.1で実態へ更新。1..6）:
 
 | モジュール | 持つもの |
 |---|---|
 | `modHtmlTemplate1` | `BuildDocument`（全体組立）／`HeadHtml`（`<meta charset>`・`<title>`・共通CSS・テーマCSSの差込口）／`BodyShellHtml`（骨格と `<noscript>`）／**`SectionsJs`（§4.2のセクション登録表。編集が最も多い1関数）**／`RuntimeJs`（目次生成・登録配列の走査・`need`/`empty` の判定・共通の描画ヘルパ） |
 | `modHtmlTemplate2` | SEC-01 cover ／ SEC-02 exec ／ SEC-03 profile ／ SEC-04 sufficiency |
 | `modHtmlTemplate3` | SEC-05 riskuniv ／ SEC-06 riskmap ／ SEC-07 risks ／ SEC-08 coverage |
-| `modHtmlTemplate4` | SEC-09 newrisk ／ SEC-16 round-update ／ SEC-10 story ／ SEC-11 prevent ／ SEC-12 limit ／ SEC-13 hearing ／ SEC-14 source ／ SEC-15 disclaimer |
+| `modHtmlTemplate4` | SEC-09 newrisk ／ SEC-16 round-update ／ SEC-10 story |
+| `modHtmlTemplate5` | SEC-11 prevent ／ SEC-12 limit ／ SEC-13 hearing ／ SEC-14 source ／ SEC-15 disclaimer |
+| `modHtmlTemplate6` | `LabelJs`（19章§3・15章§0のenum変換表を返す。`RuntimeJs` から呼ぶ下請け。19章の改訂でしか動かない表を、編集が最も多い `SectionsJs` と同じモジュールに置かないための切り出し） |
+
+- 上の表は**現時点の実態**であり、25,000字規約に従って切り出した結果はここへ反映する（表と実装がずれたまま放置しない）。セクションの担当モジュールは§4.3の手順1が「空きのあるテンプレモジュール」と定めるとおり流動的で、正は登録表(§4.2)の(a)連結行である。
 
 - 共通CSSは `modHtmlTemplate1.HeadHtml` に一元化し、セクション別のテンプレ関数に `<style>` を書かない（CSSが散ると見た目のフィードバックを1箇所で吸収できなくなる）。セクション固有のスタイルはクラス名を `sec-<slug>-*` の接頭辞で共通CSSに置く。
 - 文字列の組み立ては15章と同じ `s = s & "..." & vbLf` 方式とする（`Const` は1論理行1,023字・行継続25本の制約に当たるため使わない。14章§7と同じ理由）。
@@ -285,7 +294,25 @@ s = s & "];" & vbLf
 - `@page` の余白はCSS変数で解決されないため、テーマ変数にせず共通CSSにリテラルで書く（§6）。テーマから紙面余白は変えられない、と割り切る。
 - 機械検査（17章 T-35 のDoD）: (1) `ThemeCss` の戻り値が `:root{` で始まり `}` で終わり、内側が `--` で始まる宣言のみであること (2) 全テーマが上表28変数を**過不足なく**定義していること (3) 共通CSS中に `var(--` を伴わない色指定（`#` に続く16進6桁・3桁）が `#fff` 以外に出現しないこと。
 
-### 5.2 テーマ差替の単位
+### 5.2 テーマ差替の単位とテンプレ5関数の署名
+
+**テンプレ5関数の署名（W3.1で明文化。14章§6は「本章は宣言を持たない」としてここへ委ねている）**: §4.4の分割表は関数名と持ち物だけを定めて引数を規定しておらず、実装のコメントだけが唯一の根拠になっていた。テンプレ関数は層(a)のテストと `tools/render_report.py` が直接叩く境界なので、ここで契約として固定する。
+
+```vb
+' === app: modHtmlTemplate1（純文字列・R4）===
+Public Function BuildDocument(ByVal themeName As String, ByVal dataJson As String, _
+                              ByVal coverFields As String) As String
+' HTML全文。themeName=**解決済み**のテーマ名（未知名のフォールバックは呼出側で済ませる）、
+' dataJson=§2のDATA（生のJSON。`JsStringSafe` を通すのは本関数の中＝§5.3(1)）、
+' coverFields=下記の3値。
+Public Function HeadHtml(ByVal themeName As String, ByVal coverFields As String) As String
+Public Function BodyShellHtml(ByVal coverFields As String) As String
+Public Function SectionsJs() As String     ' §4.2の登録表。引数を取らない
+Public Function RuntimeJs() As String      ' 目次・走査・描画ヘルパ。引数を取らない
+```
+
+- **`coverFields` の書式**: §4.1(b)の3値（会社名／案件ID／生成日時）を**タブ（`vbTab`）区切りの1本の文字列**で渡す。`[0]`=会社名 `[1]`=案件ID `[2]`=生成日時。タブが区切りとして安全なのは、外部由来テキストが `modUtilText.SanitizeInput`（16章 E-04）で制御文字を落としてから案件データに入るため。3値をJSONで渡さないのは、テンプレ側にJSONパーサを持たせない（＝純文字列モジュールに留める）ため。**この3値はテンプレ側で `HtmlSafe` を通す**（§4.1・§5.3(2)）。
+- 引数を増やすときは本節を先に改訂する（実装のコメントを根拠にしない）。
 
 - **差し替えの単位は `modHtmlTheme` の1モジュールのみ**。テーマを増やす作業は「`ThemeCss` の `Select Case` に分岐を1本足し、28変数を書く」で完結し、`modExportHtml` にも `modHtmlTemplate1..n` にも触れない。
 - 契約:
@@ -313,9 +340,13 @@ Public Function ThemeCss(ByVal themeName As String) As String
 `modUtilText.JsStringSafe` の適用順は次のとおりで、**この順序を守る**（逆順にすると二重エスケープになる）。
 
 1. `\` を `\\` に、`"` を `\"` に置換する（JSON本文をJSの二重引用符リテラルへ入れるため必須）
-2. `</` を `<\/` に置換する（本文中の `</script>` でスクリプトブロックが閉じるのを防ぐ）
+2. **`<` を1文字残らず `\u003C` に置換する**（旧規約「`</` を `<\/` へ」はこれに包含されるため v1.1 で置き換えた。理由は直後の注記）
 3. 行区切り文字 U+2028 を `\u2028`、段落区切り文字 U+2029 を `\u2029` に置換する
 4. その他の制御文字（U+0000 から U+001F）を `\u00XX` に置換する
+
+**なぜ `</` ではなく `<` の全部なのか（v1.1改訂の理由）**: HTMLトークナイザは `<script>` の中身を **script data** 状態で読むが、そこに `<!--` が現れると **script data escaped** へ、続けて `<script` が現れると **script data double escaped** へ遷移する。double escaped 状態では `</script>` が終端として働かず、`-->` が来るまで復帰しない。したがってLLM出力の1フィールドに `<!--<script>`（`-->` を伴わない形）が入るだけで、DATAブロックの正規の `</script>` が食われ、後続のランタイムJSごとスクリプトの中身として飲み込まれ、**ページが1セクションも描かれない真っ白な状態になる**（コード実行は成立しないが、主力出力〔10章FR-37〕が無言で白紙になる）。`</` だけを狙うエスケープではこの経路を塞げない。`<` を1文字残らず `\u003C` へ落とせば `</script>` も `<!--` も `<script` も**構造上生成されえない**（`JSON.parse` が `\u003C` を `<` へ戻すので画面に出る文字は元のまま＝情報は落ちない）。
+
+**この規約の受入条件**は「生成HTMLの `var DATA=JSON.parse("…")` の**文字列リテラル内に生の `<` が1文字も無いこと**」とする。トークナイザの状態を数え上げる検査ではなく1文字の有無で判定できることが本改訂の価値であり、17章 T-35 のDoDで `tools/render_report.py` が機械検査する。
 
 **(2) HTML本文への差し込み**: §4.1の3箇所（`<title>` ・表紙の会社名/案件ID/生成日時・`<noscript>`）は `modUtilText.HtmlSafe`（`& < > " '` のエンティティ化）を通す。JS側の描画は `textContent` と `setAttribute` のみを使うためエスケープ不要であり、逆に `innerHTML` 系を使わないことがエスケープ規約そのものである（§4.1）。
 

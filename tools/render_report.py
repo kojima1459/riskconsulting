@@ -56,12 +56,21 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
         「登録したが描けない」を見逃すため、可能なら(3)まで行う。
     (4) innerHTML / insertAdjacentHTML / document.write / outerHTML= が
         1つも出現しない(18章§4.1・17章 T-46 の出荷前検問と同じ観点)
+    (5) DATAの文字列リテラル内に**生の `<` が1文字も無い**(18章§5.3(1) v1.1)。
+        `</` だけを逃がす旧規約では `<!--<script>` を含むLLM出力でHTMLトークナイザが
+        script data double escaped 状態へ入り、ページが白紙化する。
+    (6) 18章の**固定文と見出しの逐語照合**(§3の見出し16件・§3.5の免責4行・
+        §3.4のヒアリング2文・SEC-08注記・SEC-09/SEC-12のnote)。期待値は18章
+        Markdownからパースする(ツール側に写経しない)。
+    (7) DOMスタブのパスB: `meta.round_no` を1に落とすと SEC-16 が本文からも
+        目次からも消える(18章§3。この規定の回帰網はここだけ)。
 ================================================================================
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -85,7 +94,7 @@ RENDER_MODULES = [
     "modUtil", "modUtilText", "modJsonLite", "modLog",
     "modHtmlTheme",
     "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
-    "modHtmlTemplate4", "modHtmlTemplate5",
+    "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
     "modExportHtml",
     "modMockLlm", "modMockLlm2",
 ]
@@ -217,10 +226,19 @@ DOM_STUB_JS = r"""
 // 18章§4.1 が許す操作(createElement / textContent / setAttribute / appendChild /
 // removeChild / getElementById / addEventListener)だけを持つ最小DOMスタブ。
 // これで足りるということ自体が「innerHTML系を使っていない」ことの裏取りになる。
+//
+// 2パスで走らせる:
+//   A = DATA をそのまま流す(通常の描画)
+//   B = DATA.meta.round_no を 1 に落として流す(18章§3 SEC-16 の
+//       「round_no が2未満ならセクションごと非表示。目次からも落とす」の実測)
+// Bを別に持つのは、A の素材が round_no=2 のときだけ SEC-16 の分岐に意味が
+// 生じるため。--faithful の素材(round_no=1・status全件proposed)では後段の
+// 「3つのstatusが0件なら return」ガードが先に効いてしまい、round_no 側の
+// ガードを消しても誰も気づけない(W3検証 MAJOR1 の未検出変異がこれ)。
 const fs = require('fs');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 
-const byId = Object.create(null);
+let byId = Object.create(null);
 function El(tag) {
   this.tagName = tag; this.nodeType = 1; this.childNodes = [];
   this.attrs = Object.create(null); this.className = ''; this._text = '';
@@ -248,35 +266,47 @@ El.prototype.setAttribute = function (k, v) {
 };
 El.prototype.addEventListener = function () {};
 
-function mk(tag, id) { const n = new El(tag); if (id) { n.setAttribute('id', id); } return n; }
-const root = mk('body', null);
-const doc = mk('main', 'doc');
-root.appendChild(doc);
-// 静的HTML側(BodyShellHtml)にある id を先に用意する。
-doc.appendChild(mk('section', 'sec-cover'));
-doc.appendChild(mk('nav', 'toc'));
-root.appendChild(mk('div', 'warnbox'));
-root.appendChild(mk('button', 'btnPrint'));
-
-global.document = {
-  createElement: (t) => new El(t),
-  getElementById: (id) => (byId[id] || null)
-};
-global.window = { print: function () {} };
-
 const scripts = [];
 const re = /<script>([\s\S]*?)<\/script>/g;
 let m;
 while ((m = re.exec(html)) !== null) { scripts.push(m[1]); }
-if (scripts.length < 2) { console.error('SCRIPT_BLOCKS=' + scripts.length); process.exit(3); }
-for (const s of scripts) { (0, eval)(s); }
+if (scripts.length !== 2) { console.error('SCRIPT_BLOCKS=' + scripts.length); process.exit(3); }
 
-const seen = [];
-(function walk(n) {
-  if (n.attrs && n.attrs.id) { seen.push(n.attrs.id); }
-  for (const c of n.childNodes) { walk(c); }
-})(doc);
-console.log(seen.join('\n'));
+// 1ページぶんのDOMを作って scripts を流し、現れたidと目次のhrefを集める。
+function runPass(mutate) {
+  byId = Object.create(null);
+  function mk(tag, id) { const n = new El(tag); if (id) { n.setAttribute('id', id); } return n; }
+  const root = mk('body', null);
+  const doc = mk('main', 'doc');
+  root.appendChild(doc);
+  // 静的HTML側(BodyShellHtml)にある id を先に用意する。
+  doc.appendChild(mk('section', 'sec-cover'));
+  doc.appendChild(mk('nav', 'toc'));
+  root.appendChild(mk('div', 'warnbox'));
+  root.appendChild(mk('button', 'btnPrint'));
+  global.document = {
+    createElement: (t) => new El(t),
+    getElementById: (id) => (byId[id] || null)
+  };
+  global.window = { print: function () {} };
+
+  (0, eval)(scripts[0]);            // var DATA=JSON.parse("...")
+  if (mutate) { mutate(global.DATA); }
+  (0, eval)(scripts[1]);            // ランタイム(登録配列の走査・描画・目次)
+
+  const ids = [];
+  const hrefs = [];
+  (function walk(n) {
+    if (n.attrs && n.attrs.id) { ids.push(n.attrs.id); }
+    if (n.attrs && n.attrs.href) { hrefs.push(n.attrs.href); }
+    for (const c of n.childNodes) { walk(c); }
+  })(doc);
+  return { ids: ids, hrefs: hrefs };
+}
+
+const passA = runPass(null);
+const passB = runPass(function (D) { if (D && D.meta) { D.meta.round_no = 1; } });
+console.log(JSON.stringify({ A: passA, B: passB }));
 """
 
 
@@ -366,8 +396,15 @@ def check_theme_css(html: str) -> list[str]:
 def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
     """node があれば最小DOMスタブでページのJSを実際に走らせて確認する。
 
-    --faithful(素材合成なし=初回ラウンド)のときは SEC-16 が18章§3の規定
-    どおり非表示になるのが**正しい**ので、DOMに無いことを期待値にする。
+    パスA(素材そのまま): 表示されるべきセクションが全部描かれているか。
+      --faithful(素材合成なし=初回ラウンド)のときは SEC-16 が18章§3の規定
+      どおり非表示になるのが**正しい**ので、DOMに無いことを期待値にする。
+    パスB(meta.round_no を 1 に落とす): 18章§3 SEC-16 の
+      「`meta.round_no` が2未満（初回ラウンド）なら**セクションごと非表示**
+      （目次からも落とす）」を、status が new/confirmed/rejected で埋まった
+      素材のまま round_no だけ下げて実測する。**この規定を守る回帰網はここ
+      だけ**なので、本文(sec-round-update)と目次(#sec-round-update)の両方が
+      消えることを見る。
     """
     node = shutil.which("node") or shutil.which("nodejs")
     if node is None:
@@ -379,17 +416,186 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
                           capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
         return [f"DOM検査でページのJSが落ちました: {proc.stderr.strip()[:400]}"]
-    ids = set(l.strip() for l in proc.stdout.splitlines() if l.strip())
+    try:
+        got = json.loads(proc.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return [f"DOM検査の出力を読めませんでした: {proc.stdout.strip()[:200]}"]
+
+    ids_a = set(got["A"]["ids"])
+    ids_b = set(got["B"]["ids"])
+    hrefs_b = set(got["B"]["hrefs"])
     if verbose:
-        print(f"[render_report] DOMに現れたid: {sorted(ids)}")
+        print(f"[render_report] パスA のid: {sorted(ids_a)}")
+        print(f"[render_report] パスB(round_no=1)のid: {sorted(ids_b)}")
     problems = []
     for sec_id, slug, _fn in SECTIONS:
         hidden_expected = faithful and sec_id == "SEC-16"
-        present = ("sec-" + slug) in ids
+        present = ("sec-" + slug) in ids_a
         if hidden_expected and present:
             problems.append(f"初回ラウンドなのに sec-{slug} が描かれています({sec_id}・18章§3)")
         elif not hidden_expected and not present:
             problems.append(f"描画後のDOMに sec-{slug} がありません({sec_id})")
+
+    # --- 18章§3 SEC-16 の round_no ガード(パスB) ---
+    if "sec-round-update" in ids_b:
+        problems.append(
+            "meta.round_no=1 なのに sec-round-update が描かれています"
+            "(18章§3 SEC-16「round_no が2未満ならセクションごと非表示」)")
+    if "#sec-round-update" in hrefs_b:
+        problems.append(
+            "meta.round_no=1 なのに目次に #sec-round-update が残っています"
+            "(18章§3「非表示のセクションは目次からも同時に落とす」)")
+    # パスBが「SEC-16以外まで消えた」状態でないこと(ガードの効きすぎ・空振り防止)。
+    if "sec-exec" not in ids_b:
+        problems.append("パスB(round_no=1)で sec-exec まで消えています(DOM検査が空振り)")
+    return problems
+
+
+# ==============================================================================
+# 18章の固定文・見出しの逐語照合(漂流の恒久検問)
+# ------------------------------------------------------------------------------
+# validate_check.py が15章§11のエラー文テンプレに対して行っている「一字一句の
+# 近傍照合」を、18章の固定文にも掛ける。W3では SEC-08 注記への「です。」付加と
+# §3.4 超過1行の半角括弧という2件の漂流が、目視でしか見つからなかった。
+# **期待値は18章Markdownからパースする**(ツール側に写経しない=二重管理にしない)。
+# ==============================================================================
+SPEC18 = REPO_ROOT / "docs" / "spec" / "18_HTMLレポートテンプレート仕様.md"
+
+
+def spec18_text() -> str:
+    return SPEC18.read_text(encoding="utf-8")
+
+
+def parse_sec_headings(spec: str) -> list[tuple[str, str, str]]:
+    """§3の表から (SEC-nn, slug, 見出し（既定）) を拾う。見出しが正の値源。"""
+    out = []
+    for line in spec.splitlines():
+        if not line.startswith("| SEC-"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        sec_id, slug, title = cells[0], cells[1], cells[2]
+        if title.startswith("（表紙"):      # SEC-01 は「見出しなし」
+            title = ""
+        out.append((sec_id, slug, title))
+    return out
+
+
+def parse_disclaimer(spec: str) -> list[str]:
+    """§3.5「この4行を必ず含める」の固定文をバッククォートから取る。"""
+    body = spec.split("### 3.5 ")[1].split("### 3.6")[0]
+    out = []
+    for line in body.splitlines():
+        mm = re.match(r"^\d+\. `(.+?)`", line.strip())
+        if mm:
+            out.append(mm.group(1))
+    return out
+
+
+def parse_fixed_phrases(spec: str) -> list[tuple[str, str]]:
+    """§3.4・§3のSEC-08注記・SEC-09/SEC-12のnoteを (出典, 逐語) で返す。"""
+    out: list[tuple[str, str]] = []
+    s34 = spec.split("### 3.4 ")[1].split("### 3.5")[0]
+    for label, pat in (("§3.4 超過1行", r"「(ほか\{n\}問（[^」]+）)」"),
+                       ("§3.4 不足情報の設問文", r"`(\{item\}について教えてください)`")):
+        mm = re.search(pat, s34)
+        if mm:
+            out.append((label, mm.group(1)))
+    s3 = spec.split("## 3. ")[1].split("### 3.1")[0]
+    for label, pat in (
+        ("§3 SEC-08 注記", r"「(新規案件のため現契約なし。[^」]+)」の注記"),
+        ("§3 SEC-09 0件時の1行", r"「(現時点で特筆すべき[^」]+)」の1行"),
+        ("§3 SEC-12 0件時の1行", r"3ブロックとも0件なら「(該当なし)」の1行"),
+    ):
+        mm = re.search(pat, s3)
+        if mm:
+            out.append((label, mm.group(1)))
+    return out
+
+
+def _literal_missing(html: str, frag: str) -> bool:
+    """固定文の断片が「JSの単引用符リテラルまるごと」として現れるか。
+
+    ただの部分文字列一致にしないのは、**末尾に語を足す漂流**（W3で実際に起きた
+    SEC-08 注記への「です。」付加）が部分文字列一致では素通りするため。テンプレは
+    固定文を `T(el,'p','note','……')` の形で1本のリテラルとして書くので、前後を
+    引用符ごと照合すれば付加も削除も同時に捕まる。プレースホルダ（`{item}` 等）で
+    割れた断片も `'……'+S(x)+'……'` の形になるため、断片ごとに同じ規則で当たる。
+    """
+    return ("'" + frag + "'") not in html
+
+
+def check_spec18_literals(html: str) -> list[str]:
+    """18章の固定文・見出しが生成HTMLに逐語で入っているか。"""
+    problems = []
+    spec = spec18_text()
+
+    headings = parse_sec_headings(spec)
+    if len(headings) != len(SECTIONS):
+        problems.append(f"18章§3の表から{len(headings)}行しか読めません(期待{len(SECTIONS)})")
+    for sec_id, slug, title in headings:
+        if not title:
+            continue
+        row = f"{{id:'{sec_id}',slug:'{slug}',title:'{title}'"
+        if row not in html.replace("\n", ""):
+            problems.append(
+                f"{sec_id} の見出しが18章§3の「{title}」と逐語一致しません"
+                f"(登録表の title。18章§4.2)")
+
+    disc = parse_disclaimer(spec)
+    if len(disc) != 4:
+        problems.append(f"18章§3.5の免責が4行読めません({len(disc)}行)")
+    for line in disc:
+        # 4行目は {meta.xxx} を含むテンプレなので、プレースホルダで割った
+        # リテラル片をすべて照合する。
+        for frag in [f for f in re.split(r"\{[^}]+\}", line) if f.strip()]:
+            if _literal_missing(html, frag):
+                problems.append(
+                    f"18章§3.5の免責固定文が逐語で入っていません: [{frag}]"
+                    f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
+
+    for label, phrase in parse_fixed_phrases(spec):
+        for frag in [f for f in re.split(r"\{[^}]+\}", phrase) if f.strip()]:
+            if _literal_missing(html, frag):
+                problems.append(
+                    f"{label}の固定文が逐語で入っていません: [{frag}]"
+                    f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
+    return problems
+
+
+def check_data_literal(html: str) -> list[str]:
+    """18章§5.3(1) v1.1 の受入条件: DATAの文字列リテラル内に生の `<` が無いこと。
+
+    `</` だけを逃がす旧規約では、LLM出力の1フィールドに `<!--<script>`
+    (`-->` を伴わない形)が入るとHTMLトークナイザが script data double escaped
+    状態へ入り、DATAブロックの正規の `</script>` が終端として働かず、ページが
+    1セクションも描かれない真っ白な状態になる。`<` が1文字も無ければ
+    `</script>` も `<!--` も `<script` も構造上現れない。
+    """
+    problems = []
+    pre = 'var DATA=JSON.parse("'
+    a = html.find(pre)
+    if a < 0:
+        return ["DATAが `var DATA=JSON.parse(\"...\")` の形で埋まっていません(18章§5.3(1))"]
+    a += len(pre)
+    b = html.find('");', a)
+    if b < 0:
+        return ["DATAの文字列リテラルが閉じていません(18章§5.3(1))"]
+    lit = html[a:b]
+    bad = lit.find("<")
+    if bad >= 0:
+        problems.append(
+            f"DATAの文字列リテラル内に生の `<` があります(位置{bad}・周辺=[{lit[max(0, bad - 20):bad + 30]}])。"
+            f"18章§5.3(1) v1.1 は「すべての `<` を \\u003C へ」を要求します")
+    # 文書全体としても <script> の対が2組ちょうどであること(トークナイザが
+    # 迷わない=白紙化しないことの構造的な裏取り)。
+    n_open = len(re.findall(r"<script>", html))
+    n_close = len(re.findall(r"</script>", html))
+    if (n_open, n_close) != (2, 2):
+        problems.append(
+            f"<script>ブロックが2組ではありません(開き{n_open}/閉じ{n_close}。"
+            f"DATAブロックとランタイムブロックの2本が18章§5.3(1)・§4.1の想定)")
     return problems
 
 
@@ -422,6 +628,8 @@ def main() -> int:
         print(f"[render_report] 生成: {out_path} ({len(html)}字)")
 
         problems = check_source(html)
+        problems += check_data_literal(html)
+        problems += check_spec18_literals(html)
         problems += check_dom(out_path, args.verbose, args.faithful)
         if problems:
             print("[render_report] NG:")
