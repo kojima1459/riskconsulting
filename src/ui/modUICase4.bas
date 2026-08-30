@@ -94,7 +94,16 @@ Public Sub FeedbackSave()
     PutIfEmpty ws, hdr, rowNo, "recorded_by", OwnerName()
     PutAlways ws, hdr, rowNo, "recorded_at", modUtil.NowStamp()
 
-    modLog.LogUsage "feedback_saved", modUISheet.ReadNamed("hm_case_id"), "row=" & CStr(rowNo)
+    ' 13章§2.1・14章§6(裁定書9 B16(b)): フィードバック保存の**成功分岐**が
+    ' case_status の feedback_done を立てる唯一の点。案件IDが取れないときは
+    ' 状態を動かさない(記録そのものは成功として扱う。16章 E-48)。
+    Dim caseId As String
+    caseId = modUISheet.ReadNamed("hm_case_id")
+    If modCaseStore.IsValidCaseId(caseId) Then
+        modCaseStore.SetStatus caseId, "feedback_done"
+    End If
+
+    modLog.LogUsage "feedback_saved", caseId, "row=" & CStr(rowNo)
     Notice "商談の記録を保存しました。"
 
 Done:
@@ -171,16 +180,19 @@ Public Sub JudgeSave()
     rec.post_loss = ColText(ws, hdr, rowNo, "post_loss")
     rec.recorded_by = OwnerName()
 
-    ' 下書き行を消してから起票する(NewJudgement が新しい行を積むため)。
-    ws.Rows(rowNo).Delete
-
+    ' 裁定書9 B3: **起票が成功したときだけ**下書き行を消す。NewJudgement は必須列の
+    ' 欠落・enum外・PII検知など7通りで空を返し、VBAの行削除は Undo できないため、
+    ' 先に消すと利用者の入力が復元不能のまま失われる(13章§4「判断台帳は削除しない」)。
     Dim judgeId As String
     judgeId = modJudgeStore.NewJudgement(rec)
     If LenB(judgeId) = 0 Then
         Notice "起票できませんでした。種目・状況・判断・決め手が埋まっているか、" & _
-               "個人情報が含まれていないかをご確認ください（下書き行は削除済みです）。"
+               "個人情報が含まれていないかをご確認ください（下書き行はそのまま残しています）。"
         GoTo Done
     End If
+
+    ' 起票済みの行が2本にならないよう、成功を確かめてから下書き行を消す。
+    ws.Rows(rowNo).Delete
 
     Notice "判断台帳へ起票しました: " & judgeId
 

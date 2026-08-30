@@ -22,6 +22,17 @@ Option Explicit
 ' ============================================================================
 
 Private Const U2_SRC As String = "modUICase2"
+Private Const U2_WARN As String = "hm_warning"    ' 13章§2.10 HOMEの警告欄
+Private Const U2_MSG_MISMATCH As String = "画面の案件と保存先が一致しません。再描画してください"
+
+' 画面制御用のモジュール変数(裁定書9 B6。永続でない**描画状態のフラグ**であり、
+' 14章§6の「状態保持の例外」への登録は要らない)。
+'   gDrawStep    = いま DrawStep が描いている Step 番号(DrawArrBlock への文脈)
+'   gTruncStep() = 直近の描画で部屋あふれ(切捨て)が起きた Step
+'   gTruncNote   = 切捨ての内訳(利用者向け文言の材料)
+Private gDrawStep As Long
+Private gTruncStep(1 To 4) As Boolean
+Private gTruncNote As String
 Private Const U2_MAX_ROOM As Long = 200        ' 最終ブロックの部屋の上限
 Private Const U2_HDR_WIDTH As Long = 24        ' 見出し行の探索幅(列番号ではない)
 Private Const U2_FIRST_COL As Long = 1         ' ブロックの左端列(build/sheets_main.json)
@@ -180,6 +191,24 @@ Public Function SaveEditedStep(ByVal caseId As String, ByVal stepNo As Long, _
         Exit Function
     End If
 
+    ' 裁定書9 B1: 画面が別案件の内容のまま sN_edited を確定させない。読取専用の
+    ' 案件ID表示セル(13章§2.12 sN_case_id)と引数が一致しなければ1セルも保存しない。
+    ' 呼び出し側で二重に文言を出さないよう errText は空のままにし、画面へ直接出す。
+    If Trim$(modUISheet.ReadNamed(CaseIdCellOf(stepNo))) <> caseId Then
+        modUISheet.WriteNamed U2_WARN, U2_MSG_MISMATCH
+        modLog.LogError "E0302", U2_SRC & ".SaveEditedStep", _
+                        "case_id_mismatch:s" & CStr(stepNo)
+        Exit Function
+    End If
+
+    ' 裁定書9 B6: 部屋あふれで表示しきれていない行があるあいだは保存しない
+    ' (切り詰められた画面が参照優先の最上位に居座るのを防ぐ)。
+    If gTruncStep(stepNo) Then
+        modUISheet.WriteNamed U2_WARN, "表示しきれていない行があるため、Step" & _
+            CStr(stepNo) & " の編集は保存しませんでした（" & gTruncNote & "）。"
+        Exit Function
+    End If
+
     Dim jsonText As String
     jsonText = SerializeStep(stepNo)
     If LenB(jsonText) = 0 Then
@@ -200,6 +229,17 @@ Public Function SaveEditedStep(ByVal caseId As String, ByVal stepNo As Long, _
     End If
 
     modLog.LogUsage "sheet_edited_saved", caseId, "step=s" & CStr(stepNo)
+
+    ' 裁定書9 B14(16章NFR-S7 設計原則(2)): 一次のfail-closed(注入テキスト照合)を
+    ' 残したまま、ナレッジブック本体との**二次照合**を後段で行う。不一致は保存を
+    ' ブロックせず hm_warning へ出す(注入の切詰めやKB更新でも差分は生じうるため)。
+    Dim unknownIds As String
+    unknownIds = UnknownKbIds(stepNo, jsonText)
+    If LenB(unknownIds) > 0 Then
+        modUISheet.WriteNamed U2_WARN, "ナレッジブックに見当たらないIDがあります（" & _
+            modUtil.SafeLeft(unknownIds, 200) & "）。内容をご確認ください。"
+    End If
+
     SaveEditedStep = True
     Exit Function
 
@@ -245,6 +285,114 @@ Private Function ValidateEdited(ByVal caseId As String, ByVal stepNo As Long, _
     End Select
 End Function
 
+' 二次照合(裁定書9 B14)。JSONに現れるナレッジIDのうち modKnowledge 本体に実在
+'   しないものを ";" 区切りで返す(全て実在なら "")。走査表は
+'   `配列キー|要素内のキー(空=要素そのものがID)|種別` の vbLf 区切り。
+Private Function UnknownKbIds(ByVal stepNo As Long, ByVal jsonText As String) As String
+    On Error GoTo Skip1
+
+    Dim spec As String
+    If stepNo = 2 Then
+        spec = "risks>preventions|related_menu_id|m"
+    ElseIf stepNo = 3 Then
+        spec = "stories|menu_ids|m" & vbLf & "stories|line_ids|l" & vbLf & _
+               "stories|scheme_id|s" & vbLf & "stories|similar_case_id|c"
+    Else
+        Exit Function
+    End If
+
+    Dim buf() As String
+    Dim cnt As Long
+    modUtil.BufInit buf, cnt
+
+    Dim rows1() As String
+    rows1 = Split(spec, vbLf)
+    Dim i As Long
+    For i = LBound(rows1) To UBound(rows1)
+        ScanIds jsonText, rows1(i), buf, cnt
+    Next i
+
+    UnknownKbIds = Replace(modUtil.BufText(buf, cnt), vbLf, ";")
+    Exit Function
+Skip1:
+    UnknownKbIds = vbNullString
+End Function
+
+' 走査表1行ぶん。外側配列(">"で入れ子を1段)の各要素からIDを取り出して照合する。
+Private Sub ScanIds(ByVal jsonText As String, ByVal rowText As String, _
+                    ByRef buf() As String, ByRef cnt As Long)
+    Dim flds() As String
+    flds = Split(rowText, "|")
+    If UBound(flds) - LBound(flds) <> 2 Then Exit Sub
+
+    Dim outerKey As String
+    Dim innerKey As String
+    Dim keyName As String
+    Dim kindText As String
+    outerKey = flds(LBound(flds))
+    keyName = flds(LBound(flds) + 1)
+    kindText = flds(LBound(flds) + 2)
+
+    Dim p As Long
+    p = InStr(1, outerKey, ">", vbBinaryCompare)
+    If p > 0 Then
+        innerKey = Mid$(outerKey, p + 1)
+        outerKey = Left$(outerKey, p - 1)
+    End If
+
+    Dim outer1 As Collection
+    Set outer1 = modJsonLite.GetArrayItems(jsonText, outerKey)
+
+    Dim i As Long
+    For i = 1 To outer1.count
+        If LenB(innerKey) > 0 Then
+            Dim inner1 As Collection
+            Dim j As Long
+            Set inner1 = modJsonLite.GetArrayItems(CStr(outer1(i)), innerKey)
+            For j = 1 To inner1.count
+                AddIfMissing modJsonLite.GetStr(CStr(inner1(j)), keyName), kindText, buf, cnt
+            Next j
+        Else
+            Dim ids As Collection
+            Dim k As Long
+            Set ids = modJsonLite.GetArrayItems(CStr(outer1(i)), keyName)
+            If ids.count > 0 Then
+                For k = 1 To ids.count
+                    AddIfMissing CStr(ids(k)), kindText, buf, cnt
+                Next k
+            Else
+                AddIfMissing modJsonLite.GetStr(CStr(outer1(i)), keyName), kindText, buf, cnt
+            End If
+        End If
+    Next i
+End Sub
+
+' 種別ごとの実在検査(14章§6 modKnowledge の5本のうち画面に現れる4本)。
+Private Sub AddIfMissing(ByVal idText As String, ByVal kindText As String, _
+                         ByRef buf() As String, ByRef cnt As Long)
+    Dim id1 As String
+    id1 = Trim$(idText)
+    If LenB(id1) = 0 Then Exit Sub
+
+    Dim okId As Boolean
+    Select Case kindText
+    Case "m"
+        okId = modKnowledge.MenuIdExists(id1)
+    Case "l"
+        okId = modKnowledge.LineIdExists(id1)
+    Case "s"
+        okId = modKnowledge.SchemeIdExists(id1)
+    Case Else
+        okId = modKnowledge.CaseLibIdExists(id1)
+    End Select
+    If Not okId Then modUtil.BufAdd buf, cnt, id1
+End Sub
+
+' 13章§2.12: S1～S4の読取専用の案件ID表示セル(名前付きレンジ)。
+Private Function CaseIdCellOf(ByVal stepNo As Long) As String
+    CaseIdCellOf = "s" & CStr(stepNo) & "_case_id"
+End Function
+
 ' ============================================================================
 ' DrawStep - JSON -> シート(参照優先の解決は modCaseStore.ResolveStepJson)
 ' ============================================================================
@@ -262,6 +410,12 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolea
     If Not modCaseRead.ReadCaseCtx(caseId, ctx, roundNo, qualityMode, s4Variant, tierText) Then
         Exit Function
     End If
+
+    ' 裁定書9 B1/B6: この描画で「どの案件を」「切り詰めずに」描けたかを記録する。
+    gDrawStep = stepNo
+    gTruncStep(stepNo) = False
+    gTruncNote = vbNullString
+    modUISheet.WriteNamed CaseIdCellOf(stepNo), caseId
 
     Dim jsonText As String
     jsonText = modCaseStore.ResolveStepJson(caseId, stepNo)
@@ -529,7 +683,23 @@ Private Sub DrawArrBlock(ByVal anchorName As String, ByVal colSpec As String, _
     If items.count > room Then
         modLog.LogError "E0604", U2_SRC & ".DrawArrBlock", _
                         anchorName & ":rows=" & CStr(items.count) & ";room=" & CStr(room)
+        NoteTruncation anchorName, items.count, room
     End If
+End Sub
+
+' 裁定書9 B6: 部屋あふれを画面へ出し、当該Stepの保存をブロックする印を立てる。
+Private Sub NoteTruncation(ByVal anchorName As String, ByVal total1 As Long, ByVal room As Long)
+    On Error Resume Next
+
+    If gDrawStep >= 1 And gDrawStep <= 4 Then gTruncStep(gDrawStep) = True
+
+    Dim one As String
+    one = anchorName & ": " & CStr(total1) & "件のうち" & CStr(room) & "件しか表示できていません"
+    If LenB(gTruncNote) > 0 Then gTruncNote = gTruncNote & " ／ "
+    gTruncNote = gTruncNote & one
+
+    modUISheet.WriteNamed U2_WARN, gTruncNote & _
+        "。編集を保存すると残りが失われるため、この画面の保存は行いません。"
 End Sub
 
 ' 文字列配列ブロックへ書く。

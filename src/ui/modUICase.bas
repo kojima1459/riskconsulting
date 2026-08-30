@@ -145,7 +145,7 @@ Public Function EnumPairsCsv() As String
     s = s & "input_quality_status,ok,十分" & vbLf
     s = s & "input_quality_status,partial,断片的" & vbLf
     s = s & "input_quality_status,missing,無い" & vbLf
-    s = s & "input_quality_overall,high,充足度 高" & vbLf
+    s = s & "input_quality_overall,high,高" & vbLf
     s = s & "input_quality_overall,mid,中" & vbLf
     s = s & "input_quality_overall,low,低" & vbLf
     s = s & "field_insight_tag,risk_clue,リスクの手がかり" & vbLf

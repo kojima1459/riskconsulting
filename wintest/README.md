@@ -101,16 +101,20 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -Target pro
 ⑤(modTestsPure の本数条件)はここで確認する**。5項目のうち1つでも落ちたら
 出荷しない。
 
-## 既知の制約(W0時点)
+## 既知の制約(W4.1時点)
 
-- **自己インストーラが未移植**: `build/build_rpn.py` は `vba_src` シートまでは
-  作るが、`vbaProject.bin` の外科パッチ(ThisWorkbookストリームへの自己
-  インストーラ注入)は行っていない。移植元の `build/template_skeleton.xlsm` と
-  `build/ovba.py` が引き継ぎ資産に含まれていないためである。
-  この2つが用意されるまで、**手順2以降は実機で動かない**(ブックを開いても
-  モジュールが注入されない)。司令塔への確認事項として報告済み。
-  暫定手順としては、VBEで `src/**/*.bas` を手動インポートしてから
-  `run_excel_tests.ps1` を回せば層(a)の実機確認はできる。
+- **自己インストーラは移植済み**: `build/template_skeleton.xlsm` と `build/ovba.py` は
+  リポジトリに実在し、`build/build_rpn.py` が Stage 4 で `vbaProject.bin` の外科パッチ
+  (ThisWorkbookストリームへの自己インストーラ注入)を当て、注入結果を自己検証している。
+  W0時点の「手順2以降は実機で動かない」「VBEで手動インポートする暫定手順」は**解消済み**であり、
+  上の[実行]のコマンドをそのまま流せる。
+- **層(b)の実体が未実装**: `modTestsExcel`(17章 T-47)がまだ無いため、`run_excel_tests.ps1` に
+  `-ExcelLayerEntry` を渡さない実行はログに
+  「層(b)未指定: -ExcelLayerEntry を渡していないため modTestsExcel は実行していません(T-47)」
+  の1行を出す。**この行が出た実行は T-46(4) を満たしていない**(合格扱いにしない)。
+  現時点で実機確認できるのは層(a)(`modTestsPure`)の分だけである。
+- **Linux側の検問はまとめて回すのが標準**: `python3 tools/gate.py`(全14ゲート一括)。
+  個別ツールの直接実行はデバッグ時のみ(17章§5-1)。
 
 ## セキュリティ上の注意
 

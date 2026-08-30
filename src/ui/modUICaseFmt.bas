@@ -448,9 +448,16 @@ Private Function PathArrCell(ByVal jsonText As String, ByVal pathText As String)
     Dim i As Long
     For i = 1 To items.count
         If LenB(acc) > 0 Then acc = acc & UF_SEP
-        acc = acc & CStr(items(i))
+        acc = acc & SepSafe(CStr(items(i)))
     Next i
     PathArrCell = acc
+End Function
+
+' 13章§2.2(裁定書9 B5): 要素本文に含まれる「;」を全角「，」へ置換する。
+'   **要素1本ごとに、連結する前に**通す(連結後にまとめて置換すると区切りの
+'   「; 」まで潰れる)。復元はしない(非可逆。各列の header_note に常設注記)。
+Private Function SepSafe(ByVal one As String) As String
+    SepSafe = Replace(one, ";", ChrW(&HFF0C&))
 End Function
 
 ' preventions -> `measure(M-0012); measure2` (13章§2.2)。
@@ -468,7 +475,7 @@ Private Function PrevCell(ByVal itemJson As String) As String
         If LenB(menuId) > 0 Then one = one & "(" & menuId & ")"
         If LenB(one) > 0 Then
             If LenB(acc) > 0 Then acc = acc & UF_SEP
-            acc = acc & one
+            acc = acc & SepSafe(one)
         End If
     Next i
     PrevCell = acc

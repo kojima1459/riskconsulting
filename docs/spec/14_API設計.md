@@ -1,8 +1,10 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5
 
-> v2.4.8（裁定書9-1/9-2: W2c検証 MAJOR の解消）: 規約が実行制御・シートI/Oの中に閉じ込められていた2点を**純核として宣言**した。(1) **`modInboxStore.InterestSummaryOf(themeLines)`** — 10章FR-17 の関心度集計（件数集計・件数降順・**2件以上集まったテーマだけ**・上限は既定3件）の唯一の値源。シートI/Oの `InterestText` は theme 列を1件1行で集めて渡すだけになり、上限件数を引数で受けなくなったので **`InterestText()` は引数なし**へ改めた（`maxItems` の呼び出し実績は無い）。(2) **`modPipeline2.AdoptRevisionOf(outcome, originalJson, revisedJson)`** — 16章E-36 の「改訂を破棄して改訂前を採用」の唯一の選択点。`RunPipe` の確定JSON選択と `sNr_json` の保存可否はこの戻り値を経由し、不合格の改訂版が `sNr_json` へ入る経路を構造として持たない。あわせて §6 が「Private へ戻すことは契約違反」と書く純核（`modPipeline2` 8本 ＋ `modInboxStore` / `modPlayOps` / `modJudgeStore` の宣言済み純核）を `vba_lint.py` の CONTRACT `required` へ同期した（裁定書9-3）。
+> v2.5（裁定書9: W4.1 最終修正ウェーブ）: §6へ新設3本を宣言した。**`modPipeline2.LastDeepOutcome`**（N1。E-35/E-36 の警告を ui層へ渡す唯一の口）・**`modCaseStore.PromoteTier`**（N2。案件一覧 `dossier_tier` の唯一の書込口。v2.4.7 が「本節の裁定事項」と書いた未解決(a)の解消）・**`modExportHearing.AnswerMemoCount`**（N8。手書き回答の上書き確認の要否判定）。あわせて `modCompanyFile2.DossierSaveAndClose` を Boolean へ改め（N3）、`SetStatus` が遷移検査を通さない設計を明記し、`exported` / `feedback_done` の結線先・`AppendServiceGap` の呼出点・`MenuIdExists` 系5本の二次照合の呼出点・企業ドシエのファイル名8桁を company 由来とする例外（13章§2.8）を注記した。**本裁定で許可した新設名は N1～N8 の8件のみ**であり、これ以外の公開関数・名前付きレンジを新設しない。
 
-> v2.4.7（裁定書8 B-9: T-27 実装時の命名）: §6へ **`modSparring`**（PL-04 壁打ち）の節を新設し、実行制御4本（`ResumeSparring` / `SendSparring` / `SendToInbox` / `HistoryOf`）と純核3本（`CanContinueSparring` / `TrimHistoryOf` / `HistoryJoinOf`）を宣言した。あわせて `sparring_u` / `sparring_a`（13章§2.2）の**保存形式**（1発話＝1行 `seq <TAB> spoke_at <TAB> 本文`）を本節で確定した——§2.2 の列定義（`seq`＝32,000字の分割連番）と data_key 注記（「発話単位seqで保存」）の食い違いを、`SaveData` の契約（data_key 単位で全行を置換）を変えずに吸収するためである。**未解決2件**を本文中に明記した: (a) 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への**自動昇格の書込口**が本節に無い（`ResumeSparring` は昇格せず usage_log に事実を残す）、(b) 15章§6.5 の `{{schemes}}` は「全status」だが `modKnowledge.SchemesFor` は S3用の proven/adopted 絞込しか持たない（狭い側で注入し run_log へ事実を残す）。
+> v2.4.8（裁定書9-1/9-2: W2c検証 MAJOR の解消）: 規約が実行制御・シートI/Oの中に閉じ込められていた2点を**純核として宣言**した。(1) **`modInboxStore.InterestSummaryOf(themeLines)`** - 10章FR-17 の関心度集計（件数集計・件数降順・**2件以上集まったテーマだけ**・上限は既定3件）の唯一の値源。シートI/Oの `InterestText` は theme 列を1件1行で集めて渡すだけになり、上限件数を引数で受けなくなったので **`InterestText()` は引数なし**へ改めた（`maxItems` の呼び出し実績は無い）。(2) **`modPipeline2.AdoptRevisionOf(outcome, originalJson, revisedJson)`** - 16章E-36 の「改訂を破棄して改訂前を採用」の唯一の選択点。`RunPipe` の確定JSON選択と `sNr_json` の保存可否はこの戻り値を経由し、不合格の改訂版が `sNr_json` へ入る経路を構造として持たない。あわせて §6 が「Private へ戻すことは契約違反」と書く純核（`modPipeline2` 8本 ＋ `modInboxStore` / `modPlayOps` / `modJudgeStore` の宣言済み純核）を `vba_lint.py` の CONTRACT `required` へ同期した（裁定書9-3）。
+
+> v2.4.7（裁定書8 B-9: T-27 実装時の命名）: §6へ **`modSparring`**（PL-04 壁打ち）の節を新設し、実行制御4本（`ResumeSparring` / `SendSparring` / `SendToInbox` / `HistoryOf`）と純核3本（`CanContinueSparring` / `TrimHistoryOf` / `HistoryJoinOf`）を宣言した。あわせて `sparring_u` / `sparring_a`（13章§2.2）の**保存形式**（1発話＝1行 `seq <TAB> spoke_at <TAB> 本文`）を本節で確定した--§2.2 の列定義（`seq`＝32,000字の分割連番）と data_key 注記（「発話単位seqで保存」）の食い違いを、`SaveData` の契約（data_key 単位で全行を置換）を変えずに吸収するためである。**未解決2件**を本文中に明記した: (a) 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への**自動昇格の書込口**が本節に無い（`ResumeSparring` は昇格せず usage_log に事実を残す）、(b) 15章§6.5 の `{{schemes}}` は「全status」だが `modKnowledge.SchemesFor` は S3用の proven/adopted 絞込しか持たない（狭い側で注入し run_log へ事実を残す）。
 >
 > v2.4.6（裁定書8 B-8: T-26 実装時の命名）: 裁定書8が予約していた **`modJudgeStore.NewJudgement`**（`TJudgement`受取・`judge_id`返却）に加え、読取口 **`ReadJudgement`**・事後結果の更新口 **`SetJudgementResult`**・純ロジック4本（`BuildJudgeId` / `IsValidJudgeId` / `IsValidDecision` / `IsValidJudgeResult`）を宣言した。あわせて `modAppTypes` へ判断台帳9列（`judge_id`/`judged_at`を除く）の入れ物 **`TJudgement`** を新設した。判断台帳は13章§4のとおり削除しないため、本モジュールに Delete 相当の公開関数は無い。
 >
@@ -93,7 +95,7 @@ Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログ�
 - リトライ: 429/500/502/503=指数バックオフ最大3回（2s/4s/8s）。408/タイムアウト=1回。その他4xx=リトライなし
 - o系モデル名（先頭"o"）では temperature を送らない。temperature / max_tokens はリテラルで書かず必ず config から読む（NFR-M3。ribbon経路の§2と同じ値源）
 - キー不存在=E0205「direct経路は開発者専用です」
-- コスト目安: 1案件=4呼び出し・入力≈25k tok・出力≈8k tok → 数十円/案件。PoC全体で数千円以内
+- コスト目安: 1案件=4呼び出し・入力 約25k tok・出力 約8k tok → 数十円/案件。PoC全体で数千円以内
 - **コスト前提（発注者確認 2026-08-28）: API利用コストは設計制約としない**。トークン節約のための品質妥協（入力の間引き・批判パスの省略・リトライ回数の切詰め）は行わない。有報級の長文（5万字≒25k tok強）を1呼び出しに載せる設計も可。usage ログ（modLog）は引き続き全呼び出しで記録する（コスト管理でなく挙動監視のため）
 - **長文入力の根拠（2026-08-28実機検証済み）**: リボン側ラッパーは機能制限なし・Azure OpenAI応答素通し（PoC台帳 RIBBON_API_CONFIRMED.md）。上限はモデルのコンテキスト長のみ。**実機テスト合格**: 三菱電機・有報「事業等のリスク」章全文を1呼び出しで構造化、最終項目まで完走・切り捨てなし。Wait（config `llm_wait_sec`）と MaxTokens（config `llm_max_tokens`・Step別上書き可）は長文時に引数で拡張する前提で設計する
 - **長文出力の既知欠陥（尾部劣化）**: 上記テストで**末尾項目の重複出力＋重複側への他項目引用の誤混入**を観測。**16章 E-49 として登録済み**。対応の実体は§5防衛線の(2.5)＝`modValidate.NormalizeLlmJson(stepName, json, removedCount)` であり、**全step・両経路で必須**（S1だけの対策にしない）。配列要素を `modUtilText.NormalizeForHash` 正規化後の fnv1a64 で重複排除し（PoC modPack の fnv 重複排除を転用。docs/08 実機確認1参照）、除去件数を run_log の detail に記録して E0303（重複除去実施・警告）を残す。黙って畳んで済ませない
@@ -372,6 +374,10 @@ Public Function CheckS3CCore(ByVal json As String) As String
 ' 整形（1行の書式・0行の既定文言・空項目の省略）そのものは **modKnowledgeFmt** の純関数が
 ' 行い、本モジュールは「読む・絞る・注入IDを積む」だけを担う（12章§2）。
 Public Function LoadKnowledge() As Boolean            ' 起動時/再読込。スナップショット保存込み
+' **退避を空で上書きしない**（裁定書9 B11）: ナレッジブックの読取（`ReadKbSheets`）が
+'   データ行のあるシートを**1枚も返さなかったときはスナップショットに触らない**（`SaveSnapshot`
+'   を呼ばず E0401 を記録して False を返す）。0行読込で前回の正常な退避を消すと、次に接続
+'   できない起動で16章 E-08 の退路（`RestoreSnapshot`）が失われる
 Public Function RiskLibFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
 ' 整形済注入テキスト（S2用。書式の正は15章§3）
 Public Function MenusSummaryFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
@@ -399,7 +405,23 @@ Public Function LineIdExists(ByVal id As String) As Boolean
 Public Function SchemeIdExists(ByVal id As String) As Boolean
 Public Function CaseLibIdExists(ByVal id As String) As Boolean
 Public Function PatternIdExists(ByVal id As String) As Boolean
+' **二次照合の呼出点**（裁定書9 B14。16章NFR-S7 設計原則(2)「取得側でも再チェック」）: 上の5本は
+'   `modUICase2.ValidateEdited` の**後段**で、確定しようとしているJSONに現れるIDをナレッジブック
+'   本体と突き合わせるために呼ぶ。一次防御（`modValidate` の注入テキスト照合＝ListGiven の
+'   fail-closed）は**そのまま残す**。二次側の不一致は保存をブロックせず `hm_warning` へ出す
+'   （一次が通った以上そのIDは提示済み候補であり、差分は注入の切詰め〈15章§0.7〉や
+'   ナレッジブック側の更新で生じうるため。宣言だけして呼ばない状態を残さない）
 Public Sub AppendServiceGap(ByVal caseId As String, ByVal industryCode As String, ByVal riskDesc As String)
+' 10章 FR-13（Must）・12章§2.1 手順6・13章§3.9 の「該当メニュー・型なし＝新サービス候補として
+'   自動記録」の実体。**呼出点は `modPipeline.ExecStep` の stepNo=3 成功直後**に固定する
+'   （裁定書9 B10）。確定した `s3_json` の `unmatched_risks` を1件ずつ回し、
+'   `AppendServiceGap caseId, ctx.industry_code, risk_name & " / " & why_unmatched` を呼ぶ。
+'   11章のS3ワイヤーが「新サービス候補として記録済み」と表示する以上、宣言だけして
+'   1行も書かない状態を残さない。書込失敗時の退避キューの扱いは下の注記による
+' **退避キューを空で消さない**（裁定書9 B19。16章 E-13）: ナレッジブックへの書き戻しは
+'   列名一致で1行ずつ書き、**書けた件数を数える**。0件しか書けなかったときは退避キューの
+'   `Cells.Clear` を実行しない（見出し不在・列名変更で1件も書けていないのにキューだけ
+'   空になる経路を残さない）
 
 ' === app: modKnowledgeFmt（ナレッジ整形の純関数。Excel非依存＝層(a)から直接叩ける） ===
 ' modKnowledge から「整形」だけを切り出したモジュール（12章§2）。シート・config・ログに
@@ -677,6 +699,15 @@ Public Function DeepRouteOf(ByVal cfgDeepTransport As String) As String
 ' config `deep_transport`（13章§2.3）の解決。`direct` のときだけ "direct"、他は ""。
 '   **経路の切替そのものは未結線**（本節の `CallStep` に呼び出し単位で経路を上書きする
 '   口が無い）。RunDeep は指定がある間その事実を usage_log に残す（黙って無視しない）
+Public Function LastDeepOutcome() As String
+' 直近の `RunStep` が回した入念パイプの結末（裁定書9 N1・B9）。値は `DeepOutcomeOf` の4値の
+'   うち**警告を伴う2値**（`critique_skipped` / `revision_discarded`）と、警告が要らない場合の
+'   `""` の3通り。**`RunStep` の開始時に必ず "" へリセットする**（前回の結果が次の実行へ持ち越さ
+'   ない）。ui層（`modUIHome.RunStepUi` / `RunAllUi`）は成功分岐でこの値を読み、非空なら
+'   `DeepWarningOf` の文言を `hm_warning` へ出す（16章 E-35/E-36 の逐語表示の唯一の経路）。
+'   **`ShowWarning vbNullString` によるクリアより後で書く**（冒頭のクリアに消されない順序）。
+'   モジュール変数による状態保持は本関数を**例外として許可する**（`broken_json_once` に次ぐ
+'   2例目。理由: `RunStep` の Boolean 戻り値の契約を変えずに E-35/E-36 を ui へ渡す口が他に無い）
 
 ' === app: modSparring（PL-04 壁打ち。T-27。裁定書8 B-9）===
 ' 自由対話（スキーマなし）。呼び出しは `CallChat` の1本だけで、成否は `ByRef ok`
@@ -689,10 +720,12 @@ Public Function ResumeSparring(ByVal caseId As String, ByRef contextNote As Stri
 '   （0＝履歴なし＝新規開始）。**-1＝案件一覧を読めない**（呼び出し側は fail-closed で
 '   開始させない）。contextNote＝13章§2.17 `sp_context_note` の表示文字列
 '   （例「ドシエ+S1-S3+型/機構 注入済」）。
-'   **未解決**: 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への自動昇格は
-'   案件一覧への**書込**だが、本節に tier の書込口が無い（`SetStatus` / `SetStepOutcome`
-'   はどちらも別列）。本関数は昇格を行わず usage_log に事実を残す（黙って昇格したことに
-'   しない）。書込口の追加は本節の裁定事項。
+'   **解消（裁定書9 A-1）**: 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への
+'   自動昇格は **`modCaseStore.PromoteTier`**（N2）を唯一の書込口として実行する。本関数は
+'   履歴の解決に先立って `PromoteTier caseId, "t3_sparring"` を呼び、戻り値 False（enum不合格
+'   ・行不在）のときは昇格せずに usage_log へ事実を残して続行する（昇格の失敗で壁打ちの
+'   開始そのものを止めない）。usage_log は「昇格しなかった事実」ではなく**昇格の実行**の記録
+'   へ変わる（従来の `sparring_tier_not_promoted` は残さない）。
 Public Function SendSparring(ByVal caseId As String, ByVal utterance As String, _
                              ByRef replyText As String, ByRef errCode As String) As Boolean
 ' 発話1本の送信（15章§6.5）。True＝応答を受け取り、発話と応答を case_data へ保存できた。
@@ -773,6 +806,11 @@ Public Function MaskText(ByVal sText As String) As String
 Public Function CompanyFilePath(ByVal company As String, ByVal caseId As String, _
                                 ByVal dirPath As String) As String
 ' 13章§2.8のファイル名規則で決まる絶対パス（生の company を使わず SanitizeFileName 系を通す）
+' **8桁は company 由来**（裁定書9 B7。13章§2.8 手順4の但し書き）: 企業ドシエファイルに限り
+'   `Left$(Fnv1a64Hex(NormalizeForHash(company)), 8)` を使う（`ExportCompanyFile` が
+'   `dossier_meta.company_id` を作るのと同じ式＝値源は1つ）。case_id 由来では同じ会社の2件目の
+'   案件が必ず別ファイルになり、FR-45「1社1ファイル・追記して育てる」が成立しないため。
+'   HTMLレポート・PPTは従来どおり case_id 由来のままとする（1案件1出力であり衝突回避が目的）
 Public Function ScanCaseForPii(ByVal caseId As String) As String
 ' 書き出す予定の中身をまとめて modPii へ通す（16章E-05(7)）。""=検知なし
 Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As String, _
@@ -781,21 +819,56 @@ Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As Strin
 '   company / industry_code / dossier_tier / round_no は modCaseRead.ReadCaseCtx で読む
 '   （読めなければ書き出さない）。confirmedAt=PII検知に対し利用者が「確認した」を選んだ日時。
 '   検知があるのに confirmedAt が空なら**書き出さない**（16章E-05(7)）
+'   **保存の失敗を成功として返さない**（裁定書9 B8・N3）: 下位の `modCompanyFile2.DossierSaveAndClose`
+'   は **`Public Function ... As Boolean`** へ改め、`SaveAs` の失敗を呼び出し側へ返す（共有フォルダの
+'   読取専用・他者ロック・パス長超過で現実に起きる）。False のときは `VerifyRoundTrip` へ進まず
+'   **`ExportCompanyFile = ""`** を返し、ui層は「保存できませんでした」を表示する。
+'   `VerifyRoundTrip` は**対象ブックが閉じていることを確認してから**開き直す（同一プロセスで
+'   開いたままのブックを読むと、ディスクではなくメモリ上の未保存内容と突合して合格してしまう）
 Public Function ImportCompanyFile(ByVal filePath As String, ByVal caseId As String) As Boolean
 ' 最新ラウンドの s1/s2 と notes を案件へ復元（HOMEの[開く]）。**その枠が空のときだけ書く**
 ' `modCompanyFile2` は 30,000字契約による分割先（ブック・シートの下位I/O 14本）。
 '   **本節の公開契約面には載せない**（modCompanyFile の下位実装であり、呼んでよいのは
-'   modCompanyFile だけ。vba_lint の CONTRACT は required=[] で登録する）
+'   modCompanyFile だけ。vba_lint の CONTRACT は required=[] で登録する）。
+'   ただし **`DossierSaveAndClose` の戻り値の型だけは本節の裁定事項**であり、裁定書9 N3 で
+'   `Public Sub` から **`Public Function ... As Boolean`**（True=SaveAs とClose が成功）へ
+'   変更した。下位実装であっても「失敗を握り潰さない」ことは§6冒頭のエラー規約そのものである
 
 ' === app: modCaseStore / modInboxStore / modJudgeStore ===
 Public Function NewCase(ByVal company As String, ByVal industryCode As String, ByVal caseType As String) As String
 Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, ByVal content As String) As Boolean
+' 13章§2.2 の縦持ち保存（32,000字分割）。**2相書込**とする（裁定書9 B13）: 新しい断片を先に
+'   書き切ってから旧行を消す。途中で失敗したら旧行を1行も消していない状態で False を返す
+'   （「削除してから書く」順序を禁じる。VBAの行削除は Undo できず、途中失敗で旧内容が
+'   消えたまま短いJSONだけが残る経路を構造として持たない）。seq 帯の取り方は実装裁量だが、
+'   **途中失敗で旧データが残ること**を層(a)のテストで実証する
 Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String
+' 保存された断片を seq 昇順に連結して返す。**完全性を検査する**（裁定書9 B13）: seq 1..maxSeq が
+'   1つでも欠けていたら詰めて返さず、E0604 を記録して "" を返す（切れたJSONを正常値として
+'   返さない＝fail-closed）。当該 data_key が1行も無い場合は従来どおり "" （欠損ではない）
 Public Function ResolveStepJson(ByVal caseId As String, ByVal stepNo As Long) As String
 ' 下流Stepが参照すべきJSONを一元解決する（優先順の正は13章§2.2）。
 ' N=2,3 は sN_edited > sNr_json > sN_json、S1/S4 は sN_edited > sN_json。呼び出し側で個別に分岐しない
 Public Function SetStatus(ByVal caseId As String, ByVal status As String) As Boolean
-Public Function SetStepOutcome(ByVal caseId As String, ByVal lastOkStep As Long, _
+' 案件一覧 `status`（13章§2.1の8値）の唯一の書込口。**`CanTransition` を通さない**（裁定書9 B16(a)）。
+'   理由: 起動時の状態修復（`RepairStates` / `ApplyRepairedState`。16章 E-12）と失敗時の `error`
+'   書込は、遷移表に無い並びで書く必要がある修復系であり、ここで遷移検査を掛けると修復自身が
+'   弾かれる。本関数が課すのは enum 検査だけであり、**遷移の整合は `RepairStates` が担う**
+'   （`CanTransition` は11章§4の遷移表の宣言であり、修復の期待値を層(a)で検査するための純核）。
+'   `exported` / `feedback_done` の書込点は次の2つに固定する（裁定書9 B16(b)）:
+'     `exported`      = `modUIHome.HomeExportHtml` の**成功分岐**（HTMLレポートの生成成功時）
+'     `feedback_done` = `modUICase4.FeedbackSave` の**成功分岐**（フィードバック保存の成功時）
+'   これにより `CS_STATUSES_ABOVE_S4` の降格抑止（s4_done より上の状態から巻き戻さない）が
+'   到達可能になる。出力・記録の失敗は状態を動かさない（16章 E-48）
+Public Function PromoteTier(ByVal caseId As String, ByVal tierText As String) As Boolean
+' 案件一覧 `dossier_tier` の**唯一の書込口**（裁定書9 N2・A-1。13章§2.1/§2.17 の t3_sparring
+'   自動昇格の実体）。`tierText` は19章§3の enum（t1_quick / t2_full / t3_sparring）のみ受け付け、
+'   不一致は**1列も書かず** False（E0101 を記録）。案件行が無いときも False。
+'   **status は動かさない**（ティアは案件の属性であって状態ではない）。案件入力の画面から
+'   ui層が `ci_dossier_tier` を書く経路（13章§2.1 の属性列の書込経路）とは別に、app層から
+'   昇格する必要があるためここに置く。**方向（昇格か降格か）は本関数では判定しない**
+'   （enum に合致する値をそのまま書く）。app層からの呼び出しは `modSparring.ResumeSparring`
+'   の t3_sparring 昇格の1点だけであり、そこ以外から呼ばないByVal caseId As String, ByVal lastOkStep As Long, _
                                ByVal failedStep As String) As Boolean
 ' 16章 E-06 が要求する案件一覧の `last_ok_step` / `failed_step` の【書込口】（裁定書8 A-2で
 '   新設）。modPipeline の成功経路が (stepNo, "")、失敗経路が (-1, "sN") で呼ぶ。
@@ -812,6 +885,9 @@ Public Function SetReportPath(ByVal caseId As String, ByVal pathText As String) 
 '   （戻り値 False は「記録できなかった」であって「出力できなかった」ではない）。
 '   pathText は `modUtilText.SanitizeFileName` を通したあとの**確定フルパス**
 Public Sub InvalidateDownstream(ByVal caseId As String, ByVal fromStepNo As Long)
+' 16章 E-10 の下流無効化。**`last_ok_step` は下げる方向にしか動かさない**（裁定書9 B20）:
+'   書き込む値は `Min(keepStep, 現在の last_ok_step)` とする（`ApplyRepairedState` の冒頭で
+'   丸める）。無効化の呼び出しで案件が昇格しうる経路を残さない
 Public Function RepairStates() As Long                 ' 起動時整合修復（16章E-12・12章§2.1のmodBoot手順③）。戻り=修復件数
 Public Function FreezeRound(ByVal caseId As String) As Long
 ' ラウンド確定（FR-35マルチラウンド）。s2（edited優先で解決した1本）を data_key `s2_prev_json` へ
@@ -831,6 +907,13 @@ Public Function SetInboxJudgement(ByVal inboxId As String, ByVal status As Strin
 '   **`merged` は受け付けない**: 13章§2.6 は merged に `merged_into` を必須とするが、本
 '   シグネチャは統合先を受け取る引数を持たない。空の `merged_into` を書くと13章の必須を
 '   満たさない行ができるため fail-closed で拒否し E0101 を記録する（引数の追加は本節の裁定事項）
+'   **判定の入力口（裁定書9 B2・N5）**: ui層は `status` 列ではなく受信箱シートの入力列
+'   **`judge_to`**（13章§2.6）を読み、その値を第2引数 `status` へ渡す。`status` 列は判定の
+'   **結果**を表す列であり利用者に触らせない（列見出しの header_note に明記）。本関数の
+'   `CanInboxTransition` は「現在の `status`（diagnosed）→ `judge_to` の値」を検査するため、
+'   from と to が同一セル由来になって自己遷移で必ず False になる経路が構造として消える。
+'   成功時に ui層は `status` の書き換え結果を再描画し、**`judge_to` を空へ戻す**（判定済みの
+'   行に入力値を残さない）。本関数のシグネチャは変更しない
 Public Function SavePfResult(ByVal inboxId As String, ByVal pfJson As String, _
                              ByVal survival As String, ByVal predTypes As String) As Boolean
 ' プリフライト診断の結果を格納する（13章§2.6）。あわせて status を undiagnosed →
@@ -980,6 +1063,13 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     ' テンプレ本体は modHtmlTemplate1..n（純文字列・R4・12章§2 app層）、テーマCSSは modHtmlTheme
     ' （config `html_theme`。既定 standard）。出力先は config `html_out_dir`
     ' ファイル名は modUtilText.SanitizeFileName を通し、確定パスを案件一覧 report_path に記録する
+    ' **上書きしない**（裁定書9 B4。13章§2.8）: 名前の末尾に `_<yyyymmdd>`（`IsoDateCompact`）を
+    ' 付け、同名が既に存在する場合は `_2` `_3` と連番を探して**新規ファイルとして作る**。
+    ' 既存ファイルへ `adSaveCreateOverWrite` で書かない（利用者が手で注記を入れた前回HTMLを消さない）
+    ' **PII走査の失敗を黙らせない**（裁定書9 B17。18章§1.1(3)）: 走査は `On Error GoTo` ラベル方式で
+    ' 包み、失敗しても生成は続行するが `meta.warnings` へ「個人情報の走査に失敗しました。配布前に
+    ' 本文をご確認ください」を積む（プロシージャ冒頭の `On Error Resume Next` で3本の走査を
+    ' まとめて覆い、警告も E0103 も出ないまま合格に見える経路を残さない）
     ' **文字コード**: 書き出しは `ADODB.Stream`（Charset="utf-8"・BOMあり）。VBAの Open/Print # は
     ' CP932で書かれ非CP932文字が "?" 化するため使わない。テンプレ先頭に <meta charset="utf-8"> を必ず含める
     ' **埋め込み**: JSONは「1本のJS文字列リテラル＋JSON.parse」形式で埋め、modUtilText.JsStringSafe を
@@ -1006,6 +1096,15 @@ Public Function BuildReportHtml(ByVal metaJson As String, ByVal s1Json As String
 Public Function GeneratePpt(ByVal caseId As String, ByVal s4Json As String, _
                             ByVal variant As String, ByRef outPath As String) As String ' ""=成功。variant=proposal/alliance。Phase 1.5
 Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
+' 13章§2.16 のヒアリングシートを S4 から再生成する（LLM不使用）。**既存行を消してから書く**ため、
+'   訪問後に `answer_memo` へ書き込まれた手書き回答は失われる。VBAの書込は Undo できないので、
+'   呼び出し側（ui層）が下の `AnswerMemoCount` で事前に数え、1行以上なら確認を挟む
+Public Function AnswerMemoCount(ByVal caseId As String) As Long
+' ヒアリングシートの `answer_memo` 列の**非空行数**（裁定書9 N8・B12）。シートが無い・見出しが
+'   無い・当該案件のシートでない場合は 0（読めないことを「回答あり」と誤認しない）。
+'   `modUIHome` はこの値が 1 以上のときだけ `MsgBox`（vbYesNo）で上書き確認を出し、
+'   No なら `BuildHearingSheet` を呼ばずに中止する（16章 E-10 の下流無効化と同じ作法）。
+'   本関数は数えるだけで、シートを1セルも書き換えない
 
 ' === test: modMockLlm（本体内mockトランスポート。§4(a)・12章§2 test層） ===
 Public Function MockResponse(ByVal stepName As String, ByVal variantName As String, _
