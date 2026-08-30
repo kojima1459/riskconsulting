@@ -41,6 +41,7 @@ Private m2Run As Long
 Public Function RunExcelTests2() As Long
     m2Run = 0
     TestQ9PasteRoundTrip
+    TestV5DraftRowNotCounted
     RunExcelTests2 = m2Run
 End Function
 
@@ -133,6 +134,20 @@ Private Sub TestQ9PasteRoundTrip()
            StrComp(modCaseStore.LoadData(T2_CASE, "input_hp"), hpText, _
                    vbBinaryCompare) = 0
 
+    ' (4) 裁定書12 V1(13章§2.11): CaseSave の3値判定。ci_case_id が空のまま
+    '     [保存して戻る]を押しても**新規採番へ倒さない**。3値判定を「空->採番」
+    '     へ戻す変異はここで落ちる(案件一覧に行が1本増えるため)。
+    Dim rowsBefore As Long
+    rowsBefore = LastRowA(wsCases)
+    modUISheet.WriteNamed "hm_warning", vbNullString
+    modUICase3.CaseSave
+    ECheck "T47B-V1-11_表示case_idが空の[保存して戻る]は採番しない", _
+           LastRowA(wsCases) = rowsBefore, _
+           "案件一覧の最終行 前=" & CStr(rowsBefore) & " 後=" & CStr(LastRowA(wsCases))
+    ECheck "T47B-V1-12_ブロック時はhm_warningへ警告文を出す(V3)", _
+           modUISheet.ReadNamed("hm_warning") = T2_MSG_MISMATCH, _
+           "実際=" & modUISheet.ReadNamed("hm_warning")
+
 Cleanup:
     On Error Resume Next
     modCaseStore.SaveData T2_CASE, "input_hp", vbNullString
@@ -141,6 +156,19 @@ Cleanup:
     ClearNamed "ci_paste_hp_2"
     ClearNamed "ci_paste_hp_3"
     ClearNamed "ci_paste_memo_1"
+    ' 裁定書12 V8: 属性欄も戻す。フィクスチャ企業名が画面に残ったままだと、
+    ' 実機で[保存して戻る]を押したときの挙動が検査用の値に引きずられる。
+    ClearNamed "ci_case_type"
+    ClearNamed "ci_company"
+    ClearNamed "ci_industry_code"
+    ClearNamed "ci_industry_name"
+    ClearNamed "ci_dossier_tier"
+    ClearNamed "ci_channel"
+    ClearNamed "ci_kanji"
+    ClearNamed "ci_bid"
+    ClearNamed "ci_reins"
+    ClearNamed "ci_other_insurers"
+    ClearNamed "ci_s4_variant"
     modUISheet.WriteNamed "ci_case_id", vbNullString
     modUISheet.WriteNamed "hm_warning", warnOrig
     DropFixtureRow wsCases, cCase
@@ -149,6 +177,61 @@ Crashed:
     ECheck "T47B-Q9-99_想定外エラー", False, _
            "Err=" & CStr(Err.Number) & " " & Err.Description
     Resume Cleanup
+End Sub
+
+' ============================================================================
+' V5(裁定書12・13章§2.6): 下書き行に status を書いても CountByStatus が
+'   数えない。HOMEの hm_inbox_* は CountByStatus だけが値源であり、下書き行を
+'   数えると「一括診断は0件なのにHOMEは1件」という食い違いが出る。下書き行の
+'   スキップを無効化する変異はこの1本でのみ検出できる(層(a)から到達できない)。
+' ============================================================================
+Private Sub TestV5DraftRowNotCounted()
+    Dim ws As Object
+    Dim addedRow As Long
+    Dim before As Long
+    Dim after1 As Long
+    Dim okAll As Boolean
+    Dim detail As String
+    On Error GoTo Crashed
+
+    Set ws = SheetByName("受信箱")
+    If ws Is Nothing Then
+        detail = "受信箱シートが無い"
+        GoTo Report
+    End If
+
+    Dim hdr As Variant
+    Dim cId As Long
+    Dim cStatus As Long
+    hdr = Hdr1(ws, 32)
+    cId = modUtil.FindHeaderCol(hdr, "inbox_id")
+    cStatus = modUtil.FindHeaderCol(hdr, "status")
+    If cId <= 0 Or cStatus <= 0 Then
+        detail = "inbox_id / status 列が引けない"
+        GoTo Report
+    End If
+
+    before = modUIInbox.CountByStatus("undiagnosed")
+
+    ' 末尾へ「マーカー付き かつ status=undiagnosed」の行を1本だけ足す。
+    addedRow = LastRowA(ws) + 1
+    PutCell ws, addedRow, cId, modInboxStore.IB_DRAFT_MARK
+    PutCell ws, addedRow, cStatus, "undiagnosed"
+
+    after1 = modUIInbox.CountByStatus("undiagnosed")
+    okAll = (after1 = before)
+    detail = "追加前=" & CStr(before) & " 追加後=" & CStr(after1)
+
+Report:
+    ECheck "T47B-V5-13_下書き行にstatusを書いてもCountByStatusが数えない", _
+           okAll, detail
+    On Error Resume Next
+    If addedRow >= 2 And Not ws Is Nothing Then ws.Rows(addedRow).Delete
+    Exit Sub
+Crashed:
+    okAll = False
+    detail = "Err=" & CStr(Err.Number) & " " & Err.Description
+    Resume Report
 End Sub
 
 ' ============================================================================

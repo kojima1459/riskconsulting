@@ -50,7 +50,8 @@ Private Const TE_SNAP_MARK As String = "T47_SNAP_MARK"
 Private Const TE_BAND_SEQ As Long = 100001
 
 ' 本モジュールが打つ Check の総本数(自己照合用。テストを増減したら更新)。
-Private Const TE_EXPECTED As Long = 44
+' (裁定書12: V5で1本・V1で2本を modTestsExcel2 へ追加し 44 -> 47)
+Private Const TE_EXPECTED As Long = 47
 
 Private mRun As Long    ' ECheck が数える実行本数
 

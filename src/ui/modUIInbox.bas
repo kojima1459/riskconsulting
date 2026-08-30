@@ -97,11 +97,17 @@ Private Function EnsureDraftRow(ByVal ws As Object) As Long
     ' inbox_id が空で body に書きかけの本文が残った**孤児行**になる。新しい
     ' 下書き行を挿すと孤児行は誰からも触られないまま残置するので、先頭から
     ' 探して見つかればその行をマーカーで下書き行として復帰させる。
+    ' 裁定書12 V6: 回復条件へ「status列も空」を足す。status に値のある行は
+    ' 投函済みのデータ行(id列だけを消してしまった行)であり、下書き行として
+    ' マーキングすると次の投函成功で入力列が消され status だけの幽霊行になる。
     Dim bodyCol As Long
+    Dim stCol As Long
     bodyCol = modUtil.FindHeaderCol(hdr, "body")
+    stCol = modUtil.FindHeaderCol(hdr, "status")
     If bodyCol > 0 Then
         For r = 2 To lastRow
-            If LenB(Trim$(modUISheet.CellText(ws, r, colNo))) = 0 Then
+            If LenB(Trim$(modUISheet.CellText(ws, r, colNo))) = 0 And _
+               IsBlankCol(ws, stCol, r) Then
                 If LenB(Trim$(modUISheet.CellText(ws, r, bodyCol))) > 0 Then
                     modUISheet.PutText ws, r, colNo, modInboxStore.IB_DRAFT_MARK, _
                                        UI2_SHEET & "/inbox_id"
@@ -129,6 +135,16 @@ Private Function EnsureDraftRow(ByVal ws As Object) As Long
     Exit Function
 Zero0:
     EnsureDraftRow = 0
+End Function
+
+' 当該列が空か(列が見つからないときは True=条件に加えない)。
+Private Function IsBlankCol(ByVal ws As Object, ByVal colNo As Long, _
+                            ByVal rowNo As Long) As Boolean
+    If colNo <= 0 Then
+        IsBlankCol = True
+        Exit Function
+    End If
+    IsBlankCol = (LenB(Trim$(modUISheet.CellText(ws, rowNo, colNo))) = 0)
 End Function
 
 ' 当該行が投函下書き行か(13章§2.6。判定基準は id列マーカーの1点)。

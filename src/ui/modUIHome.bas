@@ -433,15 +433,12 @@ Public Sub HomeNewCase()
     modUIProgress.ParkFocus
     ShowWarning vbNullString
 
-    Dim caseId As String
-    caseId = modUICase3.CreateCaseFromSheet()
-    If LenB(caseId) = 0 Then
-        ShowWarning "新規案件を作成できませんでした（案件入力の企業名・業種をご確認ください）。"
-        GoTo Done
-    End If
-
-    modUISheet.WriteNamed UH_CASE_ID, caseId
-    RefreshHome
+    ' 裁定書12 V1(13章§2.11): ここでは採番しない。案件入力を**新規モード**で
+    ' 開くだけにし、ci_case_id へ固定マーカー「(新規)」を書く。採番は案件入力の
+    ' [保存して戻る](modUICase3.CaseSave の3値判定)が企業名・業種を読んで行う。
+    ' 空欄のまま採番して幽霊案件が積まれるのを防ぎ、かつ「表示が空のまま保存」
+    ' を新規採番へ倒さないという保証を、ブックに残るセル1つで成り立たせる。
+    modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
     modUISheet.ShowSheet "案件入力"
 
 Done:

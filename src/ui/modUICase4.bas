@@ -180,10 +180,10 @@ Public Sub JudgeSave()
     rec.line_id = ColText(ws, hdr, rowNo, "line_id")
     rec.case_ref = ColText(ws, hdr, rowNo, "case_ref")
     rec.situation = ColText(ws, hdr, rowNo, "situation")
-    rec.decision = ColText(ws, hdr, rowNo, "decision")
+    rec.decision = JudgeEnumEn("judge_decision", ColText(ws, hdr, rowNo, "decision"))
     rec.factor_note = ColText(ws, hdr, rowNo, "factor_note")
     rec.key_reason = ColText(ws, hdr, rowNo, "key_reason")
-    rec.result = ColText(ws, hdr, rowNo, "result")
+    rec.result = JudgeEnumEn("judge_result", ColText(ws, hdr, rowNo, "result"))
     rec.post_loss = ColText(ws, hdr, rowNo, "post_loss")
     rec.recorded_by = OwnerName()
 
@@ -243,16 +243,32 @@ Public Sub JudgeSaveResult()
         GoTo Done
     End If
 
-    If modJudgeStore.SetJudgementResult(judgeId, ColText(ws, hdr, rowNo, "result"), _
+    If modJudgeStore.SetJudgementResult(judgeId, _
+                                        JudgeEnumEn("judge_result", _
+                                                    ColText(ws, hdr, rowNo, "result")), _
                                         ColText(ws, hdr, rowNo, "post_loss")) Then
         Notice "結果を記録しました: " & judgeId
     Else
-        Notice "結果を記録できませんでした（result は won / lost / pending のみです）。"
+        Notice "結果を記録できませんでした（結果は 成約 / 失注 / 未確定 から選んでください）。"
     End If
 
 Done:
     modUIProgress.ExitUiLock
 End Sub
+
+' 裁定書12 V7: 判断台帳の decision / result は日本語ラベルの入力列になった
+' (13章§2.7・19章§3)。変換表に載っていれば機械値へ戻し、載っていなければ
+' 入力をそのまま渡す(store が書いた機械値のまま残っている確定行を素通しさせる
+' ため。不正値は modJudgeStore の enum 検査が fail-closed で止める)。
+Private Function JudgeEnumEn(ByVal groupName As String, ByVal shownText As String) As String
+    Dim en As String
+    en = modUICase.EnumEn(groupName, Trim$(shownText))
+    If LenB(en) > 0 Then
+        JudgeEnumEn = en
+    Else
+        JudgeEnumEn = shownText
+    End If
+End Function
 
 Private Function ColText(ByVal ws As Object, ByVal hdr As Variant, ByVal rowNo As Long, _
                          ByVal colName As String) As String

@@ -32,6 +32,14 @@ Private Const U3_SCAN_COLS As Long = 32
 ' 連結し SplitForCells と完全に可逆なので、余白を引かず1セル上限ちょうど。
 Private Const U3_CHUNK As Long = 32000
 Private Const U3_THIN_HP As Long = 200        ' 16章 E-02: HPが薄いと判断する字数
+' 裁定書12 V1(13章§2.11): 新規モードの固定マーカー。HOMEの[＋新規案件]がこの
+' 値を ci_case_id へ書き、CaseSave はこの値のときだけ採番する(採番の根拠を
+' 揮発変数から**ブックに残るセル**へ移す)。IsValidCaseId は案件ID書式だけを
+' 通すのでこの値を有効IDと誤認しない。
+Public Const U3_NEW_MARK As String = "(新規)"
+' 表示case_idと保存先が食い違うときの逐語文言(13章§2.12 B1と同作法)。
+Private Const U3_MSG_MISMATCH As String = _
+    "画面の案件と保存先が一致しません。再描画してください"
 Private Const U3_RESEARCH_ROOM As Long = 20   ' 追加収集ブロックの表示上限行
 
 ' 画面制御用のモジュール変数(裁定書9 B15/B22)。**永続でない画面制御の状態**で
@@ -266,9 +274,10 @@ Public Sub DrawCaseInput(ByVal caseId As String)
     gDrawState = U3_ST_FAILED
     gOverBuf = vbNullString
 
-    ' 裁定書11 Q1(m3と同作法): 表示case_id は**描き切ったときだけ**書く。ここで
-    ' 空へ戻しておけば、途中で抜けた画面・切捨てが起きた画面は「どの案件のもの
-    ' でもない」状態がブックに残り、SavePasteFields の一致検査が止め続ける。
+    ' 裁定書11 Q1/裁定書12 V1: 表示case_id は**描き切ったときだけ**書く。ここで
+    ' 空へ戻せば、途中で抜けた画面・切捨てが起きた画面は「どの案件のものでもない」
+    ' 状態でブックに残り、CaseSave の3値判定が保存を止める(新規モードの
+    ' マーカーもここで消えるので、描画した画面が採番へ倒れることはない)。
     modUISheet.WriteNamed "ci_case_id", vbNullString
 
     If Not modCaseStore.IsValidCaseId(caseId) Then Exit Sub
@@ -430,25 +439,34 @@ Public Sub CaseSave()
 
     modUIProgress.ParkFocus
 
+    ' 裁定書12 V1(13章§2.11): ci_case_id の**3値判定**。採番の根拠は揮発変数で
+    ' はなくブックに残るこのセル1つだけ。
+    '   「(新規)」  = [＋新規案件]が書いた新規モード -> ここで採番する
+    '   有効な案件ID = その案件へ保存(SavePasteFields が再度突き合わせる)
+    '   空・その他   = 描き切れなかった画面 -> 1欄も書かずに止める(採番へ倒すと
+    '                  切り詰まった画面が別案件として確定する)
     Dim caseId As String
-    caseId = modUISheet.ReadNamed("ci_case_id")
-    If Not modCaseStore.IsValidCaseId(caseId) Then
-        ' 裁定書11 Q1: 表示case_idが空なのは、切捨て・失敗で描き切れなかった
-        ' 画面(直前の描画対象が判っているとき)。ここで新規採番へ倒すと、切り
-        ' 詰まった画面が別案件として確定してしまうので採番せずに止める。
-        If modCaseStore.IsValidCaseId(gDrawCaseId) Then
-            Notice "案件（" & gDrawCaseId & "）を最後まで表示できていません。" & _
-                   "HOMEの[案件入力を開く]で開き直してから保存してください。"
+    Dim isNew As Boolean
+    caseId = Trim$(modUISheet.ReadNamed("ci_case_id"))
+    If StrComp(caseId, U3_NEW_MARK, vbBinaryCompare) = 0 Then
+        isNew = True
+        caseId = CreateCaseFromSheet()
+        If LenB(caseId) = 0 Then
+            Notice "案件を作成できませんでした。企業名と業種コードをご確認ください。"
             GoTo Done
         End If
-        caseId = CreateCaseFromSheet()
-    End If
-    If LenB(caseId) = 0 Then
-        Notice "案件を作成できませんでした。企業名と業種コードをご確認ください。"
+    ElseIf Not modCaseStore.IsValidCaseId(caseId) Then
+        ' 裁定書12 V3: 成功時と同じHOME遷移で戻し、hm_warning の警告文で
+        ' 「保存できなかった」ことが判るようにする(MsgBoxは使わない)。
+        modLog.LogError "E0302", U3_SRC & ".CaseSave", "case_id_blank"
+        modUISheet.ShowSheet "HOME"
+        modUIHome.RefreshHome
+        modUISheet.WriteNamed "hm_warning", U3_MSG_MISMATCH
         GoTo Done
     End If
 
     If SaveCaseInput(caseId) Then
+        If isNew Then modUISheet.WriteNamed "hm_case_id", caseId
         modUISheet.ShowSheet "HOME"
         modUIHome.RefreshHome
     End If
@@ -640,16 +658,14 @@ End Sub
 ' 貼付欄 -> case_data。E-04(浄化)と E-31(匿名化)を通してから保存する。
 ' True=保存した。False=表示case_idと保存先が一致せず1欄も書いていない。
 Private Function SavePasteFields(ByVal caseId As String) As Boolean
-    ' 裁定書11 Q1(m3と同作法): 貼付欄を上書きする前に、**ブックに残る**表示
-    ' case_id と保存先を突き合わせる。切捨て(overflow)や描画失敗のあとは
-    ' ci_case_id が空のままなので、揮発性の gOverBuf が消えていてもここで必ず
-    ' 止まり、画面に出ていない原文が case_data から消えることはない。
+    ' 裁定書11 Q1: 貼付欄を上書きする前に、**ブックに残る**表示case_idと保存先を
+    ' 突き合わせる(CaseSave の3値判定に続く第2の壁)。overflow・描画失敗のあとは
+    ' ci_case_id が空なので、揮発変数が消えていてもここで必ず止まる。
     If StrComp(Trim$(modUISheet.ReadNamed("ci_case_id")), caseId, vbBinaryCompare) <> 0 Then
         ' 文言は画面へ直書きする(13章§2.12 B1ガードと同作法。モーダルを出さない
         ' ので、無人実行の層(b)テストからこのガードを検査できる)。
         modLog.LogError "E0302", U3_SRC & ".SavePasteFields", "case_id_mismatch:ci"
-        modUISheet.WriteNamed "hm_warning", _
-            "画面の案件と保存先が一致しません。再描画してください"
+        modUISheet.WriteNamed "hm_warning", U3_MSG_MISMATCH
         Exit Function
     End If
 

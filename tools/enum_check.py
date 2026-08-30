@@ -103,6 +103,12 @@ REQUIRED: dict[str, str] = {
     #     19章§3が日本語ラベル(部内投稿/現場の声/ウォッチ)を持つため載せる。
     #     受信箱のデータ行は従来どおり機械値のまま(store が書く)。
     "inbox.source_kind": "inbox_source_kind",
+    # --- 判断台帳の入力列(v2.5.3・裁定書12 V7。13章§2.7) ---
+    #     decision / result も利用者が起票・結果記録のときに選ぶ入力列であり、
+    #     19章§3が日本語ラベルを持つため載せる(受信箱の judge_to と同作法)。
+    #     store が書く確定行の値は従来どおり機械値のまま。
+    "judgement.decision": "judge_decision",
+    "judgement.result": "judge_result",
 }
 
 # 変換表に載せない行と、その理由(1行ずつ書く。理由の無い除外を作らない)。
@@ -115,8 +121,6 @@ EXCLUDED: dict[str, str] = {
     "s2c.issue_type": "批判JSONの内部enum。13章に対応する画面列が無い(入念モードの中間生成物)",
     "s3c.issue_type": "同上",
     "fb.event": "13章§2.5 フィードバックの event 列は機械値のまま持つ(入力規則も機械値)",
-    "judgement.decision": "13章§2.7 判断台帳の decision 列は機械値のまま持つ",
-    "judgement.result": "同上(result 列)",
     "inbox.status": "同上(status 列)",
     "drop_type": "同上(drop_type 列)。19章§3のenum欄が `T0～T10` の範囲表記で個別値を列挙しない",
     "revive_tag": "同上(revive_tag 列)",

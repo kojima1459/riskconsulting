@@ -51,11 +51,14 @@
     "inbox_source_kind": ["member_post", "field_voice", "watch"],
     "inbox_status": ["undiagnosed", "diagnosed", "adopted", "conditional_hold", "rejected", "merged"],
     "judge_to_ja": ["採択", "条件付き保留", "却下"],
+    "source_kind_ja": ["部内投稿", "現場の声", "ウォッチ"],
     "pf_survival": ["high", "mid", "low"],
     "drop_type": ["T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"],
     "revive_tag": ["tech", "regulation", "partner", "data", "market"],
     "judge_decision": ["raise", "close", "restrict", "keep", "improve"],
     "judge_result": ["won", "lost", "pending"],
+    "judge_decision_ja": ["増率", "クローズ", "縮小・限定", "条件維持", "ロス改善伴走"],
+    "judge_result_ja": ["成約", "失注", "未確定"],
     "boolean": ["TRUE", "FALSE"],
 
     "case_type_ja": ["新規開拓", "更新"],
@@ -169,7 +172,7 @@
         {
           "title": "属性欄(保存時に案件一覧へ書く。enum欄は日本語ラベルを選び modUICase が機械値へ変換する)",
           "fields": [
-            {"range": "ci_case_id", "label": "案件ID", "type": "String", "input": false, "note": "自動採番・書込専用"},
+            {"range": "ci_case_id", "label": "案件ID", "type": "String", "input": false, "note": "自動採番・書込専用。新規モードでは「(新規)」と表示され、[保存して戻る]で採番される(13章§2.11・裁定書12 V1)"},
             {"range": "ci_case_type", "label": "種別", "type": "String", "input": true, "dv": "case_type_ja", "note": "案件一覧 case_type (new / renewal)"},
             {"range": "ci_company", "label": "企業名(必須)", "type": "String", "input": true, "note": "案件一覧 company。必須(16章 E-01)"},
             {"range": "ci_industry_code", "label": "業種コード", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則=起動時に modBoot がナレッジスナップショットの業種マスタから隠しレンジへ複製して張る(13章§2.11・裁定書9 §4)。ナレッジ未接続かつスナップショット無しのときは張らず手入力のまま続行(16章 E-08)"},
@@ -606,7 +609,7 @@
         {"name": "inbox_id", "type": "String", "width": 16, "header_note": "I-YYYYMM-NNN。先頭データ行(ヘッダ直下)は投函下書き行でありid列に固定マーカー「(下書き)」が入る(13章§2.6・裁定書10 C1)。走査・判定・集計の対象外"},
         {"name": "posted_at", "type": "String", "width": 20},
         {"name": "posted_by_group", "type": "String", "width": 22, "header_note": "個人名は持たない(グループ名まで)"},
-        {"name": "source_kind", "type": "String", "width": 16, "dv": "inbox_source_kind"},
+        {"name": "source_kind", "type": "String", "width": 16, "dv": "source_kind_ja", "header_note": "投函下書き行の入力列(13章§2.6・裁定書11 Q4・裁定書12 V4)。judge_to と同作法で日本語ラベル(部内投稿/現場の声/ウォッチ)から選ぶ。ui層が機械値へ戻してから投函するため、データ行は機械値のまま"},
         {"name": "theme", "type": "String", "width": 30},
         {"name": "body", "type": "String", "width": 60, "header_note": "最大32,000字。超過は1セル上限で打切り+警告"},
         {"name": "pf_json", "type": "String", "width": 40, "header_note": "プリフライト診断の生JSON"},
@@ -635,10 +638,10 @@
         {"name": "recorded_by", "type": "String", "width": 18},
         {"name": "case_ref", "type": "String", "width": 22, "header_note": "案件ID or 社内案件番号(自由)"},
         {"name": "situation", "type": "String", "width": 46, "header_note": "状況要約(200字以内)"},
-        {"name": "decision", "type": "String", "width": 14, "dv": "judge_decision"},
+        {"name": "decision", "type": "String", "width": 14, "dv": "judge_decision_ja", "header_note": "起票の入力列(13章§2.7・裁定書12 V7)。受信箱の judge_to と同作法で日本語ラベル(増率/クローズ/縮小・限定/条件維持/ロス改善伴走)から選び、ui層が機械値へ戻して起票する"},
         {"name": "factor_note", "type": "String", "width": 30, "header_note": "適用係数・安全率のメモ"},
         {"name": "key_reason", "type": "String", "width": 40, "header_note": "決め手(1行。唯一の自由記述必須項目)"},
-        {"name": "result", "type": "String", "width": 12, "dv": "judge_result"},
+        {"name": "result", "type": "String", "width": 12, "dv": "judge_result_ja", "header_note": "事後結果の入力列(13章§2.7・FR-22・裁定書12 V7)。日本語ラベル(成約/失注/未確定)から選び[結果を記録]を押す。ui層が機械値へ戻して記録する"},
         {"name": "post_loss", "type": "String", "width": 30, "header_note": "事後ロスのメモ"}
       ]
     },

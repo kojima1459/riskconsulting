@@ -1,4 +1,6 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.2
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.3
+
+> v2.5.3（裁定書12: W4.4 最終収束パッチ）: §6の登記表へ **`modUICase3.U3_NEW_MARK`**（V1。案件入力の新規モードの固定マーカー `(新規)`。`modInboxStore.IB_DRAFT_MARK` と同作法の公開定数）を登記した。**本波での公開関数の新設・移設はゼロ**。あわせて `AnswerMemoCount` の別案件確認文言を実物へ逐語化した（V9）。
 
 > v2.5.2（裁定書11: W4.3 最終パッチ）: §6の登記表へ新設・移設3件を登記した。**`modUICase.RebindFlatValidation`**（Q3(a)）・**`modUICase4.CopyResearchRow`**（Q1。30,000字契約により `modUICase3` から移設）・**`modTestsExcel2.RunExcelTests2`**（Q9/Q1。層(b)の分割先。wintest からの入口は `RunAllExcelTests` の1本のまま）。**本裁定で許可した新設・移設はこの3件のみ**。
 
@@ -1140,7 +1142,8 @@ Public Function AnswerMemoCount(ByVal caseId As String) As Long
 '   `modUIHome` はこの値が 1 以上のとき `MsgBox`（vbYesNo）で上書き確認を出し、No なら
 '   `BuildHearingSheet` を呼ばずに中止する（16章 E-10 の下流無効化と同じ作法）。確認文言は
 '   `hs_case_id` を読み分ける: caseId と不一致かつ 1 以上なら
-'   「別案件（<hs_case_id>）の手書き回答が残っています」の別案件確認文言にする。
+'   「別案件（<hs_case_id>）の手書き回答が<N>行残っています。作り直すとこの回答は消えます。」
+'   （<N>=本関数の戻り値。裁定書12 V9で実物〔modUIHome〕へ逐語化）。
 '   本関数は数えるだけで、シートを1セルも書き換えない
 
 ' === test: modMockLlm（本体内mockトランスポート。§4(a)・12章§2 test層） ===
@@ -1189,6 +1192,7 @@ Public Function RunExcelTests2() As Long
   | - | `modUICase.RebindFlatValidation` | 公開関数（ui層内部ヘルパ） | 本章§6 | フラット表（f種別）の入力規則を1シートぶん張り直す口。受信箱の投函下書き行を行挿入で用意したときに ui層から呼ぶ（v2.5.2・裁定書11 Q3(a)。13章§2.6） |
   | - | `modUICase4.CopyResearchRow` | 公開関数（図形ボタンの OnAction） | 本章§6 | 追加収集の[コピー]。30,000字契約により `modUICase3` から移設（v2.5.2・裁定書11 Q1。移設前の名は `modUICase3.CopyResearchRow`。呼出は図形の OnAction 文字列のみ） |
   | - | `modTestsExcel2.RunExcelTests2` | 公開関数（test層の分割先の入口） | 本章§6 | 30,000字契約による `modTestsExcel` の分割先。呼んでよいのは `RunAllExcelTests` のみ（v2.5.2・裁定書11 Q9/Q1） |
+  | - | `modUICase3.U3_NEW_MARK`（値 `(新規)`） | 公開定数（モジュール間で共有する固定マーカー。`modInboxStore.IB_DRAFT_MARK` と同作法） | 本章§6・13章§2.11 | 案件入力の**新規モード**の固定マーカー。HOMEの[＋新規案件]（`modUIHome.HomeNewCase`）が `ci_case_id` へ書き、`modUICase3.CaseSave` の3値判定がこの値のときだけ採番する（v2.5.3・裁定書12 V1）。**公開関数の新設は本波では無い** |
   | - | `modUICase5` の Public 4本（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`） | ui層内部ヘルパ（W4.1分割裁定） | 本章§6 | 30,000字契約による `modUICase2` の分割先。呼んでよいのは modUICase2 のみ（裁定書10 §1でM2を解消） |
 
   これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。

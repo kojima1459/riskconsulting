@@ -162,6 +162,14 @@ Public Function EnumPairsCsv() As String
     s = s & "inbox_source_kind,member_post,部内投稿" & vbLf
     s = s & "inbox_source_kind,field_voice,現場の声" & vbLf
     s = s & "inbox_source_kind,watch,ウォッチ" & vbLf
+    s = s & "judge_decision,raise,増率" & vbLf
+    s = s & "judge_decision,close,クローズ" & vbLf
+    s = s & "judge_decision,restrict,縮小・限定" & vbLf
+    s = s & "judge_decision,keep,条件維持" & vbLf
+    s = s & "judge_decision,improve,ロス改善伴走" & vbLf
+    s = s & "judge_result,won,成約" & vbLf
+    s = s & "judge_result,lost,失注" & vbLf
+    s = s & "judge_result,pending,未確定" & vbLf
     EnumPairsCsv = s
 End Function
 
@@ -352,6 +360,12 @@ Private Function BindingTable() As String
     ' 裁定書11 Q4: 投函下書き行の source_kind も利用者が選ぶ入力列なので
     ' 日本語ラベルで束ねる(19章§3 inbox.source_kind)。
     s = s & "inbox_source_kind|f|受信箱:source_kind" & vbLf
+    ' 裁定書12 V7: 判断台帳の decision / result も利用者が選ぶ入力列なので
+    ' 受信箱と同作法(f種別)で束ねる(19章§3 judgement.decision / judgement.result)。
+    ' ビルド時の静的DVは51行目までしか無く、52行目以降は日本語ラベルの一覧が
+    ' 消えていた。f種別は2行目以降の列全体へ張るのでこの欠落も同時に解消する。
+    s = s & "judge_decision|f|判断台帳:decision" & vbLf
+    s = s & "judge_result|f|判断台帳:result" & vbLf
     BindingTable = s
 End Function
 
