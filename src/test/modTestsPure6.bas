@@ -21,8 +21,9 @@ Option Explicit
 '   ヘッダに記した3点セットのとおり(本ファイル29本)。
 '
 ' テスト本数: 29本 = G40 10 / G40K 2 / G41 7 / G41K 1 / G42 4 / G43 5
-'   (K付きは14章§6「ID実在はmodKnowledge参照」を通る群。層(a)では
-'    ナレッジ未装填のため隔離してある)
+'   (K付きはID実在検査を通る群。裁定書7 A-1/A-2 で一覧テキストは Check系の
+'    引数になったので、本モジュールが15章の1行書式で自給する Wl* を渡す。
+'    modKnowledge には触れない)
 '
 ' 設計判断(R4準拠): Excelトークン不使用。改行は vbLf 基準。乱数・時刻不使用。
 ' ============================
@@ -64,6 +65,17 @@ Public Sub RunAll()
         End If
         On Error GoTo 0
     Next i
+
+    ' 姉妹モジュール(30,000字契約による分割)を同じ隔離作法で続けて回す。
+    ' 数珠つなぎ: modTestsPure -> 2 -> 3 -> 4 -> 5 -> 6 -> 7(裁定書7 D-13/D-14)。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure7.RunAll
+    If Err.Number <> 0 Then
+        GroupFail "modTestsPure7.RunAll"
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)
@@ -180,8 +192,78 @@ Private Function MockJson(ByVal mockId As String) As String
 End Function
 
 ' ============================
+' 実在ID一覧のホワイトリスト(裁定書7 A-1/A-3。層(a)で自給する)
+' ----------------------------
+'   ID実在検査は「呼出側が modKnowledge から取得して渡す一覧テキスト」を見る
+'   (14章§6)。テストは modKnowledge に触れず、**15章の1行書式リテラル**で
+'   小さな一覧を組み立てて引数に渡す。載せるIDは15章§8.1が mock 応答に許した
+'   実在ID(M-0012 / L-03 / S-0004 / K-0003 / P9)だけで、幽霊素材に使う
+'   M-9999 / L-99 / S-9999 / K-9999 は**1行も含めない**。
+'   ・共通規約(15章§6.1): 1行1件・行頭は `[ID] `・項目区切りは " | "・
+'     項目内の複数値は ";" 区切り・空項目は項目ごと省略・改行は vbLf。
+'   ・MC-0107(機構ライブラリ)は壁打ちのsystemにしか注入されず Check系が読む
+'     一覧には現れないため、本ホワイトリストには載せない(15章§6.1)。
+'   Public なのは姉妹モジュール modTestsPure5 の G31K/G32K/G34K が同じ一覧を
+'   使うため(30,000字契約により実体は本モジュール側に置く)。
+' ============================
+
+' S2の {{menusText}} = MenusSummaryFor(15章§3。ID・名称・対応カテゴリのみ)。
+Public Function WlMenusSummary() As String
+    WlMenusSummary = _
+        "[M-0012] 食品工場リスク診断サービス | 対応カテゴリ:manufacturing_quality;supply_chain" & vbLf & _
+        "[M-0031] 物流網BCP点検サービス | 対応カテゴリ:supply_chain"
+End Function
+
+' S3の {{menusText}} = MenusFor(15章§4。要約版に概要を加えた版)。
+Public Function WlMenus() As String
+    WlMenus = _
+        "[M-0012] 食品工場リスク診断サービス | 概要:製造ラインの異物混入リスクを現地診断する" & _
+        " | 対応カテゴリ:manufacturing_quality;supply_chain" & vbLf & _
+        "[M-0031] 物流網BCP点検サービス | 概要:調達と配送の途絶点を洗い出す | 対応カテゴリ:supply_chain"
+End Function
+
+' S3の {{linesText}} = LinesText(15章§4。market_note が空の種目は項目ごと省略)。
+Public Function WlLines() As String
+    WlLines = _
+        "[L-03] 生産物賠償責任保険(PL保険) | 市場環境:再保険料率の上昇で限度額に慎重" & vbLf & _
+        "[L-07] 企業総合賠償責任保険"
+End Function
+
+' S3の {{schemesText}} = SchemesFor(15章§4。status が proven/adopted のみ)。
+Public Function WlSchemes() As String
+    WlSchemes = _
+        "[S-0004] 見守りヤモリ型(P2) | 構造:検知パートナーと有事補償のバンドル" & _
+        " | 成立条件:検知パートナーの実在;引受条件への接続 | 適用シグナル:設備の老朽化"
+End Function
+
+' S3の {{casesText}} = CasesFor(15章§4)。
+Public Function WlCases() As String
+    WlCases = _
+        "[K-0003] 業種:09 顧客像:菓子製造の中堅 提示リスク:異物混入による自主回収" & _
+        " 提案:生産物賠償の限度額増額 決め手:回収費用の実額提示"
+End Function
+
+' CheckPF の refIdsText(14章§6: menusSummary + patternsText + rulesText +
+'   researchingText の連結)。V-PF-03 は M- / S- / K- で始まるIDを見るので、
+'   mock が使う S-0004 / K-0003 の行も同じ連結へ載せる。
+Public Function WlPfRefIds() As String
+    WlPfRefIds = WlMenusSummary() & vbLf & _
+        "[P9] 予兆検知と補償のバンドル | 構造:検知サービスとセットで残余リスクを保険がカバー" & _
+        " | 成立条件:検知パートナーの実在;検知から引受条件化への接続" & _
+        " | 代表例:漏水センサーと水濡れ補償 | 社内実績:見守りヤモリ型" & vbLf & _
+        "[J-03] class:adverse_selection 基準:加入者が予兆を知っている設計は引き受けない" & _
+        " | 破り方:entry_path" & vbLf & _
+        "[RT-07] 高齢者見守り連携 status:researching 判定日:2026-05-20" & _
+        " | メモ:自治体予算の裏取り待ち | 関連:P9" & vbLf & _
+        WlSchemes() & vbLf & WlCases()
+End Function
+
+' ============================
 ' G40 mock正常応答の自バリアント文脈検証(15章§8.1受入条件1・17章T-22 DoD)
 '   「警告判定のケースも発火させない」ため、期待値は空文字ちょうど。
+'   受入条件1の「文脈」には**実在ID一覧の注入も含む**(裁定書7 A-2で15章§8.1へ
+'   明記)。一覧を渡さない呼び出しは fail-closed で不合格になるので合格判定に
+'   使えない。よってID実在検査を通る応答には Wl* の一覧を渡して判定する。
 ' ============================
 Private Sub T_MockOk()
     ChkZero "G40_MK-S1-NEWがnew文脈で警告含め0件_15章§8.1", _
@@ -191,19 +273,21 @@ Private Sub T_MockOk()
         modValidate.CheckS1(MockJson(MK_S1R), CT_RNW)
 
     ChkZero "G40_MK-S2-NEWがnew文脈で警告含め0件_15章§8.1", _
-        modValidate.CheckS2(MockJson(MK_S2N), CT_NEW)
+        modValidate.CheckS2(MockJson(MK_S2N), CT_NEW, WlMenusSummary())
 
     ChkZero "G40_MK-S2-RNWがrenewal文脈で警告含め0件_15章§8.1", _
-        modValidate.CheckS2(MockJson(MK_S2R), CT_RNW)
+        modValidate.CheckS2(MockJson(MK_S2R), CT_RNW, WlMenusSummary())
 
     ChkZero "G40_MK-S4が0件_15章§8.1", modValidate.CheckS4(MockJson(MK_S4))
 
-    ChkZero "G40_MK-PFが0件_15章§8.1", modValidate.CheckPF(MockJson(MK_PF))
+    ChkZero "G40_MK-PFが0件_15章§8.1", _
+        modValidate.CheckPF(MockJson(MK_PF), WlPfRefIds())
 
-    ChkZero "G40_MK-S2C-HITが0件_15章§8.1", modValidate.CheckS2C(MockJson(MK_C2H))
+    ChkZero "G40_MK-S2C-HITが0件_15章§8.1", _
+        modValidate.CheckS2C(MockJson(MK_C2H), MockJson(MK_S2R))
 
     ChkZero "G40_MK-S2C-CLEANが0件で改訂スキップ_15章§8.1", _
-        modValidate.CheckS2C(MockJson(MK_C2C))
+        modValidate.CheckS2C(MockJson(MK_C2C), MockJson(MK_S2R))
 
     ChkZero "G40_MK-S3C-HITが0件_15章§8.1", modValidate.CheckS3C(MockJson(MK_C3H))
 
@@ -213,17 +297,29 @@ End Sub
 
 ' ============================
 ' G40K 共通バリアントのS3はnew・renewalの両文脈で合格すること(受入条件1)
-'   ID実在検査を通るためグループを分けてある。
+'   ID実在検査を通るためグループを分けてある。15章§8.1が言う「文脈」には
+'   実在ID一覧の注入が含まれるので、4つの一覧(menus/lines/schemes/cases)を
+'   15章§4の書式で自給して渡す。mockが使う M-0012 / L-03 / S-0004 / K-0003 が
+'   一覧に載っているので0件になる=幽霊IDが1件も無いことの裏返しである。
 ' ============================
 Private Sub T_MockOkIds()
     Dim s3 As String
+    Dim wm As String
+    Dim wn As String
+    Dim ws As String
+    Dim wc As String
+
     s3 = MockJson(MK_S3)
+    wm = WlMenus()
+    wn = WlLines()
+    ws = WlSchemes()
+    wc = WlCases()
 
     ChkZero "G40_MK-S3がnew文脈で0件_15章§8.1", _
-        modValidate.CheckS3(s3, MockJson(MK_S2N))
+        modValidate.CheckS3(s3, MockJson(MK_S2N), wm, wn, ws, wc)
 
     ChkZero "G40_MK-S3がrenewal文脈で0件_15章§8.1", _
-        modValidate.CheckS3(s3, MockJson(MK_S2R))
+        modValidate.CheckS3(s3, MockJson(MK_S2R), wm, wn, ws, wc)
 End Sub
 
 ' ============================
@@ -253,7 +349,7 @@ Private Sub T_Fault()
     '   (エラーUIへ昇格させない根拠。14章§6の帯域外成否規約・16章E-46)。
     ChkZero "G41_fake_errの本文JSONは自文脈で合格する_15章§8.2", _
         modValidate.CheckS2(modJsonLite.ExtractJsonBlock( _
-            modMockLlm.MockResponse("s2", CT_NEW, "fake_err")), CT_NEW)
+            modMockLlm.MockResponse("s2", CT_NEW, "fake_err")), CT_NEW, WlMenusSummary())
 
     ' broken_json: 修復呼出にも同じ破損が返る(毎回破損=状態レス)。だから
     '   修復後も不合格でStepが失敗する、という15章§8.2の期待挙動が成立する。
@@ -269,26 +365,35 @@ Private Sub T_Fault()
     r1 = modMockLlm.MockResponse("s2", CT_NEW, "broken_json_once")
     r2 = modMockLlm.MockResponse("s2", CT_NEW, "broken_json_once")
     ChkZero "G41_broken_json_onceの2回目は自文脈で合格する_15章§8.2", _
-        modValidate.CheckS2(modJsonLite.ExtractJsonBlock(r2), CT_NEW)
+        modValidate.CheckS2(modJsonLite.ExtractJsonBlock(r2), CT_NEW, WlMenusSummary())
 
     ' 未知の値は正常応答へフォールバックする(config入力ミスでE2Eを暴走させない)。
     ChkZero "G41_未知のfault値は正常応答へフォールバックする_15章§8.2", _
         modValidate.CheckS2(modJsonLite.ExtractJsonBlock( _
-            modMockLlm.MockResponse("s2", CT_NEW, "no_such_fault_kind")), CT_NEW)
+            modMockLlm.MockResponse("s2", CT_NEW, "no_such_fault_kind")), CT_NEW, WlMenusSummary())
 
     ' fault が空のときは8.1の正常応答のみ(既定で異常系が混ざらない)。
     ChkZero "G41_fault空は正常応答のみを返す_15章§8.2", _
         modValidate.CheckS2(modJsonLite.ExtractJsonBlock( _
-            modMockLlm.MockResponse("s2", CT_NEW, "")), CT_NEW)
+            modMockLlm.MockResponse("s2", CT_NEW, "")), CT_NEW, WlMenusSummary())
 End Sub
 
 ' ============================
 ' G41K ghost_id(ID実在検査を通るためグループを分けてある)
+'   **一覧を渡した上で**判定する。渡さないと fail-closed の申告行(裁定書7 A-2)
+'   が同じケースIDで出てしまい、「幽霊IDを捕まえた」ことの証明にならない。
+'   発火した行が幽霊ID M-9999 を挙げていることまで見て両者を分ける。
 ' ============================
 Private Sub T_FaultIds()
-    ChkFault "G41_ghost_idはS3のID実在検査を落とす_15章§8.2", _
-        modValidate.CheckS3(modJsonLite.ExtractJsonBlock( _
-            modMockLlm.FaultResponse("ghost_id", "s3")), MockJson(MK_S2R)), "V-S3-", "03"
+    Dim outText As String
+
+    outText = modValidate.CheckS3(modJsonLite.ExtractJsonBlock( _
+        modMockLlm.FaultResponse("ghost_id", "s3")), MockJson(MK_S2R), _
+        WlMenus(), WlLines(), WlSchemes(), WlCases())
+
+    ChkB "G41_ghost_idはS3のID実在検査を落とす_15章§8.2", _
+        (HasCase(outText, "V-S3-" & "03") And InStr(outText, "M-9999") > 0), _
+        "期待=V-S3-" & "03 が M-9999 を挙げて発火。実際=[" & HeadOf(outText) & "]"
 End Sub
 
 ' ============================

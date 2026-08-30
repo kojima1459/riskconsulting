@@ -49,6 +49,10 @@ Private Const VS3C_REACTION_N As Long = 3
 ' --- 正規化エンジンの再帰上限(壊れた入力で暴走させない) ---
 Private Const V_MAX_DEPTH As Long = 40
 
+' --- ID実在検査が実行できないときのエラー文(裁定書7 A-2 の fail-closed。
+'     modValidate.V_NOLIST と同一文言。V-S2C-03 の「一覧」は審査対象のS2 JSON) ---
+Private Const V_NOLIST As String = "ID実在検査が実行できません(ID一覧未提供)"
+
 ' ============================================================================
 ' NormalizeCore - 配列要素の重複排除(14章§5(2.5)・16章 E-49・E0303)
 ' ----------------------------------------------------------------------------
@@ -159,8 +163,8 @@ End Function
 ' ----------------------------------------------------------------------------
 '   refIdsText : PFへ注入した一覧(menusSummary / patternsText / rulesText /
 '     researchingText 等を連結したもの。15章§6.1 の1行書式で行頭が "[ID] ")。
-'     V-PF-03 の実在判定に使う。空文字は「一覧を注入していない」の意なので
-'     検査しない(IdExistsIn の注記)。
+'     V-PF-03 の実在判定に使う。空文字は「一覧未提供」= fail-closed で不合格
+'     (裁定書7 A-2。V_NOLIST)。PFを結線する側は必ず連結した一覧を渡すこと。
 ' ============================================================================
 Public Function CheckPFCore(ByVal json As String, ByVal refIdsText As String) As String
     Dim r As String
@@ -213,7 +217,9 @@ Public Function CheckPFCore(ByVal json As String, ByVal refIdsText As String) As
         sj = CStr(it)
         sVal = Trim$(modJsonLite.GetStr(sj, "ref_id"))
         If IsRefIdShaped(sVal) Then
-            If Not IdExistsIn(refIdsText, sVal) Then
+            If Not ListGiven(refIdsText) Then
+                Ap r, "[V-PF-03] " & V_NOLIST
+            ElseIf Not IdExistsIn(refIdsText, sVal) Then
                 Ap r, "[V-PF-03] duplicates[" & idx & "].ref_id " & sVal & " は実在しません"
             End If
         End If
@@ -266,8 +272,8 @@ End Function
 ' ----------------------------------------------------------------------------
 '   s2Json: 審査対象のS2 JSON(V-S2C-03 の risk_no / gap_no 実在判定)。
 '     空文字は「審査対象を渡していない」の意であり「S2に番号が1つも無い」では
-'     ないため、V-S2C-03 は検査しない(ID実在検査の IdExistsIn と同じ規約。
-'     17章 T-22 のDoD「mock応答は自分の文脈で0件」)。
+'     ないため、V-S2C-03 は**実行できない=不合格**とする(裁定書7 A-2 の
+'     fail-closed。V_NOLIST。黙って検査を消さない)。
 '   V-S2C-05(issues 0件=合格)はエラー文を持たないため戻り値に現れない
 '   (15章§0 原則10。改訂パスのスキップ判定は呼び出し側が issues 件数で行う)。
 ' ============================================================================
@@ -302,11 +308,15 @@ Public Function CheckS2CCore(ByVal json As String, ByVal s2Json As String) As St
         If LenB(kind) = 0 Then
             Ap r, "[V-S2C-02] issues[" & idx & "].target の書式が不正です: " & sVal
         ElseIf kind = "risk_no" Then
-            If s2Given And InStr(riskSet, "|" & TargetNumText(sVal) & "|") = 0 Then
+            If Not s2Given Then
+                Ap r, "[V-S2C-03] " & V_NOLIST
+            ElseIf InStr(riskSet, "|" & TargetNumText(sVal) & "|") = 0 Then
                 Ap r, "[V-S2C-03] issues[" & idx & "].target " & sVal & " が S2 に存在しません"
             End If
         ElseIf kind = "gap_no" Then
-            If s2Given And InStr(gapSet, "|" & TargetNumText(sVal) & "|") = 0 Then
+            If Not s2Given Then
+                Ap r, "[V-S2C-03] " & V_NOLIST
+            ElseIf InStr(gapSet, "|" & TargetNumText(sVal) & "|") = 0 Then
                 Ap r, "[V-S2C-03] issues[" & idx & "].target " & sVal & " が S2 に存在しません"
             End If
         End If
@@ -392,17 +402,18 @@ Private Function InEnum(ByVal sVal As String, ByVal enumList As String) As Boole
     InEnum = (InStr(enumList, "|" & sVal & "|") > 0)
 End Function
 
+' ID一覧が渡されたか(fail-closed の判断点。裁定書7 A-2。modValidate.ListGiven と
+' 同じ規約: 空は「未提供」であって「一覧に無い」ではないので、呼び出し側は
+' V_NOLIST の不合格を出す。15章§6.1 の "(登録なし)" は空ではない)。
+Private Function ListGiven(ByVal listText As String) As Boolean
+    ListGiven = (LenB(Trim$(listText)) > 0)
+End Function
+
 ' 注入テキスト(1行1件・行頭 "[ID] ")に当該IDの行があるか(15章§6.1)。ID実在検査
-' (15章§6 V-PF-03)の唯一の判断点。**一覧が空なら True**: 空は「一覧を注入して
-' いない」の意であって「一覧に無い」ではなく、候補ゼロに実在を要求するのは
-' 14章§6 MenusSummaryFor が名指しで禁じた矛盾だからである(modValidate.IdExistsIn
-' と同じ規約。17章 T-22 のDoD「mock応答は自分の文脈で0件」もこれによる)。
+' (15章§6 V-PF-03)の照合部。一覧が空なら False(未提供は ListGiven で先に分ける)。
 Private Function IdExistsIn(ByVal listText As String, ByVal idText As String) As Boolean
-    If LenB(Trim$(listText)) = 0 Then
-        IdExistsIn = True
-        Exit Function
-    End If
     If LenB(idText) = 0 Then Exit Function
+    If LenB(listText) = 0 Then Exit Function
     If Left$(listText, Len(idText) + 2) = "[" & idText & "]" Then
         IdExistsIn = True
         Exit Function

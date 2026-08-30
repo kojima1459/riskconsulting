@@ -127,9 +127,11 @@ PURE_ALLOWLIST = [
     "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
     "modSchemas", "modValidate", "modValidate2", "modPii",
     # app のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは14章§6が公開を
-    # 宣言した純関数だけのモジュール(技術メモ4。裁定書6 項目6/7)。
+    # 宣言した純関数だけのモジュール(技術メモ4。裁定書6 項目6/7・裁定書7 B-6)。
     # modKnowledgeFmt は全体が純文字列(整形と15章§0.7の切詰め)。
-    "modKnowledgeFmt", "modCaseStore",
+    # modPipeline は store/log/LLM経由でExcelに触れるが、テストが叩くのは
+    # 14章§6が公開を宣言した判定核16本(純関数)だけ。
+    "modKnowledgeFmt", "modCaseStore", "modPipeline",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",

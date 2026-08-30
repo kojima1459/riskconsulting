@@ -1,5 +1,7 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
+> v2.4.3（裁定書7: W2b整合）: §6の `modValidate` を**引数渡し設計**へ正式改訂した（Check系の末尾 Optional＝実在ID一覧テキストとJSONの外側の文脈を宣言に昇格。「ID実在はmodKnowledge参照」は**呼出側＝modPipelineがmodKnowledgeから取得して渡す**の意であると明記）。ID実在検査を**fail-closed**（一覧未提供は当該ケースIDで不合格・16章E-07のKPI「すり抜け0件」と整合）とし、`CheckS4` のティア不明時は V-S4-01/02 の両方を当てる規約を確定。**LibreOffice制約**（Optional String に `= ""` を書かない）を注記。命名権の一括裁定として `modValidate2` の *Core 5本 / `modPipeline` の判定核16本 / `modPii` 5本 / `modCompanyFile` 4本（`modCompanyFile2` の下位I/Oは公開契約面に載せない）を宣言し、案件一覧の読取専用API **`modCaseRead.ReadCaseCtx`** を新設した（modPipeline.LoadCtx と modCompanyFile.ExportCompanyFile の死に経路を解消）。
+
 > v2.4.2（裁定書6: W2a整合）: §6を**二層**へ改訂した。(1) `Build*System` / `Build*User` / `ReviseSuffix` / `RepairSuffix` / `Block*` / `Schema*` は**引数なしのテンプレート関数**（`{{...}}` を素のまま返す＝`prompt_diff.py` の突合対象31関数）、(2) `modPromptsOps` に**組立層** `Fill` と `Asm*`（`AsmS1User` / `AsmS2User` / `AsmS3User` / `AsmS4System` / `AsmS4User` / `AsmS2CriticUser` / `AsmS3CriticUser` / `AsmSparringSystem` / `AsmPFUser`）を新設し、条件ブロック（renewal）・S4バリアント差替・想定外variantのproposalフォールバック（`fallbackNote` で帯域外に返し記録は modPipeline）をその責務とした。あわせて **`modKnowledgeFmt`**（整形の純関数10本＋`TrimKbLine`＋`TrimPlan`）を新設、`modKnowledge` の各注入関数へ `Optional maxRows`（15章§0.7の半減の口）を追加、`modCaseStore` の純ロジック4本（`BuildCaseId` / `IsValidCaseId` / `CanTransition` / `ResolveDataKey`）を公開、**`modUtil` の節を新設**して10関数を契約化した（`BufText` の区切りは vbLf）。
 
 > v2.4.1（裁定書5: W1整合）: §6を唯一の命名権者として確定し、`modGatewayRPN.DecideOk`（帯域外成否の唯一の判定点）・`modUtilText.SanitizeForCell`・`modLog.TruncDetail` / `ShouldRotate`・`modGatewayDirect.CallDirect` / `BackoffMs` / `RetryBudgetFor` / `ParseKeyLine` / `IsOSeriesModel` / `BuildRequestBody`・`modMockLlm.MockResponse` / `ResponseById` / `FaultResponse` を追記。`SanitizeInput` の宣言を実装の Optional ByRef 2本（16章E-04の件数記録）へ追随させ、`GetStr`（エスケープを解いて返す）・`GetArrayItems`（キー不在は空Collection）の未確定点を明文化。§5に括弧の対応判定が文字列リテラル内を数えない旨、§2に `LooksLikeLimitError` の判定（先頭 `#LIMIT:` または「利用上限に達しました」を含む）を固定した。
@@ -282,20 +284,74 @@ Public Function BuildRequestBody(ByVal stepName As String, ByVal model As String
 ' schemaJson が空のときは response_format を出力しない
 
 ' === app: modValidate ===  戻り値 ""=合格 / 非空=エラー列挙（修復プロンプト用の日本語）
+' **JSONの外側の文脈は引数で受ける**（裁定書7 A-1 が正式に確定した設計）。modValidate は
+'   12章§2・17章§4-1 層(a) の純関数であり、シート・config・ログ・modKnowledge に触れない。
+'   したがって**実在ID一覧テキスト（15章§3/§4/§6.1 の1行書式。行頭 `[ID] `）は、
+'   呼び出し側＝modPipeline / modPlayOps が modKnowledge から取得して渡す**。
+'   （v2.4までの CheckS3 の注記「ID実在はmodKnowledge参照」はこの引数渡しの意味であり、
+'    modValidate から modKnowledge を直接呼ぶことではない。直接呼ぶと層(a)から試験できない）
+' **fail-closed**（裁定書7 A-2・16章E-07のKPI「S3実在チェックのすり抜け0件」）: 検査対象の
+'   キーが非空のIDを持つのに対応する一覧テキストが空（＝未提供）なら、当該ケースIDで
+'   **不合格**とし `[ケースID] ID実在検査が実行できません（ID一覧未提供）` を返す。
+'   値が "" のIDは従来どおり検査対象外。15章§6.1 の "(登録なし)" は空ではないので通常の
+'   実在検査が走る。**引数の渡し忘れで検査が黙って消えることを禁じる**のがこの規約である
+'   （対象ケース: V-S2-06 / V-S3-03..06 / V-PF-03 / V-S2C-03。15章§11の該当行にも明記）
+' **LibreOffice制約**: `Optional ... As String = ""` と書かない（空文字の既定値を束縛できず、
+'   省略呼び出しが実行時エラー13になり層(c)のテスト群が丸ごと止まる）。既定値を書かない
+'   Optional String はVBAでも省略時に長さ0の文字列になるため意味は同一
 Public Function NormalizeLlmJson(ByVal stepName As String, ByVal json As String, _
                                  ByRef removedCount As Long) As String
 ' 尾部劣化（同名項目の重複出力）の正規化。§5防衛線(2.5)。16章E-49。
 ' 配列要素を NormalizeForHash 後の fnv1a64 で重複排除し、除去件数を removedCount に返す。
 ' removedCount>0 は E0303（警告）として run_log detail に記録する（黙殺しない）
-Public Function CheckS1(ByVal json As String, ByVal caseType As String) As String
-Public Function CheckS2(ByVal json As String, ByVal caseType As String) As String
-Public Function CheckS3(ByVal json As String, ByVal s2Json As String) As String  ' ID実在はmodKnowledge参照
-Public Function CheckS4(ByVal json As String) As String
-Public Function CheckS2C(ByVal json As String) As String          ' 入念モードの批判JSON（15章§4.5）
+Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
+                        Optional ByVal fieldNoteProvided As Boolean = True) As String
+' fieldNoteProvided: 現場メモの有無（V-S1-11。s1Json から判別できないので modPipeline が渡す）。
+'   **既定は True**＝不明なら黙らず出す（V-S1-11 の判定は「警告」。15章§0 原則10）
+Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
+                        Optional ByVal menusText As String, _
+                        Optional ByVal prevS2Json As String) As String
+' menusText: S2へ注入した menusSummary（MenusSummaryFor の戻り値。V-S2-06 の実在判定）。
+' prevS2Json: 前ラウンドのS2 JSON（case_data `s2_prev_json`）。"" または "なし" は初回実行
+'   （V-S2-09 は初回のみ / V-S2-10 は第2ラウンド以降のみ）
+Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
+                        Optional ByVal menusText As String, _
+                        Optional ByVal linesText As String, _
+                        Optional ByVal schemesText As String, _
+                        Optional ByVal casesText As String, _
+                        Optional ByVal caseType As String) As String
+' menusText/linesText/schemesText/casesText: S3へ注入した一覧（MenusFor / LinesText /
+'   SchemesFor / CasesFor の戻り値。V-S3-03..06 の実在判定）。caseType は V-S3-13 用
+'   （省略時は s2Json の gaps 非空から更新案件を導く。V-S2-12 が「新規で gaps 1件以上」を
+'    不合格にしているため確定できる）
+Public Function CheckS4(ByVal json As String, _
+                        Optional ByVal dossierTier As String, _
+                        Optional ByVal maxSlidesT2 As Long = 10) As String
+' dossierTier: 13章§2.1 の dossier_tier（s4Json に無いので呼び出し側が渡す）。**省略・空は
+'   「ティア不明」として V-S4-01 と V-S4-02 の両方を当てる**（裁定書7 A-4。片方のティアを
+'   黙って既定に据えると、もう一方の違反〈t1_quick の5枚固定〉が構造的にすり抜ける。
+'   5枚は両ティアで合法なので正常な応答はティア不明でも0件）。maxSlidesT2=config `ppt_max_slides_t2`
+Public Function CheckS2C(ByVal json As String, Optional ByVal s2Json As String) As String
+' 入念モードの批判JSON（15章§4.5）。s2Json=審査対象のS2（V-S2C-03 の番号実在判定。
+'   未提供は fail-closed で V-S2C-03 を不合格にする）
 Public Function CheckS3C(ByVal json As String) As String          ' 入念モードの批判JSON（15章§4.6）
-Public Function CheckPF(ByVal json As String) As String
+Public Function CheckPF(ByVal json As String, Optional ByVal refIdsText As String) As String
+' refIdsText: PFへ注入した一覧（menusSummary + patternsText + rulesText + researchingText を
+'   連結したもの。V-PF-03 の実在判定）。PL-03を結線する modPlayOps は必ず渡すこと
 Public Function CheckWT(ByVal json As String) As String          ' Phase1.5
 Public Function CheckFG(ByVal json As String) As String          ' Phase1.5
+
+' === app: modValidate2（30,000字契約による modValidate の分割先。裁定書7 B-5）===
+' **分割の継ぎ目**であり、呼んでよいのは modValidate だけ（依存は modValidate -> modValidate2 の
+'   一方向。逆参照はしない）。公開名の `*Core` 接尾辞は「14章§6の公開名の本体」の意で、
+'   引数はいずれも modValidate 側の入口と同じ意味を持つ（Optional は入口側にだけ置く）。
+Public Function NormalizeCore(ByVal stepName As String, ByVal json As String, _
+                              ByRef removedCount As Long) As String
+Public Function CheckS4Core(ByVal json As String, ByVal dossierTier As String, _
+                            ByVal maxSlidesT2 As Long) As String
+Public Function CheckPFCore(ByVal json As String, ByVal refIdsText As String) As String
+Public Function CheckS2CCore(ByVal json As String, ByVal s2Json As String) As String
+Public Function CheckS3CCore(ByVal json As String) As String
 
 ' === app: modKnowledge ===
 ' 各注入関数の `Optional ByVal maxRows As Long = 0` は**15章§0.7の段階的な半減を外から
@@ -483,6 +539,94 @@ Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
     ' 指摘ありなら改訂(ReviseSuffix)の3呼び出しで実行。批判・改訂はrun_logに
     ' step="s2c"/"s3c"/"s2r"/"s3r" として記録。deep_transport指定時は批判・改訂のみ経路変更
 Public Function RunPreflight(ByVal inboxId As String) As Boolean
+' --- modPipeline の判定核16本（裁定書7 B-6。シート・ログ・LLMに触れない純関数）---
+' 規約そのもの（打切り計画・修復要否・結果の分類・失敗コードの切分け・deep分岐）を実行制御の
+'   中に閉じ込めると層(a)から誰も検査できない（W2aの modKnowledge 整形と同じ轍）。以下は
+'   modTestsPure から直接叩く前提で公開し、run_lo_tests の PURE_ALLOWLIST にも modPipeline を
+'   登録する。**Private へ戻すことは契約違反**（vba_lint の CONTRACT required が検出する）。
+Public Function TrimInputPlan(ByRef lens() As Long, ByVal budgetChars As Long) As Long()
+' 16章E-03(2)の打切りを**計画するだけ**（実際に削るのは呼び出し側）。lens(0..4)=切る順
+'   （追加ドシエ/前回更新メモ/有報/営業メモ/HP）の現在字数、lens(5)=打切らない4欄の合計。
+'   budgetChars<=0 は上限なし。戻り値=5要素の「残してよい字数」。1欄ずつ削って再計測し、
+'   上限を下回った時点で止める。**4欄だけで超過する場合は自動では削らない**（E-03(3)(4)）
+Public Function ProtectedOverBudget(ByVal keepChars As Long, ByVal budgetChars As Long) As Boolean
+' 打切らない4欄だけで上限超過か（E-03(4) の E0102 警告の唯一の条件）
+Public Function TruncField(ByVal s As String, ByVal allowedChars As Long) As String
+' 切詰めた欄に注記「（一部省略）」を付す（E-03(6)）。allowedChars<=0 は注記だけを返す
+Public Function BudgetOf(ByVal limitChars As Long, ByVal pct As Long) As Long
+' 15章§0.7 の予算配分（貼付=上限の7割 / ナレッジ=3割）。pct は 7 または 3。16章E-03の
+'   「上限」の解釈もこの配分が正（E-03 に同旨を追記済み。裁定書7 B-9）
+Public Function NeedsRepair(ByVal errText As String, ByVal retryBudget As Long) As Boolean
+' 修復要否（§5防衛線(4)）。検証エラーがあり再試行枠（config `json_repair_retry`）が残るときだけ
+Public Function ClassifyResult(ByVal firstOk As Boolean, ByVal repairTried As Boolean, _
+                               ByVal repairOk As Boolean) As String
+' run_log の validate_result（13章§2.4）の3値。初回合格=ok / 修復後合格=repaired / 他=failed
+Public Function FailCodeOf(ByVal errText As String) As String
+' 不合格の内訳をエラーコードへ。**ID幻覚（16章E-07）を含めば E0301、それ以外は E0302**。
+'   判定は検証エラー行の先頭のケースID（V-S2-06 / V-S3-03..06）で行う
+Public Function CaseIdOfLine(ByVal lineText As String) As String
+' 検証エラー1行の先頭 `[ケースID] ` からケースIDを取り出す（15章§0 原則10の書式）。不一致は ""
+Public Function DeepEnabled(ByVal qualityMode As String, ByVal stepNo As Long) As Boolean
+' 入念モードの分岐（S2/S3のみ。15章§4.5-4.7）
+Public Function ResolveQualityMode(ByVal cfgMode As String, ByVal tier As String) As String
+' config `quality_mode`（13章§2.3）の解決。空はティア連動（t1_quick=standard / 他=deep）
+Public Function StepNameOf(ByVal stepNo As Long) As String        ' 19章§4 の step 値（s1..s4。範囲外は ""）
+Public Function StatusForStep(ByVal stepNo As Long) As String     ' Step成功時の遷移先（13章§2.1 sN_done）
+Public Function PlayIdOf(ByVal caseType As String) As String      ' renewal=PL-02 / それ以外=PL-01（§1）
+Public Function KbRowCount(ByVal s As String) As Long             ' 注入テキストの行数（0行の既定文言は0）
+Public Function UsesSlot(ByVal stepNo As Long, ByVal slot As Long) As Boolean
+' 12章§3のStep別ナレッジ枠（S2=リスクライブラリ+メニュー要約 / S3=メニュー/種目/型/事例）
+Public Function S1SummaryOf(ByVal s1Json As String) As String
+' 15章 S3/S3C の {{s1SummaryJson}}（business_summary / strategy_outlook / current_coverage /
+'   field_insights の4キーだけのJSON。他のキーを含めない）
+
+' === app: modCaseRead（案件一覧の読取専用API。裁定書7 B-7）===
+Public Function ReadCaseCtx(ByVal caseId As String, ByRef ctx As TCaseCtx, _
+                            ByRef roundNo As Long, ByRef qualityMode As String, _
+                            ByRef s4Variant As String, ByRef dossierTier As String) As Boolean
+' 13章§2.1『案件一覧』の1行から「Stepを実行するのに要る文脈」を1回の読取で取り出す**唯一の口**。
+'   R4でシートに触れない modPipeline / modCompanyFile は必ずこれを通す（読取APIが無いまま
+'   既定値で走らせると、企業名が空・case_type=new 固定のプロンプトでAI利用枠を消費し、
+'   誤った sN_json を確定してしまう）。**書込は一切持たない**（状態遷移・採番・case_data は
+'   modCaseStore が唯一の口。R4許可は「案件一覧の読取だけ」に限る）。
+'   ctx=13章§2.1の10列（TCaseCtx）/ roundNo=round_no（空・不正は1）/ s4Variant=s4_variant
+'   （空は proposal）/ dossierTier=dossier_tier（空は t1_quick。ctx.dossier_tier と同値）/
+'   qualityMode=config `quality_mode`（案件一覧に列は無い。空はティア連動＝ResolveQualityMode が解決）。
+'   戻り値 False=シート・見出し・当該行が無い（呼び出し側は fail-closed で中止する）
+' なお `last_ok_step` / `failed_step` の**書込**口（16章E-06）はまだ本節に無い。modPipeline は
+'   失敗Stepを usage_log（event=failed_step）へ退避している（次波で宣言する）
+
+' === app: modPii（PII走査の本体。16章E-05・12章§2/§4。裁定書7 B-5）===
+' 走査の実施点は16章E-05の一覧（modUICase / modUIInbox / modSparring / modJudgeStore /
+'   modExportHtml / modCompanyFile）が正。本モジュールは**判定の唯一の実装**であり、
+'   検知規則（@付き・電話番号・敬称つき人名）を2箇所に書かない。
+Public Function HasPii(ByVal sText As String) As Boolean          ' 1件でも検知したか
+Public Function DetectionCount(ByVal sText As String) As Long     ' 検知件数
+Public Function KindsOf(ByVal sText As String) As String          ' 検知種別（";"区切り。例 "mail;phone"）
+Public Function ScanReport(ByVal sText As String, ByVal whereNote As String) As String
+' 走査結果の1行表現（"箇所名|種別@文字位置" の列挙）。**本文を含めない**（16章NFR-S3。
+'   err_log / dossier_meta へそのまま記録できることが契約）
+Public Function MaskText(ByVal sText As String) As String
+' 検知箇所を `{{PERSON}}` 等へ置換した伏字案（16章E-05(5) の customer_quote の差し替え案）。
+'   置換した文面を返すだけで、保存の採否は呼び出し側（利用者の選択）が決める
+
+' === app: modCompanyFile（企業ドシエファイル。13章§2.8・FR-45。裁定書7 B-5）===
+Public Function CompanyFilePath(ByVal company As String, ByVal caseId As String, _
+                                ByVal dirPath As String) As String
+' 13章§2.8のファイル名規則で決まる絶対パス（生の company を使わず SanitizeFileName 系を通す）
+Public Function ScanCaseForPii(ByVal caseId As String) As String
+' 書き出す予定の中身をまとめて modPii へ通す（16章E-05(7)）。""=検知なし
+Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As String, _
+                                  ByVal confirmedAt As String) As String
+' 現ラウンドを追記書き出し（HOMEの[保存]）。戻り値=書き出した絶対パス。失敗・中止は ""。
+'   company / industry_code / dossier_tier / round_no は modCaseRead.ReadCaseCtx で読む
+'   （読めなければ書き出さない）。confirmedAt=PII検知に対し利用者が「確認した」を選んだ日時。
+'   検知があるのに confirmedAt が空なら**書き出さない**（16章E-05(7)）
+Public Function ImportCompanyFile(ByVal filePath As String, ByVal caseId As String) As Boolean
+' 最新ラウンドの s1/s2 と notes を案件へ復元（HOMEの[開く]）。**その枠が空のときだけ書く**
+' `modCompanyFile2` は 30,000字契約による分割先（ブック・シートの下位I/O 14本）。
+'   **本節の公開契約面には載せない**（modCompanyFile の下位実装であり、呼んでよいのは
+'   modCompanyFile だけ。vba_lint の CONTRACT は required=[] で登録する）
 
 ' === app: modCaseStore / modInboxStore / modJudgeStore ===
 Public Function NewCase(ByVal company As String, ByVal industryCode As String, ByVal caseType As String) As String

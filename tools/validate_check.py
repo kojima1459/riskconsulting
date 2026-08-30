@@ -29,6 +29,17 @@ validate_check.py - 15章§11の検証ルール表 <-> modValidate <-> modTestsP
       (d) エラー文テンプレの一字一句(既定でON。--no-templates で外す)
           - 各Check節の表の `エラー文テンプレ` を `{...}` で切った**固定部**が、
             実装のソースにそのまま現れること。文言が仕様から漂流したら落ちる。
+          - 照合の範囲は**当該ケースIDの近傍に限る**(裁定書7 C-11)。実装を
+            1本の文字列に連結して素の部分文字列検索を掛けると、別ケースが
+            偶然もつ同一の固定部が肩代わりして文言の漂流を検出できない
+            (実測: V-S3-01「件です(3件固定)」を「(3件確定)」へ壊しても
+             V-S3C-01 の同一文言が吸収して緑のまま通った)。近傍＝当該IDが
+            現れた行から**次にケースIDが現れる行の直前まで**(行継続 `_` で
+            次行へ続くエラー文もこの区間に入る)。同じIDの区間は連結する。
+      (e) 自己整合(裁定書7 C-12。照合器自身の骨抜きを検出する)
+          - (a)(b)(d) の各ループが**64件すべてを検査したこと**を件数で確認する
+            (特定ケースを `continue` で飛ばす改変が入ると落ちる)。
+          - (d) の照合片が0件なら不合格(照合しなかったことを緑にしない)。
 
     未統合段階(modValidate は出来たがテストはまだ、の並行作業)では
     `--no-tests` で (b) と (b)由来の件数照合を省ける。**出荷前の検問では
@@ -191,6 +202,26 @@ def read_sources(directory: Path, pattern: str) -> dict[str, str]:
             for p in sorted(directory.glob(pattern))}
 
 
+def case_regions(srcs: dict[str, str]) -> dict[str, str]:
+    """ケースIDごとの「近傍」区間を作る((d)の照合範囲。裁定書7 C-11)。
+
+    各ファイルを行単位で見て、ケースIDが現れた行から**次にケースIDが現れる行の
+    直前まで**をそのIDの区間とする。同じIDの区間は連結する。行継続(`_`)で
+    次行へ続くエラー文は次のケースID行までに入るので同じ区間に収まる。
+    """
+    regions: dict[str, list[str]] = {}
+    for text in srcs.values():
+        lines = text.split("\n")
+        hits = [(i, sorted(set(CASE_ID.findall(line)))) for i, line in enumerate(lines)]
+        anchors = [(i, found) for i, found in hits if found]
+        for pos, (i, found) in enumerate(anchors):
+            end = anchors[pos + 1][0] if pos + 1 < len(anchors) else len(lines)
+            seg = "\n".join(lines[i:end])
+            for cid in found:
+                regions.setdefault(cid, []).append(seg)
+    return {cid: "\n".join(parts) for cid, parts in regions.items()}
+
+
 def check_impl(ids: list[str], verdict: dict[str, str], rep: Report) -> None:
     srcs = read_sources(IMPL_DIR, IMPL_GLOB)
     if not srcs:
@@ -200,7 +231,9 @@ def check_impl(ids: list[str], verdict: dict[str, str], rep: Report) -> None:
     joined = "\n".join(srcs.values())
     # 実装中の "[V-xxx] " で始まる文字列リテラルを集める。
     lit_ids = set(re.findall(r'"\[(V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2})\]\s', joined))
+    examined = 0
     for cid in ids:
+        examined += 1
         has_lit = cid in lit_ids
         mentioned = cid in joined
         if verdict.get(cid) == "合格":
@@ -217,27 +250,54 @@ def check_impl(ids: list[str], verdict: dict[str, str], rep: Report) -> None:
     stray = sorted(lit_ids - set(ids))
     if stray:
         rep.err(f"(a) §11に無いケースIDのエラー文が実装にあります: {', '.join(stray)}")
+    if examined != len(ids):
+        rep.err(f"(e) 自己整合: (a)の照合ループが{examined}件しか回っていません"
+                f"(§11の展開は{len(ids)}件)。ケースを飛ばす改変が入っています")
 
 
-def check_templates(rules: dict[str, tuple[str, str]], ids: list[str], rep: Report) -> None:
+def check_templates(rules: dict[str, tuple[str, str]], ids: list[str],
+                    verdict: dict[str, str], rep: Report) -> None:
     srcs = read_sources(IMPL_DIR, IMPL_GLOB)
-    joined = "\n".join(srcs.values())
+    regions = case_regions(srcs)
     checked = 0
+    visited = 0
+    with_tmpl = 0
     for cid in ids:
+        visited += 1
         entry = rules.get(cid)
         if entry is None:
             continue
         tmpl = entry[1]
         if not tmpl:
             continue
+        with_tmpl += 1
+        # (d)は当該ケースIDの近傍だけを見る(裁定書7 C-11)。全ソース連結に対する
+        # 素の部分文字列検索だと、別ケースの同一文言が肩代わりして漂流を見逃す。
+        near = regions.get(cid, "")
         for frag in re.split(r"\{[^}]*\}", tmpl):
             if len(frag.strip()) < 2:
                 continue
-            if frag not in joined:
+            if frag not in near:
                 rep.err(f"(d) {cid} のエラー文テンプレが実装と一致しません。"
-                        f"15章の固定部「{frag}」が modValidate*.bas にありません")
+                        f"15章の固定部「{frag}」が modValidate*.bas の "
+                        f"{cid} の近傍にありません")
             checked += 1
-    rep.note(f"(d) エラー文テンプレの固定部 {checked} 片を照合")
+    rep.note(f"(d) エラー文テンプレの固定部 {checked} 片を {len(regions)} 件の"
+             "ケースID近傍で照合")
+
+    # --- (e) 自己整合(裁定書7 C-12) ---
+    if visited != len(ids):
+        rep.err(f"(e) 自己整合: (d)の照合ループが{visited}件しか回っていません"
+                f"(§11の展開は{len(ids)}件)。ケースを飛ばす改変が入っています")
+    if checked == 0:
+        rep.err("(e) 自己整合: (d)の照合片が0件です"
+                "(エラー文テンプレを1片も照合していない状態を緑にしない)")
+    expect_tmpl = sum(1 for c in ids if verdict.get(c) != "合格")
+    if with_tmpl != expect_tmpl:
+        rep.err(f"(e) 自己整合: エラー文テンプレを持つケースが{with_tmpl}件ですが、"
+                f"§11で「不合格・警告」のケースは{expect_tmpl}件です"
+                "(判定3値のうちエラー文を持つのはこの2値。各Check節の表の"
+                "テンプレ欄が欠けているか、判定列が食い違っています)")
 
 
 def check_tests(ids: list[str], rep: Report) -> None:
@@ -276,7 +336,9 @@ def check_tests(ids: list[str], rep: Report) -> None:
                      "1件も拾えませんでした。判定ヘルパの名前が Check / Chk* 以外なら"
                      "本スクリプトの TEST_NAME を合わせてください")
 
+    examined = 0
     for cid in ids:
+        examined += 1
         n = len(hit[cid])
         if n == 0:
             rep.err(f"(b) {cid} のテストがありません"
@@ -286,6 +348,9 @@ def check_tests(ids: list[str], rep: Report) -> None:
                     + " / ".join(hit[cid]))
     if tagged != len(ids):
         rep.err(f"(c) ケースIDを含むテスト名は{tagged}本ですが、ケース総数は{len(ids)}件です")
+    if examined != len(ids):
+        rep.err(f"(e) 自己整合: (b)の照合ループが{examined}件しか回っていません"
+                f"(§11の展開は{len(ids)}件)。ケースを飛ばす改変が入っています")
 
 
 def main() -> int:
@@ -321,7 +386,7 @@ def main() -> int:
 
         check_impl(ids, verdict, rep)
         if not args.no_templates:
-            check_templates(rules, ids, rep)
+            check_templates(rules, ids, verdict, rep)
         if args.no_tests:
             rep.note("(b) --no-tests のためテスト側の照合をスキップしました"
                      "(出荷前の検問では必ず外して回すこと)")

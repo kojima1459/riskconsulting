@@ -394,7 +394,7 @@ End Function
 Private Function IsPhoneHead(ByVal sText As String, ByVal i As Long) As Boolean
     Dim c As String
     c = Mid$(sText, i, 1)
-    If c <> "0" And c <> ChrW(&HFF10) Then Exit Function
+    If c <> "0" And c <> ChrW(&HFF10&) Then Exit Function
     If i > 1 Then
         Dim prevCh As String
         prevCh = Mid$(sText, i - 1, 1)
@@ -576,18 +576,22 @@ End Function
 
 ' 人名を構成しうる文字か(漢字・カタカナ・長音・中黒・々)。ひらがなと英字は
 ' 誤検知が多すぎるため名前構成要素にしない(本モジュール冒頭の既知の取りこぼし)。
+' 16進リテラルには必ず Long 接尾辞 "&" を付ける。付けないと &H8000 以上が
+' 符号付き Integer として負値に化け(&H9FFF = -24577)、漢字域の上限比較が
+' 常に偽になって【漢字の姓が1つも当たらない】。modUtil/modJsonLite/modConfig と
+' 同じ作法(codebase 全体で &H....& に統一)。
 Private Function IsNameChar(ByVal c As String) As Boolean
     Dim cp As Long
     cp = CodePointOf(c)
-    If cp >= &H4E00 And cp <= &H9FFF Then
+    If cp >= &H4E00& And cp <= &H9FFF& Then
         IsNameChar = True
         Exit Function
     End If
-    If cp >= &H30A1 And cp <= &H30FA Then
+    If cp >= &H30A1& And cp <= &H30FA& Then
         IsNameChar = True
         Exit Function
     End If
-    If cp = &H30FC Or cp = &H30FB Or cp = &H3005 Then IsNameChar = True
+    If cp = &H30FC& Or cp = &H30FB& Or cp = &H3005& Then IsNameChar = True
 End Function
 
 ' AscW は符号付き16bitを返すため、U+8000 以上が負になる。Long のコードポイントへ

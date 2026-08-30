@@ -9,14 +9,13 @@ Option Explicit
 '   E-07・E-49/13章§2.2(保存 data_key と参照優先)/15章§0.7/17章 T-24。
 ' 責務: 入力読取と打切り / ナレッジ注入と切詰め / プロンプト組立の委譲(15章の本文は
 '   持たない) / CallStep / 防衛線と修復リトライ / 保存 / run_log を1呼び出し1行。
-'   **シートに直接触れない**(R4: 12章§4の許可10モジュールに無い)。
+'   **シートに直接触れない**(R4)。案件一覧の読取は modCaseRead.ReadCaseCtx
+'   (14章§6・裁定書7 B-7)が唯一の口で、読めなければ fail-closed で中止する。
 ' 判定核の分離(T-24): 修復要否・validate_result の3値分類・deep分岐・E-03の打切り
-'   計画・E0301/E0302の切分けは、シートもログも触らない純関数として下の「純関数」
-'   節に置いた。**14章§6に宣言が無いため Private**(命名権は14章§6。層(a)から叩く
-'   には§6への宣言追加が要る。申請済み)。
-' 【未結線1】案件一覧を読む公開関数(case_type/dossier_tier/company/s4_variant/
-'   round_no 等)も last_ok_step/failed_step を書く公開関数も14章§6に無く、R4で
-'   シートも読めない。誤った前提でAI枠を使わないよう LoadCtx は fail-closed。
+'   計画・E0301/E0302の切分けはシートもログも触らない純関数で、**16本は14章§6が
+'   公開を宣言**(裁定書7 B-6)。層(a)=modTestsPure が直接叩く。
+' 【未結線1】last_ok_step / failed_step の**書込**APIは14章§6に未宣言(申請中)。
+'   失敗Stepは usage_log(event=failed_step)へ退避している。
 ' 【未結線2】入念モード(15章§4.5-4.7・16章E-35/E-36)の批判・改訂は30,000字契約に
 '   収まらないため T-28 へ渡す(分岐判定の純核 DeepEnabled と分岐点だけ置く)。
 ' ============================================================================
@@ -121,19 +120,28 @@ Failed:
     RunStep = False
 End Function
 
-' LoadCtx - 案件一覧から1案件の文脈を読む【唯一の口】。読取APIが14章§6に無く R4で
-'   シートも読めないため現状は必ず False(未結線1)。§6宣言後はここで ctx /
-'   mRoundNo / mS4Variant / mQualityMode を埋める。
+' LoadCtx - 1案件の文脈を読む【唯一の口】。modCaseRead.ReadCaseCtx へ委譲し、読め
+'   なければ fail-closed(既定値で走らせるとAI利用枠を誤った前提で消費する)。
 Private Function LoadCtx(ByVal caseId As String, ByRef ctx As TCaseCtx) As Boolean
+    Dim rNo As Long
+    Dim tierText As String
+
     ctx.case_type = vbNullString
     mRoundNo = vbNullString
     mS4Variant = vbNullString
     mQualityMode = vbNullString
 
-    modLog.LogError "E0603", PL_SRC & ".LoadCtx", "case_ctx_reader_undeclared"
-    modLog.LogUsage "case_ctx_unavailable", caseId, _
-                    "案件一覧の読取APIが14章§6に未宣言のため実行中止(T-24で申請中)"
-    LoadCtx = False
+    ' 第6引数は ctx.dossier_tier と同値。UDTの要素を ByRef で別名にしない
+    ' (LibreOffice Basic で別名参照が壊れるのを避ける)。
+    If Not modCaseRead.ReadCaseCtx(caseId, ctx, rNo, mQualityMode, mS4Variant, _
+                                   tierText) Then
+        modLog.LogUsage "case_ctx_unavailable", caseId, "案件一覧を読めないため実行中止"
+        Exit Function
+    End If
+
+    If rNo > 0 Then mRoundNo = CStr(rNo)
+    If LenB(ctx.dossier_tier) = 0 Then ctx.dossier_tier = tierText
+    LoadCtx = True
 End Function
 
 ' ExecStep - 組立 -> 呼出 -> 防衛線 -> 保存 -> 状態遷移
@@ -305,7 +313,7 @@ Private Function Sanitized(ByVal caseId As String, ByVal dataKey As String, _
 End Function
 
 ' LoadKb - ナレッジ注入と15章§0.7の切詰め。切詰めたら注入IDを積み直す
-'   (LastInjectedIds は「実際に注入したIDのみ」であること)。
+'   (LastInjectedIds は実際に注入したIDのみ)。
 Private Sub LoadKb(ByRef ctx As TCaseCtx, ByRef c As TChkCtx, _
                    ByVal limitChars As Long, ByRef detailAcc As String)
     Dim counts(0 To 9) As Long
@@ -342,8 +350,8 @@ Private Sub LoadKb(ByRef ctx As TCaseCtx, ByRef c As TChkCtx, _
     c.riskLibText = txt(4)
 End Sub
 
-' slotIdx=-1 は当該Stepの全スロットを既定行数(config)で、0以上はそのスロットだけ
-'   maxRows 行(0なら既定文言)で取り直す。メニューはStepで別物(12章§3)。
+' slotIdx=-1 は全スロットを既定行数(config)で、0以上はそのスロットだけ maxRows 行
+'   (0なら既定文言)で取り直す。メニューはStepで別物(12章§3)。
 Private Sub FetchKb(ByRef ctx As TCaseCtx, ByVal stepNo As Long, ByRef txt() As String, _
                     ByVal slotIdx As Long, ByVal maxRows As Long)
     Dim i As Long, n As Long
@@ -372,7 +380,7 @@ Private Sub FetchKb(ByRef ctx As TCaseCtx, ByVal stepNo As Long, ByRef txt() As 
 End Sub
 
 ' 12章§3: S2=リスクライブラリ+メニュー要約 / S3=メニュー/種目/型/事例。
-Private Function UsesSlot(ByVal stepNo As Long, ByVal slot As Long) As Boolean
+Public Function UsesSlot(ByVal stepNo As Long, ByVal slot As Long) As Boolean
     If stepNo = 2 Then UsesSlot = (slot = 2 Or slot = 4)
     If stepNo = 3 Then UsesSlot = (slot <= 3)
 End Function
@@ -507,21 +515,21 @@ Private Sub FailStep(ByVal caseId As String, ByRef c As TChkCtx, ByVal rawText A
     modCaseStore.SetStatus caseId, PL_STATUS_ERROR
 End Sub
 
-' === 純関数(シート・ログ・LLMに触れない判定核)。§6に宣言が無いため Private ===
+' === 純関数(シート・ログ・LLMに触れない判定核)。14章§6が公開を宣言(裁定書7 B-6) ===
 
 ' 19章§4 の step 値(s1..s4。範囲外は "")。
-Private Function StepNameOf(ByVal stepNo As Long) As String
+Public Function StepNameOf(ByVal stepNo As Long) As String
     If stepNo < 1 Or stepNo > 4 Then Exit Function
     StepNameOf = "s" & CStr(stepNo)
 End Function
 
 ' 13章§2.1 の status(Step成功時の遷移先)。
-Private Function StatusForStep(ByVal stepNo As Long) As String
+Public Function StatusForStep(ByVal stepNo As Long) As String
     If LenB(StepNameOf(stepNo)) = 0 Then Exit Function
     StatusForStep = StepNameOf(stepNo) & "_done"
 End Function
 
-Private Function PlayIdOf(ByVal caseType As String) As String
+Public Function PlayIdOf(ByVal caseType As String) As String
     If Trim$(caseType) = PL_TYPE_RENEWAL Then
         PlayIdOf = PL_PLAY_RENEWAL
     Else
@@ -530,12 +538,12 @@ Private Function PlayIdOf(ByVal caseType As String) As String
 End Function
 
 ' 修復要否(14章§5(4))。検証エラーがあり再試行枠が残るときだけ。
-Private Function NeedsRepair(ByVal errText As String, ByVal retryBudget As Long) As Boolean
+Public Function NeedsRepair(ByVal errText As String, ByVal retryBudget As Long) As Boolean
     NeedsRepair = (LenB(errText) > 0 And retryBudget > 0)
 End Function
 
 ' validate_result の3値(14章§5)。初回合格=ok / 修復後合格=repaired / 他=failed。
-Private Function ClassifyResult(ByVal firstOk As Boolean, ByVal repairTried As Boolean, _
+Public Function ClassifyResult(ByVal firstOk As Boolean, ByVal repairTried As Boolean, _
                                 ByVal repairOk As Boolean) As String
     If Not repairTried Then
         If firstOk Then
@@ -553,7 +561,7 @@ Private Function ClassifyResult(ByVal firstOk As Boolean, ByVal repairTried As B
 End Function
 
 ' 不合格の内訳をコードへ(16章E-07=E0301 / E-06=E0302)。
-Private Function FailCodeOf(ByVal errText As String) As String
+Public Function FailCodeOf(ByVal errText As String) As String
     Dim parts() As String
     Dim i As Long
     FailCodeOf = "E0302"
@@ -568,7 +576,7 @@ Private Function FailCodeOf(ByVal errText As String) As String
 End Function
 
 ' 検証エラー行の先頭からケースID(15章§0 原則10)。
-Private Function CaseIdOfLine(ByVal lineText As String) As String
+Public Function CaseIdOfLine(ByVal lineText As String) As String
     Dim t As String, p As Long
 
     t = Trim$(lineText)
@@ -579,7 +587,7 @@ Private Function CaseIdOfLine(ByVal lineText As String) As String
 End Function
 
 ' 13章§2.3: quality_mode は案件で上書き可。空はティア連動(t1=standard/他=deep)。
-Private Function ResolveQualityMode(ByVal cfgMode As String, ByVal tier As String) As String
+Public Function ResolveQualityMode(ByVal cfgMode As String, ByVal tier As String) As String
     Dim m As String
 
     m = LCase$(Trim$(cfgMode))
@@ -595,7 +603,7 @@ Private Function ResolveQualityMode(ByVal cfgMode As String, ByVal tier As Strin
 End Function
 
 ' deep分岐は S2/S3 だけ(15章§4.5-4.7)。
-Private Function DeepEnabled(ByVal qualityMode As String, ByVal stepNo As Long) As Boolean
+Public Function DeepEnabled(ByVal qualityMode As String, ByVal stepNo As Long) As Boolean
     DeepEnabled = (qualityMode = PL_MODE_DEEP And (stepNo = 2 Or stepNo = 3))
 End Function
 
@@ -609,22 +617,22 @@ Private Function ContextLimitOf(ByVal tier As String) As Long
 End Function
 
 ' 15章§0.7 の予算配分(貼付7割 / ナレッジ3割)。
-Private Function BudgetOf(ByVal limitChars As Long, ByVal pct As Long) As Long
+Public Function BudgetOf(ByVal limitChars As Long, ByVal pct As Long) As Long
     If limitChars <= 0 Then Exit Function
     BudgetOf = (limitChars \ 10) * pct
 End Function
 
 ' 打切らない4欄だけで上限超過か(E-03(4)の実行前警告の条件)。
-Private Function ProtectedOverBudget(ByVal keepChars As Long, ByVal budgetChars As Long) As Boolean
+Public Function ProtectedOverBudget(ByVal keepChars As Long, ByVal budgetChars As Long) As Boolean
     If budgetChars <= 0 Then Exit Function
     ProtectedOverBudget = (keepChars > budgetChars)
 End Function
 
 ' TrimInputPlan - 16章E-03(2)の打切りを【計画するだけ】の純関数。lens(0..4)=切る順の
 '   現在字数 / lens(5)=打切らない4欄の合計。budgetChars<=0 は上限なし。戻り値=5要素
-'   の「残してよい字数」。1欄ずつ削っては再計測し上限を下回った時点で止める。4欄
-'   だけで超過する場合は E-03(4) により自動では削らない。
-Private Function TrimInputPlan(ByRef lens() As Long, ByVal budgetChars As Long) As Long()
+'   の「残してよい字数」。1欄ずつ削り再計測し上限を下回った時点で止める(4欄だけで
+'   超過する場合は E-03(4) により自動では削らない)。
+Public Function TrimInputPlan(ByRef lens() As Long, ByVal budgetChars As Long) As Long()
     Dim res(0 To 4) As Long
     Dim i As Long, total As Long, over As Long, cut As Long
 
@@ -651,7 +659,7 @@ Private Function TrimInputPlan(ByRef lens() As Long, ByVal budgetChars As Long) 
 End Function
 
 ' 切詰めた欄には必ず注記を付す(E-03(6))。
-Private Function TruncField(ByVal s As String, ByVal allowedChars As Long) As String
+Public Function TruncField(ByVal s As String, ByVal allowedChars As Long) As String
     If allowedChars <= 0 Then
         TruncField = PL_OMIT_TEXT
         Exit Function
@@ -664,7 +672,7 @@ Private Function TruncField(ByVal s As String, ByVal allowedChars As Long) As St
 End Function
 
 ' 注入テキストの行数(1行1件・vbLf区切り)。0行の既定文言は0。
-Private Function KbRowCount(ByVal s As String) As Long
+Public Function KbRowCount(ByVal s As String) As Long
     Dim t As String
 
     t = Trim$(s)
@@ -674,7 +682,7 @@ Private Function KbRowCount(ByVal s As String) As Long
 End Function
 
 ' 15章 S3/S3C の {{s1SummaryJson}}(4キーだけのJSON。他のキーは含めない)。
-Private Function S1SummaryOf(ByVal s1Json As String) As String
+Public Function S1SummaryOf(ByVal s1Json As String) As String
     Dim s As String
 
     s = "{""business_summary"": " & JStr(modJsonLite.GetStr(s1Json, "business_summary"))

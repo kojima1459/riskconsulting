@@ -72,6 +72,13 @@
       "wave": "T-20"
     },
     {
+      "name": "modCaseRead",
+      "path": "src/app/modCaseRead.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-20"
+    },
+    {
       "name": "modKnowledge",
       "path": "src/app/modKnowledge.bas",
       "role": "app",
@@ -210,6 +217,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-22"
+    },
+    {
+      "name": "modTestsPure7",
+      "path": "src/test/modTestsPure7.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-24"
     },
     {
       "name": "modMockLlm",

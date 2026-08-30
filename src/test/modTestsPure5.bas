@@ -30,22 +30,23 @@ Option Explicit
 '       RunAll 末尾で結線済み**なので、統合者が足すのはこの1本だけ。
 '   (2) build/modules.json へ2件追加(modTestsPure5 / modTestsPure6。ともに
 '       src/test/ 配下・role=test・type=std・wave=T-22)。
-'   (3) wintest/tests_expected.txt を 264 -> 357 へ更新(本ファイル64本＋
-'       modTestsPure6 の29本)。
+'   (3) wintest/tests_expected.txt を本ファイル70本＋modTestsPure6 の29本で更新
+'       (裁定書7 A-3のID実在群の書き直しで 64 -> 70本になった)。
 '   run_lo_tests.py の PURE_ALLOWLIST には modTestsPure5/6 と modValidate が既にある。
-'   **modKnowledge は未登録**である。ID実在検査(14章§6「ID実在はmodKnowledge
-'   参照」)を通る6本は、層(a)ではナレッジ未装填のため実行時エラー/誤発火の
-'   おそれがあるので、グループを分けて隔離してある(G31K/G32K/G34K)。
+'   **modKnowledge は登録しない**。裁定書7 A-1/A-2 により実在ID一覧は Check系の
+'   引数(15章§3/§4/§6.1 の1行書式テキスト)になったので、K付きの群は層(a)で
+'   ホワイトリストを自給する。一覧の実体(Wl* ヘルパ)は30,000字契約の都合で
+'   modTestsPure6 に置き、本モジュールは modTestsPure6.Wl* を呼ぶ。
+'   modKnowledge には一切触れない。
 '
-' テスト本数: 64本(15章§11の全ケース。1テスト1ケース)
-'   G30 CheckS1 11 / G31 CheckS2 16 / G31K CheckS2(ID実在) 1 /
-'   G32 CheckS3 9 / G32K CheckS3(ID実在) 4 / G33 CheckS4 6 /
-'   G34 CheckPF 6 / G34K CheckPF(ID実在) 1 / G35 CheckS2C 5 / G36 CheckS3C 5
+' テスト本数: 70本(15章§11の全64ケース＋ID実在群のfail-closed面6本)
+'   G30 CheckS1 11 / G31 CheckS2 16 / G31K CheckS2(ID実在) 3 /
+'   G32 CheckS3 9 / G32K CheckS3(ID実在) 6 / G33 CheckS4 6 /
+'   G34 CheckPF 6 / G34K CheckPF(ID実在) 3 / G35 CheckS2C 5 / G36 CheckS3C 5
 '
-' 現行の公開シグネチャ(14章§6)では発火条件を層(a)から一意に作れないケースが
-' あり、該当テストには前提をコメントで明記した(司令塔へ引数追加を申請中):
-'   現場メモ提供の有無 / ラウンドの別と前ラウンド件数 / dossier_tier /
-'   S3のcase_type / S2Cの審査対象s2Json。
+' 裁定書7 A-1で実在ID一覧とS2Cの審査対象s2Jsonは引数へ昇格したが、次は依然と
+' して層(a)から一意に作れないため、該当テストに前提をコメントで明記してある:
+'   現場メモ提供の有無 / ラウンドの別と前ラウンド件数 / dossier_tier / S3のcase_type。
 '
 ' 設計判断(R4準拠): Excelトークン不使用。改行は vbLf 基準。乱数・時刻不使用。
 ' ============================
@@ -211,6 +212,26 @@ End Sub
 ' 合格判定のケース(戻り値 ""=合格。14章§6 modValidate の戻り値規約)。
 Private Sub ChkPass(ByVal nm As String, ByVal outText As String)
     modTestRunner.Check nm, (outText = ""), "合格(空文字)を期待。実際=[" & HeadOf(outText) & "]"
+End Sub
+
+' fail-closed の検問(裁定書7 A-2・15章§11・16章E-07)。行の中身まで見て、
+'   本物の幻覚検知と「一覧未提供」の申告を分ける。**ケースIDは頭と尾に割って
+'   渡す**(テスト名に書くと17章§4-2の1ケース1本計数が狂う。ChkFaultと同作法)。
+Private Sub ChkFailClosed(ByVal nm As String, ByVal outText As String, _
+                          ByVal idHead As String, ByVal idTail As String)
+    Dim cid As String
+    cid = idHead & idTail
+    modTestRunner.Check nm, _
+        (InStr(outText, "[" & cid & "] ID実在検査が実行できません") > 0), _
+        "期待=" & cid & " の一覧未提供による不合格(同一行)。実際=[" & HeadOf(outText) & "]"
+End Sub
+
+' 当該ケースIDが出てはならない文脈の固定(ケースIDは頭と尾に割って渡す)。
+Private Sub ChkNoCase(ByVal nm As String, ByVal outText As String, _
+                      ByVal idHead As String, ByVal idTail As String)
+    modTestRunner.Check nm, Not HasCase(outText, idHead & idTail), _
+        "発火してはならない文脈で " & idHead & idTail & _
+        " が出ています。実際=[" & HeadOf(outText) & "]"
 End Sub
 
 ' ============================
@@ -600,16 +621,32 @@ Private Sub T_S2()
 End Sub
 
 ' ============================
-' G31K CheckS2 のID実在検査(14章§6「ID実在はmodKnowledge参照」)
-'   ナレッジ未装填でも "M-9999" は実在しないため発火が期待値。
+' G31K CheckS2 のID実在検査(裁定書7 A-1/A-2/A-3)。3面を1群で張る:
+'   (1)幽霊ID素材=発火 (2)実ID素材(一覧あり)=不発火 (3)一覧未提供+非空ID=不合格。
+'   加えて「値が "" のIDは検査対象外」を張り、(3)が「一覧が無ければ何でも
+'   落とす」へ振れていないことを分ける。
 ' ============================
 Private Sub T_S2Ids()
     Dim s2n As String
-    s2n = MockJson(MK_S2N)
+    Dim wl As String
 
+    s2n = MockJson(MK_S2N)
+    ' 実在ID一覧は層(a)で自給する(15章§3の1行書式。姉妹モジュールが持つ)。
+    wl = modTestsPure6.WlMenusSummary()
+
+    ' (1)(2) 一覧を渡した上で、幽霊IDだけが発火する。
     ChkFire "V-S2-06_related_menu_idが実在しない_15章§11", _
-        modValidate.CheckS2(PutStr(s2n, "related_menu_id", "M-9999"), CT_NEW), _
-        modValidate.CheckS2(s2n, CT_NEW)
+        modValidate.CheckS2(PutStr(s2n, "related_menu_id", "M-9999"), CT_NEW, wl), _
+        modValidate.CheckS2(s2n, CT_NEW, wl)
+
+    ' (3) menusText 未提供では非空の related_menu_id を検査できないので不合格
+    '     (fail-open へ戻すとここが落ちる)。
+    ChkFailClosed "G31K_menusText未提供で実在検査が不合格になる_15章§11", _
+        modValidate.CheckS2(s2n, CT_NEW), "V-S2-", "06"
+
+    ' 値が "" のIDは検査対象外。一覧未提供でも発火してはならない。
+    ChkNoCase "G31K_related_menu_idが空なら一覧未提供でも検査対象外_15章§11", _
+        modValidate.CheckS2(PutAllStr(s2n, "related_menu_id", ""), CT_NEW), "V-S2-", "06"
 End Sub
 
 ' ============================
@@ -659,27 +696,60 @@ End Sub
 
 ' ============================
 ' G32K CheckS3 のID実在検査(最重要検証。幽霊IDの黙殺除去は禁止)
+'   4つの一覧(menus/lines/schemes/cases)を15章§4の書式で自給し、G31Kと同じ
+'   3面＋空値の対象外を張る(KPI「すり抜け0件」を層(a)で支える群)。
 ' ============================
 Private Sub T_S3Ids()
     Dim s3 As String
     Dim s2r As String
     Dim okRnw As String
+    Dim noOptId As String
+    Dim wm As String
+    Dim wn As String
+    Dim ws As String
+    Dim wc As String
 
     s3 = MockJson(MK_S3)
     s2r = MockJson(MK_S2R)
-    okRnw = modValidate.CheckS3(s3, s2r)
+    ' 実在ID一覧は層(a)で自給する(15章§4の1行書式。姉妹モジュールが持つ)。
+    wm = modTestsPure6.WlMenus()
+    wn = modTestsPure6.WlLines()
+    ws = modTestsPure6.WlSchemes()
+    wc = modTestsPure6.WlCases()
+    okRnw = modValidate.CheckS3(s3, s2r, wm, wn, ws, wc)
 
     ChkFire "V-S3-03_menu_idが実在しない_15章§11", _
-        modValidate.CheckS3(PutVal(s3, "menu_ids", "[""M-9999""]"), s2r), okRnw
+        modValidate.CheckS3(PutVal(s3, "menu_ids", "[""M-9999""]"), s2r, wm, wn, ws, wc), okRnw
 
     ChkFire "V-S3-04_line_idが実在しない_15章§11", _
-        modValidate.CheckS3(PutVal(s3, "line_ids", "[""L-99""]"), s2r), okRnw
+        modValidate.CheckS3(PutVal(s3, "line_ids", "[""L-99""]"), s2r, wm, wn, ws, wc), okRnw
 
     ChkFire "V-S3-05_scheme_idが実在しない_15章§11", _
-        modValidate.CheckS3(PutStr(s3, "scheme_id", "S-9999"), s2r), okRnw
+        modValidate.CheckS3(PutStr(s3, "scheme_id", "S-9999"), s2r, wm, wn, ws, wc), okRnw
 
     ChkFire "V-S3-06_similar_case_idが実在しない_15章§11", _
-        modValidate.CheckS3(PutStr(s3, "similar_case_id", "K-9999"), s2r), okRnw
+        modValidate.CheckS3(PutStr(s3, "similar_case_id", "K-9999"), s2r, wm, wn, ws, wc), okRnw
+
+    ' 一覧を1本も渡さない呼び出し。menu_ids は mock でも非空なので不合格。
+    ChkFailClosed "G32K_menusText未提供で実在検査が不合格になる_15章§11", _
+        modValidate.CheckS3(s3, s2r), "V-S3-", "03"
+
+    ' 残る3一覧も個別にfail-closed(裁定書7 A-2。MK-S3のline_idsは非空・
+    ' scheme_id/similar_case_idは実IDへ差し替えて非空にする)。
+    ChkFailClosed "G32K_linesText未提供で実在検査が不合格になる_15章§11", _
+        modValidate.CheckS3(PutAllStr(PutAllStr(s3, "scheme_id", ""), "similar_case_id", ""), _
+            s2r, wm), "V-S3-", "04"
+    ChkFailClosed "G32K_schemesText未提供で実在検査が不合格になる_15章§11", _
+        modValidate.CheckS3(PutStr(PutAllStr(s3, "similar_case_id", ""), "scheme_id", "S-0004"), _
+            s2r, wm, wn), "V-S3-", "05"
+    ChkFailClosed "G32K_casesText未提供で実在検査が不合格になる_15章§11", _
+        modValidate.CheckS3(s3, s2r, wm, wn, ws), "V-S3-", "06"
+
+    ' 空許容のID(scheme_id / similar_case_id)を "" にすれば一覧未提供でも
+    ' 検査対象外(15章§11)。落ちるなら fail-closed が当たり過ぎている。
+    noOptId = PutAllStr(PutAllStr(s3, "scheme_id", ""), "similar_case_id", "")
+    ChkNoCase "G32K_scheme_idが空なら一覧未提供でも検査対象外_15章§11", _
+        modValidate.CheckS3(noOptId, s2r), "V-S3-", "05"
 End Sub
 
 ' ============================
@@ -743,14 +813,29 @@ Private Sub T_PF()
 End Sub
 
 ' ============================
-' G34K CheckPF のID実在検査(M- で始まるのに一覧に無い)
+' G34K CheckPF のID実在検査(M- / S- / K- で始まるのに一覧に無い)
+'   refIdsText は menusSummary+patternsText+rulesText+researchingText の連結
+'   (14章§6)。G31K/G32Kと同じ3面＋「ID形式でない ref_id は対象外」を張る。
 ' ============================
 Private Sub T_PFIds()
     Dim pf As String
+    Dim wl As String
+
     pf = MockJson(MK_PF)
+    ' 実在ID一覧は層(a)で自給する(15章§6.1の1行書式。姉妹モジュールが持つ)。
+    wl = modTestsPure6.WlPfRefIds()
 
     ChkFire "V-PF-03_duplicatesのref_idが実在しない_15章§11", _
-        modValidate.CheckPF(PutStr(pf, "ref_id", "M-9999")), modValidate.CheckPF(pf)
+        modValidate.CheckPF(PutStr(pf, "ref_id", "M-9999"), wl), _
+        modValidate.CheckPF(pf, wl)
+
+    ChkFailClosed "G34K_refIdsText未提供で実在検査が不合格になる_15章§11", _
+        modValidate.CheckPF(pf), "V-PF-", "03"
+
+    ' V-PF-03 の対象は「M- / S- / K- で始まるID形式」の ref_id だけ。
+    ' 形式でない値(既存提案の言い回し)は一覧が無くても検査対象外。
+    ChkNoCase "G34K_ID形式でないref_idは一覧未提供でも検査対象外_15章§11", _
+        modValidate.CheckPF(PutStr(pf, "ref_id", "同種の既存提案あり")), "V-PF-", "03"
 End Sub
 
 ' ============================
@@ -759,27 +844,34 @@ End Sub
 Private Sub T_S2C()
     Dim hit As String
     Dim clean As String
+    Dim s2r As String
     Dim okOut As String
 
     hit = MockJson(MK_C2H)
     clean = MockJson(MK_C2C)
-    okOut = modValidate.CheckS2C(hit)
+    ' 審査対象のS2(V-S2C-03の番号実在判定。裁定書7 A-1で引数へ昇格)。
+    ' risks 8件とgaps 3件の双方を持つ MK-S2-RNW を審査対象に置く。
+    s2r = MockJson(MK_S2R)
+    okOut = modValidate.CheckS2C(hit, s2r)
+    ' 審査対象S2未提供のfail-closed(裁定書7 A-2適用拡張・15章§11「03は
+    ' 審査対象S2の未提供時も不合格」)。
+    ChkFailClosed "G35_審査対象S2未提供で不合格になる_15章§11", _
+        modValidate.CheckS2C(hit), "V-S2C-", "03"
 
     ChkFire "V-S2C-01_issue_typeがenum外_15章§11", _
-        modValidate.CheckS2C(PutStr(hit, "issue_type", "typo")), okOut
+        modValidate.CheckS2C(PutStr(hit, "issue_type", "typo"), s2r), okOut
 
     ChkFire "V-S2C-02_targetの書式が不正_15章§11", _
-        modValidate.CheckS2C(PutStr(hit, "target", "risk 3")), okOut
+        modValidate.CheckS2C(PutStr(hit, "target", "risk 3"), s2r), okOut
 
-    ' 前提: 審査対象の s2Json は引数で渡らない。書式は正しく番号だけが
-    '   実在しない値(999)を「S2に存在しない」の素材とする。
+    ' 書式は正しく番号だけが審査対象のS2に無い値(999)を素材とする。
     ChkFire "V-S2C-03_targetが指す番号がS2に存在しない_15章§11", _
-        modValidate.CheckS2C(PutStr(hit, "target", "risk_no:999")), okOut
+        modValidate.CheckS2C(PutStr(hit, "target", "risk_no:999"), s2r), okOut
 
     ChkFire "V-S2C-04_verdict_summaryが空_15章§11", _
-        modValidate.CheckS2C(PutStr(hit, "verdict_summary", "")), okOut
+        modValidate.CheckS2C(PutStr(hit, "verdict_summary", ""), s2r), okOut
 
-    ChkPass "V-S2C-05_指摘0件は合格で改訂スキップ_15章§11", modValidate.CheckS2C(clean)
+    ChkPass "V-S2C-05_指摘0件は合格で改訂スキップ_15章§11", modValidate.CheckS2C(clean, s2r)
 End Sub
 
 ' ============================

@@ -66,9 +66,13 @@ MODULE_REGISTRY = {
     "modBoot", "modUIHome", "modUICase", "modUIInbox", "modUISparring",
     "modUIProgress",
     # ---- app 層 ----
-    "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modInboxStore",
+    "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
+    "modInboxStore",
     "modJudgeStore", "modKnowledge", "modKnowledgeFmt", "modValidate",
-    "modCompanyFile", "modPii",
+    # 分割・新設の追認は裁定書7 B-7/B-8(12章§2のモジュール一覧に追記済み)。
+    #   modValidate2 / modCompanyFile2 = 30,000字契約による分割先。
+    #   modCaseRead = 案件一覧の読取専用API(app層。R4許可も併せて追加)。
+    "modValidate2", "modCompanyFile", "modCompanyFile2", "modPii",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
     "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
     "modHtmlTheme",
@@ -139,6 +143,15 @@ CONTRACT: dict[str, dict] = {
             "CheckS2C", "CheckS3C", "CheckPF",
         ],
     },
+    # modValidate2: 30,000字契約による分割先(裁定書7 B-5 が §6 へ *Core 5本を宣言。
+    #   「分割の継ぎ目」であり呼び出してよいのは modValidate だけ)。
+    "modValidate2": {
+        "closed": False,
+        "required": [
+            "NormalizeCore", "CheckS4Core", "CheckPFCore", "CheckS2CCore",
+            "CheckS3CCore",
+        ],
+    },
     "modKnowledge": {
         "closed": False,
         "required": [
@@ -200,7 +213,20 @@ CONTRACT: dict[str, dict] = {
             "SchemaS2C", "SchemaS3C", "SchemaPF",
         ],
     },
-    "modPipeline": {"closed": False, "required": ["RunAll", "RunStep"]},
+    # modPipeline: 14章§6が RunAll / RunStep と**判定核16本**を宣言(裁定書7 B-6)。
+    #   16本は層(a)=modTestsPure から叩く純関数なので Private へ戻したら ERROR。
+    "modPipeline": {
+        "closed": False,
+        "required": [
+            "RunAll", "RunStep",
+            "TrimInputPlan", "ProtectedOverBudget", "TruncField", "BudgetOf",
+            "NeedsRepair", "ClassifyResult", "FailCodeOf", "CaseIdOfLine",
+            "DeepEnabled", "ResolveQualityMode", "StepNameOf", "StatusForStep",
+            "PlayIdOf", "KbRowCount", "UsesSlot", "S1SummaryOf",
+        ],
+    },
+    # modCaseRead: 案件一覧の読取専用API(裁定書7 B-7。14章§6が ReadCaseCtx を宣言)。
+    "modCaseRead": {"closed": False, "required": ["ReadCaseCtx"]},
     "modPlayOps": {"closed": False, "required": ["RunPreflight"]},
     "modCaseStore": {
         "closed": False,
@@ -226,10 +252,24 @@ CONTRACT: dict[str, dict] = {
     # (14章§6 の TCaseCtx 定義)。Public Function シグネチャは章に無いため required は空。
     "modAppTypes": {"closed": False, "required": []},
     # modPii: 保存・外部送信・レポート出力前のPII走査本体(16章 E-05・12章§2/§4)。
-    # 14章§6は走査本体の Public Function シグネチャを固定していない(責務のみ規定)ため
-    # required は空。呼び出し側(modUICase/modUIInbox/modSparring/modJudgeStore/
-    # modExportHtml/modCompanyFile)が前段で必ず通す関係だけが規定される。
-    "modPii": {"closed": False, "required": []},
+    # 公開5本は裁定書7 B-5 が14章§6へ宣言した(ScanReport は本文を返さない=NFR-S3)。
+    # 呼び出し側(modUICase/modUIInbox/modSparring/modJudgeStore/modExportHtml/
+    # modCompanyFile)が前段で必ず通す関係も§6が規定する。
+    "modPii": {
+        "closed": False,
+        "required": ["HasPii", "DetectionCount", "KindsOf", "ScanReport", "MaskText"],
+    },
+    # modCompanyFile: 企業ドシエファイルの書出・取込(13章§2.8)。公開4本は裁定書7
+    #   B-5 が14章§6へ宣言。下位I/Oの modCompanyFile2 は§6の公開契約面に載せない
+    #   ため required は空(closed=False で追加 Public を許容する)。
+    "modCompanyFile": {
+        "closed": False,
+        "required": [
+            "CompanyFilePath", "ScanCaseForPii", "ExportCompanyFile",
+            "ImportCompanyFile",
+        ],
+    },
+    "modCompanyFile2": {"closed": False, "required": []},
     # modHtmlTemplate1: 18章§4.4 の分割表で「基底モジュール」が持つと明記された5関数。
     # (SecXxxJs等のセクション関数は modHtmlTemplate2..n 側にあり流動的なので、
     #  分割後モジュールには固定契約を課さない=CONTRACTに載せない。closed=False)。
@@ -283,6 +323,10 @@ R4_EXCEL_ALLOWED_MODULES = {
     # 以下 store 系。案件・受信箱・判断台帳・ナレッジブックのシートI/Oが責務
     # (12章§2 の R4 但し書き「store系モジュール内は自身の責務範囲で可」)。
     "modCaseStore", "modInboxStore", "modJudgeStore", "modKnowledge",
+    # modCaseRead: 案件一覧の**読取専用**API(裁定書7 B-7・14章§6 ReadCaseCtx)。
+    #   許可の幅は modCaseStore と同じ「案件一覧の1枚」で、書込は一切持たない
+    #   (Range への代入が入ったら NFR-S7 の書込口検査と本注記の両方に違反する)。
+    "modCaseRead",
     # modCompanyFile: 企業ドシエファイル(1社1.xlsx)の書出・取込(13章§2.8)。
     "modCompanyFile",
     # modCompanyFile2: 上と同一責務の分割先(T-29の実装が1本では30,000字契約を

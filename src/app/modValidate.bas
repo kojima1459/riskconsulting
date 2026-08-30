@@ -8,30 +8,27 @@ Option Explicit
 '   エラー文テンプレ) / 15章§0 原則10(判定3値) / 19章§3(enum) / 14章§6
 '   (公開シグネチャ) / 16章 E-49(NormalizeLlmJson) / 17章 T-22(DoD)。
 '
-' 戻り値の規約(15章§0 原則10): **不合格・警告**となったケースのエラー文を
-'   vbLf 区切りで連結した文字列。どちらも発火しなければ ""。判定「合格」の
-'   V-S2C-05 / V-S3C-05 はエラー文を持たないため戻り値に現れない。各行は必ず
-'   "[ケースID] " で始まる(17章§4-2の照合スクリプトが機械照合する)。
-'   1ケースが複数件の欠陥に当たるときは**同じケースIDの行を件数分**出す
-'   (例: locations が3件とも enum 外なら V-S1-02 が3行)。
+' 戻り値の規約(15章§0 原則10): **不合格・警告**のエラー文を vbLf 区切りで連結
+'   した文字列(発火なしは "")。各行は必ず "[ケースID] " で始まる(17章§4-2の
+'   照合スクリプトが機械照合する)。1ケースが複数件の欠陥に当たるときは**同じ
+'   ケースIDの行を件数分**出す。判定「合格」の V-S2C-05 / V-S3C-05 は
+'   エラー文を持たないため戻り値に現れない。
 '
 ' **純関数**であること(12章§2・17章§4-1 層(a)): シート・config・ログ・
-'   modKnowledge に一切触れない。ID実在チェックに要る一覧(menusText 等)と、
-'   JSONの外側の文脈(case_type / dossier_tier / 前ラウンドのS2 / 現場メモの
-'   有無)は**引数で受ける**。14章§6 が宣言した引数はそのまま先頭に置き、足りない
-'   文脈は**末尾の Optional** で受ける。14章§6 CheckS3 の注記「ID実在は
-'   modKnowledge参照」は、**呼び出し側(modPipeline)が modKnowledge から取った
-'   注入テキストを渡す**形で満たす(直接叩くと層(a)から試験できなくなる)。
+'   modKnowledge に一切触れない。ID実在検査の一覧(menusText 等)と、JSONの外側の
+'   文脈(case_type / dossier_tier / 前ラウンドのS2 / 現場メモの有無)は
+'   **引数で受ける**(14章§6 が引数渡し設計を正式宣言。裁定書7 A-1)。実在ID一覧
+'   テキスト(15章の1行書式)は呼出側=modPipeline が modKnowledge から取得して渡す。
 '
-' ID実在チェックの一覧が空文字なら**検査しない**(IdExistsIn の注記)。書式は§3等。
+' ID実在検査は**fail-closed**(裁定書7 A-2): 非空のIDがあるのに一覧が空(未提供)
+'   なら「[ケースID] ID実在検査が実行できません(ID一覧未提供)」で**不合格**とする。
+'   渡し忘れを黙って合格に見せない(16章 E-07 のKPI「すり抜け0件」)。
 '
 ' 30,000字契約(12章§2)により CheckS4 / CheckPF / CheckS2C / CheckS3C の本体と
 '   NormalizeLlmJson の正規化エンジンは **modValidate2** にある。14章§6が
 '   宣言した公開関数8本の入口は仕様どおり本モジュールに置き、本体へ委譲する。
 '
-' R4準拠: Excelトークン(Worksheets/Range/Application/ThisWorkbook/MsgBox/
-'   ActiveSheet)に触れない。CP932準拠(15章§0 原則7)。例外は投げない(14章§6)。
-'
+' R4準拠(Excelトークン不使用)・CP932準拠(15章§0 原則7)・例外を投げない(14章§6)。
 ' 配列添字の {i} は**0始まり**(JSONパスの読み方に合わせる)。{n}/{no}/{value}
 '   はJSONの実値。{p} は百分率の整数部(切り捨て)。
 ' ============================================================================
@@ -66,23 +63,20 @@ Private Const VS3_STORY_N As Long = 3
 ' --- 前ラウンド無し(初回実行)を表す値(15章§3 prevS2Json の「なし」) ---
 Private Const V_NONE_TEXT As String = "なし"
 
-' ============================================================================
+' --- ID実在検査が実行できないときのエラー文(裁定書7 A-2 の fail-closed) ---
+Private Const V_NOLIST As String = "ID実在検査が実行できません(ID一覧未提供)"
+
 ' NormalizeLlmJson - 尾部劣化(同名項目の重複出力)の正規化(14章§5(2.5)・16章E-49)
-' ----------------------------------------------------------------------------
 '   本体は modValidate2.NormalizeCore(30,000字契約による分割)。
-' ============================================================================
 Public Function NormalizeLlmJson(ByVal stepName As String, ByVal json As String, _
                                  ByRef removedCount As Long) As String
     NormalizeLlmJson = modValidate2.NormalizeCore(stepName, json, removedCount)
 End Function
 
-' ============================================================================
 ' CheckS1 - 企業プロファイル構造化の検証(15章§2 CheckS1 検証ルール表。11件)
-' ----------------------------------------------------------------------------
 '   fieldNoteProvided: 現場メモの有無(V-S1-11 は提供時のみ判定。15章§2 補足)。
 '     s1Json から判別できないので modPipeline が渡す。**既定は True**(V-S1-11 は
 '     「警告」なので不明なら黙らず出す。15章§0 原則10)。
-' ============================================================================
 Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
                         Optional ByVal fieldNoteProvided As Boolean = True) As String
     Dim r As String
@@ -185,15 +179,12 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
     CheckS1 = r
 End Function
 
-' ============================================================================
 ' CheckS2 - リスク仮説＋付保ギャップの検証(15章§3 CheckS2 検証ルール表。17件)
-' ----------------------------------------------------------------------------
 '   menusText : S2へ注入した menusSummary(15章§3の1行書式。V-S2-06 の実在判定)
 '   prevS2Json: 前ラウンドのS2 JSON。"" または "なし" を初回実行とみなす
 '               (V-S2-09 は初回のみ / V-S2-10 は第2ラウンド以降のみ)
 '   ※ Optional String に `= ""` を書かない。VBAの省略時と同義だが LibreOffice
 '     Basic は空文字既定を束縛できず省略呼び出しが実行時エラー13になる(層(c))。
-' ============================================================================
 Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
                         Optional ByVal menusText As String, _
                         Optional ByVal prevS2Json As String) As String
@@ -262,7 +253,9 @@ Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
             nCount = nCount + 1
             sVal = Trim$(modJsonLite.GetStr(CStr(prevItem), "related_menu_id"))
             If LenB(sVal) > 0 Then
-                If Not IdExistsIn(menusText, sVal) Then
+                If Not ListGiven(menusText) Then
+                    Ap r, "[V-S2-06] " & V_NOLIST
+                ElseIf Not IdExistsIn(menusText, sVal) Then
                     Ap r, "[V-S2-06] risk_no " & noText & " の related_menu_id " & sVal & " は実在しません"
                 End If
             End If
@@ -360,16 +353,13 @@ Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
     CheckS2 = r
 End Function
 
-' ============================================================================
 ' CheckS3 - 提案マッチングの検証(15章§4 CheckS3 検証ルール表。13件。最重要)
-' ----------------------------------------------------------------------------
 '   s2Json     : 審査対象のS2 JSON(risk_no / gap_no の実在判定)
 '   menusText / linesText / schemesText / casesText: S3へ注入した一覧
 '     (15章§4の1行書式。行頭 "[ID] ")。V-S3-03～V-S3-06 の実在判定に使う。
-'     空文字は「一覧を注入していない」の意なので検査しない(IdExistsIn の注記)。
+'     空文字は「一覧未提供」= fail-closed で不合格(裁定書7 A-2。V_NOLIST)。
 '   caseType  : V-S3-13 用。省略時は IsRenewalCtx が s2Json から導く。
 '   ※ Optional String の既定値は CheckS2 の注記と同じ理由で書かない。
-' ============================================================================
 Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
                         Optional ByVal menusText As String, _
                         Optional ByVal linesText As String, _
@@ -431,14 +421,18 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
         ' --- V-S3-03: menu_ids[] の実在 ---
         For Each elemVal In modJsonLite.GetArrayItems(sj, "menu_ids")
             usedCount = usedCount + 1
-            If Not IdExistsIn(menusText, Trim$(CStr(elemVal))) Then
+            If Not ListGiven(menusText) Then
+                Ap r, "[V-S3-03] " & V_NOLIST
+            ElseIf Not IdExistsIn(menusText, Trim$(CStr(elemVal))) Then
                 Ap r, "[V-S3-03] story_no " & noText & " の menu_id " & CStr(elemVal) & " は実在しません"
             End If
         Next elemVal
 
         ' --- V-S3-04: line_ids[] の実在 ---
         For Each elemVal In modJsonLite.GetArrayItems(sj, "line_ids")
-            If Not IdExistsIn(linesText, Trim$(CStr(elemVal))) Then
+            If Not ListGiven(linesText) Then
+                Ap r, "[V-S3-04] " & V_NOLIST
+            ElseIf Not IdExistsIn(linesText, Trim$(CStr(elemVal))) Then
                 Ap r, "[V-S3-04] story_no " & noText & " の line_id " & CStr(elemVal) & " は実在しません"
             End If
         Next elemVal
@@ -447,7 +441,9 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
         sVal = Trim$(modJsonLite.GetStr(sj, "scheme_id"))
         If LenB(sVal) > 0 Then
             usedCount = usedCount + 1
-            If Not IdExistsIn(schemesText, sVal) Then
+            If Not ListGiven(schemesText) Then
+                Ap r, "[V-S3-05] " & V_NOLIST
+            ElseIf Not IdExistsIn(schemesText, sVal) Then
                 Ap r, "[V-S3-05] story_no " & noText & " の scheme_id " & sVal & " は実在しません"
             End If
         End If
@@ -455,7 +451,9 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
         ' --- V-S3-06: similar_case_id の実在("" は許す) ---
         sVal = Trim$(modJsonLite.GetStr(sj, "similar_case_id"))
         If LenB(sVal) > 0 Then
-            If Not IdExistsIn(casesText, sVal) Then
+            If Not ListGiven(casesText) Then
+                Ap r, "[V-S3-06] " & V_NOLIST
+            ElseIf Not IdExistsIn(casesText, sVal) Then
                 Ap r, "[V-S3-06] story_no " & noText & " の similar_case_id " & sVal & " は実在しません"
             End If
         End If
@@ -509,9 +507,7 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
     CheckS3 = r
 End Function
 
-' ============================================================================
-' CheckS4 / CheckPF / CheckS2C / CheckS3C - 本体は modValidate2(30,000字契約)
-' ============================================================================
+' CheckS4 / CheckPF / CheckS2C / CheckS3C - 本体は modValidate2(30,000字契約)。
 ' dossierTier 省略時は「ティア不明」= V-S4-01/02 の両方を当てる(CheckS4Core 注記)。
 Public Function CheckS4(ByVal json As String, _
                         Optional ByVal dossierTier As String, _
@@ -531,9 +527,7 @@ Public Function CheckPF(ByVal json As String, Optional ByVal refIdsText As Strin
     CheckPF = modValidate2.CheckPFCore(json, refIdsText)
 End Function
 
-' ============================================================================
-' 内部ヘルパ(本モジュール専用の純関数)
-' ============================================================================
+' --- 内部ヘルパ(本モジュール専用の純関数) ---
 
 ' エラー行を vbLf 区切りで積む(15章§0 原則10)。
 Private Sub Ap(ByRef outText As String, ByVal lineText As String)
@@ -561,17 +555,19 @@ Private Function IsRenewalCtx(ByVal caseType As String, ByVal s2Json As String) 
     End If
 End Function
 
+' ID一覧が渡されたか(fail-closed の判断点。裁定書7 A-2)。空=未提供であって
+' 「一覧に無い」ではないため、呼び出し側は V_NOLIST の不合格を出す。15章§6.1 の
+' "(登録なし)" は空ではないので通常の実在検査が走る。
+Private Function ListGiven(ByVal listText As String) As Boolean
+    ListGiven = (LenB(Trim$(listText)) > 0)
+End Function
+
 ' 注入テキスト(1行1件・行頭 "[ID] ")に当該IDの行があるか。ID実在検査
-' (V-S2-06 / V-S3-03～06)の唯一の判断点。**一覧が空なら True**: 候補ゼロに実在を
-' 要求するのは 14章§6 MenusSummaryFor が名指しで禁じた矛盾で、17章 T-22 のDoD
-' 「mock応答は自分の文脈で0件」も同じ規約。15章§6.1 の "(登録なし)" は空では
-' ないので検査は走る(16章 E-07)。
+' (V-S2-06 / V-S3-03～06)の照合部。一覧が空のときは False(未提供の扱いは
+' ListGiven で先に分けるので、ここへ来た時点で「一覧に無い」を意味する)。
 Private Function IdExistsIn(ByVal listText As String, ByVal idText As String) As Boolean
-    If LenB(Trim$(listText)) = 0 Then
-        IdExistsIn = True
-        Exit Function
-    End If
     If LenB(idText) = 0 Then Exit Function
+    If LenB(listText) = 0 Then Exit Function
     If Left$(listText, Len(idText) + 2) = "[" & idText & "]" Then
         IdExistsIn = True
         Exit Function

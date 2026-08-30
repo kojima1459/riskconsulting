@@ -26,13 +26,12 @@ Option Explicit
 '   だけで、本体ブックのシートには一切触らない。案件データは必ず modCaseStore
 '   経由(唯一の口)。セル書込は全て modUtilText.SetCellSafe(16章 NFR-S7(1))。
 '
-' 呼び出し側から値を受け取る理由: 案件一覧(company / industry_code /
-'   dossier_tier / round_no)にもフィードバック(dossier_facts の供給元。
-'   13章§2.5)にも読取APIが14章§6に無い(modPipeline.LoadCtx と同じ壁)。ここで
-'   シートを直接読むと「そのシートの唯一の入出力口は store」という12章§2の
-'   責務分割が崩れるため、ui層から TCaseCtx と roundNo を受け取る形にした。
-'   dossier_facts は5シートの1枚として見出しつきで作るが、行の投入は供給元API
-'   の宣言待ちで保留している(見出しだけ先に作るので後から足せる)。
+' 案件一覧の値(company / industry_code / dossier_tier / round_no)は
+'   modCaseRead.ReadCaseCtx(14章§6・裁定書7 B-7)で読む。本モジュールが本体
+'   ブックのシートを直接読むと「そのシートの唯一の入出力口は store」という
+'   12章§2の責務分割が崩れるため、読取は必ずこの1本を通す。
+'   dossier_facts(13章§2.5 フィードバック由来)は5シートの1枚として見出しつきで
+'   作るが、行の投入は供給元APIの宣言待ちで保留(見出しだけ先に作る)。
 '
 ' 16章 E-05(7)(共有前は確認必須): ExportCompanyFile は書き出す中身を modPii に
 '   通し、検知があるのに confirmedAt(利用者が「確認した」を選んだ日時)が空なら
@@ -113,8 +112,11 @@ End Function
 ' ============================================================================
 ' ExportCompanyFile - 現ラウンドを企業ファイルへ追記書き出しする(FR-45)。
 ' ----------------------------------------------------------------------------
-'   ctx         : 案件の文脈(company / industry_code / dossier_tier を使う)
-'   roundNo     : 案件一覧の現在の round_no
+'   caseId      : 案件ID。company / industry_code / dossier_tier / round_no は
+'                 modCaseRead.ReadCaseCtx(14章§6・裁定書7 B-7)で読む。案件一覧の
+'                 読取APIが無かったため ui から値を貰う設計にしていたのを結線した
+'                 (読めなければ fail-closed。空の企業名でファイルを作らない)。
+'   dirPath     : 保存先ディレクトリ
 '   confirmedAt : PII検知に対し利用者が「確認した」を選んだ日時(未選択は "")
 '   戻り値      : 書き出したファイルの絶対パス。失敗・中止は ""
 '
@@ -122,13 +124,21 @@ End Function
 '   い)。別ラウンドの行は消さない=これが「追記して育てる」の実体。書き終えたら
 '   閉じて開き直し s1-s3 JSON と notes を読み直してハッシュ照合する(2段検証)。
 ' ============================================================================
-Public Function ExportCompanyFile(ByVal caseId As String, ByRef ctx As TCaseCtx, _
-                                  ByVal roundNo As Long, ByVal dirPath As String, _
+Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As String, _
                                   ByVal confirmedAt As String) As String
     On Error GoTo Failed
 
     If Not modCaseStore.IsValidCaseId(caseId) Then
         modLog.LogError "E0101", CF_SRC & ".ExportCompanyFile", "invalid_case_id"
+        Exit Function
+    End If
+
+    Dim ctx As TCaseCtx
+    Dim roundNo As Long
+    Dim qualityMode As String, s4Variant As String, tierText As String
+    If Not modCaseRead.ReadCaseCtx(caseId, ctx, roundNo, qualityMode, s4Variant, _
+                                   tierText) Then
+        modLog.LogUsage "dossier_export_blocked", caseId, "case_ctx_unreadable"
         Exit Function
     End If
 
