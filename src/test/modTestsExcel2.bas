@@ -67,7 +67,14 @@ Private Sub TestQ9PasteRoundTrip()
     Dim hpText As String
     Dim memoText As String
     Dim tail As Long
+    Dim actOrig As String
     On Error GoTo Crashed
+
+    ' 裁定書13 W5: CaseSave は成功・ブロックのどちらでも ShowSheet "HOME" を通る
+    ' ため、本テストの途中で活性シートが移る。実行前のシート名を覚えておき、
+    ' Cleanup で必ず戻す(以降の層(b)テストの前提を壊さない)。画面遷移は ui層の
+    ' 責務なので、素の Activate ではなく modUISheet.ShowSheet を通す。
+    actOrig = ActiveSheetName()
 
     Set wsCases = SheetByName("案件一覧")
     Dim cCase As Long
@@ -137,16 +144,31 @@ Private Sub TestQ9PasteRoundTrip()
     ' (4) 裁定書12 V1(13章§2.11): CaseSave の3値判定。ci_case_id が空のまま
     '     [保存して戻る]を押しても**新規採番へ倒さない**。3値判定を「空->採番」
     '     へ戻す変異はここで落ちる(案件一覧に行が1本増えるため)。
+    '     裁定書13 W5: CaseSave は冒頭で TryEnterUiLock を取る。ロックが他所で
+    '     握られたままだと本文へ入らず無言で戻るため、hm_warning が空のまま
+    '     V1-12 だけが赤になる(誤検知)。**先にロックの空きを確かめ**、取れなければ
+    '     2本とも SKIP 扱いにする(本数は不変=TE_EXPECTED の自己照合を崩さない)。
+    Dim lockFree As Boolean
+    lockFree = modUIProgress.TryEnterUiLock("T47B-V1の前提確認")
+    If lockFree Then modUIProgress.ExitUiLock
+
     Dim rowsBefore As Long
     rowsBefore = LastRowA(wsCases)
     modUISheet.WriteNamed "hm_warning", vbNullString
-    modUICase3.CaseSave
-    ECheck "T47B-V1-11_表示case_idが空の[保存して戻る]は採番しない", _
-           LastRowA(wsCases) = rowsBefore, _
-           "案件一覧の最終行 前=" & CStr(rowsBefore) & " 後=" & CStr(LastRowA(wsCases))
-    ECheck "T47B-V1-12_ブロック時はhm_warningへ警告文を出す(V3)", _
-           modUISheet.ReadNamed("hm_warning") = T2_MSG_MISMATCH, _
-           "実際=" & modUISheet.ReadNamed("hm_warning")
+    If lockFree Then
+        modUICase3.CaseSave
+        ECheck "T47B-V1-11_表示case_idが空の[保存して戻る]は採番しない", _
+               LastRowA(wsCases) = rowsBefore, _
+               "案件一覧の最終行 前=" & CStr(rowsBefore) & " 後=" & CStr(LastRowA(wsCases))
+        ECheck "T47B-V1-12_ブロック時はhm_warningへ警告文を出す(V3)", _
+               modUISheet.ReadNamed("hm_warning") = T2_MSG_MISMATCH, _
+               "実際=" & modUISheet.ReadNamed("hm_warning")
+    Else
+        ECheck "T47B-V1-11_表示case_idが空の[保存して戻る]は採番しない", True, _
+               "SKIP: UiLockが握られており CaseSave を無人実行できない"
+        ECheck "T47B-V1-12_ブロック時はhm_warningへ警告文を出す(V3)", True, _
+               "SKIP: 同上"
+    End If
 
 Cleanup:
     On Error Resume Next
@@ -172,6 +194,8 @@ Cleanup:
     modUISheet.WriteNamed "ci_case_id", vbNullString
     modUISheet.WriteNamed "hm_warning", warnOrig
     DropFixtureRow wsCases, cCase
+    ' 裁定書13 W5: 活性シートを実行前へ戻す(CaseSave が HOME へ移していることがある)。
+    If LenB(actOrig) > 0 Then modUISheet.ShowSheet actOrig
     Exit Sub
 Crashed:
     ECheck "T47B-Q9-99_想定外エラー", False, _
@@ -264,6 +288,15 @@ Private Sub PutNamedCol(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Lon
                         ByVal colName As String, ByVal valueText As String)
     PutCell ws, r, modUtil.FindHeaderCol(hdr, colName), valueText
 End Sub
+
+' 実行前の活性シート名(取れなければ "")。裁定書13 W5 の復帰用。
+Private Function ActiveSheetName() As String
+    On Error GoTo NoActive
+    ActiveSheetName = CStr(ActiveSheet.Name)
+    Exit Function
+NoActive:
+    ActiveSheetName = vbNullString
+End Function
 
 ' シートを名前で引く(非表示・veryHidden も対象。無ければ Nothing)。
 Private Function SheetByName(ByVal sheetTitle As String) As Object

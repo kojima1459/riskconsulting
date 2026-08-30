@@ -25,6 +25,9 @@ Private Const U4_FB As String = "フィードバック"
 Private Const U4_JUDGE As String = "判断台帳"
 Private Const U4_SCAN_COLS As Long = 32
 Private Const U4_CASEIN As String = "案件入力"
+' 追加収集ブロックの表示上限行(modUICase3.U3_RESEARCH_ROOM と同値。描いた側と
+' 消す側で行数が食い違うと消し残りが出る)。
+Private Const U4_RESEARCH_ROOM As Long = 20
 
 ' ============================================================================
 ' 図形ボタン(11章 HOMEワイヤーの[商談の記録][判断台帳]から開いた先の操作)
@@ -249,7 +252,11 @@ Public Sub JudgeSaveResult()
                                         ColText(ws, hdr, rowNo, "post_loss")) Then
         Notice "結果を記録しました: " & judgeId
     Else
-        Notice "結果を記録できませんでした（結果は 成約 / 失注 / 未確定 から選んでください）。"
+        ' 裁定書13 W4: SetJudgementResult は judge_id が台帳に無い等 enum 以外の
+        ' 理由でも False を返すため、原因を断定しない文言にする(選択肢は参考として
+        ' 添えるだけで「原因はこれだ」とは言わない)。
+        Notice "結果を記録できませんでした。err_log をご確認ください" & _
+               "（結果の欄は 成約／失注／未確定 から選びます）"
     End If
 
 Done:
@@ -277,6 +284,81 @@ Private Function ColText(ByVal ws As Object, ByVal hdr As Variant, ByVal rowNo A
     If colNo <= 0 Then Exit Function
     ColText = modUISheet.CellText(ws, rowNo, colNo)
 End Function
+
+' ============================================================================
+' 案件入力の全クリア(裁定書13 W1・13章§2.11)
+' ----------------------------------------------------------------------------
+' HOMEの[＋新規案件](modUIHome.HomeNewCase)が固定マーカー「(新規)」を書く**前**に
+' 呼ぶ。前の案件を描いた画面のまま新規モードへ入ると、その画面に乗っている貼付
+' 内容がそのまま新しい案件の case_data として確定してしまう(切り詰まった描画の
+' あとでも同じことが起きる)。**新規モードは空の画面から始める**。
+'
+' 消すのは 13章§2.11 の 属性欄11 + 貼付欄17(本欄9・続き欄8) + 実行後表示欄
+' (字数欄10 と 追加収集ブロックの2列N行＋各行のコピーボタン)。
+' ci_quality_mode / ci_anonymize は案件の内容ではなく利用者の設定なので残す。
+'
+' 30,000字契約(12章§2)により modUICase3 に余白が無いため本モジュールへ置く
+' (CopyResearchRow と同じ理由・同じ移設先。14章§6へ登記)。
+' ============================================================================
+Public Sub ClearCaseInput()
+    On Error Resume Next
+
+    modUISheet.WriteNamed "ci_case_id", vbNullString
+
+    Dim names1() As String
+    names1 = Split(ClearNamesCsv(), ",")
+
+    Dim i As Long
+    For i = LBound(names1) To UBound(names1)
+        If LenB(names1(i)) > 0 Then modUISheet.WriteNamed names1(i), vbNullString
+    Next i
+
+    ' 字数の超過表示(赤)も戻す(色を塗りっぱなしにしない)。
+    modUISheet.MarkNamed "ci_count_total", False
+
+    ClearResearchBlock
+End Sub
+
+' クリア対象の名前付きレンジ(","区切り)。並びは 13章§2.11 の表の順で、
+' modUICase3 の AttrTable / PasteTable と同じ欄をもれなく挙げる。
+Private Function ClearNamesCsv() As String
+    Dim s As String
+    ' 属性欄11(保存時に案件一覧へ書く欄)。
+    s = s & "ci_case_type,ci_company,ci_industry_code,ci_industry_name,"
+    s = s & "ci_dossier_tier,ci_channel,ci_kanji,ci_bid,ci_reins,"
+    s = s & "ci_other_insurers,ci_s4_variant,"
+    ' 貼付欄9欄と続き欄8欄。
+    s = s & "ci_paste_hp_1,ci_paste_hp_2,ci_paste_hp_3,"
+    s = s & "ci_paste_yuho_1,ci_paste_yuho_2,ci_paste_yuho_3,"
+    s = s & "ci_paste_memo_1,"
+    s = s & "ci_paste_contract_1,ci_paste_contract_2,ci_paste_contract_3,"
+    s = s & "ci_paste_prev_renewal_1,"
+    s = s & "ci_paste_dossier_1,ci_paste_dossier_2,ci_paste_dossier_3,"
+    s = s & "ci_paste_field_notes_1,ci_paste_coverage_note_1,"
+    s = s & "ci_paste_hearing_answers_1,"
+    ' 実行後表示欄(1) 文字数カウンタ9欄と合計。
+    s = s & "ci_count_hp,ci_count_yuho,ci_count_memo,ci_count_contract,"
+    s = s & "ci_count_prev_renewal,ci_count_dossier,ci_count_field_notes,"
+    s = s & "ci_count_coverage_note,ci_count_hearing_answers,ci_count_total"
+    ClearNamesCsv = s
+End Function
+
+' 実行後表示欄(2) 追加収集ブロック(S1の research_requests)。描いた側
+' (modUICase3.DrawResearchBlock)と同じ範囲・同じ図形接頭辞で消す。
+Private Sub ClearResearchBlock()
+    On Error Resume Next
+
+    Dim anchor As Object
+    Set anchor = modUISheet.NamedCell("ci_research_anchor")
+    If anchor Is Nothing Then Exit Sub
+
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(U4_CASEIN)
+    If ws Is Nothing Then Exit Sub
+
+    modUISheet.DropShapesByPrefix ws, "btncopy_"
+    modUISheet.ClearBlock ws, anchor.row - 1, anchor.Column, 2, U4_RESEARCH_ROOM
+End Sub
 
 ' ============================================================================
 ' 追加収集の[コピー](17章 T-31 DoD)

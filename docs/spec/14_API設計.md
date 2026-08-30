@@ -1,4 +1,6 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.3
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.4
+
+> v2.5.4（裁定書13: W4.5 クローズパッチ）: §6の登記表へ **`modUICase4.ClearCaseInput`**（W1。案件入力の全クリア。HOMEの[＋新規案件]が新規モードのマーカーを書く前に呼ぶ唯一の口。30,000字契約により `modUICase3` へ置けないため `CopyResearchRow` と同じ移設先へ置く）を登記した。**本波で許可した新設はこの1件のみ**。
 
 > v2.5.3（裁定書12: W4.4 最終収束パッチ）: §6の登記表へ **`modUICase3.U3_NEW_MARK`**（V1。案件入力の新規モードの固定マーカー `(新規)`。`modInboxStore.IB_DRAFT_MARK` と同作法の公開定数）を登記した。**本波での公開関数の新設・移設はゼロ**。あわせて `AnswerMemoCount` の別案件確認文言を実物へ逐語化した（V9）。
 
@@ -1192,6 +1194,7 @@ Public Function RunExcelTests2() As Long
   | - | `modUICase.RebindFlatValidation` | 公開関数（ui層内部ヘルパ） | 本章§6 | フラット表（f種別）の入力規則を1シートぶん張り直す口。受信箱の投函下書き行を行挿入で用意したときに ui層から呼ぶ（v2.5.2・裁定書11 Q3(a)。13章§2.6） |
   | - | `modUICase4.CopyResearchRow` | 公開関数（図形ボタンの OnAction） | 本章§6 | 追加収集の[コピー]。30,000字契約により `modUICase3` から移設（v2.5.2・裁定書11 Q1。移設前の名は `modUICase3.CopyResearchRow`。呼出は図形の OnAction 文字列のみ） |
   | - | `modTestsExcel2.RunExcelTests2` | 公開関数（test層の分割先の入口） | 本章§6 | 30,000字契約による `modTestsExcel` の分割先。呼んでよいのは `RunAllExcelTests` のみ（v2.5.2・裁定書11 Q9/Q1） |
+  | - | `modUICase4.ClearCaseInput` | 公開関数（ui層内部ヘルパ） | 本章§6・13章§2.11 | 案件入力の全クリア（属性欄11・貼付欄17・実行後表示欄）。`modUIHome.HomeNewCase` が `ci_case_id` へ `(新規)` を書く**前**に呼ぶ。呼んでよいのは modUIHome のみ。30,000字契約により `modUICase3` に置けないため `CopyResearchRow` と同じ移設先へ置く（v2.5.4・裁定書13 W1） |
   | - | `modUICase3.U3_NEW_MARK`（値 `(新規)`） | 公開定数（モジュール間で共有する固定マーカー。`modInboxStore.IB_DRAFT_MARK` と同作法） | 本章§6・13章§2.11 | 案件入力の**新規モード**の固定マーカー。HOMEの[＋新規案件]（`modUIHome.HomeNewCase`）が `ci_case_id` へ書き、`modUICase3.CaseSave` の3値判定がこの値のときだけ採番する（v2.5.3・裁定書12 V1）。**公開関数の新設は本波では無い** |
   | - | `modUICase5` の Public 4本（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`） | ui層内部ヘルパ（W4.1分割裁定） | 本章§6 | 30,000字契約による `modUICase2` の分割先。呼んでよいのは modUICase2 のみ（裁定書10 §1でM2を解消） |
 

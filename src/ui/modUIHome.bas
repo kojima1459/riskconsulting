@@ -438,6 +438,12 @@ Public Sub HomeNewCase()
     ' [保存して戻る](modUICase3.CaseSave の3値判定)が企業名・業種を読んで行う。
     ' 空欄のまま採番して幽霊案件が積まれるのを防ぎ、かつ「表示が空のまま保存」
     ' を新規採番へ倒さないという保証を、ブックに残るセル1つで成り立たせる。
+    '
+    ' 裁定書13 W1(13章§2.11): マーカーを書く**前に画面を全クリアする**。前の案件
+    ' を描いた画面のまま新規モードへ入ると、その画面の貼付内容がそのまま新しい
+    ' 案件の case_data として確定する(切り詰まった描画のあとでも同じ)。
+    ' **新規モードは空画面から始まる**。
+    modUICase4.ClearCaseInput
     modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
     modUISheet.ShowSheet "案件入力"
 
