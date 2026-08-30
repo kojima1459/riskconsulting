@@ -29,6 +29,7 @@ vba_lint.py 緑
   -> app_version 更新 -> 15分スモーク -> 署名 -> 共有フォルダ配置
 ```
 
+- **検問はまとめて `python3 tools/gate.py` で回すのが標準**(全14ゲート・緑は1行/赤だけ末尾ログ+全文ログパス。テストが数千本規模になっても出力が肥大しない非対称出力)。`--only lint,lo-pure` で絞り、`--tail N` で失敗時表示量を調整、`--list` で一覧。個別ツールの直接実行はデバッグ時のみ。
 - `vba_lint.py` と `run_lo_tests.py` は**コミット条件**。HTMLテンプレ系(modHtmlTemplate*/modHtmlTheme/modExportHtml)へ触れたコミットは `render_report.py`(standard・--faithful の両方)も**コミット条件**に含める(18章固定文の逐語照合・DATAリテラル検査・SEC-16非描画検査はここが唯一の検問。層(a)のG90/G91は空白畳み照合のため見出し内空白の漂流には盲)。
   これらが緑でも**実機 wintest(層b)を飛ばしてよい理由にはならない**(17章§1)。
 - 検問を1つでも飛ばした版は配布しない。
