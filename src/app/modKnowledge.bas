@@ -309,13 +309,26 @@ Public Function LoadKnowledge() As Boolean
         Exit Function
     End If
 
-    ReadKbSheets wb
+    ' 裁定書9 B11(16章 E-08): データ行のあるシートが1枚も無い読込は**読込失敗**
+    ' として扱い、SaveSnapshot を呼ばない(0行で前回の正常な退避を上書きすると、
+    ' 次に接続できない起動で E-08 の退路そのものが失われる)。
+    If ReadKbSheets(wb) > 0 Then
+        CloseKbBook wb
+        gKbLoaded = True
+        ValidateKb
+        SaveSnapshot
+        FlushPending
+        LoadKnowledge = True
+        Exit Function
+    End If
+
     CloseKbBook wb
-    gKbLoaded = True
-    ValidateKb
-    SaveSnapshot
+    LogKb "E0401", "LoadKnowledge", "kb_zero_rows"
+    If RestoreSnapshot() > 0 Then
+        gKbLoaded = True
+        LoadKnowledge = True
+    End If
     FlushPending
-    LoadKnowledge = True
     Exit Function
 
 Failed:
@@ -778,28 +791,35 @@ Private Sub FlushPending()
     hdr = ReadWsBlock(gapWs, 2, KB_SCAN_COLS)
     cols = Split(KB_GAPCOLS, ",")
     Dim wr As Long, r As Long, c As Long
+    Dim wrote As Long
     wr = LastRowOfWs(gapWs)
     For r = 1 To lastRow
         If LenB(Trim$(CellRaw(blk, r, 1))) > 0 Then
             wr = wr + 1
             For c = 0 To 4
-                PutByName gapWs, hdr, wr, CStr(cols(c)), CellRaw(blk, r, c + 1)
+                If PutByName(gapWs, hdr, wr, CStr(cols(c)), CellRaw(blk, r, c + 1)) Then
+                    wrote = wrote + 1
+                End If
             Next c
         End If
     Next r
     wb.Save
     CloseKbBook wb
-    ws.Cells.Clear
+    ' 裁定書9 B19(16章 E-13): 書込成功が0件(見出し不在・列名変更で1セルも
+    ' 書けていない)のときは退避キューを消さず次回起動へ持ち越す。
+    If wrote > 0 Then ws.Cells.Clear
     Exit Sub
 Ignore0:
     Exit Sub
 End Sub
 
-' 列名で位置を引いて1セル書く。列が無ければ何もしない(SetCellSafe。NFR-S7①)。
-Private Sub PutByName(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
-                      ByVal colName As String, ByVal textValue As String)
+' 列名で位置を引いて1セル書く(SetCellSafe。NFR-S7①)。裁定書9 B19: 書けたか
+'   どうかを返す(列が無ければ何もせず False。呼び出し側が成功件数を数える)。
+Private Function PutByName(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
+                           ByVal colName As String, ByVal textValue As String) As Boolean
     Dim c As Long
     c = modUtil.FindHeaderCol(hdr, colName)
-    If c <= 0 Then Exit Sub
+    If c <= 0 Then Exit Function
     modUtilText.SetCellSafe ws.Cells(r, c), textValue, KB_SHEET_GAP & "/" & colName
-End Sub
+    PutByName = True
+End Function

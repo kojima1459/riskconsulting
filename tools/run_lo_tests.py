@@ -166,6 +166,10 @@ PURE_ALLOWLIST = [
     # IsValidJudgeResult(採番・ID書式・19章§3のdecision enum検証・
     # 13章§2.7のresult enum検証)。
     "modJudgeStore",
+    # W4.1(裁定書9)。ui層だがテストが叩くのは19章§3の変換表の純関数3本だけ:
+    #   modUICase : EnumPairsCsv(変換表の唯一の値源)/ EnumJa / EnumEn
+    # (技術メモ4。モジュールの他の関数はシートに触れるが実行に到達しない)。
+    "modUICase",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",
@@ -186,6 +190,11 @@ PURE_ALLOWLIST = [
     # と、両群が共有する攻撃素材 DataJsonAttack を持つ。
     # modTestsPure10.RunAll の末尾から呼ぶ。
     "modTestsPure11",
+    # modTestsPure12: W4.1(裁定書9)の回帰42本。B5(;置換)/A-6(充足度ラベル)/
+    # B2(受信箱判定judge_to)/B4・B7(ファイル名規則)/B9・N1(E-35/E-36警告)。
+    # 叩くのは modUtil / modUtilText / modUICase / modInboxStore / modPipeline2 の
+    # 純関数だけ。modTestsPure11.RunAll の末尾から呼ぶ。
+    "modTestsPure12",
     "modMockLlm", "modMockLlm2",
 ]
 

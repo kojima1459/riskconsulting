@@ -74,20 +74,31 @@ Failed:
 End Function
 
 ' 上書き確認を出さずにマクロ無し.xlsxとして保存して閉じる。
-Public Sub DossierSaveAndClose(ByVal wb As Object, ByVal pathText As String)
-    On Error GoTo Failed
+'   裁定書9 B8・N3(14章§6): SaveAs の失敗を握り潰さず Boolean で返す
+'   (True=SaveAs と Close が成功)。共有フォルダの読取専用・他者ロック・
+'   パス長超過で現実に起きる。失敗時もブックは保存せずに閉じて残さない
+'   (開いたままのダーティなブックを VerifyRoundTrip が読むと、ディスクでは
+'   なくメモリ上の未保存内容と突合して合格してしまうため)。
+Public Function DossierSaveAndClose(ByVal wb As Object, ByVal pathText As String) As Boolean
     Dim prevAlerts As Boolean
     prevAlerts = Application.DisplayAlerts
+    On Error GoTo Failed
     Application.DisplayAlerts = False
     wb.SaveAs pathText, C2_XLSX_FORMAT
     Application.DisplayAlerts = prevAlerts
     wb.Close False
-    Exit Sub
+    DossierSaveAndClose = True
+    Exit Function
 Failed:
     modLog.LogError "E0603", C2_SRC & ".DossierSaveAndClose", "save_failed", Err.Number
-    Resume Ignore0
-Ignore0:
-End Sub
+    Resume CleanUp0
+CleanUp0:
+    ' Resume でハンドラを抜けてから後始末する(ハンドラ稼働中は再捕捉できない)。
+    On Error Resume Next
+    Application.DisplayAlerts = prevAlerts
+    wb.Close False
+    DossierSaveAndClose = False
+End Function
 
 ' 保存せずに閉じる(読み取り目的で開いたブックの後始末)。
 Public Sub DossierClose(ByVal wb As Object)

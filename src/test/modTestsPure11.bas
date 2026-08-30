@@ -35,6 +35,16 @@ Public Sub RunAll()
         End If
         On Error GoTo 0
     Next i
+
+    ' 数珠つなぎの継続: W4.1(裁定書9)の回帰テストへ(modTestsPure -> 2 .. -> 11 -> 12)
+    On Error Resume Next
+    Err.Clear
+    modTestsPure12.RunAll
+    If Err.Number <> 0 Then
+        GroupFail "modTestsPure12.RunAll"
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)

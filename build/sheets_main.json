@@ -50,6 +50,7 @@
     "fb_event": ["next_appt", "quote_req", "won", "lost", "renewed", "claim", "no_meeting_yet"],
     "inbox_source_kind": ["member_post", "field_voice", "watch"],
     "inbox_status": ["undiagnosed", "diagnosed", "adopted", "conditional_hold", "rejected", "merged"],
+    "judge_to": ["adopted", "conditional_hold", "rejected"],
     "pf_survival": ["high", "mid", "low"],
     "drop_type": ["T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"],
     "revive_tag": ["tech", "regulation", "partner", "data", "market"],
@@ -74,7 +75,7 @@
       "財務状態", "付保・提案の経緯", "拠点ハザード"
     ],
     "input_quality_status_ja": ["十分", "断片的", "無い"],
-    "input_quality_overall_ja": ["充足度 高", "充足度 中", "充足度 低"],
+    "input_quality_overall_ja": ["高", "中", "低"],
     "risk_category_ja": [
       "戦略・市場", "調達・供給網", "製造・品質", "販売・顧客", "施設・自然災害・BCP",
       "人材・労務", "デジタル・情報", "法務・規制", "財務・取引先", "ブランド・社会"
@@ -171,8 +172,8 @@
             {"range": "ci_case_id", "label": "案件ID", "type": "String", "input": false, "note": "自動採番・書込専用"},
             {"range": "ci_case_type", "label": "種別", "type": "String", "input": true, "dv": "case_type_ja", "note": "案件一覧 case_type (new / renewal)"},
             {"range": "ci_company", "label": "企業名(必須)", "type": "String", "input": true, "note": "案件一覧 company。必須(16章 E-01)"},
-            {"range": "ci_industry_code", "label": "業種コード", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則はW3で隠しレンジ化"},
-            {"range": "ci_industry_name", "label": "業種名", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則はW3で隠しレンジ化"},
+            {"range": "ci_industry_code", "label": "業種コード", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則=起動時に modBoot がナレッジスナップショットの業種マスタから隠しレンジへ複製して張る(13章§2.11・裁定書9 §4)。ナレッジ未接続かつスナップショット無しのときは張らず手入力のまま続行(16章 E-08)"},
+            {"range": "ci_industry_name", "label": "業種名", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則は ci_industry_code と同じく modBoot が起動時に張る(13章§2.11・裁定書9 §4)"},
             {"range": "ci_dossier_tier", "label": "収集ティア", "type": "String", "input": true, "dv": "dossier_tier_ja", "note": "既定 クイック。壁打ち開始時に自動昇格。入力打切り上限の選択もこの値で決まる(16章 E-03)"},
             {"range": "ci_channel", "label": "取引", "type": "String", "input": true, "dv": "channel_ja", "note": "案件一覧 channel"},
             {"range": "ci_kanji", "label": "幹事", "type": "String", "input": true, "dv": "kanji_ja", "note": "案件一覧 kanji"},
@@ -181,8 +182,7 @@
             {"range": "ci_other_insurers", "label": "他社付保メモ", "type": "String", "input": true, "note": "案件一覧 other_insurers。自由記述"},
             {"range": "ci_s4_variant", "label": "S4出力", "type": "String", "input": true, "dv": "s4_variant_ja", "note": "案件一覧 s4_variant"},
             {"range": "ci_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "config上書き。空=ティア連動の既定に従う"},
-            {"range": "ci_anonymize", "label": "匿名化", "type": "String", "input": true, "dv": "boolean", "note": "匿名化ボタンの状態。既定は config anonymize_default(16章 E-31)"},
-            {"range": "ci_input_quality_banner", "label": "入力充足度", "type": "String", "input": false, "note": "S1実行後の 充足度: 中 / 不足: ... / 助言: ...(15章 CheckS1充足度ゲート)"}
+            {"range": "ci_anonymize", "label": "匿名化", "type": "String", "input": true, "dv": "boolean", "note": "匿名化ボタンの状態。既定は config anonymize_default(16章 E-31)"}
           ]
         },
         {
@@ -259,6 +259,10 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.12",
+      "header_title": "S1_企業プロファイル",
+      "header_fields": [
+        {"range": "s1_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+      ],
       "blocks": [
         {
           "name": "s1_basic",
@@ -355,6 +359,10 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.13",
+      "header_title": "S2_リスク仮説",
+      "header_fields": [
+        {"range": "s2_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+      ],
       "blocks": [
         {
           "name": "s2_gaps",
@@ -425,6 +433,10 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.14",
+      "header_title": "S3_提案",
+      "header_fields": [
+        {"range": "s3_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+      ],
       "blocks": [
         {
           "name": "s3_stories",
@@ -474,6 +486,10 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.15",
+      "header_title": "S4_骨子",
+      "header_fields": [
+        {"range": "s4_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+      ],
       "blocks": [
         {
           "name": "s4_meta",
@@ -596,13 +612,14 @@
         {"name": "pf_json", "type": "String", "width": 40, "header_note": "プリフライト診断の生JSON"},
         {"name": "pf_survival", "type": "String", "width": 12, "dv": "pf_survival"},
         {"name": "pf_pred_types", "type": "String", "width": 18, "header_note": "予測棄却類型(;区切り T1..T10)"},
-        {"name": "status", "type": "String", "width": 18, "dv": "inbox_status"},
+        {"name": "status", "type": "String", "width": 18, "header_note": "この列は自動で更新されます。判定は judge_to 列で選んでください(13章§2.6・裁定書9 B2/N5)"},
         {"name": "drop_type", "type": "String", "width": 12, "dv": "drop_type", "header_note": "rejected時必須"},
         {"name": "revive_tag", "type": "String", "width": 14, "dv": "revive_tag", "header_note": "conditional_hold時必須"},
         {"name": "revive_due", "type": "String", "width": 16, "header_note": "conditional_hold時必須"},
         {"name": "merged_into", "type": "String", "width": 16, "header_note": "merged時必須(統合先inbox_id)"},
         {"name": "judged_by_group", "type": "String", "width": 22},
-        {"name": "judged_at", "type": "String", "width": 20}
+        {"name": "judged_at", "type": "String", "width": 20},
+        {"name": "judge_to", "type": "String", "width": 16, "dv": "judge_to", "header_note": "判定の入力列(13章§2.6・裁定書9 B2/N5)。判定先を選び[判定を保存]を押す。成功すると status へ反映され本列は空に戻る"}
       ]
     },
 

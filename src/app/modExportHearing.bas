@@ -124,6 +124,62 @@ Failed:
     BuildHearingSheet = False
 End Function
 
+' ==========================================================
+' AnswerMemoCount - 14章§6の契約(裁定書9 N8・B12)。ヒアリングシートの
+'   answer_memo 列の**非空行数**を返す。シート不在・アンカー不在・見出し不在・
+'   当該案件のシートでない(hs_case_id が caseId と一致しない)場合は 0
+'   (読めないことを「回答あり」と誤認しない)。
+'   modUIHome が [ヒアリングシート] 押下時に呼び、1以上なら上書き確認
+'   (MsgBox vbYesNo)を挟む(生成は answer_memo を含む全行を空へ戻すため)。
+'   本関数は数えるだけで、シートを1セルも書き換えない。
+' ==========================================================
+Public Function AnswerMemoCount(ByVal caseId As String) As Long
+    On Error GoTo Zero0
+
+    Dim ws As Object
+    Set ws = SheetOf(EH_SHEET)
+    If ws Is Nothing Then Exit Function
+
+    ' 当該案件のシートか(印刷ヘッダの hs_case_id で確認)。
+    Dim sheetCase As String
+    sheetCase = NamedText("hs_case_id")
+    If StrComp(Trim$(sheetCase), Trim$(caseId), vbBinaryCompare) <> 0 Then Exit Function
+
+    Dim headerRow As Long
+    headerRow = BlockHeaderRow(EH_BLOCK)
+    If headerRow <= 0 Then Exit Function
+
+    Dim hdr As Variant
+    hdr = ws.Range(ws.Cells(headerRow, 1), ws.Cells(headerRow, EH_HDR_WIDTH)).Value
+
+    Dim cA As Long
+    cA = modUtil.FindHeaderCol(hdr, "answer_memo")
+    If cA <= 0 Then Exit Function
+
+    Dim n As Long
+    Dim r As Long
+    For r = headerRow + 1 To headerRow + EH_MAX_Q
+        If LenB(Trim$(CStr(ws.Cells(r, cA).Value))) > 0 Then n = n + 1
+    Next r
+    AnswerMemoCount = n
+    Exit Function
+
+Zero0:
+    AnswerMemoCount = 0
+End Function
+
+' 名前付きレンジ1点の値(文字列)。不在・読めないときは ""。
+Private Function NamedText(ByVal rangeName As String) As String
+    On Error GoTo Blank0
+    Dim cell As Object
+    Set cell = NamedCell(rangeName)
+    If cell Is Nothing Then Exit Function
+    NamedText = CStr(cell.Value)
+    Exit Function
+Blank0:
+    NamedText = vbNullString
+End Function
+
 ' 印刷ヘッダ(名前付きレンジ)。案件一覧からの複写3項目と生成日時。
 '   hs_visit_date は手入力欄なので**書かない**(13章§2.16)。
 Private Sub WriteHeaderFields(ByVal caseId As String)

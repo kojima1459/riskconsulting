@@ -109,6 +109,10 @@ Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long, _
                         Optional ByVal qualityOverride As String) As Boolean
     On Error GoTo Failed
 
+    ' 裁定書9 N1: LastDeepOutcome を毎実行の開始時にリセットする(stepNo=0 は
+    ' RunDeep の対象外検査で即 False。入念パイプは走らずリセットだけが通る)。
+    modPipeline2.RunDeep caseId, 0
+
     If Not modCaseStore.IsValidCaseId(caseId) Then
         modLog.LogError "E0101", PL_SRC & ".RunStep", "invalid_case_id"
         Exit Function
@@ -197,12 +201,30 @@ Private Function ExecStep(ByVal caseId As String, ByRef ctx As TCaseCtx, _
     modCaseStore.SetStepOutcome caseId, stepNo, vbNullString
     modCaseStore.SetStatus caseId, StatusForStep(stepNo)
 
+    ' 裁定書9 B10(10章 FR-13 Must): S3成功直後、確定した s3_json の
+    ' unmatched_risks を新サービス候補としてナレッジへ自動記録する。
+    If stepNo = 3 Then RecordServiceGaps caseId, ctx.industry_code, okJson
+
     ' 入念モード(15章§4.5-4.7)は modPipeline2 へ1行で委譲(裁定書8 A-1)。戻り値は
     ' 握りつぶす: 批判・改訂の不首尾で本体Stepを落とさない(E-35/E-36)。
     If DeepEnabled(ResolveQualityMode(mQualityMode, ctx.dossier_tier), stepNo) Then modPipeline2.RunDeep caseId, stepNo
 
     ExecStep = True
 End Function
+
+' RecordServiceGaps - 裁定書9 B10。確定した s3_json の unmatched_risks を1件ずつ
+'   modKnowledge.AppendServiceGap へ渡す(FR-13。書込失敗時の退避・再送は
+'   AppendServiceGap 側の責務で、本体Stepの成否は動かさない)。
+Private Sub RecordServiceGaps(ByVal caseId As String, ByVal industryCode As String, _
+                              ByVal s3Json As String)
+    Dim it As Variant
+
+    For Each it In modJsonLite.GetArrayItems(s3Json, "unmatched_risks")
+        modKnowledge.AppendServiceGap caseId, industryCode, _
+            modJsonLite.GetStr(CStr(it), "risk_name") & " / " & _
+            modJsonLite.GetStr(CStr(it), "why_unmatched")
+    Next it
+End Sub
 
 ' BuildPrompts - Step別のsystem/user/schemaを組む(15章の本文は持たない)
 Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _

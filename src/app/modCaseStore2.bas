@@ -155,6 +155,125 @@ Done0:
     DropRowsOf = 0
 End Function
 
+' --- 2相書込(裁定書9 B13)の下位I/O ---
+' seq帯(seqBase超のseq)は「書き途中の仮行」で、modCaseStore.LoadData からは
+' 見えない。帯の値(CS_SEQ_BAND)は modCaseStore が持ち引数で渡す。
+
+' ReplaceSeqRows - (case_id, data_key) の断片群を2相で置換する唯一の入口。
+'   相0: 過去の失敗が残した仮行の掃除 / 相1: 新断片を仮seq帯へ書き切る(失敗
+'   したら仮行を後始末して False。**旧行は1行も消えていない**) / 相2: 旧行を
+'   削除 / 相3: 仮行のseqから帯を外して確定(seqの大きい側から。途中で落ちても
+'   先頭から揃った「短い完全形」にならず、LoadData の欠番検査=E0604 が止める)。
+Public Function ReplaceSeqRows(ByVal ws As Object, ByVal caseId As String, _
+                               ByVal dataKey As String, ByRef parts() As String, _
+                               ByVal seqBase As Long) As Boolean
+    On Error GoTo Failed0
+    Const TOP As Long = 2147483647
+
+    If Not DropSeqRange(ws, caseId, dataKey, seqBase + 1, TOP) Then Exit Function
+    If Not WriteSeqRows(ws, caseId, dataKey, parts, seqBase) Then
+        DropSeqRange ws, caseId, dataKey, seqBase + 1, TOP
+        Exit Function
+    End If
+    If Not DropSeqRange(ws, caseId, dataKey, -TOP, seqBase) Then Exit Function
+    ReplaceSeqRows = CommitSeqBand(ws, caseId, dataKey, seqBase)
+    Exit Function
+Failed0:
+    ReplaceSeqRows = False
+End Function
+
+' 断片列 parts を seq=seqBase+1.. の仮行として末尾へ書き足す。旧行には触れない。
+Private Function WriteSeqRows(ByVal ws As Object, ByVal caseId As String, _
+                              ByVal dataKey As String, ByRef parts() As String, _
+                              ByVal seqBase As Long) As Boolean
+    On Error GoTo Failed0
+    Dim lastRow As Long
+    lastRow = LastRowOf(ws)
+    Dim hdr As Variant
+    hdr = ReadBlock(ws, 2)
+    Dim stampText As String
+    stampText = modUtil.NowStamp()
+
+    Dim i As Long, n As Long
+    For i = LBound(parts) To UBound(parts)
+        n = i - LBound(parts) + 1
+        PutText ws, hdr, lastRow + n, "case_id", caseId
+        PutText ws, hdr, lastRow + n, "data_key", dataKey
+        PutNum ws, hdr, lastRow + n, "seq", seqBase + n
+        PutText ws, hdr, lastRow + n, "content", parts(i)
+        PutText ws, hdr, lastRow + n, "saved_at", stampText
+    Next i
+    WriteSeqRows = True
+    Exit Function
+Failed0:
+    WriteSeqRows = False
+End Function
+
+' (case_id, data_key) 一致行のうち seq が loSeq..hiSeq の行だけを削除する
+' (下から回すのは行ずれ回避)。非数値seqは0扱い(ToLongSafe)で範囲判定に掛かる。
+Private Function DropSeqRange(ByVal ws As Object, ByVal caseId As String, _
+                              ByVal dataKey As String, ByVal loSeq As Long, _
+                              ByVal hiSeq As Long) As Boolean
+    On Error GoTo Failed0
+    Dim lastRow As Long
+    lastRow = LastRowOf(ws)
+    If lastRow < 2 Then
+        DropSeqRange = True
+        Exit Function
+    End If
+
+    Dim blk As Variant
+    blk = ReadBlock(ws, lastRow)
+    Dim cCase As Long, cKey As Long, cSeq As Long
+    cCase = modUtil.FindHeaderCol(blk, "case_id")
+    cKey = modUtil.FindHeaderCol(blk, "data_key")
+    cSeq = modUtil.FindHeaderCol(blk, "seq")
+    If cCase <= 0 Or cKey <= 0 Or cSeq <= 0 Then Exit Function
+
+    Dim r As Long, sq As Long
+    For r = lastRow To 2 Step -1
+        If MatchesRow(blk, r, cCase, cKey, caseId, dataKey) Then
+            sq = ToLongSafe(blk(r, cSeq))
+            If sq >= loSeq And sq <= hiSeq Then ws.Rows(r).Delete
+        End If
+    Next r
+    DropSeqRange = True
+    Exit Function
+Failed0:
+    DropSeqRange = False
+End Function
+
+' seq帯の仮行を確定へ(seq - seqBase)。**seqの大きい行から**帯を外す: 途中で
+' 落ちても先頭から揃った「短い完全形」が生まれず、LoadData の完全性検査
+' (欠番=E0604)が必ず止める。仮行は昇順で追記されるので行の降順=seqの降順。
+Private Function CommitSeqBand(ByVal ws As Object, ByVal caseId As String, _
+                               ByVal dataKey As String, ByVal seqBase As Long) As Boolean
+    On Error GoTo Failed0
+    Dim lastRow As Long
+    lastRow = LastRowOf(ws)
+    If lastRow < 2 Then Exit Function
+
+    Dim blk As Variant
+    blk = ReadBlock(ws, lastRow)
+    Dim cCase As Long, cKey As Long, cSeq As Long
+    cCase = modUtil.FindHeaderCol(blk, "case_id")
+    cKey = modUtil.FindHeaderCol(blk, "data_key")
+    cSeq = modUtil.FindHeaderCol(blk, "seq")
+    If cCase <= 0 Or cKey <= 0 Or cSeq <= 0 Then Exit Function
+
+    Dim r As Long, sq As Long
+    For r = lastRow To 2 Step -1
+        If MatchesRow(blk, r, cCase, cKey, caseId, dataKey) Then
+            sq = ToLongSafe(blk(r, cSeq))
+            If sq > seqBase Then PutNum ws, blk, r, "seq", sq - seqBase
+        End If
+    Next r
+    CommitSeqBand = True
+    Exit Function
+Failed0:
+    CommitSeqBand = False
+End Function
+
 ' 列名で位置を引いて1セル書く。列が無ければ何もしない。書込は必ず SetCellSafe。
 Public Sub PutText(ByVal ws As Object, ByVal hdr As Variant, ByVal r As Long, _
                    ByVal colName As String, ByVal textValue As String)

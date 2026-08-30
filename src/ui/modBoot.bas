@@ -69,6 +69,7 @@ Option Explicit
         Lib "user32" () As Long
 #End If
 
+Private Const BOOT_SRC As String = "modBoot"
 Private Const BOOT_GUARD_SHEET As String = "はじめにお読みください"
 Private Const BOOT_DATA_SHEET As String = "case_data"
 Private Const BOOT_ENUM_SHEET As String = "enum_hidden"
@@ -95,6 +96,19 @@ Private Const BOOT_DATA_KEYS As String = _
     "s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;" & _
     "s4_json_failed;sparring_u;sparring_a"
 
+' 起動手順の本数(BootStep の Select Case と一致させること)。
+Private Const BOOT_STEP_COUNT As Long = 11
+
+' 業種入力規則(13章§2.11・裁定書9 §4)。値源はナレッジのスナップショット
+' (16章 E-08 の退避先)であり、modKnowledge の内部表現を読む口を増やさない
+' ためにシートを直接読む。索引1 = 業種マスタ(modKnowledge KB_SHEETS の先頭)。
+Private Const BOOT_SNAP_SHEET As String = "kb_snapshot"
+Private Const BOOT_SNAP_IDX_INDUSTRY As String = "1"
+Private Const BOOT_IND_CODE_COL As Long = 30     ' enum_hidden の使用列(1=data_key
+Private Const BOOT_IND_NAME_COL As Long = 31     '  / 2-25=19章§3の24グループ)
+Private Const BOOT_IND_CODE_NAME As String = "enum_industry_code"
+Private Const BOOT_IND_NAME_NAME As String = "enum_industry_name"
+
 Private Const BOOT_DV_ERROR_TITLE As String = "入力できない値です"
 Private Const BOOT_DV_ERROR_MSG As String = "一覧から選んでください。"
 Private Const BOOT_MSG_LIMIT_REACHED As String = _
@@ -104,41 +118,67 @@ Private Const BOOT_MSG_LIMIT_REACHED As String = _
 ' Boot - 起動シーケンス本体(12章§2.1の7手順をこの順で1回ずつ実行する)。
 ' ============================================================================
 Public Sub Boot()
-    ' (1) ガードシート非表示
-    HideGuardSheet
+    ' 裁定書9 B21(12章§2.1): 各手順を**個別のエラーハンドラ**で包む。途中の
+    ' 手順が未捕捉の実行時エラーを投げても、以降の手順(EnableSelectionの毎起動
+    ' 適用=16章E-51(b)・ボタン配線・ParkFocus)まで必ず到達させる。
+    Dim i As Long
+    For i = 1 To BOOT_STEP_COUNT
+        BootStep i
+    Next i
+End Sub
 
-    ' (2) config読込(既定値登録->シート上書き)。keep_window_aliveは
-    '     ここより前には読めないため、ゴースト化抑止も(2)の直後に置く。
-    RegisterConfigDefaults
-    modConfig.LoadFromSheet
-    ApplyGhostingGuard
+' 起動手順1本ぶん。失敗しても記録して次へ進む(起動を止めない。12章§2.1)。
+Private Sub BootStep(ByVal stepNo As Long)
+    On Error GoTo Failed
 
-    ' (3) 案件状態の整合修復(RepairStatesが失敗時のE0603記録まで自己完結)
-    modCaseStore.RepairStates
+    Select Case stepNo
+    Case 1
+        ' (1) ガードシート非表示
+        HideGuardSheet
+    Case 2
+        ' (2) config読込(既定値登録->シート上書き)。keep_window_aliveは
+        '     ここより前には読めないため、ゴースト化抑止も(2)の直後に置く。
+        RegisterConfigDefaults
+        modConfig.LoadFromSheet
+        ApplyGhostingGuard
+    Case 3
+        ' (3) 案件状態の整合修復(RepairStatesが失敗時のE0603記録まで自己完結)
+        modCaseStore.RepairStates
+    Case 4
+        ' (4) enum入力規則の隠しレンジ複製(11章§5)。data_key(日本語ラベルを
+        '     持たない内部キー)は本モジュールが復元する。
+        RestoreDataKeyHiddenRange
+    Case 5
+        '     日本語ラベルを持つ24グループは変換表を持つ modUICase が復元する
+        '     (19章§3の値を2箇所に書かないため)。
+        modUICase.ApplyEnumValidation
+    Case 6
+        ' (5)+(6) ナレッジ読込・スナップショット保存・新サービス候補の再送
+        '         (再送はLoadKnowledge内部のFlushPendingが無音で行う。E-13)
+        modKnowledge.LoadKnowledge
+    Case 7
+        ' 業種入力規則(13章§2.11・裁定書9 §4)。ナレッジ読込の**後**に置く
+        ' (直前の読込で更新されたスナップショットを使う)。
+        RestoreIndustryHiddenRange
+    Case 8
+        ' (7) 利用上限チェック。Trueでも起動は止めずHOMEへ案内する
+        If modGatewayRPN.RunLimitCheck() Then NoticeLimitReached
+    Case 9
+        ' protection_policy(Locked+EnableSelection)の適用
+        ' (16章E-51・17章T-16 DoD。Lockedはビルドが焼くのでここでは
+        '  EnableSelectionのみを毎起動適用する)
+        ApplyProtectionPolicy
+    Case 10
+        ' 画面の用意(図形ボタン+OnAction の配線とHOMEの初期表示。11章§5・T-30)
+        modUIHome.EnsureScreens
+    Case 11
+        ' フォーカス退避(16章E-51(c))。実装は ui層 modUIProgress が唯一持つ。
+        modUIProgress.ParkFocus
+    End Select
+    Exit Sub
 
-    ' (4) enum入力規則の隠しレンジ複製(11章§5)。data_key(日本語ラベルを持たない
-    '     内部キー)は本モジュールが、日本語ラベルを持つ24グループは変換表を持つ
-    '     modUICase が復元する(19章§3の値を2箇所に書かないため)。
-    RestoreDataKeyHiddenRange
-    modUICase.ApplyEnumValidation
-
-    ' (5)+(6) ナレッジ読込・スナップショット保存・新サービス候補の再送
-    '         (再送はLoadKnowledge内部のFlushPendingが無音で行う。E-13)
-    modKnowledge.LoadKnowledge
-
-    ' (7) 利用上限チェック。Trueでも起動は止めずHOMEへ案内する
-    If modGatewayRPN.RunLimitCheck() Then NoticeLimitReached
-
-    ' protection_policy(Locked+EnableSelection)の適用とParkFocus
-    ' (16章E-51・17章T-16 DoD。Lockedはビルドが焼くのでここではEnableSelection
-    '  のみを毎起動適用する)
-    ApplyProtectionPolicy
-
-    ' 画面の用意(図形ボタン+OnAction の配線とHOMEの初期表示。11章§5・T-30)
-    modUIHome.EnsureScreens
-
-    ' フォーカス退避(16章E-51(c))。実装は ui層 modUIProgress が唯一持つ。
-    modUIProgress.ParkFocus
+Failed:
+    modLog.LogError "E0603", BOOT_SRC & ".Boot", "boot_step_failed:" & CStr(stepNo), Err.Number
 End Sub
 
 ' ----------------------------------------------------------------------------
@@ -281,6 +321,111 @@ Private Sub ApplyDataKeyValidation()
     target.Validation.ErrorMessage = BOOT_DV_ERROR_MSG
     On Error GoTo 0
 End Sub
+
+' ----------------------------------------------------------------------------
+' 業種入力規則(13章§2.11・裁定書9 §4。検証欠陥#1)
+'   ナレッジのスナップショット(業種マスタ)から industry_code / industry_name を
+'   隠しレンジへ複製し、案件入力の ci_industry_code / ci_industry_name へ入力
+'   規則を張る(RestoreDataKeyHiddenRange と同作法)。
+'   **ナレッジ未接続かつスナップショット無しのときは張らずに続行する**
+'   (16章 E-08 準拠。起動は止めず E0401 の記録のみ)。
+' ----------------------------------------------------------------------------
+Private Sub RestoreIndustryHiddenRange()
+    Dim codeList As String
+    Dim nameList As String
+    ReadIndustryMaster codeList, nameList
+    If LenB(codeList) = 0 Then
+        modLog.LogError "E0401", BOOT_SRC & ".RestoreIndustryHiddenRange", _
+                        "industry_master_unavailable"
+        Exit Sub
+    End If
+
+    Dim ws As Object
+    Set ws = modUISheet.EnsureHiddenSheet(BOOT_ENUM_SHEET)
+    If ws Is Nothing Then Exit Sub
+
+    If LenB(modUISheet.PutEnumRange(ws, BOOT_IND_CODE_COL, BOOT_IND_CODE_NAME, _
+                                    codeList, ";")) > 0 Then
+        modUISheet.BindNamedValidation "ci_industry_code", BOOT_IND_CODE_NAME, _
+                                       BOOT_DV_ERROR_TITLE, BOOT_DV_ERROR_MSG
+    End If
+    If LenB(modUISheet.PutEnumRange(ws, BOOT_IND_NAME_COL, BOOT_IND_NAME_NAME, _
+                                    nameList, ";")) > 0 Then
+        modUISheet.BindNamedValidation "ci_industry_name", BOOT_IND_NAME_NAME, _
+                                       BOOT_DV_ERROR_TITLE, BOOT_DV_ERROR_MSG
+    End If
+End Sub
+
+' スナップショットの業種マスタを ";" 区切りの2本にする(見出し行は読み飛ばす)。
+'   1行 = [シート索引][行数][元の1行をvbTabで連結] (modKnowledge.SaveSnapshot)。
+Private Sub ReadIndustryMaster(ByRef codeList As String, ByRef nameList As String)
+    On Error GoTo Failed
+
+    codeList = vbNullString
+    nameList = vbNullString
+
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(BOOT_SNAP_SHEET)
+    If ws Is Nothing Then Exit Sub
+
+    Dim lastRow As Long
+    lastRow = modUISheet.LastRowOf(ws)
+    If lastRow < 2 Then Exit Sub
+
+    Dim r As Long
+    Dim flds As Variant
+    Dim cCode As Long
+    Dim cName As Long
+    cCode = -1
+    cName = -1
+    For r = 1 To lastRow
+        If Trim$(modUISheet.CellText(ws, r, 1)) = BOOT_SNAP_IDX_INDUSTRY Then
+            flds = Split(modUISheet.CellText(ws, r, 3), vbTab)
+            If cCode < 0 Then
+                cCode = FieldPos(flds, "industry_code")
+                cName = FieldPos(flds, "industry_name")
+                If cCode < 0 Or cName < 0 Then Exit Sub
+            Else
+                AppendIndustry codeList, nameList, flds, cCode, cName
+            End If
+        End If
+    Next r
+    Exit Sub
+
+Failed:
+    codeList = vbNullString
+    nameList = vbNullString
+End Sub
+
+' 1行ぶんを2本のリストへ足す(どちらかが空・";"を含む行は採らない)。
+Private Sub AppendIndustry(ByRef codeList As String, ByRef nameList As String, _
+                           ByVal flds As Variant, ByVal cCode As Long, ByVal cName As Long)
+    If cCode > UBound(flds) Or cName > UBound(flds) Then Exit Sub
+
+    Dim codeText As String
+    Dim nameText As String
+    codeText = Trim$(CStr(flds(cCode)))
+    nameText = Trim$(CStr(flds(cName)))
+    If LenB(codeText) = 0 Or LenB(nameText) = 0 Then Exit Sub
+    If InStr(1, codeText & nameText, ";", vbBinaryCompare) > 0 Then Exit Sub
+
+    If LenB(codeList) > 0 Then codeList = codeList & ";"
+    If LenB(nameList) > 0 Then nameList = nameList & ";"
+    codeList = codeList & codeText
+    nameList = nameList & nameText
+End Sub
+
+' 見出し行の中の位置(0起点)。見つからなければ -1。
+Private Function FieldPos(ByVal flds As Variant, ByVal wanted As String) As Long
+    FieldPos = -1
+    Dim i As Long
+    For i = LBound(flds) To UBound(flds)
+        If Trim$(CStr(flds(i))) = wanted Then
+            FieldPos = i
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' ----------------------------------------------------------------------------
 ' (7) 利用上限がTrueのときのHOME案内(14章§2・12章§2.1手順(7))。

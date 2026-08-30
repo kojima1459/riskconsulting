@@ -166,9 +166,11 @@ End Function
 '   戻り値=保存済みの発話数(0=履歴なし＝新規開始)。**-1=案件一覧を読めない**
 '   (fail-closed。ui は開始させない)。contextNote は 13章§2.17 の
 '   `sp_context_note` へ出す表示文字列(例「ドシエ+S1-S3+型/機構 注入済」)。
-'   dossier_tier の t3_sparring への自動昇格(13章§2.1・§2.17)は案件一覧への
-'   **書込**であり、その書込口が 14章§6 に無いため本関数では行わない。黙って
-'   昇格したことにせず usage_log へ事実を残す。
+'   dossier_tier の t3_sparring への自動昇格(13章§2.1・§2.17)は、裁定書9 A-1
+'   により modCaseStore.PromoteTier(14章§6・N2)を唯一の書込口として**実行する**。
+'   開始/再開のたびに呼ぶ(既に t3_sparring でも同値の書込で害はない)。昇格の
+'   失敗(案件行が無い等)は usage_log へ事実を残して続行し、壁打ちの開始その
+'   ものは止めない。
 Public Function ResumeSparring(ByVal caseId As String, ByRef contextNote As String) As Long
     On Error GoTo Failed
 
@@ -191,9 +193,15 @@ Public Function ResumeSparring(ByVal caseId As String, ByRef contextNote As Stri
     End If
 
     contextNote = ContextNoteOf(caseId)
-    If tierText <> "t3_sparring" Then
-        modLog.LogUsage "sparring_tier_not_promoted", caseId, _
-                        "dossier_tier=" & tierText & " 昇格の書込口が14章§6に無い"
+
+    ' 裁定書9 A-1: t3_sparring への自動昇格を実行する(書込口は N2 の PromoteTier
+    ' のみ)。失敗しても壁打ちの開始は止めない(fail-closed にしない設計どおり)。
+    If modCaseStore.PromoteTier(caseId, "t3_sparring") Then
+        modLog.LogUsage "sparring_tier_promoted", caseId, _
+                        "dossier_tier=" & tierText & " -> t3_sparring"
+    Else
+        modLog.LogUsage "sparring_tier_promote_failed", caseId, _
+                        "dossier_tier=" & tierText & " 昇格できず続行"
     End If
 
     ResumeSparring = RowCountOf(modCaseStore.LoadData(caseId, SP_KEY_U)) + _

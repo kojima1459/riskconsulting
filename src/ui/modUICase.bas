@@ -156,6 +156,9 @@ Public Function EnumPairsCsv() As String
     s = s & "field_insight_tag,other,その他" & vbLf
     s = s & "sparring_role,user,自分" & vbLf
     s = s & "sparring_role,ai,AI" & vbLf
+    s = s & "inbox_judge_to,adopted,採択" & vbLf
+    s = s & "inbox_judge_to,conditional_hold,条件付き保留" & vbLf
+    s = s & "inbox_judge_to,rejected,却下" & vbLf
     EnumPairsCsv = s
 End Function
 

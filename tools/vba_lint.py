@@ -80,13 +80,17 @@ MODULE_REGISTRY = {
     #                 実装を1箇所へ集め、6つのui層モジュールが同じ12行を各自
     #                 持つのを防ぐ。
     #   modUICase2  = modUICase の分割先(30,000字契約)。S1～S4シートの描画と
-    #                 逆シリアライズ本体(13章§2.12-§2.15・§2.2)。
+    #                 編集の確定(13章§2.12-§2.15・§2.2 規約4)。
+    #   modUICase5  = modUICase2 の分割先(30,000字契約。裁定書9 W4.1)。逆シリ
+    #                 アライズ本体とブロックの幾何(ColIndexes/ColCount/RoomOf)。
+    #                 列の引き当て方と部屋の数え方を読み書きで1本に保つ。
     #   modUICase3  = 同上。案件入力・フィードバック・判断台帳(13章§2.11/
     #                 §2.5/§2.7)。
     #   modUICase4  = 同上。フィードバック・判断台帳(13章§2.5/§2.7)。
     #   modUICaseFmt= 同上。13章§2.2 セル格納規約の変換(セル<->JSON値)の純関数。
     #                 modKnowledgeFmt が15章の整形規約を持つのと同じ切り口。
-    "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICaseFmt",
+    "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICase5",
+    "modUICaseFmt",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -397,6 +401,7 @@ CONTRACT: dict[str, dict] = {
     "modUICase2": {"closed": False, "required": []},
     "modUICase3": {"closed": False, "required": []},
     "modUICase4": {"closed": False, "required": []},
+    "modUICase5": {"closed": False, "required": []},
     "modUICaseFmt": {"closed": False, "required": []},
     "modUIInbox": {"closed": False, "required": []},
     "modUISparring": {"closed": False, "required": []},

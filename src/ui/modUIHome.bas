@@ -38,6 +38,12 @@ Private Const UH_INBOX_HOLD As String = "hm_inbox_hold"
 ' 16章 E-27: transport が ribbon 以外のときHOMEに常時出す赤帯。
 Private Const UH_BANNER_TEXT As String = "デモ／開発経路で動作中です（本番の判断に使わないでください）"
 
+' 画面制御用のモジュール変数(裁定書9 B1)。**永続でない画面制御変数**であり、
+' 14章§6の「状態保持の例外」への登録は要らない。直前に RefreshHome が描いた
+' 対象案件IDを覚えておき、変わっていたらS1～S4を描き直す(前の案件の画面が残った
+' まま次の案件の sN_edited として確定するクロス案件汚染を、描画側でも塞ぐ)。
+Private gShownCaseId As String
+
 ' 18章§1.1(1): S1未実行時のレポート出力は**エラーコードを立てず**中止する。
 Private Const UH_MSG_NEED_S1 As String = "先にStep1を実行してください。"
 Private Const UH_MSG_NO_CASE As String = "対象案件が選ばれていません（HOMEの対象案件IDをご確認ください）。"
@@ -99,6 +105,9 @@ Private Sub EnsureHomeButtons()
                             "modUIHome.HomeCompanyOpen"
     modUISheet.EnsureButton ws, "btn_hm_cfsave", "企業ファイルへ保存", r, 5, 116#, _
                             "modUIHome.HomeCompanySave"
+    ' 11章 HOMEワイヤー(裁定書9 A-2/N7): 第2ラウンドの開始。round_no の行に置く。
+    modUISheet.EnsureButton ws, "btn_round_freeze", "第2ラウンド開始", r, 6, 116#, _
+                            "modUIHome.HomeFreezeRound"
 
     r = RowOfNamed(UH_KB)
     modUISheet.EnsureButton ws, "btn_hm_kb", "ナレッジ再読込", r, 4, 100#, _
@@ -156,6 +165,15 @@ Public Sub RefreshHome()
 
     Dim caseId As String
     caseId = SelectedCaseId()
+
+    ' 裁定書9 B1(13章§2.12): hm_case_id が前回の描画時から変わっていたら、
+    ' S1～S4を必ず描き直す。前の案件の画面が残ったまま[S2]等を押すと、その
+    ' 画面が今の案件の sN_edited として確定してしまう(クロス案件汚染)。
+    If StrComp(caseId, gShownCaseId, vbBinaryCompare) <> 0 Then
+        gShownCaseId = caseId
+        DrawAllSteps caseId
+    End If
+
     If LenB(caseId) = 0 Then
         modUISheet.WriteNamed UH_CASE_LABEL, vbNullString
         modUISheet.WriteNamed UH_STATUS, vbNullString
@@ -233,6 +251,25 @@ Private Sub ShowWarning(ByVal messageText As String)
     modUISheet.WriteNamed UH_WARNING, messageText
 End Sub
 
+' 16章 E-35/E-36(裁定書9 B9・14章§6 N1): 入念モードで「審査を省略した」
+'   「改訂を破棄した」ときの逐語警告をHOMEへ出す。文言の値源は
+'   modPipeline2.DeepWarningOf だけであり(ui層は文言を持たない)、直近の結末は
+'   modPipeline2.LastDeepOutcome から取る。**実行の冒頭で掛ける
+'   ShowWarning vbNullString より後**に呼ぶこと(先に呼ぶと消える)。
+Private Sub ShowDeepWarning()
+    On Error Resume Next
+
+    Dim outcome As String
+    outcome = modPipeline2.LastDeepOutcome()
+    If LenB(outcome) = 0 Then Exit Sub
+
+    Dim warnText As String
+    warnText = modPipeline2.DeepWarningOf(outcome)
+    If LenB(warnText) = 0 Then Exit Sub
+
+    ShowWarning warnText
+End Sub
+
 ' ============================================================================
 ' OnActionハンドラ(11章 HOMEワイヤー)
 ' ----------------------------------------------------------------------------
@@ -256,6 +293,7 @@ Public Sub HomeRunAll()
     modUIProgress.SetStage "一括実行（Step1～Step4）", WaitSec()
     If modPipeline.RunAll(caseId, QualityOverride()) Then
         DrawAllSteps caseId
+        ShowDeepWarning
     Else
         ShowWarning "実行が完了しませんでした。err_log をご確認ください。"
     End If
@@ -309,6 +347,7 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     modUIProgress.SetStage "Step" & CStr(stepNo) & " を実行中", WaitSec()
     If modPipeline.RunStep(caseId, stepNo, QualityOverride()) Then
         modUICase2.DrawStep caseId, stepNo
+        ShowDeepWarning
         modUISheet.ShowSheet modUICase2.SheetNameOf(stepNo)
     Else
         ShowWarning "Step" & CStr(stepNo) & " が完了しませんでした。err_log をご確認ください。"
@@ -448,6 +487,49 @@ Done:
 End Sub
 
 ' ============================================================================
+' 第2ラウンド開始(11章 HOMEワイヤー・裁定書9 A-2/N7)
+' ----------------------------------------------------------------------------
+' 現在のS2を前ラウンド(s2_prev_json)として確定し round_no を+1する。退避の
+' 実装は modCaseStore.FreezeRound が唯一持ち(退避できなければ round_no を
+' 進めない)、本ハンドラは確認ダイアログと画面の更新だけを行う。
+' ============================================================================
+Public Sub HomeFreezeRound()
+    If Not modUIProgress.TryEnterUiLock("第2ラウンド開始") Then Exit Sub
+    On Error GoTo Done
+
+    modUIProgress.ParkFocus
+    ShowWarning vbNullString
+
+    Dim caseId As String
+    caseId = SelectedCaseId()
+    If LenB(caseId) = 0 Then
+        ShowWarning UH_MSG_NO_CASE
+        GoTo Done
+    End If
+
+    Dim answer As Long
+    answer = MsgBox("現在のS2を前ラウンドとして確定し、第2ラウンドを開始します。" & _
+                    "よろしいですか", vbYesNo + vbQuestion, "第2ラウンド開始")
+    If answer <> vbYes Then GoTo Done
+
+    Dim newRound As Long
+    newRound = modCaseStore.FreezeRound(caseId)
+    If newRound <= 0 Then
+        ShowWarning "第2ラウンドを開始できませんでした（前ラウンドの退避に失敗しました）。" & _
+                    "err_log をご確認ください。"
+        GoTo Done
+    End If
+
+    modUISheet.WriteNamed UH_ROUND, CStr(newRound)
+    RefreshHome
+    ShowWarning "第" & CStr(newRound) & "ラウンドを開始しました（前ラウンドのS2を退避しました）。"
+
+Done:
+    modUIProgress.ExitUiLock
+    modUIProgress.ParkFocus
+End Sub
+
+' ============================================================================
 ' 出力(11章 HOME「出力: [リスクレポートHTML] [ヒアリングシート]」)
 ' ============================================================================
 
@@ -481,6 +563,10 @@ Public Sub HomeExportHtml()
     If LenB(errText) > 0 Then
         ShowWarning errText
     Else
+        ' 13章§2.1・11章§4(裁定書9 B16(b)): HTMLレポートの生成成功が
+        ' case_status の exported を立てる唯一の点。SetStatus は遷移検査を
+        ' 通さない(14章§6の注記)が、CS_STATUSES_ABOVE_S4 の降格抑止は効く。
+        modCaseStore.SetStatus caseId, "exported"
         ShowWarning "リスクレポートを出力しました: " & outPath
     End If
     RefreshHome
@@ -508,6 +594,22 @@ Public Sub HomeBuildHearing()
     Dim errText As String
     If LenB(Trim$(modCaseStore.ResolveStepJson(caseId, 4))) > 0 Then
         modUICase2.SaveEditedStep caseId, 4, errText
+    End If
+
+    ' 裁定書9 B12(13章§2.16): 生成は answer_memo を含む全行を空へ戻す。
+    ' 訪問後に手書きの回答が入っている状態で押されたら、必ず確認を挟む
+    ' (VBAの書込は Undo できない。16章 E-10 の下流無効化と同じ作法)。
+    Dim memoRows As Long
+    memoRows = modExportHearing.AnswerMemoCount(caseId)
+    If memoRows > 0 Then
+        Dim answer As Long
+        answer = MsgBox("ヒアリングシートに手書きの回答が" & CStr(memoRows) & _
+                        "行あります。作り直すとこの回答は消えます。" & vbLf & _
+                        "続けますか？", vbYesNo + vbExclamation, "回答の上書き確認")
+        If answer <> vbYes Then
+            ShowWarning "ヒアリングシートは作り直しませんでした（手書きの回答を残しました）。"
+            GoTo Done
+        End If
     End If
 
     If modExportHearing.BuildHearingSheet(caseId) Then

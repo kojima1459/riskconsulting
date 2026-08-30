@@ -324,6 +324,13 @@
       "wave": "T-31"
     },
     {
+      "name": "modUICase5",
+      "path": "src/ui/modUICase5.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-31"
+    },
+    {
       "name": "modUICaseFmt",
       "path": "src/ui/modUICaseFmt.bas",
       "role": "ui",
@@ -427,6 +434,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-35"
+    },
+    {
+      "name": "modTestsPure12",
+      "path": "src/test/modTestsPure12.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-42"
     },
     {
       "name": "modMockLlm",

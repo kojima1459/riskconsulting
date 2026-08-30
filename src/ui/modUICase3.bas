@@ -31,9 +31,25 @@ Private Const U3_SRC As String = "modUICase3"
 Private Const U3_SHEET As String = "案件入力"
 Private Const U3_CASES As String = "案件一覧"
 Private Const U3_SCAN_COLS As Long = 32
-Private Const U3_CHUNK As Long = 32000
+' 13章§2.11(裁定書9 B22): 続き欄への分割幅。開くたびに JoinField が本欄と
+' 続き欄を vbLf で連結するため、**連結で増える区切り文字ぶんの余白**を確保
+' しないと、往復のたびに末尾が枠から溢れて削れる。1セル上限32,000字に対して
+' 連結余白8字を引いた値を使う。
+Private Const U3_CHUNK As Long = 31992
 Private Const U3_THIN_HP As Long = 200        ' 16章 E-02: HPが薄いと判断する字数
 Private Const U3_RESEARCH_ROOM As Long = 20   ' 追加収集ブロックの表示上限行
+
+' 画面制御用のモジュール変数(裁定書9 B15/B22)。**永続でない画面制御の状態**で
+' あり、14章§6の「状態保持の例外」への登録は要らない(役割はここに明記する)。
+'   gDrawState  = 直近の DrawCaseInput の結末(0=未実行 / 1=描き切った / 2=失敗)
+'   gDrawCaseId = その DrawCaseInput が対象にした案件ID
+'   gOverBuf    = 続き欄に収まりきらなかった欄の data_key(";"区切り)
+Private Const U3_ST_NONE As Long = 0
+Private Const U3_ST_OK As Long = 1
+Private Const U3_ST_FAILED As Long = 2
+Private gDrawState As Long
+Private gDrawCaseId As String
+Private gOverBuf As String
 
 ' ============================================================================
 ' 13章§2.11 貼付欄の定義(data_key|本欄|続き欄(;区切り)|字数欄|画面ラベル|必須)
@@ -248,6 +264,13 @@ End Function
 Public Sub DrawCaseInput(ByVal caseId As String)
     On Error Resume Next
 
+    ' 裁定書9 B15: 描き切るまでは「失敗」として扱う。途中で抜けた画面(案件を
+    ' 読めない・名前付きレンジが無い等)を保存すると、空欄がそのまま case_data
+    ' へ書かれて貼付元の原文が消える。最後まで到達したときだけ成功印を立てる。
+    gDrawCaseId = caseId
+    gDrawState = U3_ST_FAILED
+    gOverBuf = vbNullString
+
     If Not modCaseStore.IsValidCaseId(caseId) Then Exit Sub
 
     Dim ctx As TCaseCtx
@@ -299,6 +322,8 @@ Public Sub DrawCaseInput(ByVal caseId As String)
 
     DrawResearchBlock caseId
     CountChars
+
+    gDrawState = U3_ST_OK
 End Sub
 
 ' 1欄ぶんを本欄・続き欄へ分けて書き戻す(13章§2.11)。
@@ -315,18 +340,42 @@ Private Sub DrawPasteField(ByVal caseId As String, ByVal company As String, _
     Dim parts() As String
     parts = modUtil.SplitForCells(content, U3_CHUNK)
 
+    Dim slots As Long
     Dim i As Long
     Dim v As String
     For i = LBound(targets) To UBound(targets)
         v = vbNullString
         If LenB(targets(i)) > 0 Then
+            slots = slots + 1
             If i - LBound(targets) + LBound(parts) <= UBound(parts) Then
                 If LenB(content) > 0 Then v = parts(i - LBound(targets) + LBound(parts))
             End If
             modUISheet.WriteNamed targets(i), v
         End If
     Next i
+
+    ' 裁定書9 B22: 断片数が枠数を超えたら、あふれた分は画面に出ていない。
+    ' そのまま保存すると開くたびに末尾が削れていくので、当該欄の保存を止める。
+    If LenB(content) > 0 Then
+        If UBound(parts) - LBound(parts) + 1 > slots Then NoteOverflow dataKey
+    End If
 End Sub
+
+' 続き欄に収まらなかった欄を覚え、画面へ出す(裁定書9 B22)。
+Private Sub NoteOverflow(ByVal dataKey As String)
+    On Error Resume Next
+    If InStr(1, ";" & gOverBuf & ";", ";" & dataKey & ";", vbBinaryCompare) = 0 Then
+        If LenB(gOverBuf) > 0 Then gOverBuf = gOverBuf & ";"
+        gOverBuf = gOverBuf & dataKey
+    End If
+    modUISheet.WriteNamed "hm_warning", "この欄は続き欄に収まりません（" & gOverBuf & _
+        "）。表示しきれていない分が失われるため、この欄は保存しません。"
+End Sub
+
+' 当該欄が「続き欄に収まらなかった」印を持つか(裁定書9 B22)。
+Private Function IsOverflowed(ByVal dataKey As String) As Boolean
+    IsOverflowed = (InStr(1, ";" & gOverBuf & ";", ";" & dataKey & ";", vbBinaryCompare) > 0)
+End Function
 
 ' 11章 追加収集ブロック(S1の research_requests を2列N行＋各行にコピーボタン)。
 Private Sub DrawResearchBlock(ByVal caseId As String)
@@ -408,6 +457,17 @@ Public Function SaveCaseInput(ByVal caseId As String) As Boolean
     Dim caseType As String
     caseType = modUICase.EnumEn("case_type", caseTypeJa)
     If LenB(caseType) = 0 Then caseType = "new"
+
+    ' (0) 裁定書9 B15: 直前の再描画に失敗した画面は「この案件の内容」ではない。
+    '     そのまま保存すると空欄が case_data を上書きして貼付元の原文が消える。
+    If gDrawState = U3_ST_FAILED Then
+        If StrComp(gDrawCaseId, caseId, vbBinaryCompare) = 0 Then
+            modLog.LogError "E0101", U3_SRC & ".SaveCaseInput", "draw_failed_block"
+            Notice "案件入力を画面へ読み込めていないため保存しませんでした。" & _
+                   "HOMEの[案件入力を開く]で開き直してください。"
+            Exit Function
+        End If
+    End If
 
     ' (1) 16章 E-01 必須入力の検査。欠けていれば1件も保存しない。
     Dim missing1 As String
@@ -576,12 +636,14 @@ Private Sub SavePasteFields(ByVal caseId As String)
     Dim totalHits As Long
     For i = LBound(specs) To UBound(specs)
         SplitPaste specs(i), dataKey, baseRange, contRanges, countRange, labelText, requiredKind
-        body = modUtilText.SanitizeInput(JoinField(baseRange, contRanges))
-        If anonymize Then
-            body = modUICase.AnonymizeText(body, company, hits)
-            totalHits = totalHits + hits
+        If Not IsOverflowed(dataKey) Then
+            body = modUtilText.SanitizeInput(JoinField(baseRange, contRanges))
+            If anonymize Then
+                body = modUICase.AnonymizeText(body, company, hits)
+                totalHits = totalHits + hits
+            End If
+            modCaseStore.SaveData caseId, dataKey, body
         End If
-        modCaseStore.SaveData caseId, dataKey, body
     Next i
 
     If totalHits > 0 Then

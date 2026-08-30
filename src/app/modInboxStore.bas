@@ -411,6 +411,11 @@ End Function
 '   fail-closed で拒否し、E0101 を記録する(欠けている引数の追加は§6の裁定事項)。
 '   E-41 の必須検査(JudgementError)に掛かったら**1列も書かない**(保存ブロック)。
 '   遷移そのものの可否は CanInboxTransition が唯一の判定点。
+'   判定の入力口(裁定書9 B2・N5): ui層は status 列ではなく入力列 judge_to
+'   (13章§2.6)を読み、その値を statusText へ渡す。from(現在の status)と to が
+'   同一セル由来になって自己遷移で必ず False になる経路は構造として無い。
+'   成功時は status を書き換えたうえで **judge_to を空へ戻す**(判定済みの行に
+'   入力値を残さない。judge_to 列が無いブックでは IbPut が何もしない)。
 Public Function SetInboxJudgement(ByVal inboxId As String, ByVal statusText As String, _
                                   ByVal dropType As String, ByVal reviveTag As String, _
                                   ByVal reviveDue As Date) As Boolean
@@ -450,6 +455,8 @@ Public Function SetInboxJudgement(ByVal inboxId As String, ByVal statusText As S
     IbPut ws, blk, rowNo, "revive_tag", ReviveTagFor(tgt, reviveTag)
     IbPut ws, blk, rowNo, "revive_due", ReviveDueFor(tgt, reviveDue)
     IbPut ws, blk, rowNo, "judged_at", modUtil.NowStamp()
+    ' 裁定書9 B2: 判定の確定後に入力列 judge_to をクリアする(store側が唯一の実施点)。
+    IbPut ws, blk, rowNo, "judge_to", vbNullString
     SetInboxJudgement = True
     Exit Function
 

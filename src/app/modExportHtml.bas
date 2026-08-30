@@ -43,6 +43,10 @@ Private Const EX_OUT_DEFAULT As String = "%USERPROFILE%\Documents\RPN出力"
 Private Const EX_VER_DEFAULT As String = "2.0.0"
 Private Const EX_CODE_FAIL As String = "E0502"
 
+' 裁定書9 B4(13章§2.8): 同名ファイルは上書きせず _2 _3 と連番で空きを探す。
+' 探索の上限(防御。実運用で到達しない)。超えたら書出失敗として扱う。
+Private Const EX_SERIAL_MAX As Long = 9999
+
 ' ==========================================================
 ' GenerateHtmlReport - 14章§6の契約。""=成功 / 非空=失敗理由。
 '   outPath には成功時の確定パスを返す(失敗時は空のまま)。
@@ -91,8 +95,9 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     warnText = WarnIfUnreadable(s3Text, "Step3", warnText)
 
     ' (3) PII走査。**生成はブロックしない**(18章§1.1(3)・16章 E-05(6))。
+    '     裁定書9 B17: 走査自体の失敗も黙らせない(warnText へ警告を積んで続行)。
     Dim piiText As String
-    piiText = PiiNote(caseId, s1Text, s2Text, s3Text)
+    piiText = PiiNote(caseId, s1Text, s2Text, s3Text, warnText)
     If LenB(piiText) > 0 Then
         modLog.LogError "E0103", EX_SRC & ".GenerateHtmlReport", piiText
         warnText = AddWarn(warnText, "個人情報らしき記述を検知しました。配布前に本文をご確認ください。")
@@ -129,8 +134,15 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
 
     ' ファイル名は modUtilText.BuildFileNameSafe(13章§2.8の規則)を通す。
     ' HTMLへは入らない値の連結なので NFR-S7(3) の対象外。
+    ' 裁定書9 B4: 末尾に _yyyymmdd を付与し、同名が既に在れば _2 _3 と連番を
+    ' 探して**新規ファイルとして作る**(過去の出力を消さない。13章§2.8)。
     Dim pathText As String
-    pathText = dirText & "\" & FileNameOf(ctx.company, caseId, dirText) & EX_EXT ' SAFE:html
+    pathText = UniqueOutPath(dirText, FileNameOf(ctx.company, caseId, dirText))
+    If LenB(pathText) = 0 Then
+        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "no_free_filename"
+        GenerateHtmlReport = "出力ファイル名の空きを見つけられませんでした。"
+        Exit Function
+    End If
     If Not WriteUtf8Bom(pathText, docText) Then
         modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "write_failed"
         GenerateHtmlReport = "ファイルの書き出しに失敗しました。"
@@ -270,13 +282,23 @@ Private Function RestoreAnonymized(ByVal jsonText As String, ByVal company As St
 End Function
 
 ' PII走査(16章 E-05(6))。検知箇所と種別だけを返す(本文は返さない=NFR-S3)。
+'   裁定書9 B17(18章§1.1(3)): On Error GoTo 方式。走査が落ちたときは警告を
+'   warnText へ積んで続行する(冒頭の On Error Resume Next で3本まとめて覆うと
+'   警告も E0103 も出ないまま合格に見える経路が残るため)。
 Private Function PiiNote(ByVal caseId As String, ByVal s1Text As String, _
-                         ByVal s2Text As String, ByVal s3Text As String) As String
-    On Error Resume Next
+                         ByVal s2Text As String, ByVal s3Text As String, _
+                         ByRef warnText As String) As String
+    On Error GoTo Failed
     Dim acc As String
     acc = JoinNote(acc, modPii.ScanReport(s1Text, "html/s1"))
     acc = JoinNote(acc, modPii.ScanReport(s2Text, "html/s2"))
     acc = JoinNote(acc, modPii.ScanReport(s3Text, "html/s3"))
+    PiiNote = acc
+    Exit Function
+
+Failed:
+    modLog.LogUsage "html_pii_scan_failed", caseId, "err=" & CStr(Err.Number)
+    warnText = AddWarn(warnText, "個人情報の走査に失敗しました。配布前に本文をご確認ください")
     PiiNote = acc
 End Function
 
@@ -332,9 +354,44 @@ Private Function JStr(ByVal keyName As String, ByVal valueText As String) As Str
 End Function
 
 ' ファイル名(拡張子を除く)。規則の正は 13章§2.8 / modUtilText 側。
+'   裁定書9 B4: 末尾は「リスクレポート_<yyyymmdd>」(IsoDateCompact)。日付を
+'   落とすと同一案件の再生成が同名になる(13章§2.8のテンプレートの一部)。
 Private Function FileNameOf(ByVal company As String, ByVal caseId As String, _
                             ByVal dirText As String) As String
-    FileNameOf = modUtilText.BuildFileNameSafe(company, caseId, EX_TAIL, dirText, EX_EXT)
+    FileNameOf = modUtilText.BuildFileNameSafe(company, caseId, _
+                     EX_TAIL & "_" & modUtilText.IsoDateCompact(Date), dirText, EX_EXT) ' SAFE:html ファイル名(HTMLへは入らない)
+End Function
+
+' 裁定書9 B4(13章§2.8): 存在しないパスが見つかるまで _2 _3 と連番を探す。
+'   基本名が空・上限まで全て埋まっているときは ""(呼び出し側が失敗として扱う)。
+Private Function UniqueOutPath(ByVal dirText As String, ByVal baseName As String) As String
+    If LenB(Trim$(baseName)) = 0 Then Exit Function
+
+    Dim candidate As String
+    candidate = dirText & "\" & baseName & EX_EXT ' SAFE:html ファイルパス(HTMLへは入らない)
+    If Not OutFileExists(candidate) Then
+        UniqueOutPath = candidate
+        Exit Function
+    End If
+
+    Dim n As Long
+    For n = 2 To EX_SERIAL_MAX
+        candidate = dirText & "\" & baseName & "_" & CStr(n) & EX_EXT ' SAFE:html ファイルパス(HTMLへは入らない)
+        If Not OutFileExists(candidate) Then
+            UniqueOutPath = candidate
+            Exit Function
+        End If
+    Next n
+End Function
+
+' 存在検査。判定に失敗したときは True(=その名前を避ける)側へ倒し、既存
+'   ファイルを上書きする方向へは倒さない(B4の趣旨=過去の出力を消さない)。
+Private Function OutFileExists(ByVal pathText As String) As Boolean
+    On Error GoTo Unknown0
+    OutFileExists = (LenB(Dir$(pathText)) > 0)
+    Exit Function
+Unknown0:
+    OutFileExists = True
 End Function
 
 ' 空なら JSON の null、非空なら ExtractJsonBlock を通した本体。

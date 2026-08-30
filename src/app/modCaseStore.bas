@@ -29,6 +29,12 @@ Private Const CS_SHEET_DATA As String = "case_data"
 ' 1セルに入れる最大字数(16章 E-22。物理上限32,767字の手前で切る)。
 Private Const CS_CHUNK_CHARS As Long = 32000
 
+' 2相書込(裁定書9 B13)の仮seq帯の起点。超過seq=書き途中の仮行(LoadData対象外)。
+Private Const CS_SEQ_BAND As Long = 100000
+
+' dossier_tier の enum(13章§2.1・19章§3)。
+Private Const CS_TIERS As String = "t1_quick;t2_full;t3_sparring"
+
 ' 同日連番の上限(16章 E-23「999まで対応」)。
 Private Const CS_SERIAL_MAX As Long = 999
 
@@ -320,10 +326,10 @@ Failed:
 End Function
 
 ' SaveData - case_data へ1本のテキストを分割保存する(13章§2.2・16章 E-22)。
-'   同じ (case_id, data_key) の既存行を全て消してから32,000字ごとの断片を
-'   seq=1.. で積み直す(追記ではなく置換)。content が空なら削除だけで True。
-'   断片は SetCellSafe を通り先頭が = + - @ なら "'" が前置されるが、.Value で
-'   読み戻すと元へ戻る(往復一致は保たれる。NFR-S7①)。
+'   32,000字ごとの断片 seq=1.. で置換する。content が空なら削除だけで True。
+'   **2相書込**(裁定書9 B13): 新断片を仮seq帯へ書き切ってから旧行を消す(実体は
+'   modCaseStore2.ReplaceSeqRows。途中失敗で旧行は1行も消えず False)。断片は
+'   SetCellSafe を通る(先頭式記号の "'" 前置は .Value 読み戻しで元へ戻る)。
 Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
                          ByVal content As String) As Boolean
     On Error GoTo Failed
@@ -344,9 +350,13 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
         Exit Function
     End If
 
-    modCaseStore2.DropRowsOf ws, Trim$(caseId), Trim$(dataKey)
+    Dim idText As String, keyText As String
+    idText = Trim$(caseId)
+    keyText = Trim$(dataKey)
 
     If LenB(content) = 0 Then
+        ' 空=削除の意図(仮行も含め全行を消す)。
+        modCaseStore2.DropRowsOf ws, idText, keyText
         SaveData = True
         Exit Function
     End If
@@ -354,25 +364,7 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
     Dim parts() As String
     parts = modUtil.SplitForCells(content, CS_CHUNK_CHARS)
 
-    Dim lastRow As Long
-    lastRow = modCaseStore2.LastRowOf(ws)
-    Dim hdr As Variant
-    hdr = modCaseStore2.ReadBlock(ws, 2)
-    Dim stampText As String
-    stampText = modUtil.NowStamp()
-
-    Dim i As Long
-    Dim seqNo As Long
-    For i = LBound(parts) To UBound(parts)
-        seqNo = i - LBound(parts) + 1
-        Dim wr As Long
-        wr = lastRow + seqNo
-        modCaseStore2.PutText ws, hdr, wr, "case_id", Trim$(caseId)
-        modCaseStore2.PutText ws, hdr, wr, "data_key", Trim$(dataKey)
-        modCaseStore2.PutNum ws, hdr, wr, "seq", seqNo
-        modCaseStore2.PutText ws, hdr, wr, "content", parts(i)
-        modCaseStore2.PutText ws, hdr, wr, "saved_at", stampText
-    Next i
+    If Not modCaseStore2.ReplaceSeqRows(ws, idText, keyText, parts, CS_SEQ_BAND) Then GoTo Failed
 
     SaveData = True
     Exit Function
@@ -382,8 +374,9 @@ Failed:
     SaveData = False
 End Function
 
-' LoadData - 断片を seq 順に結合して返す(透過処理)。行の並び順ではなく seq の値で
-'   並べ直すので手で行を動かしたブックでも復元できる。該当が無ければ ""。
+' LoadData - 断片を seq 順に結合して返す(透過処理)。該当が無ければ ""。
+'   仮seq帯(CS_SEQ_BAND超=2相書込の書き途中)は読まない。完全性検査(裁定書9
+'   B13): seq 1..maxSeq に欠番があれば詰めずに E0604 を記録して ""(fail-closed)。
 Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String
     On Error GoTo Failed
 
@@ -413,28 +406,43 @@ Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As Str
     wantCase = Trim$(caseId)
     wantKey = Trim$(dataKey)
 
-    ' 1周目: seq の最大値=断片数を求める。
+    ' 1周目: seq の最大値=断片数を求める(仮seq帯は対象外)。
     Dim maxSeq As Long
     Dim r As Long
     For r = 2 To lastRow
         If modCaseStore2.MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
             Dim sq1 As Long
             sq1 = modCaseStore2.ToLongSafe(blk(r, cSeq))
-            If sq1 > maxSeq Then maxSeq = sq1
+            If sq1 > maxSeq And sq1 <= CS_SEQ_BAND Then maxSeq = sq1
         End If
     Next r
     If maxSeq < 1 Then Exit Function
 
-    ' 2周目: seq を添字として配置する(欠番は空断片で残る)。
+    ' 2周目: seq を添字として配置し、行の実在を seen へ記録する。
     Dim parts() As String
+    Dim seen() As Boolean
     ReDim parts(1 To maxSeq)
+    ReDim seen(1 To maxSeq)
     For r = 2 To lastRow
         If modCaseStore2.MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
             Dim sq2 As Long
             sq2 = modCaseStore2.ToLongSafe(blk(r, cSeq))
-            If sq2 >= 1 And sq2 <= maxSeq Then parts(sq2) = CStr(blk(r, cBody))
+            If sq2 >= 1 And sq2 <= maxSeq Then
+                parts(sq2) = CStr(blk(r, cBody))
+                seen(sq2) = True
+            End If
         End If
     Next r
+
+    ' 完全性検査(B13): 欠番=途中失敗・手作業破損。黙って詰めない。
+    Dim chk As Long
+    For chk = 1 To maxSeq
+        If Not seen(chk) Then
+            modLog.LogError "E0604", "modCaseStore.LoadData", _
+                            "seq_gap:" & wantKey & " missing=" & CStr(chk)
+            Exit Function
+        End If
+    Next chk
 
     LoadData = modUtil.JoinCellChunks(parts)
     Exit Function
@@ -490,6 +498,35 @@ Public Function SetStatus(ByVal caseId As String, ByVal statusText As String) As
 Failed:
     modLog.LogError "E0603", "modCaseStore.SetStatus", "write_failed", Err.Number
     SetStatus = False
+End Function
+
+' PromoteTier - 案件一覧 dossier_tier の**唯一の書込口**(裁定書9 N2・A-1)。
+'   tierText は enum(CS_TIERS)のみ。不一致は1列も書かず False(E0101)。行不在も
+'   False。status は動かさない。方向(昇格/降格)は判定しない。app層からの呼出は
+'   modSparring.ResumeSparring の1点のみ(14章§6)。
+Public Function PromoteTier(ByVal caseId As String, ByVal tierText As String) As Boolean
+    On Error GoTo Failed
+
+    Dim t As String
+    t = Trim$(tierText)
+    If Not IsListedValue(CS_TIERS, t) Then
+        modLog.LogError "E0101", "modCaseStore.PromoteTier", "invalid_tier:" & t
+        Exit Function
+    End If
+
+    Dim ws As Object
+    Dim blk As Variant
+    Dim rowNo As Long
+    If Not modCaseStore2.LocateRow(CS_SHEET_CASES, caseId, ws, blk, rowNo) Then Exit Function
+
+    modCaseStore2.PutText ws, blk, rowNo, "dossier_tier", t
+    modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    PromoteTier = True
+    Exit Function
+
+Failed:
+    modLog.LogError "E0603", "modCaseStore.PromoteTier", "write_failed", Err.Number
+    PromoteTier = False
 End Function
 
 ' SetStepOutcome - 16章 E-06 が要求する last_ok_step / failed_step の【書込口】
@@ -750,6 +787,7 @@ Private Function MaxOkStepOf(ByVal caseId As String) As Long
 End Function
 
 ' last_ok_step と status を「そのStepまで進んだ状態」へ揃える(判定は RepairedStatus)。
+'   裁定書9 B20: 冒頭で現在値との min を取り、下げる方向にしか動かさない。
 Private Function ApplyRepairedState(ByVal caseId As String, ByVal keepStep As Long) As Boolean
     On Error GoTo Failed
     Dim ws As Object
@@ -757,10 +795,19 @@ Private Function ApplyRepairedState(ByVal caseId As String, ByVal keepStep As Lo
     Dim rowNo As Long
     If Not modCaseStore2.LocateRow(CS_SHEET_CASES, caseId, ws, blk, rowNo) Then Exit Function
 
-    Dim cStatus As Long, cFailed As Long
+    Dim cStatus As Long, cFailed As Long, cLastOk As Long
     cStatus = modUtil.FindHeaderCol(blk, "status")
     cFailed = modUtil.FindHeaderCol(blk, "failed_step")
+    cLastOk = modUtil.FindHeaderCol(blk, "last_ok_step")
     If cStatus <= 0 Then Exit Function
+
+    ' B20: min(keepStep, 現在の last_ok_step)。
+    If cLastOk > 0 Then
+        Dim curOk As Long
+        curOk = modCaseStore2.ToLongSafe(blk(rowNo, cLastOk))
+        If keepStep > curOk Then keepStep = curOk
+    End If
+    If keepStep < 0 Then keepStep = 0
 
     Dim failedText As String
     failedText = vbNullString

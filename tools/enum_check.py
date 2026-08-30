@@ -94,6 +94,10 @@ REQUIRED: dict[str, str] = {
     "field_insights.tag": "field_insight_tag",
     # --- 壁打ち(13章§2.17 role: 日本語表示 自分/AI) ---
     "sparring.role": "sparring_role",
+    # --- 受信箱の判定入力列(v2.5・裁定書9 B2/N5。13章§2.6) ---
+    #     受信箱の他列は機械値のまま(EXCLUDED)だが、judge_to は利用者が選ぶ
+    #     入力列であり19章§3が日本語ラベル(採択/条件付き保留/却下)を持つため載せる。
+    "inbox.judge_to": "inbox_judge_to",
 }
 
 # 変換表に載せない行と、その理由(1行ずつ書く。理由の無い除外を作らない)。

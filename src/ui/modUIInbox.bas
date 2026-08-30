@@ -27,6 +27,9 @@ Private Const UI2_SCAN_COLS As Long = 24
 Private Const UI2_LBL_INTEREST As String = "lbl_inbox_interest"
 Private Const UI2_LBL_DIAG As String = "lbl_inbox_diagnosis"
 
+' 受信箱 body の上限(13章§2.6・16章 E-22: 32,000字で打切り＋警告)。
+Private Const UI2_BODY_MAX As Long = 32000
+
 ' ============================================================================
 ' 図形ボタン(11章 受信箱ワイヤー: [＋投函] [未診断を一括診断])
 ' ============================================================================
@@ -101,6 +104,11 @@ End Function
 
 ' ============================================================================
 ' 投函(11章 [＋投函])。16章 E-05(2): 本文のPII検知は登録をブロックする。
+' ----------------------------------------------------------------------------
+' 裁定書9 B18(13章§2.6・N6): 本文は InputBox(既定フォントで255字前後が上限)
+'   ではなく、受信箱シート上の下書きセル ib_body_draft(名前付きレンジ)から
+'   読む。32,000字超は打ち切って警告(16章 E-22)。起票に成功したら下書き
+'   セルを空へ戻す。テーマは短文なので InputBox のまま。
 ' ============================================================================
 Public Sub InboxPost()
     If Not modUIProgress.TryEnterUiLock("投函") Then Exit Sub
@@ -108,15 +116,23 @@ Public Sub InboxPost()
 
     modUIProgress.ParkFocus
 
+    Dim bodyText As String
+    bodyText = Trim$(modUISheet.ReadNamed("ib_body_draft"))
+    If LenB(bodyText) = 0 Then
+        Notice "本文を受信箱シートの下書きセル（ib_body_draft）に貼ってから押してください。"
+        GoTo Done
+    End If
+
+    Dim truncated As Boolean
+    If Len(bodyText) > UI2_BODY_MAX Then
+        bodyText = modUtil.SafeLeft(bodyText, UI2_BODY_MAX)
+        truncated = True
+    End If
+
     Dim themeText As String
     themeText = Trim$(CStr(InputBox("テーマ（短く。関心度の集計はこの文言でまとめます）", _
                                     "受信箱への投函")))
     If LenB(themeText) = 0 Then GoTo Done
-
-    Dim bodyText As String
-    bodyText = Trim$(CStr(InputBox("本文（気づき・現場の声・記事の要点など）", _
-                                   "受信箱への投函")))
-    If LenB(bodyText) = 0 Then GoTo Done
 
     If modPii.HasPii(themeText & vbLf & bodyText) Then
         modLog.LogError "E0103", UI2_SRC & ".InboxPost", _
@@ -132,9 +148,17 @@ Public Sub InboxPost()
         GoTo Done
     End If
 
+    ' 起票に成功したら下書きセルを空へ戻す(13章§2.6)。
+    modUISheet.WriteNamed "ib_body_draft", vbNullString
+
     RefreshInbox
     modUIHome.RefreshHome
-    Notice "投函しました: " & inboxId
+    If truncated Then
+        Notice "投函しました: " & inboxId & _
+               "（本文が32,000字を超えたため、超過分は打ち切りました）"
+    Else
+        Notice "投函しました: " & inboxId
+    End If
 
 Done:
     modUIProgress.ExitUiLock
@@ -230,6 +254,11 @@ End Function
 ' 必須検査は modInboxStore.JudgementError が唯一の判定であり、ここでは
 ' **判定結果を作らず**、シート上で選ばれた語彙をそのまま渡す(fail-closed。
 ' 足りなければ SetInboxJudgement が1列も書かずに戻る)。
+' 裁定書9 B2(13章§2.6・N5): 判定先は **入力列 judge_to** から読む。status 列は
+' 判定の**結果**であり利用者に触らせない(ここでも読まない・書かない。status の
+' 書換と judge_to のクリアは SetInboxJudgement 成功時に store 側が行う)。
+' 旧方式(status 列を読む)は遷移検査の from と to が同じセル由来になり、
+' 自己遷移として必ず弾かれて判定が1件も保存できなかった。
 ' ============================================================================
 Public Sub InboxSaveJudgement()
     If Not modUIProgress.TryEnterUiLock("判定の保存") Then Exit Sub
@@ -259,18 +288,23 @@ Public Sub InboxSaveJudgement()
         GoTo Done
     End If
 
-    Dim statusText As String
+    Dim judgeTo As String
     Dim dropType As String
     Dim reviveTag As String
     Dim dueText As String
-    statusText = ColText(ws, hdr, rowNo, "status")
+    judgeTo = Trim$(ColText(ws, hdr, rowNo, "judge_to"))
     dropType = ColText(ws, hdr, rowNo, "drop_type")
     reviveTag = ColText(ws, hdr, rowNo, "revive_tag")
     dueText = ColText(ws, hdr, rowNo, "revive_due")
 
+    If LenB(judgeTo) = 0 Then
+        Notice "judge_to 列で判定先（採択／条件付き保留／却下）を選んでから押してください。"
+        GoTo Done
+    End If
+
     ' 16章 E-41 の必須検査(唯一の判定点)を先に通し、理由を画面へ出す。
     Dim errText As String
-    errText = modInboxStore.JudgementError(statusText, dropType, reviveTag, _
+    errText = modInboxStore.JudgementError(judgeTo, dropType, reviveTag, _
                                            IsDateText(dueText))
     If LenB(errText) > 0 Then
         Notice "保存できません: " & errText
@@ -280,7 +314,7 @@ Public Sub InboxSaveJudgement()
     Dim due As Date
     If IsDateText(dueText) Then due = CDate(dueText)
 
-    If modInboxStore.SetInboxJudgement(inboxId, statusText, dropType, reviveTag, due) Then
+    If modInboxStore.SetInboxJudgement(inboxId, judgeTo, dropType, reviveTag, due) Then
         RefreshInbox
         modUIHome.RefreshHome
         Notice "判定を保存しました: " & inboxId

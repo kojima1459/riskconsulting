@@ -1,6 +1,6 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5
 
-> v2.5（裁定書9: W4.1 最終修正ウェーブ）: §6へ新設3本を宣言した。**`modPipeline2.LastDeepOutcome`**（N1。E-35/E-36 の警告を ui層へ渡す唯一の口）・**`modCaseStore.PromoteTier`**（N2。案件一覧 `dossier_tier` の唯一の書込口。v2.4.7 が「本節の裁定事項」と書いた未解決(a)の解消）・**`modExportHearing.AnswerMemoCount`**（N8。手書き回答の上書き確認の要否判定）。あわせて `modCompanyFile2.DossierSaveAndClose` を Boolean へ改め（N3）、`SetStatus` が遷移検査を通さない設計を明記し、`exported` / `feedback_done` の結線先・`AppendServiceGap` の呼出点・`MenuIdExists` 系5本の二次照合の呼出点・企業ドシエのファイル名8桁を company 由来とする例外（13章§2.8）を注記した。**本裁定で許可した新設名は N1～N8 の8件のみ**であり、これ以外の公開関数・名前付きレンジを新設しない。
+> v2.5（裁定書9: W4.1 最終修正ウェーブ）: §6へ新設3本を宣言した。**`modPipeline2.LastDeepOutcome`**（N1。E-35/E-36 の警告を ui層へ渡す唯一の口）・**`modCaseStore.PromoteTier`**（N2。案件一覧 `dossier_tier` の唯一の書込口。v2.4.7 が「本節の裁定事項」と書いた未解決(a)の解消）・**`modExportHearing.AnswerMemoCount`**（N8。手書き回答の上書き確認の要否判定）。あわせて `modCompanyFile2.DossierSaveAndClose` を Boolean へ改め（N3）、`SetStatus` が遷移検査を通さない設計を明記し、`exported` / `feedback_done` の結線先・`AppendServiceGap` の呼出点・`MenuIdExists` 系5本の二次照合の呼出点・企業ドシエのファイル名8桁を company 由来とする例外（13章§2.8）を注記した。**本裁定で許可した新設名は N1～N8 の8件のみ**であり、これ以外の公開関数・名前付きレンジを新設しない。あわせて §6 の末尾へ**名前付きレンジ・図形ボタン・入力列の登記表**（N4～N7）を新設し、本章が関数名だけでなく名前全体の唯一の正であることを表に固定した。
 
 > v2.4.8（裁定書9-1/9-2: W2c検証 MAJOR の解消）: 規約が実行制御・シートI/Oの中に閉じ込められていた2点を**純核として宣言**した。(1) **`modInboxStore.InterestSummaryOf(themeLines)`** - 10章FR-17 の関心度集計（件数集計・件数降順・**2件以上集まったテーマだけ**・上限は既定3件）の唯一の値源。シートI/Oの `InterestText` は theme 列を1件1行で集めて渡すだけになり、上限件数を引数で受けなくなったので **`InterestText()` は引数なし**へ改めた（`maxItems` の呼び出し実績は無い）。(2) **`modPipeline2.AdoptRevisionOf(outcome, originalJson, revisedJson)`** - 16章E-36 の「改訂を破棄して改訂前を採用」の唯一の選択点。`RunPipe` の確定JSON選択と `sNr_json` の保存可否はこの戻り値を経由し、不合格の改訂版が `sNr_json` へ入る経路を構造として持たない。あわせて §6 が「Private へ戻すことは契約違反」と書く純核（`modPipeline2` 8本 ＋ `modInboxStore` / `modPlayOps` / `modJudgeStore` の宣言済み純核）を `vba_lint.py` の CONTRACT `required` へ同期した（裁定書9-3）。
 
@@ -868,7 +868,8 @@ Public Function PromoteTier(ByVal caseId As String, ByVal tierText As String) As
 '   ui層が `ci_dossier_tier` を書く経路（13章§2.1 の属性列の書込経路）とは別に、app層から
 '   昇格する必要があるためここに置く。**方向（昇格か降格か）は本関数では判定しない**
 '   （enum に合致する値をそのまま書く）。app層からの呼び出しは `modSparring.ResumeSparring`
-'   の t3_sparring 昇格の1点だけであり、そこ以外から呼ばないByVal caseId As String, ByVal lastOkStep As Long, _
+'   の t3_sparring 昇格の1点だけであり、そこ以外から呼ばない
+Public Function SetStepOutcome(ByVal caseId As String, ByVal lastOkStep As Long, _
                                ByVal failedStep As String) As Boolean
 ' 16章 E-06 が要求する案件一覧の `last_ok_step` / `failed_step` の【書込口】（裁定書8 A-2で
 '   新設）。modPipeline の成功経路が (stepNo, "")、失敗経路が (-1, "sN") で呼ぶ。
@@ -1132,6 +1133,17 @@ Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12�
 - **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
 - **`modValidate` の CheckS2C / CheckS3C**、**`modSchemas` の SchemaS2C / SchemaS3C** は入念モード用の追加分（15章§4.5～4.6・§7の表）
 - 呼出前の走査: 外部へ送るテキスト（CallStep / CallChat の systemPrompt・userPrompt、企業ドシエファイルの書出、HTMLレポート出力）は送信・保存の直前に `modPii` を通す（16章 E-05／E-31。走査結果は run_log と dossier_meta に記録）
+- **名前付きレンジ・図形ボタン・入力列の新設（v2.5・裁定書9 §1）**: 本章§6は公開関数だけでなく**名前の唯一の正**でもある。v2.5で新設を許可したのは次の5件のみであり、実体の定義（配置・列順・書式）は各章が持つ。
+
+  | # | 名前 | 種別 | 定義の正 | 用途 |
+  |---|---|---|---|---|
+  | N4 | `s1_case_id` / `s2_case_id` / `s3_case_id` / `s4_case_id` | 名前付きレンジ（単点セル・読取専用） | 13章§2.12 | S1～S4の案件ID表示。`DrawStep` が書き、`SaveEditedStep` が突合する（B1） |
+  | N5 | `judge_to` | 受信箱シートの入力列 | 13章§2.6・19章§3 | 判定の入力口。`SetInboxJudgement` の `status` 引数へ渡す（B2） |
+  | N6 | `ib_body_draft` | 名前付きレンジ（単点セル） | 13章§2.6 | 投函本文の下書き（`InputBox` 255字上限の回避。B18） |
+  | N7 | `btn_round_freeze` | HOMEの図形ボタン（caption「第2ラウンド開始」） | 11章§2 | `modCaseStore.FreezeRound` の起動口（A-2） |
+  | - | 業種ドロップダウンの隠しレンジ | 名前付きレンジ（既存作法の内部レンジ） | 13章§2.11 | `ci_industry_code` / `ci_industry_name` の入力規則の参照元（`RestoreDataKeyHiddenRange` と同作法であり、公開名を新設しない） |
+
+  これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。
 
 ## 7. スキーマ・レジストリ（modSchemas。本文は15章）
 

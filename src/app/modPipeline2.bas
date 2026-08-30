@@ -61,6 +61,14 @@ Private Const P2_RES_OK As String = "ok"
 Private Const P2_RES_FAILED As String = "failed"
 Private Const P2_RES_CALL As String = "call_failed"
 
+' 直近パイプの結末のうち警告を伴うもの(""=警告なし / critique_skipped /
+'   revision_discarded)。**モジュール変数による状態保持の例外2例目**
+'   (broken_json_once に次ぐ。裁定書9 N1・14章§6)。理由: RunStep の Boolean
+'   戻り値の契約を変えずに E-35/E-36 警告を ui層 へ渡す口が他に無い。
+'   リセットは RunDeep の入口(=RunStep が毎実行の開始時に通す)で必ず行い、
+'   前回の結果を次の実行へ持ち越さない。読む口は LastDeepOutcome のみ。
+Private mLastDeepOutcome As String
+
 ' 1パイプ分の文脈。Check系は純関数でJSONの外側の文脈を引数で受ける(14章§6)
 ' ため、注入テキストと上流JSONをここへまとめて持ち回る。
 Private Type TDeepCtx
@@ -89,9 +97,15 @@ End Type
 '   戻り値 False = 対象Stepでない / 生成版や案件文脈が読めない / 経路そのものが
 '     失敗した(16章 E-14からE-16)。
 '   **戻り値で本体Stepの成否を左右しない**のが契約。呼び出し側は握りつぶしてよい。
+'   副作用(裁定書9 N1): 入口で LastDeepOutcome を必ず "" へリセットする。
+'   modPipeline.RunStep は毎実行の開始時に stepNo=0 で呼び、このリセットだけを
+'   通す(0 は対象外検査で即 False。パイプは走らない)。
 ' ============================================================================
 Public Function RunDeep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
     On Error GoTo Failed
+
+    ' N1: 前回の deep outcome を持ち越さない(リセットはこの1点のみ)。
+    mLastDeepOutcome = vbNullString
 
     If stepNo <> 2 And stepNo <> 3 Then Exit Function
 
@@ -278,8 +292,19 @@ Private Sub RecordOutcome(ByRef d As TDeepCtx, ByVal outcome As String)
     detailText = d.stepName
     warnText = DeepWarningOf(outcome)
     If LenB(warnText) > 0 Then detailText = detailText & " " & warnText
+    ' N1: 警告を伴う結末(critique_skipped / revision_discarded)だけを保持する。
+    If LenB(warnText) > 0 Then mLastDeepOutcome = Trim$(outcome)
     modLog.LogUsage "deep_" & outcome, d.caseId, detailText
 End Sub
+
+' LastDeepOutcome - 直近 RunStep が回した入念パイプの結末(裁定書9 N1・B9)。
+'   値は ""(警告なし) / critique_skipped / revision_discarded の3通りのみ。
+'   ui層(modUIHome.RunStepUi / RunAllUi)は成功分岐でこれを読み、非空なら
+'   DeepWarningOf の文言を hm_warning へ出す(冒頭の ShowWarning vbNullString
+'   によるクリアより後で書く)。リセットは RunDeep の入口(RunStep 開始時)。
+Public Function LastDeepOutcome() As String
+    LastDeepOutcome = mLastDeepOutcome
+End Function
 
 ' ============================================================================
 ' 純関数(シート・ログ・LLMに触れない判定核)。14章§6が公開を宣言する

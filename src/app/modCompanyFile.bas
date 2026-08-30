@@ -66,7 +66,14 @@ Private Const CF_SCHEMA_FALLBACK As String = "2.0.0"
 ' ============================================================================
 ' CompanyFilePath - 企業ドシエファイルの絶対パス(13章§2.8のファイル名規則)。
 '   company は自由記述なので生では使わず必ず BuildFileNameSafe(禁止文字置換・
-'   32字切詰め・case_id由来8桁の付与・240字超のハッシュ退避)を通す。
+'   32字切詰め・8桁ハッシュの付与・240字超のハッシュ退避)を通す。
+'   裁定書9 B7(13章§2.8 手順4): 企業ドシエだけは8桁を case_id 由来ではなく
+'   **company 由来**(Left$(Fnv1a64Hex(NormalizeForHash(company)), 8)=
+'   dossier_meta.company_id と同じ式)にする。case_id 由来だと同じ会社の2件目の
+'   案件が必ず別ファイルになり「1社1ファイル・追記して育てる」(FR-45)が
+'   成立しない。BuildFileNameSafe は第2引数の Fnv1a64Hex 先頭8桁を使うため、
+'   NormalizeForHash(company) を渡すことで仕様の式と一致させる。
+'   caseId 引数はシグネチャ(14章§6)維持のため残す(ファイル名には使わない)。
 ' ============================================================================
 Public Function CompanyFilePath(ByVal company As String, ByVal caseId As String, _
                                 ByVal dirPath As String) As String
@@ -75,7 +82,8 @@ Public Function CompanyFilePath(ByVal company As String, ByVal caseId As String,
     If LenB(dirText) = 0 Then Exit Function
 
     Dim baseName As String
-    baseName = modUtilText.BuildFileNameSafe(company, caseId, CF_TAIL, dirText, CF_EXT)
+    baseName = modUtilText.BuildFileNameSafe(company, _
+                   modUtilText.NormalizeForHash(company), CF_TAIL, dirText, CF_EXT)
     If LenB(baseName) = 0 Then Exit Function
 
     CompanyFilePath = dirText & "\" & baseName & CF_EXT
@@ -175,8 +183,23 @@ Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As Strin
     Dim expectHash As String
     expectHash = PayloadHash(caseId)
 
-    modCompanyFile2.DossierSaveAndClose wb, pathText
+    ' 裁定書9 B8(14章§6): 保存の失敗を成功として返さない。False なら
+    ' VerifyRoundTrip へ進まず ""(失敗)を返す(ui層が失敗を表示する)。
+    If Not modCompanyFile2.DossierSaveAndClose(wb, pathText) Then
+        Set wb = Nothing
+        modLog.LogError "E0603", CF_SRC & ".ExportCompanyFile", _
+                        "save_failed:round=" & CStr(roundNo)
+        Exit Function
+    End If
     Set wb = Nothing
+
+    ' 裁定書9 B8: VerifyRoundTrip の前に対象ブックが閉じていることを確認する。
+    ' 同一プロセスで開いたままのブックを Workbooks.Open が返すと、ディスクでは
+    ' なくメモリ上の内容と突合して合格してしまう(2段検証の無効化)。
+    If BookStillOpen(pathText) Then
+        modLog.LogError "E0603", CF_SRC & ".ExportCompanyFile", "book_still_open"
+        Exit Function
+    End If
 
     If Not VerifyRoundTrip(pathText, caseId, roundNo, expectHash) Then
         modLog.LogError "E0603", CF_SRC & ".ExportCompanyFile", _
@@ -502,6 +525,29 @@ Private Sub AddReport(ByRef buf() As String, ByRef cnt As Long, _
     reportText = modPii.ScanReport(bodyText, whereNote)
     If LenB(reportText) > 0 Then modUtil.BufAdd buf, cnt, reportText
 End Sub
+
+' 裁定書9 B8: 同名のブックが同一プロセスで開いたままかを名前で調べる。
+'   判定に失敗したときは True(=開いている扱い)へ倒し、無効な2段検証で
+'   合格を出す方向へは倒さない(fail-closed)。
+Private Function BookStillOpen(ByVal pathText As String) As Boolean
+    On Error GoTo Unknown0
+    Dim nameOnly As String
+    Dim p As Long
+    p = InStrRev(pathText, "\")
+    nameOnly = Mid$(pathText, p + 1)
+    If LenB(nameOnly) = 0 Then Exit Function
+
+    Dim i As Long
+    For i = 1 To Application.Workbooks.Count
+        If StrComp(Application.Workbooks(i).Name, nameOnly, vbTextCompare) = 0 Then
+            BookStillOpen = True
+            Exit Function
+        End If
+    Next i
+    Exit Function
+Unknown0:
+    BookStillOpen = True
+End Function
 
 ' Application.UserName(13章§2.1 owner と同じ扱い)。取れない環境では ""。
 Private Function OwnerName() As String
