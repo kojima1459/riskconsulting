@@ -205,11 +205,137 @@
       "wave": "T-29"
     },
     {
+      "name": "modHtmlTheme",
+      "path": "src/app/modHtmlTheme.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate1",
+      "path": "src/app/modHtmlTemplate1.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate2",
+      "path": "src/app/modHtmlTemplate2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate3",
+      "path": "src/app/modHtmlTemplate3.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate4",
+      "path": "src/app/modHtmlTemplate4.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate5",
+      "path": "src/app/modHtmlTemplate5.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
+      "name": "modExportHtml",
+      "path": "src/app/modExportHtml.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-33"
+    },
+    {
+      "name": "modExportHearing",
+      "path": "src/app/modExportHearing.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-33"
+    },
+    {
       "name": "modBoot",
       "path": "src/ui/modBoot.bas",
       "role": "ui",
       "type": "std",
       "wave": "T-16"
+    },
+    {
+      "name": "modUISheet",
+      "path": "src/ui/modUISheet.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-30"
+    },
+    {
+      "name": "modUIProgress",
+      "path": "src/ui/modUIProgress.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-30"
+    },
+    {
+      "name": "modUIHome",
+      "path": "src/ui/modUIHome.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-30"
+    },
+    {
+      "name": "modUICase",
+      "path": "src/ui/modUICase.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-31"
+    },
+    {
+      "name": "modUICase2",
+      "path": "src/ui/modUICase2.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-31"
+    },
+    {
+      "name": "modUICase3",
+      "path": "src/ui/modUICase3.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-31"
+    },
+    {
+      "name": "modUICase4",
+      "path": "src/ui/modUICase4.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-31"
+    },
+    {
+      "name": "modUICaseFmt",
+      "path": "src/ui/modUICaseFmt.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-31"
+    },
+    {
+      "name": "modUIInbox",
+      "path": "src/ui/modUIInbox.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-32"
+    },
+    {
+      "name": "modUISparring",
+      "path": "src/ui/modUISparring.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-34"
     },
     {
       "name": "modTestRunner",
@@ -280,6 +406,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-28"
+    },
+    {
+      "name": "modTestsPure10",
+      "path": "src/test/modTestsPure10.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-35"
     },
     {
       "name": "modMockLlm",

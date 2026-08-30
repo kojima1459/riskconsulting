@@ -31,9 +31,10 @@ Option Explicit
 '   仕様から一意に決まらない項目はテストにせず、末尾の一覧に残して司令塔へ
 '   懸念として返す(甘い期待値を置いて実装を追認しない)。
 '
-' 結線: modTestsPure8.RunAll の末尾から本モジュールの RunAll を呼ぶ
-'   (数珠つなぎ modTestsPure -> 2 .. -> 8 -> 9。本ファイル単体では1本も実行
-'   しない)。build/modules.json(role=test / wave=T-28)と run_lo_tests.py の
+' 結線: modTestsPure8.RunAll の末尾から本モジュールの RunAll を呼び、本モジュール
+'   の末尾から **modTestsPure10.RunAll**(T-35 HTMLレポートの純部)を呼ぶ
+'   (数珠つなぎ modTestsPure -> 2 .. -> 8 -> 9 -> 10。本ファイル単体では1本も
+'   実行しない)。build/modules.json(role=test / wave=T-28)と run_lo_tests.py の
 '   PURE_ALLOWLIST へ登録する。叩く製品モジュール(modInboxStore /
 '   modJudgeStore / modPlayOps)はいずれも登録済み。
 '
@@ -74,7 +75,7 @@ Private Const ERR_OTHER As String = _
 
 ' ----------------------------
 ' RunAll: グループ単位で隔離実行(1グループが実行時エラーで落ちても残りは走る。
-'   未実装/未注入は GroupFail で1件の失敗として可視化し、隠さない)。末端。
+'   未実装/未注入は GroupFail で1件の失敗として可視化し、隠さない)。
 ' ----------------------------
 Public Sub RunAll()
     Dim i As Long
@@ -91,6 +92,17 @@ Public Sub RunAll()
         End If
         On Error GoTo 0
     Next i
+
+    ' 姉妹モジュール(T-35 HTMLレポートの純部)を同じ隔離作法で続けて回す。
+    ' 数珠つなぎ: modTestsPure -> 2 -> .. -> 8 -> 9 -> 10。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure10.RunAll
+    If Err.Number <> 0 Then
+        GroupFail "modTestsPure10.RunAll"
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)

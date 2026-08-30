@@ -81,6 +81,30 @@ python3 tools/vba_lint.py --dump-argcount-skips
   例外は **`ChrW()` の唯一の引数**に置かれた素のリテラルのみで、この位置は
   -32768～65535 を受けるため値が保たれる。ただし黙って通さず **WARN** で表に出す
 
+### `enum_check.py` - 19章§3とenum変換表の一致検査(17章§4-2の2本目・T-31)
+
+```bash
+python3 tools/enum_check.py             # 照合
+python3 tools/enum_check.py --dump      # 19章から期待されるCSV本文を出力
+python3 tools/enum_check.py --dump-bas  # 上を .bas の連結文へ整形して出力
+# exit code: 0 = 一致 / 1 = 不一致
+```
+
+11章§5 は「日本語ラベル⇔enumの変換は modUICase の共通変換表(19章と一致必須)のみで
+行う」と定めている。その**一致必須**を目視から機械へ移したもの。
+
+- **分類の完全性**: 19章§3の全行を、変換表に載せる行(`REQUIRED`)と載せない行
+  (`EXCLUDED`＋理由)へ**漏れなく**分類できることを検査する。19章にenum行が増えたのに
+  分類表へ足していなければ落ちる(新しいenumが黙って変換表から漏れるのを防ぐ)。
+- **中身の一致**: 載せる行は `modUICase.EnumPairsCsv()` と機械値・日本語ラベル・
+  **並び順**まで一致すること。1グループ内での機械値・ラベルの重複(逆引きが一意に
+  決まらない)と、CSV区切り `,` の混入も検査する。
+- **静的評価**: `prompt_diff.py` と同じく `s = s & "..." & vbLf` 方式の関数本体を
+  静的に評価する。制御構文・未対応の項があれば不一致に数えるので、**表を関数の中で
+  組み立て直して検査を骨抜きにできない**。
+- 実装を直すときは 19章§3 を直してから `--dump-bas` の出力で `EnumPairsCsv()` を
+  差し替えること(手で写さない)。
+
 ### `run_lo_tests.py` - LibreOffice実行テスト(層(c))
 
 ```bash
@@ -219,3 +243,28 @@ python3 tools/ship_check.py
 再現可能にするため。裁定書4 項目12)。中身はキー走査クリーンで、`ship_check.py` の②が
 全パート展開して毎リリース検査し、③は `TRACKED_XLSM_ALLOWED` の許可枠として扱う
 (成果物 `.xlsm` の tracked は引き続き禁止)。`olefile` はこの外科パッチに必須。
+
+### `render_report.py` - サンプルHTMLレポートの生成(T-33 / T-35 の受入確認)
+
+```bash
+python3 tools/render_report.py                 # dist/サンプルレポート.html
+python3 tools/render_report.py --theme mono    # dist/サンプルレポート_mono.html
+python3 tools/render_report.py --faithful      # 素材合成なし(素のmock・round 1)
+# exit code: 0 = 生成+検査OK / 1 = 生成できたが検査NG / 2 = 生成できず
+```
+
+LibreOffice へ純文字列モジュール一式(`modHtmlTheme` / `modHtmlTemplate1..5` /
+`modExportHtml`)を読み込ませ、mock素材(`modMockLlm.ResponseById`)を入力に
+**純組立関数** `modExportHtml.BuildMetaJson` / `BuildReportHtml` を実行して、
+人がブラウザで開ける実物を `dist/` に出す。実行機構(雛形プロファイル・.xba変換・
+`Public Type` 注入・timeout)は `run_lo_tests.py` を import して流用している。
+
+- 書出だけPython側なのは、製品の `ADODB.Stream`(utf-8・BOMあり。18章§5.3(3))が
+  Windows専用でLinuxに無いため。**同じバイト配置**(utf-8-sig)で書く。組立ロジックは
+  1行もツール側に持たない。
+- 検査: `<meta charset="utf-8">` / 18章§3の全16セクションが登録表にあること /
+  `node` があれば最小DOMスタブでページのJSを実際に走らせ `sec-<slug>` が
+  16本生成されること / `innerHTML` 系が1つも無いこと(18章§4.1) /
+  §5.1の28変数を過不足なく定義し共通CSSに `#fff` 以外の生の色が無いこと。
+- `dist/` は `.gitignore` 済み(16章NFR-S2)。サンプルはコミットせず、必要なときに
+  このコマンドで再生成する。

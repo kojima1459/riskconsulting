@@ -537,6 +537,29 @@ Failed:
     SetStepOutcome = False
 End Function
 
+' SetReportPath - 案件一覧 report_path の【書込口】(18章§1.1⑦・14章§6の
+'   GenerateHtmlReport が「確定パスを案件一覧 report_path に記録する」と定める)。
+'   modExportHtml はR4によりシートに触れないため、記録はここを通す。status は
+'   動かさない(出力の成否は状態遷移に影響しない。16章 E-48)。
+'   記録に失敗しても生成済みファイルは残る=呼び出し側は警告に留める。
+Public Function SetReportPath(ByVal caseId As String, ByVal pathText As String) As Boolean
+    On Error GoTo Failed
+
+    Dim ws As Object
+    Dim blk As Variant
+    Dim rowNo As Long
+    If Not modCaseStore2.LocateRow(CS_SHEET_CASES, caseId, ws, blk, rowNo) Then Exit Function
+
+    modCaseStore2.PutText ws, blk, rowNo, "report_path", pathText
+    modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    SetReportPath = True
+    Exit Function
+
+Failed:
+    modLog.LogError "E0603", "modCaseStore.SetReportPath", "write_failed", Err.Number
+    SetReportPath = False
+End Function
+
 ' InvalidateDownstream - 上流を再実行するとき下流の成果物を無効化する(E-10)。
 '   fromStepNo より下流の成果物 data_key を消し、last_ok_step を fromStepNo へ
 '   戻して status を再導出する。消したキーは E0601 の detail へ列挙(黙って

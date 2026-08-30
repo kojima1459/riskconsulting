@@ -126,6 +126,16 @@ PURE_ALLOWLIST = [
     # app の純文字列・純ロジック(W2)。
     "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
     "modSchemas", "modValidate", "modValidate2", "modPii",
+    # T-35(W3)のHTMLテンプレ系。18章§1の表が「純文字列モジュール」と定めた
+    # とおりExcelトークンを1つも持たないので、そのまま実行テストにかけられる
+    # (lint の R4 が Excelトークンの混入を機械的に禁止している)。
+    "modHtmlTheme", "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
+    "modHtmlTemplate4", "modHtmlTemplate5",
+    # T-33(W3)。modExportHtml はファイルI/O(ADODB.Stream)とstore経由の読取を
+    # 持つが、純組立関数(BuildReportHtml / BuildMetaJson)はどちらにも触れない
+    # ため、テストが叩くのはその2本だけ(技術メモ4)。tools/render_report.py も
+    # 同じ2本だけを呼んで dist/ のサンプルHTMLを出す。
+    "modExportHtml",
     # app のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは14章§6が公開を
     # 宣言した純関数だけのモジュール(技術メモ4。裁定書6 項目6/7・裁定書7 B-6)。
     # modKnowledgeFmt は全体が純文字列(整形と15章§0.7の切詰め)。
@@ -165,6 +175,12 @@ PURE_ALLOWLIST = [
     # 関心度の下請け2本・modJudgeStore の採番/ID書式/enum検証・modPlayOps の
     # PfPredTypesOf/PfRefIds/PfFailCodeOf/CaseIdOfPfLine)を叩く。
     "modTestsPure9",
+    # modTestsPure10: T-35(W3)HTMLレポートの純部の契約テスト62本。18章全文と
+    # 16章E-47・19章§3だけを根拠に modUtilText.HtmlSafe / JsStringSafe と
+    # modHtmlTheme.ThemeNames / ThemeCss、modHtmlTemplate1 の BuildDocument /
+    # HeadHtml / BodyShellHtml / SectionsJs / RuntimeJs を叩く(叩く製品
+    # モジュールはいずれも上で登録済み)。modTestsPure9.RunAll の末尾から呼ぶ。
+    "modTestsPure10",
     "modMockLlm", "modMockLlm2",
 ]
 

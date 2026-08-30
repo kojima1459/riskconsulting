@@ -65,6 +65,19 @@ MODULE_REGISTRY = {
     # ---- ui 層 ----
     "modBoot", "modUIHome", "modUICase", "modUIInbox", "modUISparring",
     "modUIProgress",
+    # W3(T-30/T-31)で新設。12章§2のモジュール一覧に追記済み。
+    #   modUISheet  = ui層のシート操作プリミティブ(名前付きレンジ・ブロック
+    #                 アンカー・図形ボタン+OnAction配線)。11章§5と13章§2.9の
+    #                 実装を1箇所へ集め、6つのui層モジュールが同じ12行を各自
+    #                 持つのを防ぐ。
+    #   modUICase2  = modUICase の分割先(30,000字契約)。S1～S4シートの描画と
+    #                 逆シリアライズ本体(13章§2.12-§2.15・§2.2)。
+    #   modUICase3  = 同上。案件入力・フィードバック・判断台帳(13章§2.11/
+    #                 §2.5/§2.7)。
+    #   modUICase4  = 同上。フィードバック・判断台帳(13章§2.5/§2.7)。
+    #   modUICaseFmt= 同上。13章§2.2 セル格納規約の変換(セル<->JSON値)の純関数。
+    #                 modKnowledgeFmt が15章の整形規約を持つのと同じ切り口。
+    "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICaseFmt",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -356,6 +369,28 @@ CONTRACT: dict[str, dict] = {
         "closed": False,
         "required": ["SetStage", "TryEnterUiLock", "ExitUiLock", "ParkFocus"],
     },
+    # modUICase: 11章§5「日本語ラベル⇔enumの変換は modUICase の共通変換表
+    #   (19章と一致必須)のみで行う」＋13章§2.2 逆シリアライズ規約1が名指しする
+    #   `modUICase.SerializeSheet(stepNo)`。EnumPairsCsv は tools/enum_check.py が
+    #   静的評価する**変換表そのもの**であり、Private化・改名すると17章§4-2の
+    #   一致検査が対象を失う(=検査が無言で消える)ため required に載せる。
+    "modUICase": {
+        "closed": False,
+        "required": ["EnumPairsCsv", "EnumJa", "EnumEn", "EnumLabels",
+                     "ApplyEnumValidation", "SerializeSheet"],
+    },
+    # 以下4本の公開口は 14章§6 が宣言していない(ui層の画面ハンドラは章の
+    # 契約面に載っていない)。CONTRACT へは完全性自己検査
+    # (MODULE_REGISTRY⇔CONTRACT)を満たすために required=[] で登録する。
+    # closed=False なので追加 Public は許容する。
+    "modUISheet": {"closed": False, "required": []},
+    "modUIHome": {"closed": False, "required": []},
+    "modUICase2": {"closed": False, "required": []},
+    "modUICase3": {"closed": False, "required": []},
+    "modUICase4": {"closed": False, "required": []},
+    "modUICaseFmt": {"closed": False, "required": []},
+    "modUIInbox": {"closed": False, "required": []},
+    "modUISparring": {"closed": False, "required": []},
     # ---- test 層 ----
     "modTestRunner": {
         # 本Lintと17章§4-1のランナー要件で公開口を確定させているため closed=True。
@@ -911,6 +946,13 @@ def collect_module_level_names(raw_text: str) -> set[str]:
 # ==============================================================================
 ONACTION_LITERAL_PATTERN = re.compile(
     r"\.OnAction\s*=\s*\"(mod[A-Za-z]\w*\.[A-Za-z_]\w*)\"\s*$", re.IGNORECASE)
+# W3(T-30): ui層は図形の生成とOnAction配線を modUISheet.EnsureButton に一本化した
+# ため、`.OnAction = "modX.Y"` の直接代入はその関数の中の【変数経由】1箇所だけに
+# なった。配線先の文字列リテラルは呼び出し側の引数に現れるので、そちらも収集
+# しないと本検査が丸ごと空振りする(=関所の検査が無言で消える)。
+# 収集対象は EnsureButton 呼び出しの引数に現れる "modX.Y" 形の文字列リテラルのみ。
+ONACTION_WIRING_PATTERN = re.compile(
+    r"\bEnsureButton\b.*?\"(mod[A-Za-z]\w*\.[A-Za-z_]\w*)\"", re.IGNORECASE)
 ONACTION_GUARD_LOOKAHEAD = 4
 # 保護を求めないハンドラの名簿("modX.Y" 形式)。増やすときは必ず理由を1行書くこと。
 ONACTION_GUARD_ALLOWLIST: set[str] = set()
@@ -945,6 +987,8 @@ def check_onaction_handler_guard(infos: list[ModuleInfo]) -> None:
             m = ONACTION_LITERAL_PATTERN.search(stmt)
             if m:
                 wired.setdefault(m.group(1), (module_name_for_display(info), lineno))
+            for m2 in ONACTION_WIRING_PATTERN.finditer(stmt):
+                wired.setdefault(m2.group(1), (module_name_for_display(info), lineno))
 
     by_name = {module_name_for_display(i): i for i in infos}
 

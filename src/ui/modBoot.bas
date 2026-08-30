@@ -14,7 +14,7 @@ Option Explicit
 '   (1) ガードシート非表示                          失敗=起動継続(E-code無し)
 '   (2) config読込(既定値登録->シート上書き)         失敗=E0608警告・既定値続行
 '   (3) modCaseStore.RepairStates()                  失敗=修復0件・E0603続行
-'   (4) enum入力規則の隠しレンジ複製(data_key)        KB未接続でも内蔵定数で続行
+'   (4) enum入力規則の隠しレンジ複製(11章§5)         KB未接続でも内蔵定数で続行
 '   (5) modKnowledge.LoadKnowledge()+スナップショット 失敗=E0401警告・続行
 '   (6) 新サービス候補のローカル退避分の再送           LoadKnowledge内部で無音実施
 '   (7) modGatewayRPN.RunLimitCheck()                 Trueでも起動継続・HOME案内
@@ -34,10 +34,15 @@ Option Explicit
 '   sheets_main.json の protection_policy)、`EnableSelection` は .xlsm に
 '   永続化されない実行時プロパティのため毎起動この関数が全シートへ適用する。
 '   ParkFocus(編集不可の待避セルへフォーカスを戻す)の恒久実装は
-'   ui層 modUIProgress が持つ(14章§6・17章T-30)。T-30着手前の現時点では
-'   modUIProgress が未実装のため、本モジュールは起動直後の最小限の待避のみを
-'   internal(Private)に実装する。T-30着手時は ParkFocusAtBoot を
-'   modUIProgress.ParkFocus への委譲へ差し替えること(重複実装の解消)。
+'   ui層 modUIProgress が持つ(14章§6・17章T-30)。**T-30の実装に伴い、暫定で
+'   持っていた private ParkFocusAtBoot は modUIProgress.ParkFocus への委譲へ
+'   差し替えた**(フォーカス退避の実装を2箇所に残さない。17章T-30 DoD)。
+'
+' 画面の用意(11章§5・T-30/T-31):
+'   図形ボタンとOnActionの配線・enum入力規則の隠しレンジ複製・HOMEの初期表示は
+'   ui層が持つ。起動シーケンスからは手順(4)で modUICase.ApplyEnumValidation を、
+'   7手順の後で modUIHome.EnsureScreens を1回ずつ呼ぶだけにする(起動処理を
+'   modBoot 以外へ散らさない=12章§2.1)。
 '
 ' case_data の data_key 入力規則(11章§5・W0省略分の解消):
 '   data_key の静的リスト(全28値)はExcelの入力規則インライン上限255字を
@@ -65,7 +70,6 @@ Option Explicit
 #End If
 
 Private Const BOOT_GUARD_SHEET As String = "はじめにお読みください"
-Private Const BOOT_HOME_SHEET As String = "HOME"
 Private Const BOOT_DATA_SHEET As String = "case_data"
 Private Const BOOT_ENUM_SHEET As String = "enum_hidden"
 Private Const BOOT_NAME_DATA_KEY As String = "enum_data_key"
@@ -112,8 +116,11 @@ Public Sub Boot()
     ' (3) 案件状態の整合修復(RepairStatesが失敗時のE0603記録まで自己完結)
     modCaseStore.RepairStates
 
-    ' (4) enum入力規則の隠しレンジ複製(data_key。19章§3内蔵定数から復元)
+    ' (4) enum入力規則の隠しレンジ複製(11章§5)。data_key(日本語ラベルを持たない
+    '     内部キー)は本モジュールが、日本語ラベルを持つ24グループは変換表を持つ
+    '     modUICase が復元する(19章§3の値を2箇所に書かないため)。
     RestoreDataKeyHiddenRange
+    modUICase.ApplyEnumValidation
 
     ' (5)+(6) ナレッジ読込・スナップショット保存・新サービス候補の再送
     '         (再送はLoadKnowledge内部のFlushPendingが無音で行う。E-13)
@@ -126,7 +133,12 @@ Public Sub Boot()
     ' (16章E-51・17章T-16 DoD。Lockedはビルドが焼くのでここではEnableSelection
     '  のみを毎起動適用する)
     ApplyProtectionPolicy
-    ParkFocusAtBoot
+
+    ' 画面の用意(図形ボタン+OnAction の配線とHOMEの初期表示。11章§5・T-30)
+    modUIHome.EnsureScreens
+
+    ' フォーカス退避(16章E-51(c))。実装は ui層 modUIProgress が唯一持つ。
+    modUIProgress.ParkFocus
 End Sub
 
 ' ----------------------------------------------------------------------------
@@ -298,20 +310,4 @@ Private Sub ApplyProtectionPolicy()
         ws.EnableSelection = BOOT_ENABLE_SELECTION_UNLOCKED
         On Error GoTo 0
     Next ws
-End Sub
-
-' ----------------------------------------------------------------------------
-' ParkFocus起動時版(16章E-51(c))。恒久実装は ui層 modUIProgress.ParkFocus
-' (14章§6・17章T-30)。T-30が未着手の現時点では、起動直後にHOMEの左上
-' セルへフォーカスを戻す最小実装をここに置く(T-30着手時に委譲へ差替)。
-' ----------------------------------------------------------------------------
-Private Sub ParkFocusAtBoot()
-    On Error Resume Next
-    Dim ws As Object
-    Set ws = ThisWorkbook.Worksheets(BOOT_HOME_SHEET)
-    If Not ws Is Nothing Then
-        ws.Activate
-        ws.Cells(1, 1).Select
-    End If
-    On Error GoTo 0
 End Sub
