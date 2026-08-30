@@ -310,6 +310,8 @@ End Function
 ' 束ねる先の表(グループ|種別|対象):
 '   n = 帳票型の名前付きレンジ1点(13章§2.10/§2.11)
 '   b = テーブル型のブロック列(アンカー名:列物理名。13章§2.12-§2.17)
+'   f = フラット表(1行目が物理名ヘッダの1シート1テーブル)の列
+'       (シート名:列物理名。13章§2.5-§2.7。ブロックのアンカー名を持たない)
 ' ============================================================================
 Private Function BindingTable() As String
     Dim s As String
@@ -339,6 +341,11 @@ Private Function BindingTable() As String
     s = s & "evidence_source|b|s2_emerging:evidence_source" & vbLf
     s = s & "proposal_kind|b|s3_stories:proposal_kind" & vbLf
     s = s & "sparring_role|b|sparring_log:role" & vbLf
+    ' 裁定書10 M7: 受信箱の判定入力列 judge_to は日本語ラベルで選ばせる
+    ' (13章§2.6)。受信箱は columns だけのフラット表なのでブロックのアンカーが
+    ' 無く、束ね種別 f で「シート名:列物理名」を指す。この1行が無いと
+    ' inbox_judge_to の隠しレンジはどのセルにも束ねられない死んだ登録になる。
+    s = s & "inbox_judge_to|f|受信箱:judge_to" & vbLf
     BindingTable = s
 End Function
 
@@ -422,13 +429,24 @@ Private Function BindOne(ByVal rowText As String) As Boolean
     colName = parts(LBound(parts) + 1)
 
     Dim ws As Object
-    Set ws = modUISheet.BlockSheet(anchorName)
-    If ws Is Nothing Then Exit Function
-
     Dim headerRow As Long
     Dim firstCol As Long
-    headerRow = modUISheet.BlockRow(anchorName)
-    firstCol = modUISheet.BlockCol(anchorName)
+
+    If kindText = "f" Then
+        ' 裁定書10 M7: フラット表は1行目が物理名ヘッダで左端列が1(13章§2.9)。
+        ' ブロックのアンカー名を持たないので、シート名から直に引く。
+        Set ws = modUISheet.SheetOf(anchorName)
+        headerRow = 1
+        firstCol = 1
+    ElseIf kindText = "b" Then
+        Set ws = modUISheet.BlockSheet(anchorName)
+        headerRow = modUISheet.BlockRow(anchorName)
+        firstCol = modUISheet.BlockCol(anchorName)
+    Else
+        Exit Function
+    End If
+
+    If ws Is Nothing Then Exit Function
     If headerRow <= 0 Or firstCol <= 0 Then Exit Function
 
     Dim hdr As Variant

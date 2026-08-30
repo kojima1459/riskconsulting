@@ -87,6 +87,18 @@ Public Function SaveEditedStep(ByVal caseId As String, ByVal stepNo As Long, _
         Exit Function
     End If
 
+    ' 裁定書9 B6: 部屋あふれで表示しきれていない行があるあいだは保存しない
+    ' (切り詰められた画面が参照優先の最上位に居座るのを防ぐ)。
+    ' 裁定書10 m3: このフラグは揮発性であり**保存ブロックの根拠は下の案件ID
+    ' 一致ガード(切捨て時は DrawStep が sN_case_id を空のままにする)**が担う。
+    ' ここは「なぜ止まったのか」を具体的な内訳で伝えるための文言専用であり、
+    ' 一致ガードより先に置いて、より具体的な案内が出るようにする。
+    If gTruncStep(stepNo) Then
+        modUISheet.WriteNamed U2_WARN, "表示しきれていない行があるため、Step" & _
+            CStr(stepNo) & " の編集は保存しませんでした（" & gTruncNote & "）。"
+        Exit Function
+    End If
+
     ' 裁定書9 B1: 画面が別案件の内容のまま sN_edited を確定させない。読取専用の
     ' 案件ID表示セル(13章§2.12 sN_case_id)と引数が一致しなければ1セルも保存しない。
     ' 呼び出し側で二重に文言を出さないよう errText は空のままにし、画面へ直接出す。
@@ -94,14 +106,6 @@ Public Function SaveEditedStep(ByVal caseId As String, ByVal stepNo As Long, _
         modUISheet.WriteNamed U2_WARN, U2_MSG_MISMATCH
         modLog.LogError "E0302", U2_SRC & ".SaveEditedStep", _
                         "case_id_mismatch:s" & CStr(stepNo)
-        Exit Function
-    End If
-
-    ' 裁定書9 B6: 部屋あふれで表示しきれていない行があるあいだは保存しない
-    ' (切り詰められた画面が参照優先の最上位に居座るのを防ぐ)。
-    If gTruncStep(stepNo) Then
-        modUISheet.WriteNamed U2_WARN, "表示しきれていない行があるため、Step" & _
-            CStr(stepNo) & " の編集は保存しませんでした（" & gTruncNote & "）。"
         Exit Function
     End If
 
@@ -341,8 +345,16 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolea
         DrawS4 jsonText
     End Select
 
-    ' ここまで来たら画面はこの案件の内容で描き切れている(13章§2.12)。
-    modUISheet.WriteNamed CaseIdCellOf(stepNo), caseId
+    ' ここまで来たら画面はこの案件の内容で描けている(13章§2.12)。ただし
+    ' 裁定書10 m3: **部屋あふれ(切捨て)が起きた描画では案件ID表示セルを書かず
+    ' 空のまま**にする。gTruncStep は未捕捉エラーや再コンパイルで False へ戻る
+    ' 揮発性のフラグなので、それだけを保存ブロックの根拠にすると切り詰まった
+    ' 画面がそのまま保存できてしまう。セルを空に保てば B1 の一致ガード
+    ' (SaveEditedStep 冒頭)が**ブックに残る状態として**保存を止め続ける。
+    ' 再描画して切捨てが無ければ、その描画で通常どおり書かれる。
+    If Not gTruncStep(stepNo) Then
+        modUISheet.WriteNamed CaseIdCellOf(stepNo), caseId
+    End If
 
     modLog.LogUsage "sheet_drawn", caseId, "step=s" & CStr(stepNo)
     DrawStep = True

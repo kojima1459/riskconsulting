@@ -7,19 +7,15 @@ Option Explicit
 '   LoadData(分割保存と透過結合。E-22) / ResolveStepJson(参照優先。13章§2.2) /
 '   SetStatus / SetStepOutcome(E-06の書込口) / InvalidateDownstream(E-10) /
 '   RepairStates(E-12) / FreezeRound。
-' 配置: app層(12章§2)。シート名という製品固有語彙を持つため core層 へ置けない。
-' R4: 案件シートI/Oが責務そのもので12章§4のExcelトークン許可枠の1つ。見るのは
-'   案件一覧 と case_data の2枚だけ。再描画と確認ダイアログは ui層 modUICase。
-' 下位I/Oの分離(裁定書8 A-2): シートを取る・最終行・矩形読み・行削除・列名で
-'   1セル書く、の10本は modCaseStore2 へ移した(modCompanyFile2 と同型)。結果
-'   として本モジュールに素のExcelトークンは残っていないが、責務(案件2枚のI/O)
-'   は変わらないため12章§4の許可枠からは外さない。
+' 配置: app層(12章§2)。R4: 案件一覧/case_data 2枚のI/Oが責務そのもので12章
+'   §4の許可枠の1つ。再描画と確認ダイアログは ui層 modUICase。
+' 下位I/O 10本は modCaseStore2 へ分離(裁定書8 A-2。modCompanyFile2 と同型)。
+'   素のExcelトークンは残らないが責務は不変のため12章§4の許可枠から外さない。
 ' 列アクセスは列名ベース(13章冒頭)。セル書込は全て modUtilText.SetCellSafe
 '   (16章 NFR-S7①)。数値列だけは内部生成のLongなので ' SAFE:const を明示。
-' 純ロジックの分離: 採番・参照優先・状態遷移・無効化対象はシートI/Oを含まない
-'   関数へ切り出し、うち BuildCaseId / IsValidCaseId / CanTransition /
-'   ResolveDataKey の4本は14章§6が公開を宣言している(裁定書6 項目7)。規約を
-'   シートI/Oに閉じ込めると層(a)から検査できない(W2aの実害)。
+' 純ロジック(採番・参照優先・状態遷移・無効化対象)はシートI/O無しの関数へ分離。
+'   BuildCaseId / IsValidCaseId / CanTransition / ResolveDataKey の4本は14章
+'   §6が公開を宣言(裁定書6 項目7。シートI/Oに閉じると層(a)から検査できない)。
 ' ============================================================================
 
 ' --- シート名(13章§2.1・§2.2) ---
@@ -235,8 +231,7 @@ End Function
 '   C-YYYYMMDD-NNN。当日の使用済み最大連番の次から始め、衝突したら E0605 を
 '   記録して次の番号へ(999で枯渇)。失敗時は ""(例外は投げない)。channel /
 '   kanji / bid / reins / industry_name は §6 のシグネチャが受け取らないため
-'   空のまま起こす(13章§2.1「必須(○)の適用時点」= 実行前検証で埋まっていれば
-'   よい。裁定書6 項目9)。
+'   空のまま起こす(13章§2.1=実行前検証で埋まればよい。裁定書6 項目9)。
 Public Function NewCase(ByVal company As String, ByVal industryCode As String, _
                         ByVal caseType As String) As String
     On Error GoTo Failed
@@ -326,10 +321,10 @@ Failed:
 End Function
 
 ' SaveData - case_data へ1本のテキストを分割保存する(13章§2.2・16章 E-22)。
-'   32,000字ごとの断片 seq=1.. で置換する。content が空なら削除だけで True。
-'   **2相書込**(裁定書9 B13): 新断片を仮seq帯へ書き切ってから旧行を消す(実体は
-'   modCaseStore2.ReplaceSeqRows。途中失敗で旧行は1行も消えず False)。断片は
-'   SetCellSafe を通る(先頭式記号の "'" 前置は .Value 読み戻しで元へ戻る)。
+'   32,000字ごとの断片 seq=1.. で置換。content が空なら削除だけで True。
+'   **2相書込**(裁定書9 B13): 新断片を仮seq帯へ書き切ってから旧行を消す(実体
+'   は modCaseStore2.ReplaceSeqRows。途中失敗で旧行は消えず False)。断片は
+'   SetCellSafe を通る("'" 前置は .Value 読み戻しで元へ戻る)。
 Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
                          ByVal content As String) As Boolean
     On Error GoTo Failed
@@ -377,6 +372,7 @@ End Function
 ' LoadData - 断片を seq 順に結合して返す(透過処理)。該当が無ければ ""。
 '   仮seq帯(CS_SEQ_BAND超=2相書込の書き途中)は読まない。完全性検査(裁定書9
 '   B13): seq 1..maxSeq に欠番があれば詰めずに E0604 を記録して ""(fail-closed)。
+'   裁定書10 M6: 本seq帯が空でも仮seq帯に行が残っていれば E0604 を記録して ""。
 Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String
     On Error GoTo Failed
 
@@ -408,15 +404,24 @@ Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As Str
 
     ' 1周目: seq の最大値=断片数を求める(仮seq帯は対象外)。
     Dim maxSeq As Long
+    Dim bandLeft As Boolean
     Dim r As Long
     For r = 2 To lastRow
         If modCaseStore2.MatchesRow(blk, r, cCase, cKey, wantCase, wantKey) Then
             Dim sq1 As Long
             sq1 = modCaseStore2.ToLongSafe(blk(r, cSeq))
             If sq1 > maxSeq And sq1 <= CS_SEQ_BAND Then maxSeq = sq1
+            If sq1 > CS_SEQ_BAND Then bandLeft = True
         End If
     Next r
-    If maxSeq < 1 Then Exit Function
+    If maxSeq < 1 Then
+        ' M6: 本帯空+仮帯残存=相2後の失敗痕跡。
+        If bandLeft Then
+            modLog.LogError "E0604", "modCaseStore.LoadData", _
+                            "seq_band_orphan:" & wantKey
+        End If
+        Exit Function
+    End If
 
     ' 2周目: seq を添字として配置し、行の実在を seen へ記録する。
     Dim parts() As String
@@ -529,14 +534,13 @@ Failed:
     PromoteTier = False
 End Function
 
-' SetStepOutcome - 16章 E-06 が要求する last_ok_step / failed_step の【書込口】
-'   (裁定書8 A-2 で14章§6へ宣言・新設)。modPipeline の成功経路と失敗経路が
-'   ここを通る。status は動かさない(遷移の唯一の口は SetStatus)。
-'   lastOkStep: 0..4 を書く。**負値は「更新しない」**。E-06 の「失敗時は
-'     last_ok_step を更新しない」を、呼び出し側の分岐ではなく引数で表す。
-'   failedStep: "" は失敗の記憶を消す(13章§2.1「Step成功時に空へ戻す」)。
-'     非空は enum s1/s2/s3/s4/s2c/s3c のみ受け付け、表に無い値は E0101 で
-'     拒否して1列も書かない(黙って未定義値を残さない)。
+' SetStepOutcome - 16章 E-06 の last_ok_step / failed_step の【書込口】(裁定書8
+'   A-2 で14章§6へ宣言)。modPipeline の成功・失敗経路がここを通る。status は
+'   動かさない(遷移の唯一の口は SetStatus)。
+'   lastOkStep: 0..4 を書く。**負値は「更新しない」**(E-06「失敗時は更新
+'     しない」を引数で表す)。
+'   failedStep: "" は失敗の記憶を消す(13章§2.1)。非空は enum s1/s2/s3/s4/
+'     s2c/s3c のみ。表に無い値は E0101 で拒否して1列も書かない。
 Public Function SetStepOutcome(ByVal caseId As String, ByVal lastOkStep As Long, _
                                ByVal failedStep As String) As Boolean
     On Error GoTo Failed
@@ -641,12 +645,10 @@ Failed:
 End Sub
 
 ' RepairStates - 起動時の状態整合修復(16章 E-12・12章§2.1 手順③)。
-'   (1) sN_json(合格済のみ)の最大Stepと last_ok_step を突合し小さいほうを採る
-'   (2) failed_step が非空なら status=error を維持し failed_step 自体は
-'       書き換えない(失敗の記憶を消さない) (3) 導出に使うのは sN_json だけ
-'   (4) ui_lock は modUIProgress のモジュール変数でプロセス終了時に自然消滅
-'       (E-11/E-51)。app層から ui層は呼べない(R1)ので何もしない (5) 修復件数を
-'       返す(0件でも起動は続行)。
+'   (1) sN_json(合格済のみ)の最大Stepと last_ok_step の小さいほうを採る
+'   (2) failed_step 非空なら status=error 維持・failed_step は書き換えない
+'   (3) 導出は sN_json だけ (4) ui_lock は modUIProgress のモジュール変数で
+'       自然消滅(E-11/E-51。R1により何もしない) (5) 修復件数を返す。
 Public Function RepairStates() As Long
     On Error GoTo Failed
 

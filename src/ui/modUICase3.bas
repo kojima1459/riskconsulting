@@ -31,11 +31,12 @@ Private Const U3_SRC As String = "modUICase3"
 Private Const U3_SHEET As String = "案件入力"
 Private Const U3_CASES As String = "案件一覧"
 Private Const U3_SCAN_COLS As Long = 32
-' 13章§2.11(裁定書9 B22): 続き欄への分割幅。開くたびに JoinField が本欄と
-' 続き欄を vbLf で連結するため、**連結で増える区切り文字ぶんの余白**を確保
-' しないと、往復のたびに末尾が枠から溢れて削れる。1セル上限32,000字に対して
-' 連結余白8字を引いた値を使う。
-Private Const U3_CHUNK As Long = 31992
+' 13章§2.11(裁定書10 M3): 続き欄への分割幅。JoinField は本欄と続き欄を
+' **区切り文字なし**で連結するため、SplitForCells の機械的な切断と完全に
+' 可逆であり、往復で1字も増えない。したがって余白を引かず1セル上限
+' 32,000字ちょうどを使う(裁定書9 B22 の 31992 は往復8回ぶんの猶予に
+' すぎず、9回目以降は再び溢れる緩和策だった)。
+Private Const U3_CHUNK As Long = 32000
 Private Const U3_THIN_HP As Long = 200        ' 16章 E-02: HPが薄いと判断する字数
 Private Const U3_RESEARCH_ROOM As Long = 20   ' 追加収集ブロックの表示上限行
 
@@ -497,9 +498,21 @@ Public Function SaveCaseInput(ByVal caseId As String) As Boolean
     ' (5) 16章 E-02 入力が薄い場合の警告(続行可)。
     Dim hpLen As Long
     hpLen = Len(JoinField("ci_paste_hp_1", "ci_paste_hp_2;ci_paste_hp_3"))
+
+    ' (6) 裁定書10 M4: 成功時の案内は hm_warning を上書きし MsgBox も出すため、
+    '     B22 で保存を落とした欄名を**必ず案内に含める**。含めないと、続き欄に
+    '     収まらず1欄まるごと保存しなかったことが利用者に伝わらないまま
+    '     「保存できた」という案内だけが残る(サイレント部分保存)。
+    Dim overText As String
+    If LenB(gOverBuf) > 0 Then
+        overText = "続き欄に収まらないため保存しなかった欄があります（" & gOverBuf & "）。"
+    End If
+
     If hpLen < U3_THIN_HP Then
         Notice "HPテキストが" & CStr(hpLen) & "字と少なめです。" & _
-               "このまま実行できますが、一般論に近い出力になりやすくなります。"
+               "このまま実行できますが、一般論に近い出力になりやすくなります。" & overText
+    ElseIf LenB(overText) > 0 Then
+        Notice "案件入力を保存しました。" & overText
     End If
 
     CountChars
@@ -651,7 +664,11 @@ Private Sub SavePasteFields(ByVal caseId As String)
     End If
 End Sub
 
-' 16章 E-22: 本欄・続き欄を末尾番号の昇順に vbLf で連結する(空欄はスキップ)。
+' 16章 E-22 / 裁定書10 M3: 本欄・続き欄を末尾番号の昇順に **区切り文字なしで**
+' 連結する(空欄はスキップ)。分割側 modUtil.SplitForCells は原文を字数で機械的に
+' 切っているだけなので、区切りを入れずに戻せば原文と1字も違わない
+' (**完全に可逆**)。旧実装は境界へ vbLf を1つ挿入しており、描画->保存の往復の
+' たびに原文が変質し、最終的に枠から溢れて末尾が削れていた。
 Private Function JoinField(ByVal baseRange As String, ByVal contRanges As String) As String
     Dim targets() As String
     targets = Split(baseRange & ";" & contRanges, ";")
@@ -662,10 +679,7 @@ Private Function JoinField(ByVal baseRange As String, ByVal contRanges As String
     For i = LBound(targets) To UBound(targets)
         If LenB(targets(i)) > 0 Then
             v = modUISheet.ReadNamed(targets(i))
-            If LenB(v) > 0 Then
-                If LenB(acc) > 0 Then acc = acc & vbLf
-                acc = acc & v
-            End If
+            If LenB(v) > 0 Then acc = acc & v
         End If
     Next i
     JoinField = acc

@@ -1,4 +1,6 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.1
+
+> v2.5.1（裁定書10: W4.2 収束ウェーブ）: §6へ **`modPipeline2.ResetDeepOutcome`**（N9。deep outcome の明示リセット口。M1により `RunStep` 冒頭の自動リセットを廃止し、`LastDeepOutcome` は「その実行で最後に立った非空 outcome」を返す契約へ改めた）を新設し、**`modUICase5` の Public 4本**（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`。W4.1の30,000字契約分割の追認）を「ui層内部ヘルパ」として登記した。N6（`ib_body_draft`）は**廃止**し「受信箱の投函下書き行」方式（13章§2.6・C1）へ差し替え。あわせて `AnswerMemoCount` を「常に数える」契約へ（M5。別案件判定は呼出側が `hs_case_id` で行う）、`LoadData` へ仮seq帯の残留検査（M6）を追記した。
 
 > v2.5（裁定書9: W4.1 最終修正ウェーブ）: §6へ新設3本を宣言した。**`modPipeline2.LastDeepOutcome`**（N1。E-35/E-36 の警告を ui層へ渡す唯一の口）・**`modCaseStore.PromoteTier`**（N2。案件一覧 `dossier_tier` の唯一の書込口。v2.4.7 が「本節の裁定事項」と書いた未解決(a)の解消）・**`modExportHearing.AnswerMemoCount`**（N8。手書き回答の上書き確認の要否判定）。あわせて `modCompanyFile2.DossierSaveAndClose` を Boolean へ改め（N3）、`SetStatus` が遷移検査を通さない設計を明記し、`exported` / `feedback_done` の結線先・`AppendServiceGap` の呼出点・`MenuIdExists` 系5本の二次照合の呼出点・企業ドシエのファイル名8桁を company 由来とする例外（13章§2.8）を注記した。**本裁定で許可した新設名は N1～N8 の8件のみ**であり、これ以外の公開関数・名前付きレンジを新設しない。あわせて §6 の末尾へ**名前付きレンジ・図形ボタン・入力列の登記表**（N4～N7）を新設し、本章が関数名だけでなく名前全体の唯一の正であることを表に固定した。
 
@@ -700,14 +702,22 @@ Public Function DeepRouteOf(ByVal cfgDeepTransport As String) As String
 '   **経路の切替そのものは未結線**（本節の `CallStep` に呼び出し単位で経路を上書きする
 '   口が無い）。RunDeep は指定がある間その事実を usage_log に残す（黙って無視しない）
 Public Function LastDeepOutcome() As String
-' 直近の `RunStep` が回した入念パイプの結末（裁定書9 N1・B9）。値は `DeepOutcomeOf` の4値の
-'   うち**警告を伴う2値**（`critique_skipped` / `revision_discarded`）と、警告が要らない場合の
-'   `""` の3通り。**`RunStep` の開始時に必ず "" へリセットする**（前回の結果が次の実行へ持ち越さ
-'   ない）。ui層（`modUIHome.RunStepUi` / `RunAllUi`）は成功分岐でこの値を読み、非空なら
-'   `DeepWarningOf` の文言を `hm_warning` へ出す（16章 E-35/E-36 の逐語表示の唯一の経路）。
+' 直近の実行が回した入念パイプの結末（裁定書9 N1・B9。契約はv2.5.1・裁定書10 M1で改訂）。
+'   値は `DeepOutcomeOf` の4値のうち**警告を伴う2値**（`critique_skipped` / `revision_discarded`）
+'   と、警告が要らない場合の `""` の3通り。**`RunStep` は本値をリセットしない**。リセットは
+'   下の `ResetDeepOutcome`（N9）のみが行い、ui層（`modUIHome.RunStepUi` / `HomeRunAll`）が
+'   **実行開始前に1回**呼ぶ。したがって本関数は「その実行で最後に立った非空 outcome」を返す
+'   （一括実行では Step2/3 で立った outcome が Step4 の実行後も残る＝E-35/E-36 警告が
+'   `RunAll` でも消えない。旧契約の「RunStep 開始時リセット」は一括実行で警告を握り潰すため廃止）。
+'   ui層は成功分岐でこの値を読み、非空なら `DeepWarningOf` の文言を `hm_warning` へ出す
+'   （16章 E-35/E-36 の逐語表示の唯一の経路）。
 '   **`ShowWarning vbNullString` によるクリアより後で書く**（冒頭のクリアに消されない順序）。
 '   モジュール変数による状態保持は本関数を**例外として許可する**（`broken_json_once` に次ぐ
 '   2例目。理由: `RunStep` の Boolean 戻り値の契約を変えずに E-35/E-36 を ui へ渡す口が他に無い）
+Public Sub ResetDeepOutcome()
+' deep outcome の**明示リセット口**（v2.5.1・裁定書10 N9/M1）。`LastDeepOutcome` の内部状態を
+'   "" へ戻す。呼ぶのは ui層（`modUIHome.RunStepUi` / `HomeRunAll`）の**実行開始前に1回**だけ。
+'   `RunStep` / `RunAll` 自身は呼ばない（実行の途中で立った警告を実行自身が消さない）
 
 ' === app: modSparring（PL-04 壁打ち。T-27。裁定書8 B-9）===
 ' 自由対話（スキーマなし）。呼び出しは `CallChat` の1本だけで、成否は `ByRef ok`
@@ -845,7 +855,10 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, ByVal 
 Public Function LoadData(ByVal caseId As String, ByVal dataKey As String) As String
 ' 保存された断片を seq 昇順に連結して返す。**完全性を検査する**（裁定書9 B13）: seq 1..maxSeq が
 '   1つでも欠けていたら詰めて返さず、E0604 を記録して "" を返す（切れたJSONを正常値として
-'   返さない＝fail-closed）。当該 data_key が1行も無い場合は従来どおり "" （欠損ではない）
+'   返さない＝fail-closed）。当該 data_key が1行も無い場合は従来どおり "" （欠損ではない）。
+'   **仮seq帯の残留検査**（v2.5.1・裁定書10 M6）: 「本seq帯が空だが仮seq帯（2相書込の作業帯）に
+'   行が残っている」状態を検査し、該当時は E0604 を記録して "" を返す。相2（旧行削除）成功後・
+'   相3（seq帯確定）前に落ちたケースを「データが無いこと」と区別できない静かな消失にしない
 Public Function ResolveStepJson(ByVal caseId As String, ByVal stepNo As Long) As String
 ' 下流Stepが参照すべきJSONを一元解決する（優先順の正は13章§2.2）。
 ' N=2,3 は sN_edited > sNr_json > sN_json、S1/S4 は sN_edited > sN_json。呼び出し側で個別に分岐しない
@@ -1056,6 +1069,22 @@ Public Function EnumEn(ByVal groupName As String, ByVal labelText As String) As 
 '   （13章§2.2「表に無いラベルは検証不合格」。呼び出し側は `""` を受けたら原文をそのまま
 '   JSONへ載せ `modValidate` に弾かせる＝黙って直さない）
 
+' === ui: modUICase5（ui層内部ヘルパ。W4.1分割裁定＝30,000字契約による modUICase2 の分割先。
+'      v2.5.1・裁定書10 §1（M2解消）で本節へ登記） ===
+' 呼んでよいのは modUICase2 だけ（ui層内部の下位ヘルパであり、公開契約面の入口ではない）。
+'   変換表（19章§3）と列定義（13章§2.12-§2.15）は持たない（modUICase / modUICaseFmt が唯一持つ）。
+Public Function SerializeBody(ByVal stepNo As Long) As String
+' シート → JSON の逆シリアライズ本体（13章§2.2 規約1/2/3/5）。組めなければ ""。
+'   例外の捕捉と E0302 の記録は呼び出し側 modUICase2.SerializeStep が持つ（捏造しない口を1本に保つ）
+Public Function ColIndexes(ByVal ws As Object, ByVal headerRow As Long, _
+                           ByVal colSpec As String) As Variant
+' ブロックの列引き当て（ヘッダ行から colSpec の各列番号を解決）。描画側（modUICase2）と
+'   読取側（本モジュール）が**同じ1本**を呼ぶことで、列の引き当て方が2箇所へ分かれない
+Public Function ColCount(ByVal colSpec As String) As Long   ' colSpec の列数
+Public Function RoomOf(ByVal anchorName As String) As Long
+' ブロックの部屋数。13章§2.9「行番号を仮定しない」に従い、次のブロックのアンカー行から
+'   動的に決める（確保行数を定数で持たない）
+
 ' === app: modExportHtml / modExportPpt / modExportHearing ===
 Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
     ' ""=成功 / 非空=失敗理由（コードは E0502。16章E-48）。S1+S2+S3のJSONを固定HTMLテンプレート
@@ -1101,10 +1130,15 @@ Public Function BuildHearingSheet(ByVal caseId As String) As Boolean
 '   訪問後に `answer_memo` へ書き込まれた手書き回答は失われる。VBAの書込は Undo できないので、
 '   呼び出し側（ui層）が下の `AnswerMemoCount` で事前に数え、1行以上なら確認を挟む
 Public Function AnswerMemoCount(ByVal caseId As String) As Long
-' ヒアリングシートの `answer_memo` 列の**非空行数**（裁定書9 N8・B12）。シートが無い・見出しが
-'   無い・当該案件のシートでない場合は 0（読めないことを「回答あり」と誤認しない）。
-'   `modUIHome` はこの値が 1 以上のときだけ `MsgBox`（vbYesNo）で上書き確認を出し、
-'   No なら `BuildHearingSheet` を呼ばずに中止する（16章 E-10 の下流無効化と同じ作法）。
+' ヒアリングシートの `answer_memo` 列の**非空行数**（裁定書9 N8・B12。契約はv2.5.1・裁定書10 M5で改訂）。
+'   シートが無い・見出しが無い場合は 0（読めないことを「回答あり」と誤認しない）。
+'   **`hs_case_id` が引数 caseId と一致しなくても数える**（ヒアリングシートはブックに1枚しか
+'   なく、別案件の手書き回答こそ守るべき対象。旧契約の「当該案件のシートでない場合は 0」は
+'   守るべき条件でちょうど素通りする fail-open だったため廃止）。
+'   `modUIHome` はこの値が 1 以上のとき `MsgBox`（vbYesNo）で上書き確認を出し、No なら
+'   `BuildHearingSheet` を呼ばずに中止する（16章 E-10 の下流無効化と同じ作法）。確認文言は
+'   `hs_case_id` を読み分ける: caseId と不一致かつ 1 以上なら
+'   「別案件（<hs_case_id>）の手書き回答が残っています」の別案件確認文言にする。
 '   本関数は数えるだけで、シートを1セルも書き換えない
 
 ' === test: modMockLlm（本体内mockトランスポート。§4(a)・12章§2 test層） ===
@@ -1133,15 +1167,17 @@ Public Sub RunAllExcelTests()   ' 層(b)=Excel固有E2Eスモークの入口(12�
 - **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
 - **`modValidate` の CheckS2C / CheckS3C**、**`modSchemas` の SchemaS2C / SchemaS3C** は入念モード用の追加分（15章§4.5～4.6・§7の表）
 - 呼出前の走査: 外部へ送るテキスト（CallStep / CallChat の systemPrompt・userPrompt、企業ドシエファイルの書出、HTMLレポート出力）は送信・保存の直前に `modPii` を通す（16章 E-05／E-31。走査結果は run_log と dossier_meta に記録）
-- **名前付きレンジ・図形ボタン・入力列の新設（v2.5・裁定書9 §1）**: 本章§6は公開関数だけでなく**名前の唯一の正**でもある。v2.5で新設を許可したのは次の5件のみであり、実体の定義（配置・列順・書式）は各章が持つ。
+- **名前付きレンジ・図形ボタン・入力列の新設（v2.5・裁定書9 §1。v2.5.1・裁定書10で改訂）**: 本章§6は公開関数だけでなく**名前の唯一の正**でもある。新設を許可したのは次の表のみであり、実体の定義（配置・列順・書式）は各章が持つ。
 
   | # | 名前 | 種別 | 定義の正 | 用途 |
   |---|---|---|---|---|
   | N4 | `s1_case_id` / `s2_case_id` / `s3_case_id` / `s4_case_id` | 名前付きレンジ（単点セル・読取専用） | 13章§2.12 | S1～S4の案件ID表示。`DrawStep` が書き、`SaveEditedStep` が突合する（B1） |
-  | N5 | `judge_to` | 受信箱シートの入力列 | 13章§2.6・19章§3 | 判定の入力口。`SetInboxJudgement` の `status` 引数へ渡す（B2） |
-  | N6 | `ib_body_draft` | 名前付きレンジ（単点セル） | 13章§2.6 | 投函本文の下書き（`InputBox` 255字上限の回避。B18） |
+  | N5 | `judge_to` | 受信箱シートの入力列 | 13章§2.6・19章§3 | 判定の入力口。日本語ラベル（採択／条件付き保留／却下）で選び、ui層が `EnumEn` で機械値へ変換して `SetInboxJudgement` の `status` 引数へ渡す（B2・裁定書10 M7） |
+  | N6 | **廃止**（旧 `ib_body_draft`） | - | 13章§2.6 | v2.5.1・裁定書10 C1で**「受信箱の投函下書き行」方式へ差し替え**。名前付きレンジは作らない（受信箱は columns のみのフラットシートで、台帳の現機構では header_fields の名前付きレンジを作れない）。投函本文は受信箱テーブルの先頭データ行（id列マーカー「(下書き)」）から読む |
   | N7 | `btn_round_freeze` | HOMEの図形ボタン（caption「第2ラウンド開始」） | 11章§2 | `modCaseStore.FreezeRound` の起動口（A-2） |
+  | N9 | `modPipeline2.ResetDeepOutcome` | 公開関数（宣言は本節の modPipeline2） | 本章§6 | deep outcome の明示リセット口。ui層が実行開始前に1回呼ぶ（裁定書10 M1） |
   | - | 業種ドロップダウンの隠しレンジ | 名前付きレンジ（既存作法の内部レンジ） | 13章§2.11 | `ci_industry_code` / `ci_industry_name` の入力規則の参照元（`RestoreDataKeyHiddenRange` と同作法であり、公開名を新設しない） |
+  | - | `modUICase5` の Public 4本（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`） | ui層内部ヘルパ（W4.1分割裁定） | 本章§6 | 30,000字契約による `modUICase2` の分割先。呼んでよいのは modUICase2 のみ（裁定書10 §1でM2を解消） |
 
   これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。
 

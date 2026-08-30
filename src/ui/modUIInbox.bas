@@ -16,9 +16,12 @@ Option Explicit
 ' 11章のワイヤーが持つ「関心度」「詳細ペイン」は 13章§2.6 に列も名前付きレンジも
 ' 無いため、**ラベル図形**で描く(表のデータ面を勝手に増やさない)。
 '
-' 判定の語彙(status / drop_type / revive_tag)は 13章§2.6 が**機械値のまま**持つ列
-' なので、日本語変換は行わない(19章§3の変換表の対象外。tools/enum_check.py の
-' EXCLUDED に理由つきで宣言してある)。
+' 受信箱の語彙(status / source_kind / drop_type / revive_tag)は 13章§2.6 が
+' **機械値のまま**持つ列なので日本語変換は行わない(19章§3の変換表の対象外。
+' tools/enum_check.py の EXCLUDED に理由つきで宣言してある)。
+' 例外は判定の**入力列** judge_to で、ここだけは利用者が選ぶ列なので日本語ラベル
+' (採択/条件付き保留/却下)で見せ、modUICase.EnumEn("inbox_judge_to", ...) で
+' 機械値へ戻してから store へ渡す(裁定書10 M7・19章§3 inbox.judge_to)。
 ' ============================================================================
 
 Private Const UI2_SRC As String = "modUIInbox"
@@ -52,7 +55,54 @@ Public Sub EnsureInboxButtons()
     modUISheet.EnsureLabel ws, UI2_LBL_INTEREST, "関心度: (集計なし)", 2, 18, 260#, 16#
     modUISheet.EnsureLabel ws, UI2_LBL_DIAG, "診断: (行を選んで［診断を表示］)", _
                            4, 18, 320#, 90#
+
+    ' 裁定書10 C1: 投函下書き行を常設する(起動のたびに冪等に確かめる)。
+    EnsureDraftRow ws
 End Sub
+
+' ============================================================================
+' 投函下書き行(13章§2.6・裁定書10 C1)
+' ----------------------------------------------------------------------------
+' 受信箱テーブルの**先頭データ行(ヘッダ直下)**を[＋投函]の入力欄として常設し、
+' inbox_id 列に固定マーカーを置く。判断台帳の下書き行と同じ作法であり、
+' InputBox の255字上限を回避しつつ、名前付きレンジ(旧 ib_body_draft)を作れない
+' フラットシートでも成立する(台帳の現機構は columns だけのシートに
+' header_fields の名前付きレンジを作れない。builder は変更しない)。
+' 戻り値=下書き行の行番号(0=見出しが読めない等で用意できなかった)。
+' ============================================================================
+Private Function EnsureDraftRow(ByVal ws As Object) As Long
+    On Error GoTo Zero0
+    If ws Is Nothing Then Exit Function
+
+    Dim hdr As Variant
+    hdr = modUISheet.HeaderOf(ws, 1, 1, UI2_SCAN_COLS)
+    If IsEmpty(hdr) Then Exit Function
+
+    Dim colNo As Long
+    colNo = modUtil.FindHeaderCol(hdr, "inbox_id")
+    If colNo <= 0 Then Exit Function
+
+    ' 既にマーカー行があればそれが下書き行(行番号には依存しない)。
+    Dim lastRow As Long
+    lastRow = modUISheet.LastRowOf(ws)
+    Dim r As Long
+    For r = 2 To lastRow
+        If Trim$(modUISheet.CellText(ws, r, colNo)) = modInboxStore.IB_DRAFT_MARK Then
+            EnsureDraftRow = r
+            Exit Function
+        End If
+    Next r
+
+    ' 無ければヘッダ直下へ用意する。既存データが1行目の下に居るときだけ行を
+    ' 差し込む(空のシートに空行を増やさない)。
+    If LenB(Trim$(modUISheet.CellText(ws, 2, colNo))) > 0 Then ws.Rows(2).Insert
+    modUISheet.PutText ws, 2, colNo, modInboxStore.IB_DRAFT_MARK, _
+                       UI2_SHEET & "/inbox_id"
+    EnsureDraftRow = 2
+    Exit Function
+Zero0:
+    EnsureDraftRow = 0
+End Function
 
 ' ============================================================================
 ' RefreshInbox - 関心度(FR-17)の表示とHOMEの件数の更新
@@ -105,10 +155,12 @@ End Function
 ' ============================================================================
 ' 投函(11章 [＋投函])。16章 E-05(2): 本文のPII検知は登録をブロックする。
 ' ----------------------------------------------------------------------------
-' 裁定書9 B18(13章§2.6・N6): 本文は InputBox(既定フォントで255字前後が上限)
-'   ではなく、受信箱シート上の下書きセル ib_body_draft(名前付きレンジ)から
-'   読む。32,000字超は打ち切って警告(16章 E-22)。起票に成功したら下書き
-'   セルを空へ戻す。テーマは短文なので InputBox のまま。
+' 裁定書10 C1(13章§2.6): 本文は InputBox(既定フォントで255字前後が上限)でも
+'   名前付きレンジ(旧 N6 ib_body_draft。**廃止**)でもなく、受信箱テーブルの
+'   **投函下書き行**(ヘッダ直下・id列マーカー)の body 列から読む。
+'   32,000字超は打ち切って警告(16章 E-22)。起票に成功したら下書き行の入力列を
+'   空へ戻す(行そのものは消さない)。テーマは下書き行の theme 列に書けるが、
+'   短文なので空なら従来どおり InputBox で尋ねる。
 ' ============================================================================
 Public Sub InboxPost()
     If Not modUIProgress.TryEnterUiLock("投函") Then Exit Sub
@@ -116,10 +168,26 @@ Public Sub InboxPost()
 
     modUIProgress.ParkFocus
 
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(UI2_SHEET)
+    If ws Is Nothing Then GoTo Done
+
+    Dim draftRow As Long
+    draftRow = EnsureDraftRow(ws)
+    If draftRow <= 0 Then
+        Notice "受信箱シートの見出しを読み取れませんでした。ブックの構成をご確認ください。"
+        GoTo Done
+    End If
+
+    Dim hdr As Variant
+    hdr = modUISheet.HeaderOf(ws, 1, 1, UI2_SCAN_COLS)
+    If IsEmpty(hdr) Then GoTo Done
+
     Dim bodyText As String
-    bodyText = Trim$(modUISheet.ReadNamed("ib_body_draft"))
+    bodyText = Trim$(ColText(ws, hdr, draftRow, "body"))
     If LenB(bodyText) = 0 Then
-        Notice "本文を受信箱シートの下書きセル（ib_body_draft）に貼ってから押してください。"
+        Notice "受信箱の投函下書き行（id列が「" & modInboxStore.IB_DRAFT_MARK & _
+               "」の行）の body 欄に本文を貼ってから押してください。"
         GoTo Done
     End If
 
@@ -130,9 +198,17 @@ Public Sub InboxPost()
     End If
 
     Dim themeText As String
-    themeText = Trim$(CStr(InputBox("テーマ（短く。関心度の集計はこの文言でまとめます）", _
-                                    "受信箱への投函")))
+    themeText = Trim$(ColText(ws, hdr, draftRow, "theme"))
+    If LenB(themeText) = 0 Then
+        themeText = Trim$(CStr(InputBox("テーマ（短く。関心度の集計はこの文言でまとめます）", _
+                                        "受信箱への投函")))
+    End If
     If LenB(themeText) = 0 Then GoTo Done
+
+    ' source_kind は下書き行の入力列(機械値のenum)。空なら投函の既定値。
+    Dim sourceKind As String
+    sourceKind = Trim$(ColText(ws, hdr, draftRow, "source_kind"))
+    If LenB(sourceKind) = 0 Then sourceKind = "member_post"
 
     If modPii.HasPii(themeText & vbLf & bodyText) Then
         modLog.LogError "E0103", UI2_SRC & ".InboxPost", _
@@ -142,14 +218,18 @@ Public Sub InboxPost()
     End If
 
     Dim inboxId As String
-    inboxId = modInboxStore.NewInboxItem("member_post", themeText, bodyText)
+    inboxId = modInboxStore.NewInboxItem(sourceKind, themeText, bodyText)
     If LenB(inboxId) = 0 Then
         Notice "投函できませんでした。err_log をご確認ください。"
         GoTo Done
     End If
 
-    ' 起票に成功したら下書きセルを空へ戻す(13章§2.6)。
-    modUISheet.WriteNamed "ib_body_draft", vbNullString
+    ' 裁定書10 C1: 起票に**成功したときだけ**下書き行の入力列を空へ戻す
+    ' (失敗したら利用者の入力を残す。判断台帳の下書き行と同じ作法=B3)。
+    ' マーカーと行そのものは常設なので消さない。
+    ClearDraftCol ws, hdr, draftRow, "body"
+    ClearDraftCol ws, hdr, draftRow, "theme"
+    ClearDraftCol ws, hdr, draftRow, "source_kind"
 
     RefreshInbox
     modUIHome.RefreshHome
@@ -288,17 +368,27 @@ Public Sub InboxSaveJudgement()
         GoTo Done
     End If
 
+    Dim judgeToJa As String
     Dim judgeTo As String
     Dim dropType As String
     Dim reviveTag As String
     Dim dueText As String
-    judgeTo = Trim$(ColText(ws, hdr, rowNo, "judge_to"))
+    judgeToJa = Trim$(ColText(ws, hdr, rowNo, "judge_to"))
     dropType = ColText(ws, hdr, rowNo, "drop_type")
     reviveTag = ColText(ws, hdr, rowNo, "revive_tag")
     dueText = ColText(ws, hdr, rowNo, "revive_due")
 
-    If LenB(judgeTo) = 0 Then
+    If LenB(judgeToJa) = 0 Then
         Notice "judge_to 列で判定先（採択／条件付き保留／却下）を選んでから押してください。"
+        GoTo Done
+    End If
+
+    ' 裁定書10 M7: judge_to 列は日本語ラベルで選ばせる(19章§3 inbox.judge_to)。
+    ' 機械値へ戻すのは modUICase.EnumEn だけであり、表に無いラベルは "" が返る
+    ' (推測で近い値へ寄せない。13章§2.2 と同じ fail-closed)。
+    judgeTo = modUICase.EnumEn("inbox_judge_to", judgeToJa)
+    If LenB(judgeTo) = 0 Then
+        Notice "judge_to 列は一覧から選んでください（採択／条件付き保留／却下）: " & judgeToJa
         GoTo Done
     End If
 
@@ -331,6 +421,15 @@ Private Function IsDateText(ByVal s As String) As Boolean
     If LenB(Trim$(s)) = 0 Then Exit Function
     IsDateText = IsDate(s)
 End Function
+
+' 下書き行の入力列を1つ空へ戻す(列が無ければ何もしない)。
+Private Sub ClearDraftCol(ByVal ws As Object, ByVal hdr As Variant, _
+                          ByVal rowNo As Long, ByVal colName As String)
+    Dim colNo As Long
+    colNo = modUtil.FindHeaderCol(hdr, colName)
+    If colNo <= 0 Then Exit Sub
+    modUISheet.PutText ws, rowNo, colNo, vbNullString, UI2_SHEET & "/" & colName
+End Sub
 
 Private Function ColText(ByVal ws As Object, ByVal hdr As Variant, ByVal rowNo As Long, _
                          ByVal colName As String) As String

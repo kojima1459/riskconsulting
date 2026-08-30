@@ -65,8 +65,9 @@ Private Const P2_RES_CALL As String = "call_failed"
 '   revision_discarded)。**モジュール変数による状態保持の例外2例目**
 '   (broken_json_once に次ぐ。裁定書9 N1・14章§6)。理由: RunStep の Boolean
 '   戻り値の契約を変えずに E-35/E-36 警告を ui層 へ渡す口が他に無い。
-'   リセットは RunDeep の入口(=RunStep が毎実行の開始時に通す)で必ず行い、
-'   前回の結果を次の実行へ持ち越さない。読む口は LastDeepOutcome のみ。
+'   リセットは ResetDeepOutcome(裁定書10 N9)の1点のみで行う。ui層が実行の
+'   開始時に1回だけ呼び、そこから実行の終わりまで持ち越す(一括実行で Step2/3 の
+'   結末が Step4 に消されないため)。読む口は LastDeepOutcome のみ。
 Private mLastDeepOutcome As String
 
 ' 1パイプ分の文脈。Check系は純関数でJSONの外側の文脈を引数で受ける(14章§6)
@@ -97,15 +98,12 @@ End Type
 '   戻り値 False = 対象Stepでない / 生成版や案件文脈が読めない / 経路そのものが
 '     失敗した(16章 E-14からE-16)。
 '   **戻り値で本体Stepの成否を左右しない**のが契約。呼び出し側は握りつぶしてよい。
-'   副作用(裁定書9 N1): 入口で LastDeepOutcome を必ず "" へリセットする。
-'   modPipeline.RunStep は毎実行の開始時に stepNo=0 で呼び、このリセットだけを
-'   通す(0 は対象外検査で即 False。パイプは走らない)。
+'   副作用は持たない(裁定書10 M1)。LastDeepOutcome のリセットはここでは行わず
+'   ResetDeepOutcome(N9)だけが行う。ここでリセットすると一括実行で Step3 の
+'   RunDeep が Step2 の結末を消してしまい、E-35/E-36 警告が画面に出なくなる。
 ' ============================================================================
 Public Function RunDeep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
     On Error GoTo Failed
-
-    ' N1: 前回の deep outcome を持ち越さない(リセットはこの1点のみ)。
-    mLastDeepOutcome = vbNullString
 
     If stepNo <> 2 And stepNo <> 3 Then Exit Function
 
@@ -297,14 +295,24 @@ Private Sub RecordOutcome(ByRef d As TDeepCtx, ByVal outcome As String)
     modLog.LogUsage "deep_" & outcome, d.caseId, detailText
 End Sub
 
-' LastDeepOutcome - 直近 RunStep が回した入念パイプの結末(裁定書9 N1・B9)。
-'   値は ""(警告なし) / critique_skipped / revision_discarded の3通りのみ。
-'   ui層(modUIHome.RunStepUi / RunAllUi)は成功分岐でこれを読み、非空なら
-'   DeepWarningOf の文言を hm_warning へ出す(冒頭の ShowWarning vbNullString
-'   によるクリアより後で書く)。リセットは RunDeep の入口(RunStep 開始時)。
+' LastDeepOutcome - その実行で**最後に立った非空の**入念パイプ結末
+'   (裁定書9 N1・B9 / 裁定書10 M1)。値は ""(警告なし) / critique_skipped /
+'   revision_discarded の3通りのみ。ui層(modUIHome.RunStepUi / HomeRunAll)は
+'   成功分岐でこれを読み、非空なら DeepWarningOf の文言を hm_warning へ出す
+'   (冒頭の ShowWarning vbNullString によるクリアより後で書く)。
+'   リセットは ResetDeepOutcome(N9)のみ。一括実行では Step2 と Step3 の両方が
+'   パイプを回すため、最後に警告を伴った結末が残る。
 Public Function LastDeepOutcome() As String
     LastDeepOutcome = mLastDeepOutcome
 End Function
+
+' ResetDeepOutcome - deep outcome の明示リセット口(裁定書10 N9・14章§6)。
+'   ui層が**実行の開始時に1回だけ**呼ぶ(RunStepUi / HomeRunAll の冒頭)。
+'   app層はどこからも呼ばない。ここが唯一のリセット点であり、これを呼ばない
+'   限り前回の実行の結末は残る(呼び忘れは古い警告の再表示として現れる)。
+Public Sub ResetDeepOutcome()
+    mLastDeepOutcome = vbNullString
+End Sub
 
 ' ============================================================================
 ' 純関数(シート・ログ・LLMに触れない判定核)。14章§6が公開を宣言する

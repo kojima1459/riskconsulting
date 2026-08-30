@@ -144,8 +144,8 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1
 
 1. Excelの「マクロを使ってよい」という設定を、**この実行のあいだだけ**入れる（終わると元に戻す）。
 2. `dist\リスク提案ナビ_dev.xlsm` を開く。ブックが自分でマクロ部品を組み上げる。
-3. `wintest\tests_expected.txt` に書いてある**期待テスト本数**を読み込んでExcelへ渡す。
-4. テストを全部流す。
+3. `wintest\tests_expected.txt` に書いてある**期待テスト本数**（純ロジックテストの本数）を読み込んでExcelへ渡す。
+4. 純ロジックテスト（`modTestsPure`）を全部流し、続けて**Excel固有テスト（`modTestsExcel`・層(b)）**を流す（T-46④の「両方」）。
 5. 結果を `wintest\result_<日付>_<時刻>.log` に保存する。
 
 ### 2.3 合格の読み方
@@ -153,25 +153,26 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1
 画面の最後のほうに、次の形の行が出る。
 
 ```
-[HH:MM:SS] 実機テスト: 全PASS(FAIL 0 / SKIP 0 / 実行本数 570 = tests_expected 570)
+[HH:MM:SS] 実機テスト: 全PASS(FAIL 0 / SKIP 0 / 純層 N = tests_expected N / 層(b) M 本)
 ```
 
-**合格はこの3つが同時に成立したときだけ**である。
+（`N` は `wintest\tests_expected.txt` の1行目の数字、`M` は `modTestsExcel` が流した本数。）
+
+**合格はこの4つが同時に成立したときだけ**である。
 
 | 見るところ | 合格の値 | 意味 |
 |---|---|---|
-| FAIL | **0** | 失敗したテストが1本も無い |
+| FAIL | **0** | 失敗したテストが1本も無い（純ロジック・Excel固有の両方） |
 | SKIP | **0** | 飛ばしたテストが1本も無い |
-| 実行本数 = tests_expected | **570 = 570** | 流したテストの本数が、あらかじめ決めた本数とぴったり一致する |
+| 純層 = tests_expected | **N = N** | 純ロジックテストの本数が、あらかじめ決めた本数とぴったり一致する |
+| 層(b) | **1本以上** | Excel固有テスト（`modTestsExcel`）が実際に走っている |
 
-つまり **「PASS 570 / FAIL 0 / SKIP 0」が合格**である。
-
-> **なぜ本数まで見るのか**: テストを1本も流さなければ「失敗ゼロ」になってしまう。本数を突き合わせることで「そもそも走っていない」を合格に見せない。数字の `570` は `wintest\tests_expected.txt` の1行目に書いてあり、テストを増やしたときは開発担当が同時に書き換える約束になっている。
+> **なぜ本数まで見るのか**: テストを1本も流さなければ「失敗ゼロ」になってしまう。本数を突き合わせることで「そもそも走っていない」を合格に見せない。数字の `N` は `wintest\tests_expected.txt` の1行目に書いてあり、テストを増やしたときは開発担当が同時に書き換える約束になっている。層(b)の厳密な本数は `modTestsExcel` 自身が内部の期待本数（`TE_EXPECTED`）と突き合わせ、ズレていれば FAIL として現れる（`T47-00_層(b)本数の自己照合` という名前のテスト）。
 
 ### 2.4 不合格の読み方
 
 ```
-[HH:MM:SS] 実機テスト: NG (FAIL=3 / SKIP=0 / 実行本数=570 / tests_expected=570)
+[HH:MM:SS] 実機テスト: NG (FAIL=3 / SKIP=0 / 純層=N / tests_expected=N / 層(b)=M)
 ```
 
 このように出たら**不合格**である。次を行う。
@@ -190,22 +191,18 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -Target pro
 
 読み方は §2.3 と同じである。
 
-### 2.6 いま時点の制限（重要）
+### 2.6 層(b) `modTestsExcel` について（T-47 実装済み）
 
-17章 T-46④ は「`modTestsPure` と `modTestsExcel` の**両方**が実Excelで全PASS」を求めているが、**`modTestsExcel`（T-47）はまだ作られていない**。したがって現時点で確認できるのは `modTestsPure` の分だけである。
+17章 T-46④ は「`modTestsPure` と `modTestsExcel` の**両方**が実Excelで全PASS」を求める。T-47（W4.2）で `modTestsExcel` が実装されたため、**§2.1 のコマンドをそのまま打てば両方が流れる**（`run_excel_tests.ps1` は既定で `modTestsExcel.RunAllExcelTests` を続けて実行する）。追加の引数は要らない。
 
-- `run_excel_tests.ps1` は `-ExcelLayerEntry` を渡さなかったとき、ログに次の1行を出す。
+- `modTestsExcel` はシートI/O経路の検査（保存ガード・起票失敗時の下書き行・ナレッジ退避の保護・2相書込の破損検出・ヒアリング回答の計数）を、**自前のフィクスチャを作って必ず後始末する**形で流す。ブックの実データは壊さない（`err_log` への記録行だけは実行の痕跡として残る）。
+- 何らかの理由で層(b)を飛ばしたいときだけ `-ExcelLayerEntry ""` を渡す。そのときログに次の1行が出る。
 
 ```
-[HH:MM:SS] 層(b)未指定: -ExcelLayerEntry を渡していないため modTestsExcel は実行していません(T-47)
+[HH:MM:SS] 層(b)スキップ: -ExcelLayerEntry "" が指定されたため modTestsExcel は実行していません(T-46④は未達扱い)
 ```
 
 - この行が出ている実行は、**T-46④を満たしていない**（合格扱いにしない）。
-- T-47 が完成したら、次の形で流し直す。
-
-```
-powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -ExcelLayerEntry "modTestsExcel.RunAllExcelTests"
-```
 
 ---
 
@@ -389,8 +386,8 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -Target pro
 
 | 章 | タスク | 合格の条件 |
 |---|---|---|
-| §2 | T-46⑤ | 開発版・本番版のどちらでも「PASS 570 / FAIL 0 / SKIP 0」 |
-| §2 | T-46④ | 上に加えて `modTestsExcel` も全PASS。**T-47 完成までは未達として申告する**（合格扱いにしない） |
+| §2 | T-46⑤ | 開発版・本番版のどちらでも「FAIL 0 / SKIP 0 / 純層 N = tests_expected N」（N は `wintest\tests_expected.txt` の値） |
+| §2 | T-46④ | 上に加えて `modTestsExcel`（層(b)）も全PASS（§2.1 の既定実行に含まれる。`-ExcelLayerEntry ""` で飛ばした実行は未達扱い） |
 | §3 | T-14b | 4点すべてが目視で確認できた |
 | §4 | T-41 | 2社とも4Step完走・HTMLレポートがブラウザで描画・ヒアリングシート生成・`validate_result` の集計を報告した |
 

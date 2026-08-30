@@ -45,7 +45,7 @@ Public Function LabelJs() As String
     s = s & "var LPK={upsell:'補償拡大',cross_sell:'新種目提案',scheme:'座組提案'};" & vbLf
     s = s & "var LIQ={ok:'十分',partial:'断片的',missing:'無い'};" & vbLf
     s = s & "var IQCLS={ok:'bdg-ok',partial:'bdg-iqpartial',missing:'bdg-missing'};" & vbLf
-    s = s & "var LIQO={high:'充足度 高',mid:'充足度 中',low:'充足度 低'};" & vbLf
+    s = s & "var LIQO={high:'高',mid:'中',low:'低'};" & vbLf
     s = s & "var LCT={'new':'新規開拓',renewal:'更新'};" & vbLf
     s = s & "var LTIER={t1_quick:'クイック',t2_full:'フルドシエ',t3_sparring:'壁打ち'};" & vbLf
     s = s & "var LQM={standard:'標準',deep:'入念'};" & vbLf

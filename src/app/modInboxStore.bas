@@ -17,6 +17,9 @@ Option Explicit
 '   関心度の集計(FR-17)はシートI/Oを含まない純関数として公開する(14章§6)。
 '   規約をシートI/Oの中へ閉じ込めると層(a)から誰も検査できない(W2aの実害と
 '   同じ轍を踏まない)。
+' 投函下書き行(13章§2.6・裁定書10 C1): 先頭データ行は[＋投函]の入力欄であって
+'   受信箱のデータではない。inbox_id 列が IB_DRAFT_MARK の行は走査・判定・集計の
+'   すべてから除外する(IsDraftId が唯一の判定。行番号には依存しない)。
 ' 列アクセスは列名ベース(13章冒頭。列番号のハードコード禁止)。例外は投げず、
 '   読めない・書けないは False / "" で返す。
 ' ============================================================================
@@ -42,6 +45,13 @@ Private Const IB_STATUSES As String = "undiagnosed;diagnosed;adopted;conditional
 Private Const IB_JUDGED As String = "adopted;conditional_hold;rejected;merged"
 Private Const IB_DROP_TYPES As String = "T0;T1;T2;T3;T4;T5;T6;T7;T8;T9;T10"
 Private Const IB_REVIVE_TAGS As String = "tech;regulation;partner;data;market"
+
+' 投函下書き行の固定マーカー(13章§2.6・裁定書10 C1)。受信箱テーブルの先頭
+' データ行(ヘッダ直下)は[＋投函]の入力欄であって受信箱のデータではない。
+' inbox_id 列がこの値の行は**走査・判定・集計のどれからも必ず除外する**
+' (未診断の抽出・関心度集計・ID一致検索。判定は ID 一致検索を通るので同時に閉じる)。
+' 判定基準を1箇所に閉じるため、この定数と IsDraftId 以外に下書き行の知識を置かない。
+Public Const IB_DRAFT_MARK As String = "(下書き)"
 
 ' 起票直後の状態(11章§4)。
 Private Const IB_STATUS_NEW As String = "undiagnosed"
@@ -271,7 +281,8 @@ Public Function NewInboxItem(ByVal sourceKind As String, ByVal theme As String, 
     Dim monthText As String
     monthText = Left$(modUtilText.IsoDateCompact(Date), 6)
 
-    ' 当月ぶんの使用済み最大連番。
+    ' 当月ぶんの使用済み最大連番(裁定書10 C1: 下書き行のマーカーは ID の形を
+    ' 満たさないので SerialOfInboxId が 0 を返し、採番に影響しない)。
     Dim usedMax As Long
     Dim r As Long
     For r = 2 To lastRow
@@ -362,8 +373,11 @@ Public Function UndiagnosedIds() As String
     Dim acc As String
     Dim r As Long
     For r = 2 To lastRow
-        If StrComp(IbValue(blk, r, "status"), IB_STATUS_NEW, vbBinaryCompare) = 0 Then
-            acc = modUtil.AppendIdList(acc, IbValue(blk, r, "inbox_id"))
+        ' 裁定書10 C1: 投函下書き行は受信箱のデータではないので診断対象にしない。
+        If Not IsDraftId(IbValue(blk, r, "inbox_id")) Then
+            If StrComp(IbValue(blk, r, "status"), IB_STATUS_NEW, vbBinaryCompare) = 0 Then
+                acc = modUtil.AppendIdList(acc, IbValue(blk, r, "inbox_id"))
+            End If
         End If
     Next r
     UndiagnosedIds = acc
@@ -455,6 +469,10 @@ Public Function SetInboxJudgement(ByVal inboxId As String, ByVal statusText As S
     IbPut ws, blk, rowNo, "revive_tag", ReviveTagFor(tgt, reviveTag)
     IbPut ws, blk, rowNo, "revive_due", ReviveDueFor(tgt, reviveDue)
     IbPut ws, blk, rowNo, "judged_at", modUtil.NowStamp()
+    ' 裁定書10 m7(13章§2.6): 実施者を judged_by_group へ残す。値源は config の
+    ' operator(run_log の operator 列と同じ値源)。個人名ではなくグループ名まで
+    ' を入れる運用であり、未設定なら空のまま(でっち上げない)。
+    IbPut ws, blk, rowNo, "judged_by_group", Trim$(modConfig.GetStr("operator", vbNullString))
     ' 裁定書9 B2: 判定の確定後に入力列 judge_to をクリアする(store側が唯一の実施点)。
     IbPut ws, blk, rowNo, "judge_to", vbNullString
     SetInboxJudgement = True
@@ -485,11 +503,16 @@ Public Function InterestText() As String
     blk = IbBlock(ws, lastRow)
 
     Dim acc As String
+    Dim shown As Long
     Dim r As Long
     For r = 2 To lastRow
-        ' 1セル内の改行で1件が2件に化けないよう空白へ倒してから積む。
-        If r > 2 Then acc = acc & vbLf
-        acc = acc & Replace(Replace(IbValue(blk, r, "theme"), vbCr, " "), vbLf, " ")
+        ' 裁定書10 C1: 投函下書き行のテーマは「投函1件」ではないので数えない。
+        If Not IsDraftId(IbValue(blk, r, "inbox_id")) Then
+            ' 1セル内の改行で1件が2件に化けないよう空白へ倒してから積む。
+            If shown > 0 Then acc = acc & vbLf
+            acc = acc & Replace(Replace(IbValue(blk, r, "theme"), vbCr, " "), vbLf, " ")
+            shown = shown + 1
+        End If
     Next r
 
     InterestText = InterestSummaryOf(acc)
@@ -501,6 +524,12 @@ Failed:
 End Function
 
 ' --- 内部ヘルパー ---
+
+' 投函下書き行か(13章§2.6・裁定書10 C1)。判定基準は inbox_id 列の固定マーカー
+' だけであり、行番号には依存しない(利用者が行を挿入しても崩れない)。
+Private Function IsDraftId(ByVal idText As String) As Boolean
+    IsDraftId = (StrComp(Trim$(idText), IB_DRAFT_MARK, vbBinaryCompare) = 0)
+End Function
 
 ' 受信箱IDから当月ぶんの連番を取り出す(月不一致・形違いは0)。IDの形の判定は
 ' IsValidInboxId が唯一の値源(2箇所で書かない)。
@@ -615,9 +644,13 @@ Private Function IbRowOf(ByVal blk As Variant, ByVal lastRow As Long, _
     On Error GoTo NotFound
     Dim n As Long
     For n = 2 To lastRow
-        If Trim$(CStr(blk(n, idCol))) = inboxId Then
-            IbRowOf = n
-            Exit Function
+        ' 裁定書10 C1: 投函下書き行は ID 一致検索の対象外(判定・診断結果の
+        ' 書込・読取はすべてこの検索を通るので、ここ1点で下書き行を閉じる)。
+        If Not IsDraftId(CStr(blk(n, idCol))) Then
+            If Trim$(CStr(blk(n, idCol))) = inboxId Then
+                IbRowOf = n
+                Exit Function
+            End If
         End If
     Next n
     Exit Function

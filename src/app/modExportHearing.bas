@@ -125,12 +125,16 @@ Failed:
 End Function
 
 ' ==========================================================
-' AnswerMemoCount - 14章§6の契約(裁定書9 N8・B12)。ヒアリングシートの
-'   answer_memo 列の**非空行数**を返す。シート不在・アンカー不在・見出し不在・
-'   当該案件のシートでない(hs_case_id が caseId と一致しない)場合は 0
-'   (読めないことを「回答あり」と誤認しない)。
-'   modUIHome が [ヒアリングシート] 押下時に呼び、1以上なら上書き確認
-'   (MsgBox vbYesNo)を挟む(生成は answer_memo を含む全行を空へ戻すため)。
+' AnswerMemoCount - 14章§6の契約(裁定書9 N8・B12、裁定書10 M5改)。
+'   ヒアリングシートの answer_memo 列の**非空行数**を返す。シート不在・
+'   アンカー不在・見出し不在の場合は 0。
+'   裁定書10 M5: hs_case_id と caseId の不一致で 0 を返す旧仕様は廃止
+'   (別案件の手書き回答が入った状態で確認なしに BuildHearingSheet が全行を
+'   空へ戻す fail-open を塞ぐ)。本関数は案件を問わず常に数える。引数 caseId
+'   は14章§6の契約シグネチャ維持のため残すが、判定には使わない。
+'   呼出側(modUIHome)は modUISheet.ReadNamed("hs_case_id") を読み、
+'   caseId と不一致かつ本関数>0のとき「別案件(<hs_case_id>)の手書き回答が
+'   残っています」の確認文言にする(裁定書10 M5)。
 '   本関数は数えるだけで、シートを1セルも書き換えない。
 ' ==========================================================
 Public Function AnswerMemoCount(ByVal caseId As String) As Long
@@ -139,11 +143,6 @@ Public Function AnswerMemoCount(ByVal caseId As String) As Long
     Dim ws As Object
     Set ws = SheetOf(EH_SHEET)
     If ws Is Nothing Then Exit Function
-
-    ' 当該案件のシートか(印刷ヘッダの hs_case_id で確認)。
-    Dim sheetCase As String
-    sheetCase = NamedText("hs_case_id")
-    If StrComp(Trim$(sheetCase), Trim$(caseId), vbBinaryCompare) <> 0 Then Exit Function
 
     Dim headerRow As Long
     headerRow = BlockHeaderRow(EH_BLOCK)
@@ -166,18 +165,6 @@ Public Function AnswerMemoCount(ByVal caseId As String) As Long
 
 Zero0:
     AnswerMemoCount = 0
-End Function
-
-' 名前付きレンジ1点の値(文字列)。不在・読めないときは ""。
-Private Function NamedText(ByVal rangeName As String) As String
-    On Error GoTo Blank0
-    Dim cell As Object
-    Set cell = NamedCell(rangeName)
-    If cell Is Nothing Then Exit Function
-    NamedText = CStr(cell.Value)
-    Exit Function
-Blank0:
-    NamedText = vbNullString
 End Function
 
 ' 印刷ヘッダ(名前付きレンジ)。案件一覧からの複写3項目と生成日時。

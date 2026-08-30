@@ -12,7 +12,7 @@
 #   powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 `
 #       -MockAddinPath "C:\path\リボンちゃん(検証用).xlam"        # T-14b
 #   powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 `
-#       -ExcelLayerEntry "modTestsExcel.RunAllExcelTests"          # T-47(層b)
+#       -ExcelLayerEntry ""       # 層(b)を明示スキップ(T-46④は未達扱いになる)
 #
 # 何をするか:
 #   1. レジストリでVBA信頼設定(AccessVBOM/マクロ許可)を現ユーザーに設定
@@ -21,7 +21,8 @@
 #   3. wintest\tests_expected.txt を読んで modTestRunner.SetExpectedCount へ渡す
 #      (17章§4-1 ランナー要件(2)。0件実行の「全緑」を成立させない)
 #   4. modTestRunner.RunAllPureTests を実行し PASS/FAIL/SKIP を取得
-#   5. -ExcelLayerEntry 指定時は層(b)のエントリも実行する(T-47で実体を作る)
+#   5. 層(b) modTestsExcel.RunAllExcelTests を既定で実行する(T-47。同じランナー
+#      へ積み増すため、本数照合は「純層=tests_expected」+「層(b)>=1本」の2段)
 #   6. 結果を wintest\result_*.log に保存。FAILありなら終了コード1
 #
 # 移植元: PoC「マイ本棚AI」 wintest/run_excel_tests.ps1。
@@ -32,7 +33,9 @@
 param(
     [ValidateSet("dev", "prod")] [string]$Target = "dev",
     [string]$MockAddinPath = "",     # 「リボンちゃん(検証用).xlam」のフルパス(任意・T-14b)
-    [string]$ExcelLayerEntry = ""    # 層(b)のエントリ("modTestsExcel.RunAllExcelTests" 等・T-47)
+    # 層(b)のエントリ。T-47実装済みのため既定で modTestsExcel を実行する
+    # (17章 T-46④「modTestsPure と modTestsExcel の両方」)。"" で明示スキップ可。
+    [string]$ExcelLayerEntry = "modTestsExcel.RunAllExcelTests"
 )
 
 $ErrorActionPreference = "Stop"
@@ -129,12 +132,21 @@ try {
     Log "modTestRunner.RunAllPureTests を実行します"
     $excel.Run("'" + $wb.Name + "'!modTestRunner.RunAllPureTests") | Out-Null
 
-    # --- 5) Excel固有テスト(層b・T-47)。エントリ指定時のみ ---------------
+    # 純層の実行本数を層(b)実行前に控える。tests_expected は**純層の本数**であり
+    # (裁定書10 §3)、層(b)の Check は同じランナーへ積み増すため、本数照合は
+    # 「純層ぶん = tests_expected」「層(b)ぶん >= 1」の2段で行う。
+    $reportPure = $excel.Run("'" + $wb.Name + "'!modTestRunner.ReportText")
+    $executedPure = -1
+    if ($reportPure -match 'PASS\s+(\d+)\s*/\s*FAIL\s+(\d+)\s*/\s*SKIP\s+(\d+)') {
+        $executedPure = [int]$Matches[1] + [int]$Matches[2]
+    }
+
+    # --- 5) Excel固有テスト(層b・T-47)。既定で modTestsExcel を実行 --------
     if ($ExcelLayerEntry -ne "") {
         Log "層(b) $ExcelLayerEntry を実行します"
         $excel.Run("'" + $wb.Name + "'!" + $ExcelLayerEntry) | Out-Null
     } else {
-        Log "層(b)未指定: -ExcelLayerEntry を渡していないため modTestsExcel は実行していません(T-47)"
+        Log "層(b)スキップ: -ExcelLayerEntry `"`" が指定されたため modTestsExcel は実行していません(T-46④は未達扱い)"
     }
 
     $fails  = $excel.Run("'" + $wb.Name + "'!modTestRunner.Failures")
@@ -143,7 +155,9 @@ try {
     Log "---- テスト結果 ----"
     $report -split "`n" | ForEach-Object { Log $_ }
 
-    # 出荷条件は「FAIL 0件 かつ SKIP 0件 かつ 実行本数=tests_expected」。
+    # 出荷条件は「FAIL 0件 かつ SKIP 0件 かつ 純層の実行本数=tests_expected
+    # かつ (層(b)実行時は)層(b)が1本以上実行されている」。層(b)の厳密な本数は
+    # modTestsExcel 自身が TE_EXPECTED と自己照合し、ズレはFAILとして現れる。
     # SKIPはPASSにもFAILにも現れないため、件数そのものをここでも見張る。
     $skips = 0
     $executed = -1
@@ -154,11 +168,20 @@ try {
         Log "集計行(PASS n / FAIL m / SKIP k)を読み取れませんでした(合格側へ倒しません)"
     }
 
-    if (([int]$fails -eq 0) -and ($skips -eq 0) -and ($executed -eq $expected)) {
-        Log "実機テスト: 全PASS(FAIL 0 / SKIP 0 / 実行本数 $executed = tests_expected $expected)"
+    $excelCount = 0
+    $layerOk = $true
+    if ($ExcelLayerEntry -ne "") {
+        if (($executed -ge 0) -and ($executedPure -ge 0)) {
+            $excelCount = $executed - $executedPure
+        }
+        $layerOk = ($excelCount -ge 1)   # 層(b)が実際に走ったこと(0本の全緑を防ぐ)
+    }
+
+    if (([int]$fails -eq 0) -and ($skips -eq 0) -and ($executedPure -eq $expected) -and $layerOk) {
+        Log "実機テスト: 全PASS(FAIL 0 / SKIP 0 / 純層 $executedPure = tests_expected $expected / 層(b) $excelCount 本)"
         $exitCode = 0
     } else {
-        Log "実機テスト: NG (FAIL=$fails / SKIP=$skips / 実行本数=$executed / tests_expected=$expected)"
+        Log "実機テスト: NG (FAIL=$fails / SKIP=$skips / 純層=$executedPure / tests_expected=$expected / 層(b)=$excelCount)"
     }
 
     $wb.Close($false)

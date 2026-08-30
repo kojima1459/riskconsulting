@@ -282,6 +282,9 @@ Public Sub HomeRunAll()
 
     modUIProgress.ParkFocus
     ShowWarning vbNullString
+    ' 裁定書10 M1/N9: deep outcome のリセットは**実行の開始時に1回だけ**。
+    ' 一括実行の中では消さない(Step2/3 の結末を Step4 が消さないため)。
+    modPipeline2.ResetDeepOutcome
 
     Dim caseId As String
     caseId = SelectedCaseId()
@@ -333,6 +336,8 @@ Private Sub RunStepUi(ByVal stepNo As Long)
 
     modUIProgress.ParkFocus
     ShowWarning vbNullString
+    ' 裁定書10 M1/N9: deep outcome のリセットは実行の開始時に1回だけ。
+    modPipeline2.ResetDeepOutcome
 
     Dim caseId As String
     caseId = SelectedCaseId()
@@ -599,12 +604,27 @@ Public Sub HomeBuildHearing()
     ' 裁定書9 B12(13章§2.16): 生成は answer_memo を含む全行を空へ戻す。
     ' 訪問後に手書きの回答が入っている状態で押されたら、必ず確認を挟む
     ' (VBAの書込は Undo できない。16章 E-10 の下流無効化と同じ作法)。
+    ' 裁定書10 M5: AnswerMemoCount は案件を問わず**常に数える**(旧仕様の
+    ' 「hs_case_id 不一致なら0」は、別案件の回答が残っている場面でちょうど
+    ' 確認を素通りさせる fail-open だった)。別案件かどうかの判定はここで行い、
+    ' 文言だけを変える(ヒアリングシートはブックに1枚しかない)。
     Dim memoRows As Long
     memoRows = modExportHearing.AnswerMemoCount(caseId)
     If memoRows > 0 Then
+        Dim sheetCase As String
+        sheetCase = Trim$(modUISheet.ReadNamed("hs_case_id"))
+
+        Dim memoText As String
+        If LenB(sheetCase) > 0 And StrComp(sheetCase, caseId, vbBinaryCompare) <> 0 Then
+            memoText = "別案件（" & sheetCase & "）の手書き回答が" & CStr(memoRows) & _
+                       "行残っています。作り直すとこの回答は消えます。"
+        Else
+            memoText = "ヒアリングシートに手書きの回答が" & CStr(memoRows) & _
+                       "行あります。作り直すとこの回答は消えます。"
+        End If
+
         Dim answer As Long
-        answer = MsgBox("ヒアリングシートに手書きの回答が" & CStr(memoRows) & _
-                        "行あります。作り直すとこの回答は消えます。" & vbLf & _
+        answer = MsgBox(memoText & vbLf & _
                         "続けますか？", vbYesNo + vbExclamation, "回答の上書き確認")
         If answer <> vbYes Then
             ShowWarning "ヒアリングシートは作り直しませんでした（手書きの回答を残しました）。"

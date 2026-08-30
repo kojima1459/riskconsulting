@@ -109,10 +109,8 @@ Public Function RunStep(ByVal caseId As String, ByVal stepNo As Long, _
                         Optional ByVal qualityOverride As String) As Boolean
     On Error GoTo Failed
 
-    ' 裁定書9 N1: LastDeepOutcome を毎実行の開始時にリセットする(stepNo=0 は
-    ' RunDeep の対象外検査で即 False。入念パイプは走らずリセットだけが通る)。
-    modPipeline2.RunDeep caseId, 0
-
+    ' 裁定書10 M1: ここでリセットしない(RunAll の Step4 が Step2/3 の結末を
+    ' 消すため)。リセット口は modPipeline2.ResetDeepOutcome(N9)だけ。
     If Not modCaseStore.IsValidCaseId(caseId) Then
         modLog.LogError "E0101", PL_SRC & ".RunStep", "invalid_case_id"
         Exit Function

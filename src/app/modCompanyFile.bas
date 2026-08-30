@@ -526,20 +526,20 @@ Private Sub AddReport(ByRef buf() As String, ByRef cnt As Long, _
     If LenB(reportText) > 0 Then modUtil.BufAdd buf, cnt, reportText
 End Sub
 
-' 裁定書9 B8: 同名のブックが同一プロセスで開いたままかを名前で調べる。
+' 裁定書9 B8・裁定書10 m6: 当該ブックが同一プロセスで開いたままかを
+'   FullName(フルパス)で調べる。ファイル名のみの比較だと別フォルダの同名
+'   ブックを「開いている」と誤認し、企業ドシエ書出が失敗扱いになるため。
 '   判定に失敗したときは True(=開いている扱い)へ倒し、無効な2段検証で
 '   合格を出す方向へは倒さない(fail-closed)。
 Private Function BookStillOpen(ByVal pathText As String) As Boolean
     On Error GoTo Unknown0
-    Dim nameOnly As String
-    Dim p As Long
-    p = InStrRev(pathText, "\")
-    nameOnly = Mid$(pathText, p + 1)
-    If LenB(nameOnly) = 0 Then Exit Function
+    Dim wantPath As String
+    wantPath = Trim$(pathText)
+    If LenB(wantPath) = 0 Then Exit Function
 
     Dim i As Long
     For i = 1 To Application.Workbooks.Count
-        If StrComp(Application.Workbooks(i).Name, nameOnly, vbTextCompare) = 0 Then
+        If StrComp(Application.Workbooks(i).FullName, wantPath, vbTextCompare) = 0 Then
             BookStillOpen = True
             Exit Function
         End If

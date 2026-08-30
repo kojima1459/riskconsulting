@@ -443,6 +443,13 @@
       "wave": "T-42"
     },
     {
+      "name": "modTestsExcel",
+      "path": "src/test/modTestsExcel.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-47"
+    },
+    {
       "name": "modMockLlm",
       "path": "src/test/modMockLlm.bas",
       "role": "test",
