@@ -233,12 +233,32 @@ CONTRACT: dict[str, dict] = {
     # modPipeline2: 30,000字契約による分割先(裁定書8 A-1。入念モードの批判・改訂
     #   パイプ=T-28)。**分割の継ぎ目**であり呼んでよいのは modPipeline だけ。
     #   RunDeep は modPipeline からの1行フックの受け口なので required で固定する
-    #   (改名・Private化は契約違反)。パイプ内部の関数構成は T-28 に委ねるため
-    #   closed=False。
-    "modPipeline2": {"closed": False, "required": ["RunDeep"]},
+    #   (改名・Private化は契約違反)。加えて14章§6が「Private へ戻すことは契約
+    #   違反」と明記した**判定核8本**も required に載せる(裁定書9-3。§6の宣言文
+    #   と lint の担保を一致させる。modSparring / modPipeline と同じ扱いで、
+    #   Private 化すると層(a)の回帰網が黙って消えるため機械で検出する)。
+    #   AdoptRevisionOf は E-36 の「改訂を破棄して改訂前を採用」の唯一の選択点
+    #   (裁定書9-2)。closed=False は内部ヘルパの追加を許すため。
+    "modPipeline2": {
+        "closed": False,
+        "required": [
+            "RunDeep",
+            "CritiqueStepOf", "ReviseStepOf", "NeedsRevision", "CritiqueDigest",
+            "DeepOutcomeOf", "AdoptRevisionOf", "DeepWarningOf", "DeepRouteOf",
+        ],
+    },
     # modCaseRead: 案件一覧の読取専用API(裁定書7 B-7。14章§6が ReadCaseCtx を宣言)。
     "modCaseRead": {"closed": False, "required": ["ReadCaseCtx"]},
-    "modPlayOps": {"closed": False, "required": ["RunPreflight"]},
+    # modPlayOps: プリフライト診断(T-25)。14章§6が宣言した判定核5本を required
+    #   に載せる(裁定書9-3。純核を Private へ戻すと層(a)から検査できなくなる)。
+    "modPlayOps": {
+        "closed": False,
+        "required": [
+            "RunPreflight",
+            "PfSurvivalOf", "PfPredTypesOf", "PfRefIds", "PfFailCodeOf",
+            "CaseIdOfPfLine",
+        ],
+    },
     # modSparring: PL-04 壁打ち(T-27。裁定書8 B-9 で14章§6へ宣言)。
     #   実行制御3本(ResumeSparring / SendSparring / SendToInbox)＋履歴の読み出し
     #   (HistoryOf)に加え、**純核3本を required に載せる**。純核を Private へ
@@ -266,16 +286,32 @@ CONTRACT: dict[str, dict] = {
     #   I/O)。modCompanyFile2 と同じく14章§6の公開契約面には載せないため
     #   required は空(closed=False で追加 Public を許容する)。
     "modCaseStore2": {"closed": False, "required": []},
+    # modInboxStore: 受信箱シートの唯一の口(T-25)。実行制御2本に加え、14章§6が
+    #   宣言した純ロジック7本を required に載せる(裁定書9-3)。InterestSummaryOf
+    #   は FR-17 の集計規約(件数集計・降順・2件以上・上限件数)の唯一の値源で、
+    #   Private へ戻すと G71 の回帰網がまるごと消える(裁定書9-1)。
     "modInboxStore": {
         "closed": False,
-        "required": ["NewInboxItem", "SetInboxJudgement"],
+        "required": [
+            "NewInboxItem", "SetInboxJudgement",
+            "BuildInboxId", "IsValidInboxId", "CanInboxTransition",
+            "JudgementError", "InterestKeyOf", "FmtInterestLine",
+            "InterestSummaryOf",
+        ],
     },
     # modJudgeStore: 判断台帳CRUD(13章§2.7・裁定書8 B-8)。NewJudgement は
     #   14章§6が予約した唯一の固定名(TJudgement受取・judge_id返却)。
-    #   ReadJudgement/SetJudgementResult/BuildJudgeId/IsValidJudgeId/
-    #   IsValidDecision/IsValidJudgeResult は本タスクで追加した公開口で、
-    #   closed=False につき required には含めない(14章§6へ実装内容を追記)。
-    "modJudgeStore": {"closed": False, "required": ["NewJudgement"]},
+    #   14章§6が宣言した純ロジック4本(採番・ID書式・19章§3の decision enum・
+    #   13章§2.7の result enum)も required に載せる(裁定書9-3)。IsValidDecision
+    #   は裁定書8 B-8 が名指しした「decision enum検証」そのもの。
+    "modJudgeStore": {
+        "closed": False,
+        "required": [
+            "NewJudgement",
+            "BuildJudgeId", "IsValidJudgeId", "IsValidDecision",
+            "IsValidJudgeResult",
+        ],
+    },
     "modExportHtml": {"closed": False, "required": ["GenerateHtmlReport"]},
     "modExportHearing": {"closed": False, "required": ["BuildHearingSheet"]},
     # modExportPpt: 14章§6の GeneratePpt は **Phase 1.5**(§6の注記・§1の表)。
@@ -1920,8 +1956,12 @@ def check_msvbal_reserved_names(info: ModuleInfo) -> None:
 # &H8000 以上は負値へ化ける(&H9FFF = -24577)。W2b では modPii の漢字域判定
 # `cp >= &H4E00 And cp <= &H9FFF` がこれで常に False になり、漢字姓の検知が
 # 全滅した(黒箱テストが発見。実害はPII走査の素通り=16章E-05の骨抜き)。
-# LibreOffice Basic は同じ式を素通りさせるため run_lo_tests では捕まらない
-# (LOの死角)。接尾辞 `&` を付けると Long として解釈され値が保たれる。
+# 検査を置く理由は「LOでは捕まらないから」ではない: LibreOffice も同じ型付け
+# をするため、**当該の値を通るテストが1本でもあれば** run_lo_tests は落ちる
+# (実測: modPii の `&H9FFF&` から接尾辞を外すと純ロジック3本が FAIL)。
+# つまり LO ゲートの検出は**テストの網掛かり次第の間接検出**であり、網の無い
+# 定数・新規コードは素通りする。この検査はその依存を断ち、**静的に確実へ**
+# 変えるために置く(接尾辞 `&` を付ければ Long として解釈され値が保たれる)。
 #
 # 規則: 値が &H8000 以上の16進リテラルは接尾辞 `&` を必須とする。
 #   ・1～4桁 … `&` が無いと **値が変わる**(上記の実バグそのもの)

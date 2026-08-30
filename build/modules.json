@@ -275,6 +275,13 @@
       "wave": "T-28"
     },
     {
+      "name": "modTestsPure9",
+      "path": "src/test/modTestsPure9.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-28"
+    },
+    {
       "name": "modMockLlm",
       "path": "src/test/modMockLlm.bas",
       "role": "test",

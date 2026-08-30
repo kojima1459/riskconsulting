@@ -137,11 +137,12 @@ PURE_ALLOWLIST = [
     # 純関数だけ(技術メモ4)。
     #   modInboxStore : 採番 BuildInboxId / ID書式 IsValidInboxId / 状態遷移
     #     CanInboxTransition / E-41 の JudgementError / 関心度の InterestKeyOf・
-    #     FmtInterestLine
+    #     FmtInterestLine・InterestSummaryOf(FR-17の集計。裁定書9-1)
     #   modPlayOps    : PfSurvivalOf / PfPredTypesOf / PfRefIds / PfFailCodeOf /
     #     CaseIdOfPfLine
     #   modPipeline2  : CritiqueStepOf / ReviseStepOf / NeedsRevision /
-    #     CritiqueDigest / DeepOutcomeOf / DeepWarningOf / DeepRouteOf
+    #     CritiqueDigest / DeepOutcomeOf / AdoptRevisionOf(E-36の採用。
+    #     裁定書9-2)/ DeepWarningOf / DeepRouteOf
     "modInboxStore", "modPlayOps", "modPipeline2",
     # T-27(裁定書8 B-9)で 14章§6 が公開を宣言した壁打ちの純核3本を持つ。
     # モジュール全体は store/受信箱/LLM経由でExcelに触れるが、テストが叩くのは
@@ -159,6 +160,11 @@ PURE_ALLOWLIST = [
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",
     "modTestsPure5", "modTestsPure6", "modTestsPure7", "modTestsPure8",
+    # modTestsPure9: 30,000字契約による modTestsPure8 の分割先。14章§6が公開を
+    # 宣言済みで回帰網の無かった純核13本(modInboxStore の採番/ID書式/遷移/
+    # 関心度の下請け2本・modJudgeStore の採番/ID書式/enum検証・modPlayOps の
+    # PfPredTypesOf/PfRefIds/PfFailCodeOf/CaseIdOfPfLine)を叩く。
+    "modTestsPure9",
     "modMockLlm", "modMockLlm2",
 ]
 

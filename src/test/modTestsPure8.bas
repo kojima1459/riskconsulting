@@ -4,12 +4,11 @@ Option Explicit
 ' ============================
 ' modTestsPure8 - W2c(T-25/T-27/T-28)の判定核の契約テスト(17章§4-1 層(a))
 ' ----------------------------
-' テスト本数: 57本 = G70 13 / G72 6 / G73 7 / G74 6 / G76 9 / G77 5 /
+' テスト本数: 59本 = G70 13 / G72 6 / G73 7 / G74 6 / G76 9 / G77 7 /
 '                    G78 6 / G79 5
-' ----------------------------
 ' 役割: 裁定書8-11。**実装を1行も読まずに**、13章§2.6/§2.7・15章§4.5-4.7/
 '   §6.5/§8.1・16章 E-35/E-36/E-41/E-44 だけを根拠に入出力を固定した独立
-'   テスト。原版は T-25/T-27/T-28 の実装前に書かれている。
+'   テスト(原版は T-25/T-27/T-28 の実装前に書かれている)。
 '     G70 統制語彙の必須化        16章E-41(受信箱の判定を保存してよいか)
 '     G72 プリフライト要約列      13章§2.6 pf_survival(15章§6 Schema-PF)
 '     G73 履歴の切詰め            16章E-44 sparring_max_turns の境界
@@ -19,52 +18,41 @@ Option Explicit
 '     G78 批判ダイジェスト        15章§4.7 {{critiqueDigest}}
 '     G79 E-35/E-36の分岐合成
 '
-' 【統合時の§6整合(統合者)】原版は 14章§6 がまだ1本も宣言していない時点で
-'   書かれたため、テスト側から3本の**契約提案**(HasControlledVocab /
-'   ShouldReviseOf / AdoptRevisionOf)と2本の配置提案(PreflightVerdictOf を
-'   modInboxStore へ / CanContinueSparring を帯域外ok判定に)を置いていた。
-'   命名権は14章§6であり(原版ヘッダも「§6が別の形を宣言したら§6が正」と
-'   明記)、裁定書8 B-7/B-9/B-10 で §6 が別の形を宣言済みなので、
-'   **期待値は1件も動かさず**呼び先だけを §6 の宣言へ寄せた:
-'     HasControlledVocab(st,dt,rt,dueText)
-'         -> modInboxStore.JudgementError(st,dt,rt,hasDue) が ""(=保存可)か
-'     PreflightVerdictOf(pfJson)   -> modPlayOps.PfSurvivalOf(pfJson)
-'     TrimHistoryOf(hist,max)      -> modSparring.TrimHistoryOf(同型・変更なし)
-'     HistoryJoinOf(hist)          -> modSparring.HistoryJoinOf(hist, maxTurns)
-'     ShouldReviseOf(n,json,ok)    -> modPipeline2.DeepOutcomeOf(E-35の分類)
-'                                     + modPipeline2.NeedsRevision(json,n)
-'     AdoptRevisionOf(base,rev,ok) -> modPipeline2.DeepOutcomeOf(E-36の分類)
-'     CritiqueDigestOf(json)       -> modPipeline2.CritiqueDigest(json, stepNo)
-'   合成が要るものは下の「§6整合アダプタ」に private で置いた(ChkS/Ctn と
-'   同じテスト側の私的ヘルパで、公開名は1つも増やしていない)。
-'   §6に対応が無く**落とした**ぶんは司令塔への懸念として返した(甘い期待値へ
-'   書き換えて実装を追認するより、無い事実を表に出す):
-'     - G71 関心度集計 6本: 件数集計と降順整列の純関数が§6に無い
-'       (modInboxStore.InterestText はシートI/O。InterestKeyOf /
-'        FmtInterestLine は1件分の正規化と整形しか持たない)
-'     - G75 壁打ち継続可否 4本: §6の CanContinueSparring は
-'       (caseIdText, utterance, hasPii) の**送信前** fail-closed 判定で、
-'       原版が仮定した(ok, errCode)の**応答後**の継続可否とは別の契約
-'     - G78 の executive_reactions 全件保持 1本: 15章§4.7 の注記は3配列を
-'       名指しするが、14章§6は「S3は lands=false の反応 -> issues の順」と
-'       宣言していて lands=true の反応は digest に載らない(仕様間の食い違い)
+' 【§6整合(統合者)】原版は 14章§6 が1本も宣言していない時点で書かれたため、
+'   テスト側が契約提案(HasControlledVocab / ShouldReviseOf / AdoptRevisionOf)
+'   と配置提案(PreflightVerdictOf / CanContinueSparring)を置いていた。命名権は
+'   §6にあるので、**期待値は1件も動かさず**呼び先だけを§6の宣言へ寄せた:
+'     HasControlledVocab -> modInboxStore.JudgementError が ""(=保存可)か
+'     PreflightVerdictOf -> modPlayOps.PfSurvivalOf
+'     HistoryJoinOf      -> modSparring.HistoryJoinOf(hist, maxTurns)
+'     ShouldReviseOf     -> DeepOutcomeOf(E-35の分類)+ NeedsRevision
+'     AdoptRevisionOf    -> DeepOutcomeOf(E-36の分類)+ AdoptRevisionOf(
+'                           outcome, 改訂前, 改訂版)【裁定書9-2】
+'     CritiqueDigestOf   -> modPipeline2.CritiqueDigest(json, stepNo)
+'   このうち **AdoptedJson の私的アダプタは廃止**し、G77/G79 は上記2本を直接
+'   呼ぶ(期待値は不変)。If を要する ReviseNeeded と、Date を真偽へ落とす
+'   VocabOk だけ private に残す。§6に対応が無く落としたぶんは懸念として返した
+'   (甘い期待値へ書き換えて実装を追認しない)。G71 関心度集計は裁定書9-1 の
+'   InterestSummaryOf 宣言で**期待値のまま復帰**したが、FR-17 の下請け
+'   (InterestKeyOf / FmtInterestLine)と束ねるため modTestsPure9 へ移した。
+'   本ファイルの欠番は2件:
+'     - G75 壁打ち継続可否 4本: §6の CanContinueSparring は**送信前**の
+'       fail-closed 判定で、原版が仮定した応答後の継続可否とは別の契約
+'     - G78 の executive_reactions 全件保持 1本: 15章§4.7 の注記と14章§6の
+'       宣言が食い違い、lands=true の反応は digest に載らない
 '
-' 判定の形: シート・config・ログ・LLMに触れない純関数だけを叩く(R4)。
-'   期待値が仕様から一意に決まらない項目は**テストにしない**(甘い期待値を
-'   置いて実装を追認しない)。落とした分は末尾の一覧に残す。
+' 判定の形: シート・config・ログ・LLMに触れない純関数だけを叩く(R4)。期待値が
+'   仕様から一意に決まらない項目はテストにせず末尾の一覧に残す。
 '
-' 結線(統合済み。本ファイル単体では1本も実行されない):
-'   (1) modTestsPure7.RunAll の末尾から modTestsPure8.RunAll を呼ぶ【結線済み】
-'       (modTestsPure -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 の数珠つなぎ)。
-'   (2) build/modules.json へ1件追加(modTestsPure8 / src/test/modTestsPure8.bas
-'       / role=test / type=std / wave=T-28)【登録済み】。12章§2のtest層一覧も
-'       modTestsPure + 2..8 へ更新済み。
-'   (3) wintest/tests_expected.txt を 414 -> 471 へ(本ファイル57本)【更新済み】。
-'   run_lo_tests.py の PURE_ALLOWLIST には modTestsPure8 / modInboxStore /
-'   modSparring / modPipeline2 / modPlayOps が既にある(裁定書8 B-7/B-9/B-10)。
+' 結線(統合済み): modTestsPure7.RunAll の末尾から本モジュールの RunAll を呼び、
+'   本モジュールの末尾から **modTestsPure9.RunAll** を呼ぶ(数珠つなぎ
+'   modTestsPure -> 2 .. -> 8 -> 9。本ファイル単体では1本も実行しない)。
+'   build/modules.json(role=test / wave=T-28)・12章§2のtest層一覧・
+'   run_lo_tests.py の PURE_ALLOWLIST へ登録済み。wintest/tests_expected.txt は
+'   414 -> 471 -> 481 -> **505**(本ファイル59本 + modTestsPure9 の32本)。
 '
-' 設計判断(R4準拠): Excelトークン不使用。改行は vbLf 基準。乱数・時刻不使用。
-'   素材は実在しない架空値で組む(15章§8.1の浜松スイーツファクトリーの文脈)。
+' 設計判断(R4準拠): Excelトークン・乱数・時刻を使わず改行は vbLf 基準。素材は
+'   実在しない架空値(15章§8.1の浜松スイーツファクトリーの文脈)。
 ' ============================
 
 ' ----------------------------
@@ -83,10 +71,11 @@ Private Const ST_UNDIAG As String = "undiagnosed"
 ' 13章§2.3 sparring_max_turns の既定値。
 Private Const MAX_TURNS_DEFAULT As Long = 12
 
-' 16章E-35/E-36 の結末(14章§6 DeepOutcomeOf の4値のうち本群が使う2つ)。
+' 16章E-35/E-36 の結末(14章§6 DeepOutcomeOf の4値のうち本群が使う3つ)。
 ' 実装の Private Const を参照できないので仕様側の値を独立に置く。
 Private Const OUT_CRITIQUE_SKIPPED As String = "critique_skipped"
 Private Const OUT_REVISED As String = "revised"
+Private Const OUT_REVISION_DISCARDED As String = "revision_discarded"
 
 ' 15章§4.5 S2C(MK-S2C-HIT相当)の指摘本文。CritiqueDigest が1件も
 ' 落とさずに日本語整形することを確かめるための照合語。
@@ -109,11 +98,8 @@ Private Const C3_D2 As String = "係争中の先のD&Oは引受部門が難色�
 Private Const MK_BASE As String = "確定前の生成版"
 Private Const MK_REV As String = "審査を踏まえた改訂版"
 
-' ----------------------------
-' RunAll: グループ単位で隔離実行する。1グループが実行時エラーで落ちても
-'   残りのグループは走る(未実装/未注入の事実は GroupFail で1件の失敗として
-'   可視化し、無かったことにしない)。本ファイルは数珠つなぎの末端。
-' ----------------------------
+' RunAll: グループ単位で隔離実行(1グループが実行時エラーで落ちても残りは走る。
+'   未実装/未注入は GroupFail で1件の失敗として可視化し、隠さない)。末端。
 Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
@@ -129,6 +115,17 @@ Public Sub RunAll()
         End If
         On Error GoTo 0
     Next i
+
+    ' 姉妹モジュール(30,000字契約による分割)を同じ隔離作法で続けて回す。
+    ' 数珠つなぎ: modTestsPure -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure9.RunAll
+    If Err.Number <> 0 Then
+        GroupFail "modTestsPure9.RunAll"
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)
@@ -209,17 +206,14 @@ Private Function LineCount(ByVal s As String) As Long
 End Function
 
 ' ============================
-' §6整合アダプタ(統合時に追加。公開名は増やさない private ヘルパ)
-' ----------------------------
-' 原版が仮定した3本を 14章§6 が宣言した形へ**期待値を変えずに**寄せるだけの
-' 薄い層。規約そのもの(E-41の必須列・E-35の批判不合格・E-36の採否)は
-' すべて呼び先の実装側にあり、ここには置かない。
+' §6整合アダプタ(公開名は増やさない private ヘルパ)。原版が仮定した3本を
+' §6の宣言へ**期待値を変えずに**噛み合わせるだけの薄い層で、規約そのもの
+' (E-41の必須列・E-35の批判不合格・E-36の採否)は呼び先の実装側にしか無い。
 ' ============================
 
 ' VocabOk - 原版 HasControlledVocab(status, dropType, reviveTag, reviveDueText)。
-'   §6は同じE-41判定を modInboxStore.JudgementError(...) As String で宣言して
-'   いる(""=保存可・非空=保存ブロックの理由)。期日は Date を純関数へ持ち込ま
-'   ないため真偽で受ける契約なので、原版の文字列の空/非空をそのまま落とす。
+'   §6は同じE-41判定を JudgementError(...) As String で宣言("":=保存可)。
+'   期日は Date を純関数へ持ち込まない契約なので空/非空を真偽へ落とす。
 Private Function VocabOk(ByVal statusText As String, ByVal dropType As String, _
                          ByVal reviveTag As String, ByVal reviveDueText As String) As Boolean
     Dim reason As String
@@ -240,25 +234,11 @@ Private Function ReviseNeeded(ByVal stepNo As Long, ByVal critiqueJson As String
     ReviseNeeded = modPipeline2.NeedsRevision(critiqueJson, stepNo)
 End Function
 
-' AdoptedJson - 原版 AdoptRevisionOf(baseJson, revisedJson, revisedOk)。
-'   §6に「確定JSONを返す」関数は無く、E-36の採否そのものは DeepOutcomeOf が
-'   revised(改訂版を採用) / revision_discarded(改訂を破棄し改訂前を採用)へ
-'   分類する。確定JSONの選択は modPipeline2.RunPipe(層(b))にあるため、層(a)
-'   では分類の側を叩いて同じ規約を固定する。
-Private Function AdoptedJson(ByVal baseJson As String, ByVal revisedJson As String, _
-                             ByVal revisedOk As Boolean) As String
-    Dim outcome As String
-    outcome = modPipeline2.DeepOutcomeOf(True, True, revisedOk)
-    If StrComp(outcome, OUT_REVISED, vbBinaryCompare) = 0 Then
-        AdoptedJson = revisedJson
-    Else
-        AdoptedJson = baseJson
-    End If
-End Function
+' (原版の AdoptedJson アダプタは廃止した。E-36の採否は§6の2本
+'   DeepOutcomeOf(結末の分類)+ AdoptRevisionOf(確定JSONの選択)を G77/G79 が
+'   **そのまま実呼び**する。期待値は原版から1文字も動かしていない。)
 
-' ============================
 ' 素材(JSON)。長い文字列は論理行1023字の制約があるので継ぎ足しで組む。
-' ============================
 
 ' 15章§4.5 Schema-S2C。issues 3件(missing / generic / insurability_error)と
 '   additional_risks 1件。MK-S2C-HIT の形(15章§8.1 #8)。
@@ -357,8 +337,8 @@ End Function
 
 ' ============================
 ' G70 統制語彙(16章E-41・13章§2.6。modInboxStore.JudgementError)
-'   E-41: rejected は drop_type 必須 / conditional_hold は revive_tag と期日が
-'   必須。どちらも欠けたら保存ブロック。enum の端(T0 / T10 / market)を必ず
+'   E-41: rejected は drop_type 必須 / conditional_hold は revive_tag と期日の
+'   両方が必須(欠けたら保存ブロック)。enum の端(T0 / T10 / market)を必ず
 '   当てる(範囲を1つ狭く実装しても落ちるように)。
 ' ============================
 Private Sub T_Vocab()
@@ -410,8 +390,8 @@ End Sub
 
 ' ============================
 ' G72 プリフライト要約列(13章§2.6・15章§6 Schema-PF。modPlayOps.PfSurvivalOf)
-'   pf_survival は「診断結果の要約列」で enum high / mid / low。日本語ラベル
-'   ではなく enum 値を入れる列である(13章§2.6)。
+'   pf_survival は診断結果の要約列で enum high / mid / low(日本語ラベルでは
+'   なく enum 値を入れる列。13章§2.6)。
 ' ============================
 Private Sub T_PfVerdict()
     ChkS "G72_survivalのhighをそのまま返す_13章§2.6", _
@@ -442,10 +422,8 @@ End Sub
 ' G73 modSparring.TrimHistoryOf(16章E-44・13章§2.3)
 '   E-44: リボンへ渡す履歴を直近 sparring_max_turns 往復に制限する。
 '   13章§2.3: 超過は**古い順に切捨て**。全履歴は case_data に残るので、
-'   ここで捨てるのは「渡す分」だけである。
-'   数え方: 14章§6 CallChat は histU / histA を**別々に**受けるので、本群は
-'   片側の発話列(1行=1往復ぶんの片側。case_data の sparring_u または
-'   sparring_a)を渡す前提で置いている。
+'   ここで捨てるのは「渡す分」だけ。14章§6 CallChat は histU / histA を別々に
+'   受けるので、本群は片側の発話列(1行=1往復ぶんの片側)を渡す前提で置く。
 ' ============================
 Private Sub T_TrimHist()
     Dim src As String
@@ -565,28 +543,42 @@ End Sub
 Private Sub T_Adopt()
     Dim baseJson As String
     Dim revJson As String
+    Dim adoptOk As String
+    Dim adoptNg As String
 
     baseJson = JsRisk(MK_BASE)
     revJson = JsRisk(MK_REV)
 
-    ChkS "G77_改訂版が合格なら改訂版を確定する_16章E-36", _
-        AdoptedJson(baseJson, revJson, True), revJson
+    ' §6の2本をそのまま実呼びする(私的アダプタを介さない)。批判は合格・改訂を
+    ' 試みた前提で、改訂版の検証成否だけを振る。
+    adoptOk = modPipeline2.AdoptRevisionOf( _
+        modPipeline2.DeepOutcomeOf(True, True, True), baseJson, revJson)
+    adoptNg = modPipeline2.AdoptRevisionOf( _
+        modPipeline2.DeepOutcomeOf(True, True, False), baseJson, revJson)
 
-    ChkS "G77_改訂版が不合格なら改訂前を確定する_16章E-36", _
-        AdoptedJson(baseJson, revJson, False), baseJson
+    ChkS "G77_改訂版が合格なら改訂版を確定する_16章E-36", adoptOk, revJson
+
+    ChkS "G77_改訂版が不合格なら改訂前を確定する_16章E-36", adoptNg, baseJson
 
     ' 不合格の改訂版の断片を確定JSONへ混ぜない(2本を継ぎ合わせない)。
     ChkB "G77_不合格の改訂版は確定JSONに混ざらない_16章E-36", _
-        (Not Ctn(AdoptedJson(baseJson, revJson, False), MK_REV)), _
-        "実際=[" & HeadOf(AdoptedJson(baseJson, revJson, False)) & "]"
+        (Not Ctn(adoptNg, MK_REV)), "実際=[" & HeadOf(adoptNg) & "]"
 
     ChkB "G77_合格の改訂版に改訂前が混ざらない_16章E-36", _
-        (Not Ctn(AdoptedJson(baseJson, revJson, True), MK_BASE)), _
-        "実際=[" & HeadOf(AdoptedJson(baseJson, revJson, True)) & "]"
+        (Not Ctn(adoptOk, MK_BASE)), "実際=[" & HeadOf(adoptOk) & "]"
 
     ' 改訂の応答自体が返らなかった場合も改訂前で続行する(Step失敗にしない)。
     ChkS "G77_改訂が空応答でも改訂前で続行する_16章E-36", _
-        AdoptedJson(baseJson, "", False), baseJson
+        modPipeline2.AdoptRevisionOf( _
+            modPipeline2.DeepOutcomeOf(True, True, False), baseJson, ""), baseJson
+
+    ' 【裁定書9-2で追加】結末の**文字列そのもの**と採否の対応も固定する
+    '   (実装側の Private Const を1文字変えると採否が黙って反転しうる)。
+    ChkS "G77_結末revisedのときだけ改訂版を確定する_16章E-36", _
+        modPipeline2.AdoptRevisionOf(OUT_REVISED, baseJson, revJson), revJson
+
+    ChkS "G77_結末revision_discardedなら改訂前を確定する_16章E-36", _
+        modPipeline2.AdoptRevisionOf(OUT_REVISION_DISCARDED, baseJson, revJson), baseJson
 End Sub
 
 ' ============================
@@ -630,72 +622,78 @@ End Sub
 
 ' ============================
 ' G79 E-35/E-36 の分岐合成(15章§8.1 受入条件2)
-'   quality_mode=deep で S2 -> MK-S2C-HIT -> 改訂 と
-'   S2 -> MK-S2C-CLEAN -> 改訂スキップ の両経路が流れること。S3C も同様。
-'   2つの純核を合成した結果が16章E-35/E-36の「確定する成果物」に一致する
-'   ことを見る(判定を1本ずつ見るG76/G77とは別の層の検問)。
+'   quality_mode=deep で S2 -> MK-S2C-HIT -> 改訂 と MK-S2C-CLEAN -> 改訂
+'   スキップ の両経路が流れること(S3Cも同様)。純核を合成した結果が16章
+'   E-35/E-36の「確定する成果物」に一致するかを見る(G76/G77とは別の層)。
 ' ============================
 Private Sub T_DeepBranch()
     Dim baseJson As String
     Dim revJson As String
     Dim doRevise As Boolean
+    Dim adoptOk As String
+    Dim adoptNg As String
+    Dim adoptSkip As String
+    Dim adoptNoCri As String
 
     baseJson = JsRisk(MK_BASE)
     revJson = JsRisk(MK_REV)
 
+    ' §6の2本を実呼びする(私的アダプタを介さない)。E-35/E-36 の4結末のうち本群
+    ' が通る3つを DeepOutcomeOf に分類させ、確定JSONは AdoptRevisionOf が選ぶ。
+    adoptOk = modPipeline2.AdoptRevisionOf( _
+        modPipeline2.DeepOutcomeOf(True, True, True), baseJson, revJson)
+    adoptNg = modPipeline2.AdoptRevisionOf( _
+        modPipeline2.DeepOutcomeOf(True, True, False), baseJson, revJson)
+    adoptSkip = modPipeline2.AdoptRevisionOf( _
+        modPipeline2.DeepOutcomeOf(True, False, False), baseJson, "")
+    adoptNoCri = modPipeline2.AdoptRevisionOf( _
+        modPipeline2.DeepOutcomeOf(False, False, False), baseJson, "")
+
     ' (1) MK-S2C-HIT -> 改訂 -> 改訂版が合格 -> 改訂版を確定(s2r_json)。
     doRevise = ReviseNeeded(2, JsS2cHit(), True)
     ChkB "G79_S2C_HITは改訂へ進み合格した改訂版を確定する_15章§8.1", _
-        (doRevise And AdoptedJson(baseJson, revJson, True) = revJson), _
-        "改訂要否=" & doRevise
+        (doRevise And adoptOk = revJson), "改訂要否=" & doRevise
 
     ' (2) MK-S2C-HIT -> 改訂 -> 改訂版が不合格 -> 改訂前を確定(E-36)。
     ChkB "G79_S2C_HITでも改訂不合格なら改訂前を確定する_16章E-36", _
-        (ReviseNeeded(2, JsS2cHit(), True) And _
-         AdoptedJson(baseJson, revJson, False) = baseJson), _
-        "実際=[" & HeadOf(AdoptedJson(baseJson, revJson, False)) & "]"
+        (ReviseNeeded(2, JsS2cHit(), True) And adoptNg = baseJson), _
+        "実際=[" & HeadOf(adoptNg) & "]"
 
     ' (3) MK-S2C-CLEAN -> 改訂スキップ -> 生成版が確定(改訂を呼ばない)。
     ChkB "G79_S2C_CLEANは改訂を呼ばず生成版を確定する_15章§4.5スキップ条件", _
-        ((Not ReviseNeeded(2, JsS2cClean(), True)) And _
-         AdoptedJson(baseJson, "", False) = baseJson), _
-        "実際=[" & HeadOf(AdoptedJson(baseJson, "", False)) & "]"
+        ((Not ReviseNeeded(2, JsS2cClean(), True)) And adoptSkip = baseJson), _
+        "実際=[" & HeadOf(adoptSkip) & "]"
 
     ' (4) MK-S3C-HIT -> 改訂 -> 不合格 -> 改訂前を確定(S3も同じ規約)。
     ChkB "G79_S3C_HITでも改訂不合格なら改訂前を確定する_16章E-36", _
-        (ReviseNeeded(3, JsS3cHit(), True) And _
-         AdoptedJson(baseJson, revJson, False) = baseJson), _
-        "実際=[" & HeadOf(AdoptedJson(baseJson, revJson, False)) & "]"
+        (ReviseNeeded(3, JsS3cHit(), True) And adoptNg = baseJson), _
+        "実際=[" & HeadOf(adoptNg) & "]"
 
     ' (5) 批判が不合格(E-35) -> 批判をスキップして生成版を確定。
     '     本体Stepは成功のままなので、確定する成果物は生成版である。
     ChkB "G79_批判不合格は改訂せず生成版を確定する_16章E-35", _
-        ((Not ReviseNeeded(2, JsS2cHit(), False)) And _
-         AdoptedJson(baseJson, "", False) = baseJson), _
-        "実際=[" & HeadOf(AdoptedJson(baseJson, "", False)) & "]"
+        ((Not ReviseNeeded(2, JsS2cHit(), False)) And adoptNoCri = baseJson), _
+        "実際=[" & HeadOf(adoptNoCri) & "]"
 End Sub
 
 ' ============================
 ' 意図的に未テスト(期待値が15章/16章/13章から一意に定まらないもの)
 '   司令塔へ懸念として返した項目。**甘い期待値を置いて実装を追認しない**
 '   ために、ここへ列挙して空白のまま残す。
-'     (a) JudgementError の status=merged(13章§2.6は merged_into 必須と
-'         するが E-41 は触れず、SetInboxJudgement の引数にも merged_into が
-'         無い。§6は「SetInboxJudgement 側で fail-closed に拒否」と宣言)。
-'     (b) revive_due の**書式**検査の有無(13章§2.6は「期日」とだけ書く)。
-'         本ファイルは空/非空だけを当てている。
-'     (c) 関心度集計(FR-17)の 1件だけのテーマを載せるか・同数のときの並び・
-'         0件のときの既定文言・上限件数。§6に純関数が無いのでG71ごと落とした。
-'     (d) PfSurvivalOf と pf_pred_types(T1..T10 の ";" 連結)の関係
-'         (13章§2.6は2列あるのに要約列の宣言は1本)。
-'     (e) TrimHistoryOf の maxTurns<=0(§6は「全件」と宣言したのでG73では
-'         当てず、G74が全件渡しとして使うにとどめた)。
-'     (f) 壁打ちの応答後の継続可否(E0202/E0201/E0204/E0205/E0206の扱い)。
+'     (a) JudgementError の status=merged(13章§2.6は merged_into 必須だが
+'         E-41 は触れず、SetInboxJudgement にも引数が無い。§6は同関数側の
+'         fail-closed 拒否と宣言)。
+'     (b) revive_due の**書式**検査の有無(13章§2.6は「期日」とだけ書く。
+'         本ファイルは空/非空だけを当てている)。
+'     (c) 【移管】関心度(FR-17)は modTestsPure9 の G71/G81 が当てている。
+'     (d) 【解消】pf_pred_types は modTestsPure9 の G83 が当てている。
+'     (e) TrimHistoryOf の maxTurns<=0(§6は「全件」と宣言。G74が全件渡し
+'         として使うにとどめた)。
+'     (f) 壁打ちの応答後の継続可否(E0201/E0202/E0204からE0206の扱い)。
 '         §6の CanContinueSparring は**送信前**判定なのでG75ごと落とした。
-'     (g) ShouldReviseOf で issues 0件だが additional_risks が非空のとき
-'         (§6は「S2Cは additional_risks が非空なら True」と宣言済み)。
-'     (h) CritiqueDigest の指摘0件のときの戻り(空文字か既定文言か)と、
-'         target(risk_no:3 等)を digest に載せるか。
+'     (g) issues 0件だが additional_risks が非空のとき(§6は「S2Cは
+'         additional_risks が非空なら True」と宣言済み)。
+'     (h) CritiqueDigest の指摘0件のときの戻りと、target を digest に載せるか。
 '     (i) digest に lands=true の反応を載せるか(15章§4.7の注記と14章§6の
 '         宣言が食い違う。仕様裁定待ちのためG78から1本落とした)。
 ' ============================

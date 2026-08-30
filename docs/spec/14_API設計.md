@@ -1,5 +1,7 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.4
 
+> v2.4.8（裁定書9-1/9-2: W2c検証 MAJOR の解消）: 規約が実行制御・シートI/Oの中に閉じ込められていた2点を**純核として宣言**した。(1) **`modInboxStore.InterestSummaryOf(themeLines)`** — 10章FR-17 の関心度集計（件数集計・件数降順・**2件以上集まったテーマだけ**・上限は既定3件）の唯一の値源。シートI/Oの `InterestText` は theme 列を1件1行で集めて渡すだけになり、上限件数を引数で受けなくなったので **`InterestText()` は引数なし**へ改めた（`maxItems` の呼び出し実績は無い）。(2) **`modPipeline2.AdoptRevisionOf(outcome, originalJson, revisedJson)`** — 16章E-36 の「改訂を破棄して改訂前を採用」の唯一の選択点。`RunPipe` の確定JSON選択と `sNr_json` の保存可否はこの戻り値を経由し、不合格の改訂版が `sNr_json` へ入る経路を構造として持たない。あわせて §6 が「Private へ戻すことは契約違反」と書く純核（`modPipeline2` 8本 ＋ `modInboxStore` / `modPlayOps` / `modJudgeStore` の宣言済み純核）を `vba_lint.py` の CONTRACT `required` へ同期した（裁定書9-3）。
+
 > v2.4.7（裁定書8 B-9: T-27 実装時の命名）: §6へ **`modSparring`**（PL-04 壁打ち）の節を新設し、実行制御4本（`ResumeSparring` / `SendSparring` / `SendToInbox` / `HistoryOf`）と純核3本（`CanContinueSparring` / `TrimHistoryOf` / `HistoryJoinOf`）を宣言した。あわせて `sparring_u` / `sparring_a`（13章§2.2）の**保存形式**（1発話＝1行 `seq <TAB> spoke_at <TAB> 本文`）を本節で確定した——§2.2 の列定義（`seq`＝32,000字の分割連番）と data_key 注記（「発話単位seqで保存」）の食い違いを、`SaveData` の契約（data_key 単位で全行を置換）を変えずに吸収するためである。**未解決2件**を本文中に明記した: (a) 13章§2.1/§2.17 が求める `dossier_tier` の t3_sparring への**自動昇格の書込口**が本節に無い（`ResumeSparring` は昇格せず usage_log に事実を残す）、(b) 15章§6.5 の `{{schemes}}` は「全status」だが `modKnowledge.SchemesFor` は S3用の proven/adopted 絞込しか持たない（狭い側で注入し run_log へ事実を残す）。
 >
 > v2.4.6（裁定書8 B-8: T-26 実装時の命名）: 裁定書8が予約していた **`modJudgeStore.NewJudgement`**（`TJudgement`受取・`judge_id`返却）に加え、読取口 **`ReadJudgement`**・事後結果の更新口 **`SetJudgementResult`**・純ロジック4本（`BuildJudgeId` / `IsValidJudgeId` / `IsValidDecision` / `IsValidJudgeResult`）を宣言した。あわせて `modAppTypes` へ判断台帳9列（`judge_id`/`judged_at`を除く）の入れ物 **`TJudgement`** を新設した。判断台帳は13章§4のとおり削除しないため、本モジュールに Delete 相当の公開関数は無い。
@@ -564,6 +566,8 @@ Public Function RunPreflightAll() As Long
 '   **診断できた分は保存・失敗した分は undiagnosed のまま残す**。1件でも落ちたら E0701 を
 '   件数つきで記録する。戻り値=診断できた件数。Step間で DoEvents を挟む（E-50(c)）
 ' --- modPlayOps の判定核5本（裁定書8 B-7。シート・ログ・LLMに触れない純関数） ---
+' 規約（診断結果の要約列・ID一覧の組立・不合格の内訳）を実行制御へ閉じ込めない。**Private へ
+'   戻すことは契約違反**（vba_lint の CONTRACT required が検出する。裁定書9-3）。
 Public Function PfSurvivalOf(ByVal pfJson As String) As String
 ' 診断JSONから受信箱の要約列 `pf_survival` を取り出す（13章§2.6）。enum（high/mid/low）
 '   以外は ""（未定義値を列へ書かない）
@@ -634,12 +638,15 @@ Public Function RunDeep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
 '   左右しない**のが契約(16章 E-35 批判不合格=生成版を確定して警告 / E-36 改訂不合格=
 '   改訂を破棄して改訂前を採用。どちらも本体Stepは成功のままで failed_step を立てない)。
 '   呼び出し側はこの値を握りつぶしてよい。
-' --- modPipeline2 の判定核7本（裁定書8 B-10。T-28 の実装時に本節へ足すと A-1 が
-'     予告していた「パイプ内部の関数構成」。シート・ログ・LLMに触れない純関数） ---
-' 規約そのもの（改訂へ進む条件・批判の日本語整形・E-35/E-36 の結末の分類とHOMEへ出す
-'   文言・deep_transport の解決）を実行制御の中に閉じ込めると層(a)から誰も検査できない。
+' --- modPipeline2 の判定核8本（裁定書8 B-10 の7本 ＋ 裁定書9-2 の `AdoptRevisionOf`。
+'     A-1 が「T-28 の実装時に本節へ足す」と予告していた「パイプ内部の関数構成」。
+'     シート・ログ・LLMに触れない純関数） ---
+' 規約そのもの（改訂へ進む条件・批判の日本語整形・E-35/E-36 の結末の分類と確定JSONの
+'   選択・HOMEへ出す文言・deep_transport の解決）を実行制御の中に閉じ込めると層(a)から
+'   誰も検査できない。
 '   modTestsPure から直接叩く前提で公開し、run_lo_tests の PURE_ALLOWLIST にも
-'   modPipeline2 を登録する。**Private へ戻すことは契約違反**。
+'   modPipeline2 を登録する。**Private へ戻すことは契約違反**（裁定書9-3 で
+'   `AdoptRevisionOf` を含む8本を vba_lint の CONTRACT required へ載せ、機械で検出する）。
 Public Function CritiqueStepOf(ByVal stepNo As Long) As String   ' 2→s2c / 3→s3c / 他は ""（19章§4）
 Public Function ReviseStepOf(ByVal stepNo As Long) As String     ' 2→s2r / 3→s3r / 他は ""（同）
 Public Function NeedsRevision(ByVal critiqueJson As String, ByVal stepNo As Long) As Boolean
@@ -653,6 +660,14 @@ Public Function DeepOutcomeOf(ByVal critiqueOk As Boolean, ByVal revisionTried A
                               ByVal revisionOk As Boolean) As String
 ' パイプの結末の唯一の分類点。`critique_skipped`（E-35）/ `revision_skipped`（指摘0件）/
 '   `revised` / `revision_discarded`（E-36）の4値。**どの値でも本体Stepは成功のまま**
+Public Function AdoptRevisionOf(ByVal outcome As String, ByVal originalJson As String, _
+                                ByVal revisedJson As String) As String
+' **確定として採用するJSONの唯一の選択点**（16章 E-36。裁定書9-2）。`outcome` は
+'   `DeepOutcomeOf` の4値で、`revised` のときだけ改訂版を、それ以外（`critique_skipped` /
+'   `revision_skipped` / `revision_discarded`）は改訂前＝検証合格済みの生成版を返す。
+'   **2本を継ぎ合わせない**（どちらか1本をそのまま返す）。`RunPipe` は確定JSONの選択も
+'   `sNr_json` の保存可否もこの戻り値を経由し、**不合格の改訂版が `sNr_json` へ入る経路を
+'   構造として持たない**（E-36 の意思決定を実行制御側の If で書き直さない）
 Public Function DeepWarningOf(ByVal outcome As String) As String
 ' HOME の `hm_warning` へ出す文言（16章 E-35/E-36 の逐語）。警告の要らない結末は ""。
 '   app層から ui層 は呼べない（R1）ので、値だけを供給して ui層（modUIHome）が読む
@@ -818,11 +833,17 @@ Public Function ReadInboxItem(ByVal inboxId As String, ByRef theme As String, _
 '   戻り値 False=シート・見出し・当該行が無い（呼び出し側は fail-closed で中止する）
 Public Function UndiagnosedIds() As String
 ' 未診断（undiagnosed）の inbox_id を投函順に ";" 区切りで返す（一括診断の対象一覧）
-Public Function InterestText(Optional ByVal maxItems As Long = 0) As String
+Public Function InterestText() As String
 ' 関心度の集計表示（10章 FR-17・11章 受信箱ワイヤー「関心度: 熊対策12件 雹災5件」）。
-'   同一テーマの投函件数を多い順に maxItems 件（0=既定3件）まで並べた1行。**2件以上
-'   集まったテーマだけ**を載せる。本体シートの読取だけで完結しナレッジブックへは書かない（12章§4）
+'   受信箱の `theme` 列を投函順に**1件1行**で集め、集計そのものは純核
+'   `InterestSummaryOf` に渡すだけ（件数集計・降順・2件以上・上限件数の規約を1つも
+'   持たない）。上限件数は純核が持つため**引数で受けない**（v2.4.8 で `maxItems` を廃止）。
+'   本体シートの読取だけで完結しナレッジブックへは書かない（12章§4）
 ' --- modInboxStore の純ロジック（Excel非依存。層(a)から直接叩く。裁定書8 B-7）---
+' 規約（採番・ID書式・状態遷移・E-41の必須検査・FR-17の集計）をシートI/Oの中へ閉じ込めると
+'   層(a)から誰も検査できない。以下7本は modTestsPure から直接叩く前提で公開し、
+'   run_lo_tests の PURE_ALLOWLIST にも modInboxStore を登録する。**Private へ戻すことは
+'   契約違反**（vba_lint の CONTRACT required が検出する。裁定書9-3）。
 Public Function BuildInboxId(ByVal monthText As String, ByVal seq As Long) As String
 ' 13章§1 の `I-YYYYMM-NNN`。monthText は yyyymm の6桁ちょうど（数字のみ）、seq は 1..999。
 ' 桁違い・範囲外は ""。引数名が `monthText` なのは **`Month` がVBAの組込関数**で
@@ -843,6 +864,13 @@ Public Function InterestKeyOf(ByVal themeText As String) As String
 '   しない＝人が読める粒度で数える）。空テーマは ""
 Public Function FmtInterestLine(ByVal themeText As String, ByVal itemCount As Long) As String
 ' 関心度1件の表示（`熊対策12件`）。件数0以下・テーマ空は ""
+Public Function InterestSummaryOf(ByVal themeLines As String) As String
+' 10章 FR-17 の関心度集計の**唯一の値源**（裁定書9-1）。`themeLines` は投函1件につき1行
+'   （vbLf区切り）のテーマ文字列。規約はこの1本にしか無い: (1)同一テーマの重複投函を
+'   棄却せず件数へ寄せる (2)件数の多い順に並べる (3)**2件以上集まったテーマだけ**を
+'   載せる（1件は「重複投函」ではない） (4)上限は既定3件 (5)区切りは半角空白。
+'   同一視の粒度は `InterestKeyOf`、1件ぶんの表示は `FmtInterestLine` が唯一の値源。
+'   空・全行が空テーマなら ""（空の集計をでっち上げない）
 Public Function NewJudgement(ByVal rec As TJudgement) As String
 ' UW判断を1件起票して judge_id（13章§1 `J-YYYYMM-NNN`）を返す（裁定書8 B-8）。当月の
 '   使用済み最大連番の次から採り、衝突は E0605 を記録して次番号へ（999で枯渇）。失敗は ""。
@@ -863,6 +891,7 @@ Public Function SetJudgementResult(ByVal judgeId As String, ByVal resultText As 
 '   ブロック。""を渡すと result 列を空へ戻す（pendingの取消）。result/post_loss は16章E-05(4)
 '   の走査対象外（situation/key_reasonの2列に限る）なので modPii は通さない
 ' --- modJudgeStore の純ロジック（Excel非依存。層(a)から直接叩く。裁定書8 B-8）---
+' **Private へ戻すことは契約違反**（vba_lint の CONTRACT required が検出する。裁定書9-3）。
 Public Function BuildJudgeId(ByVal monthText As String, ByVal seq As Long) As String
 ' 13章§1 の `J-YYYYMM-NNN`。monthText は yyyymm の6桁ちょうど（数字のみ）、seq は 1..999。
 '   桁違い・範囲外は ""。`modInboxStore.BuildInboxId` と同型

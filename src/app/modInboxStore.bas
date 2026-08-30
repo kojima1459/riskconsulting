@@ -13,9 +13,10 @@ Option Explicit
 '   受信箱1枚」。セル書込は全て modUtilText.SetCellSafe(16章 NFR-S7①)を通す
 '   (body の32,000字打切りと先頭式記号の無害化もそこが唯一の実装であり、
 '   13章§2.6「1セル上限で打切り+警告」はこの1本で満たす)。
-' 純ロジックの分離: 採番・ID書式・状態遷移・E-41の必須検査・関心度キーは
-'   シートI/Oを含まない純関数として公開する(14章§6)。規約をシートI/Oの中へ
-'   閉じ込めると層(a)から誰も検査できない(W2aの実害と同じ轍を踏まない)。
+' 純ロジックの分離: 採番・ID書式・状態遷移・E-41の必須検査・関心度キー・
+'   関心度の集計(FR-17)はシートI/Oを含まない純関数として公開する(14章§6)。
+'   規約をシートI/Oの中へ閉じ込めると層(a)から誰も検査できない(W2aの実害と
+'   同じ轍を踏まない)。
 ' 列アクセスは列名ベース(13章冒頭。列番号のハードコード禁止)。例外は投げず、
 '   読めない・書けないは False / "" で返す。
 ' ============================================================================
@@ -143,7 +144,10 @@ End Function
 '   する(意味の同一視まではしない=人が読める粒度で数える)。空テーマは ""。
 Public Function InterestKeyOf(ByVal themeText As String) As String
     Dim t As String
-    t = Trim$(modUtilText.NormalizeForHash(themeText))
+    ' 14章§6: 改行・空白の揺れと大小文字だけを吸収する。改行は空白へ畳む
+    t = Replace(Replace(themeText, vbCrLf, " "), vbLf, " ")
+    t = Replace(t, vbCr, " ")
+    t = Trim$(modUtilText.NormalizeForHash(t))
     If LenB(t) = 0 Then Exit Function
     InterestKeyOf = LCase$(t)
 End Function
@@ -154,6 +158,57 @@ Public Function FmtInterestLine(ByVal themeText As String, ByVal itemCount As Lo
     If itemCount <= 0 Then Exit Function
     If LenB(Trim$(themeText)) = 0 Then Exit Function
     FmtInterestLine = Trim$(themeText) & CStr(itemCount) & IB_INTEREST_UNIT
+End Function
+
+' InterestSummaryOf - 関心度の集計そのもの(10章 FR-17・11章 受信箱ワイヤー
+'   「関心度: 熊対策12件 雹災5件」)。themeLines は**投函1件につき1行**
+'   (vbLf区切り)のテーマ文字列。
+'   規約(この1本にしか無い): (1)同一テーマの重複投函を棄却せず件数へ寄せる
+'   (2)件数の多い順に並べる (3)**2件以上集まったテーマだけ**を載せる(1件は
+'   「重複投函」ではない) (4)上限は IB_INTEREST_TOP 件 (5)区切りは半角空白。
+'   同一視の粒度は InterestKeyOf、1件ぶんの表示は FmtInterestLine が唯一の
+'   値源(答えを2箇所に書かない)。空・全行が空テーマなら ""(空の集計を
+'   でっち上げない)。シートI/Oの InterestText は行を集めてここへ渡すだけで、
+'   上の5つの規約を1つも持たない(裁定書9-1: 規約を層(a)から検査可能にする)。
+Public Function InterestSummaryOf(ByVal themeLines As String) As String
+    If LenB(Trim$(themeLines)) = 0 Then Exit Function
+
+    Dim lineTexts() As String
+    lineTexts = Split(themeLines, vbLf)
+
+    Dim maxKinds As Long
+    maxKinds = UBound(lineTexts) - LBound(lineTexts) + 1
+    If maxKinds < 1 Then Exit Function
+
+    Dim keys() As String
+    Dim labels() As String
+    Dim counts() As Long
+    ReDim keys(1 To maxKinds)
+    ReDim labels(1 To maxKinds)
+    ReDim counts(1 To maxKinds)
+
+    Dim kindCount As Long
+    Dim i As Long
+    For i = LBound(lineTexts) To UBound(lineTexts)
+        Dim oneTheme As String
+        oneTheme = Trim$(Replace(lineTexts(i), vbCr, vbNullString))
+        Dim k As String
+        k = InterestKeyOf(oneTheme)
+        If LenB(k) > 0 Then
+            Dim hit As Long
+            hit = IndexOfKey(keys, kindCount, k)
+            If hit = 0 Then
+                kindCount = kindCount + 1
+                keys(kindCount) = k
+                labels(kindCount) = oneTheme
+                counts(kindCount) = 1
+            Else
+                counts(hit) = counts(hit) + 1
+            End If
+        End If
+    Next i
+
+    InterestSummaryOf = TopInterest(labels, counts, kindCount, IB_INTEREST_TOP)
 End Function
 
 ' 半角数字だけで構成されているか(空は False)。
@@ -403,16 +458,13 @@ Failed:
     SetInboxJudgement = False
 End Function
 
-' InterestText - 関心度の集計表示(10章 FR-17・11章 受信箱ワイヤー)。同一テーマ
-'   の投函件数を多い順に maxItems 件まで並べた1行を返す(既定3件)。2件以上
-'   集まったテーマだけを載せる(1件のテーマは「重複投函」ではないため)。
+' InterestText - 関心度の集計表示(10章 FR-17・11章 受信箱ワイヤー)。受信箱の
+'   theme 列を投函順に**1件1行**で集め、集計は純核 InterestSummaryOf へ渡す。
+'   件数集計・降順整列・2件以上・上限件数の規約は本関数には1つも無い
+'   (シートI/Oは行を集めるだけ)。上限件数は純核が持つため引数で受けない。
 '   本体シートの読取だけで完結し、ナレッジブックへは書かない(12章§4)。
-Public Function InterestText(Optional ByVal maxItems As Long = 0) As String
+Public Function InterestText() As String
     On Error GoTo Failed
-
-    Dim topN As Long
-    topN = maxItems
-    If topN <= 0 Then topN = IB_INTEREST_TOP
 
     Dim ws As Object
     Set ws = IbSheet()
@@ -425,35 +477,15 @@ Public Function InterestText(Optional ByVal maxItems As Long = 0) As String
     Dim blk As Variant
     blk = IbBlock(ws, lastRow)
 
-    Dim keys() As String
-    Dim labels() As String
-    Dim counts() As Long
-    ReDim keys(1 To lastRow)
-    ReDim labels(1 To lastRow)
-    ReDim counts(1 To lastRow)
-
-    Dim kindCount As Long
+    Dim acc As String
     Dim r As Long
     For r = 2 To lastRow
-        Dim themeText As String
-        themeText = IbValue(blk, r, "theme")
-        Dim k As String
-        k = InterestKeyOf(themeText)
-        If LenB(k) > 0 Then
-            Dim hit As Long
-            hit = IndexOfKey(keys, kindCount, k)
-            If hit = 0 Then
-                kindCount = kindCount + 1
-                keys(kindCount) = k
-                labels(kindCount) = Trim$(themeText)
-                counts(kindCount) = 1
-            Else
-                counts(hit) = counts(hit) + 1
-            End If
-        End If
+        ' 1セル内の改行で1件が2件に化けないよう空白へ倒してから積む。
+        If r > 2 Then acc = acc & vbLf
+        acc = acc & Replace(Replace(IbValue(blk, r, "theme"), vbCr, " "), vbLf, " ")
     Next r
 
-    InterestText = TopInterest(labels, counts, kindCount, topN)
+    InterestText = InterestSummaryOf(acc)
     Exit Function
 
 Failed:
@@ -487,7 +519,8 @@ Private Function ReviveDueFor(ByVal tgt As String, ByVal reviveDue As Date) As S
     ReviveDueFor = modUtilText.IsoDate(reviveDue)
 End Function
 
-' 集計済みキーの位置(1始まり。無ければ0)。件数は投函の種類数ぶんしか回らない。
+' 集計済みキーの位置(1始まり。無ければ0)。InterestSummaryOf の内部ヘルパ。
+' 件数は投函の種類数ぶんしか回らない。
 Private Function IndexOfKey(ByRef keys() As String, ByVal kindCount As Long, _
                             ByVal k As String) As Long
     Dim i As Long
@@ -500,6 +533,7 @@ Private Function IndexOfKey(ByRef keys() As String, ByVal kindCount As Long, _
 End Function
 
 ' 件数の多い順に topN 件を1行へ。2件以上のテーマだけを載せる(FR-17)。
+' InterestSummaryOf の内部ヘルパ(呼ぶのは純核1本だけ。シートには触れない)。
 Private Function TopInterest(ByRef labels() As String, ByRef counts() As Long, _
                              ByVal kindCount As Long, ByVal topN As Long) As String
     Dim used() As Boolean

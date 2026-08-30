@@ -144,19 +144,24 @@ Failed:
 End Function
 
 ' RunPipe - 批判 -> (指摘があれば)改訂 の本体。結末の分類は DeepOutcomeOf が
-'   唯一の判定点で、HOMEへ出す警告文は DeepWarningOf が唯一の値源。
+'   唯一の判定点で、**確定するJSONの選択は AdoptRevisionOf が唯一の選択点**
+'   (裁定書9-2)。HOMEへ出す警告文は DeepWarningOf が唯一の値源。
+'   本体は「分類 -> 採用 -> 保存」の一本道で、E-35/E-36 の意思決定を自前の
+'   If で書き直さない(迂回すると層(a)の回帰網の外へ出てしまう)。
 Private Function RunPipe(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx) As Boolean
     Dim critiqueJson As String
     Dim revisedJson As String
     Dim resultText As String
+    Dim outcome As String
 
     ' --- 批判(15章§4.5 / §4.6) ---
     resultText = RunCritique(ctx, d, critiqueJson)
-    If resultText <> P2_RES_OK Then
+    outcome = DeepOutcomeOf((resultText = P2_RES_OK), False, False)
+    If StrComp(outcome, P2_OUT_CRITIQUE_SKIPPED, vbBinaryCompare) = 0 Then
         ' E-35: 批判をスキップして生成版を確定。本体Stepは成功のまま。経路その
         ' ものが落ちた場合(E-14からE-16・E-15の上限を含む)も生成版の確定は同じで、
         ' 戻り値だけを False にして「回し切っていない」ことを呼び出し側へ伝える。
-        RecordOutcome d, DeepOutcomeOf(False, False, False)
+        RecordOutcome d, outcome
         RunPipe = (resultText = P2_RES_FAILED)
         Exit Function
     End If
@@ -170,16 +175,26 @@ Private Function RunPipe(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx) As Boolean
 
     ' --- 改訂(15章§4.7) ---
     resultText = RunRevision(ctx, d, critiqueJson, revisedJson)
-    If resultText = P2_RES_OK Then
-        ' 13章§2.2: 改訂版は sN_json を上書きせず sNr_json へ入れる。下流Stepは
-        ' sN_edited > sNr_json > sN_json の優先で参照する。
-        If Not modCaseStore.SaveData(d.caseId, d.stepName & "r_json", revisedJson) Then
-            modLog.LogError "E0604", P2_SRC & ".RunPipe", "save_failed:" & d.stepName
-        End If
-    End If
-    RecordOutcome d, DeepOutcomeOf(True, True, (resultText = P2_RES_OK))
+    outcome = DeepOutcomeOf(True, True, (resultText = P2_RES_OK))
+    SaveAdopted d, AdoptRevisionOf(outcome, d.baseJson, revisedJson)
+    RecordOutcome d, outcome
     RunPipe = (resultText <> P2_RES_CALL)
 End Function
+
+' SaveAdopted - AdoptRevisionOf が確定として返した1本を格納する。
+'   13章§2.2: 改訂版は sN_json を上書きせず sNr_json へ入れる(下流Stepは
+'   sN_edited > sNr_json > sN_json の優先で参照する)。**確定が改訂前
+'   (=E-36 で改訂を破棄した場合)なら sNr_json へは1字も書かない**。
+'   保存可否をここで判定し直さないのが要点で、判定は AdoptRevisionOf の
+'   戻り値がすでに済ませている(不合格の改訂版が sNr_json へ入る経路を
+'   構造として持たない)。
+Private Sub SaveAdopted(ByRef d As TDeepCtx, ByVal adoptedJson As String)
+    If StrComp(adoptedJson, d.baseJson, vbBinaryCompare) = 0 Then Exit Sub
+    If LenB(Trim$(adoptedJson)) = 0 Then Exit Sub
+    If Not modCaseStore.SaveData(d.caseId, d.stepName & "r_json", adoptedJson) Then
+        modLog.LogError "E0604", P2_SRC & ".SaveAdopted", "save_failed:" & d.stepName
+    End If
+End Sub
 
 ' RunCritique - S2C / S3C の1往復。合格した批判JSONを critiqueJson へ返す。
 '   戻り値は CallGuarded と同じ ok / failed / call_failed。
@@ -369,6 +384,23 @@ Public Function DeepOutcomeOf(ByVal critiqueOk As Boolean, ByVal revisionTried A
     Else
         DeepOutcomeOf = P2_OUT_REVISION_DISCARDED
     End If
+End Function
+
+' AdoptRevisionOf - 確定として採用するJSONの唯一の選択点(16章 E-36・裁定書9-2)。
+'   outcome は DeepOutcomeOf の4値。`revised` のときだけ改訂版を確定し、それ
+'   以外(critique_skipped / revision_skipped / revision_discarded)は改訂前
+'   (=検証合格済みの生成版)を確定する。**2本を継ぎ合わせない**(どちらか1本を
+'   そのまま返す)。sNr_json へ入れてよいのは本関数が改訂版を返したときだけで、
+'   RunPipe の保存可否もこの戻り値を経由する(選択を2箇所に書かない)。
+'   E-36 の「改訂を破棄して改訂前を採用」は本関数にしか無い規約であり、
+'   Private へ戻すと層(a)から検査できなくなる(14章§6が公開を宣言)。
+Public Function AdoptRevisionOf(ByVal outcome As String, ByVal originalJson As String, _
+                                ByVal revisedJson As String) As String
+    If StrComp(Trim$(outcome), P2_OUT_REVISED, vbBinaryCompare) = 0 Then
+        AdoptRevisionOf = revisedJson
+        Exit Function
+    End If
+    AdoptRevisionOf = originalJson
 End Function
 
 ' DeepWarningOf - HOMEの hm_warning へ出す文言(16章 E-35/E-36 の逐語)。
