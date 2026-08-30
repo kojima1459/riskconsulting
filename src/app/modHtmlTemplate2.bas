@@ -104,7 +104,9 @@ Public Function SecSufficiencyJs() As String
     s = s & "T(sp,'span',null,LB(LASP,a)+' ');" & vbLf
     s = s & "BDG(sp,IQCLS[st]?IQCLS[st]:'bdg-missing',LB(LIQ,st));" & vbLf
     s = s & "box.appendChild(sp);}" & vbLf
-    s = s & "if(NB(iq.overall)){T(el,'p','muted',LB(LIQO,iq.overall));}" & vbLf
+    ' 裁定書10補遺P5: LIQO は19章§3どおり「高/中/低」の1字ラベルなので、
+    '   単独段落では意味が立たない。表示側で「充足度: 」を前置する(18章§3)。
+    s = s & "if(NB(iq.overall)){T(el,'p','muted','充足度: '+LB(LIQO,iq.overall));}" & vbLf
     s = s & "if(NB(iq.advice)){T(el,'p',null,S(iq.advice));}" & vbLf
     s = s & "var mi=AR(s1.missing_info);if(!mi.length){return;}" & vbLf
     s = s & "T(el,'h3',null,'要確認事項(いま足りていない情報)');var rows=[];" & vbLf

@@ -174,9 +174,10 @@ Private Function ExecStep(ByVal caseId As String, ByRef ctx As TCaseCtx, _
     If Not BuildPrompts(caseId, ctx, c, sysText, userText, schemaText, detailPre) Then Exit Function
 
     ' gatewayが知り得ない列を預ける(14章§6の run_log 受け渡し)。注入IDは組立で
-    ' 確定済み。operator は取得口が無いため空(未結線1)。
+    ' 確定済み。operator は config の同名キー(13章§2.3)。
     modGatewayRPN.SetRunContext caseId, mRoundNo, ctx.case_type, _
-                                modKnowledge.LastInjectedIds(), vbNullString
+                                modKnowledge.LastInjectedIds(), _
+                                Trim$(modConfig.GetStr("operator", vbNullString))
 
     resultText = CallGuarded(c, PlayIdOf(ctx.case_type), sysText, userText, _
                              schemaText, detailPre, okJson, failRaw)

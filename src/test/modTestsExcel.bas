@@ -26,6 +26,7 @@ Option Explicit
 '   B11 = 裁定書9 B11(ReadKbSheets 0件でスナップショット不触。16章E-08)
 '   B12 = 裁定書9 B12 + 裁定書10 M5(AnswerMemoCount は案件を問わず数える)
 '   B13 = 裁定書9 B13 + 裁定書10 M6(2相書込の途中失敗痕跡は E0604 で止める)
+'   C1  = 裁定書10 C1 + 補遺P7(投函下書き行の常設と、投函の失敗経路での残存)
 '
 ' LibreOffice(run_lo_tests.py)では走らない(層(b)は実Excel専用。tools/
 ' run_lo_tests.py のモジュール一覧にも含めない)。
@@ -47,7 +48,7 @@ Private Const TE_SNAP_MARK As String = "T47_SNAP_MARK"
 Private Const TE_BAND_SEQ As Long = 100001
 
 ' 本モジュールが打つ Check の総本数(自己照合用。テストを増減したら更新)。
-Private Const TE_EXPECTED As Long = 29
+Private Const TE_EXPECTED As Long = 34
 
 Private mRun As Long    ' ECheck が数える実行本数
 
@@ -62,6 +63,7 @@ Public Sub RunAllExcelTests()
     TestB11SnapshotGuard
     TestB12AnswerMemo
     TestB13TwoPhase
+    TestC1DraftRow
     ' 自己照合はランナーへ直接打つ(mRun には数えない)。
     modTestRunner.Check "T47-00_層(b)本数の自己照合(" & CStr(TE_EXPECTED) & "本)", _
         mRun = TE_EXPECTED, "実際=" & CStr(mRun) & _
@@ -442,6 +444,89 @@ Cleanup:
     Exit Sub
 Crashed:
     ECheck "T47-B13-99_想定外エラー", False, _
+           "Err=" & CStr(Err.Number) & " " & Err.Description
+    Resume Cleanup
+End Sub
+
+' ============================================================================
+' C1: 投函下書き行(裁定書10 C1・補遺P7・13章§2.6)
+'   (1)起動シーケンス(EnsureInboxButtons)の後、受信箱の先頭データ行の id 列が
+'      下書きマーカーであること(下書き行の常設)。
+'   (2)投函の失敗経路(body が空)にあたる状態で起動シーケンスを再実行しても、
+'      行が増えず・マーカーが残ること(下書き行は消さない・二重に作らない)。
+'   (3)下書き行は受信箱のデータではないので未診断一覧に混ざらないこと。
+'   ※ InboxPost 自体は失敗時に MsgBox(モーダル)を出し無人実行を止めるため
+'      直接は呼ばない。検査は下書き行の不変条件と走査の継ぎ目で行う。
+' ============================================================================
+Private Sub TestC1DraftRow()
+    Dim ws As Object
+    Dim cId As Long, cBody As Long, cStat As Long
+    Dim origBody As String, origStat As String
+    Dim lastBefore As Long
+    Dim touched As Boolean
+    On Error GoTo Crashed
+
+    Set ws = SheetByName("受信箱")
+    Dim hdr As Variant
+    If Not ws Is Nothing Then
+        hdr = Hdr1(ws, 24)
+        cId = modUtil.FindHeaderCol(hdr, "inbox_id")
+        cBody = modUtil.FindHeaderCol(hdr, "body")
+    End If
+    ECheck "T47-C1-01_受信箱の見出し(inbox_id/body)が引ける", _
+           (Not ws Is Nothing) And cId > 0 And cBody > 0
+    If ws Is Nothing Or cId <= 0 Or cBody <= 0 Then Exit Sub
+
+    modUIInbox.EnsureInboxButtons
+    ECheck "T47-C1-02_起動後の先頭データ行id列が投函下書きマーカー", _
+           Trim$(CellStr(ws, 2, cId)) = modInboxStore.IB_DRAFT_MARK, _
+           "実際=" & CellStr(ws, 2, cId)
+
+    origBody = CellStr(ws, 2, cBody)
+    touched = True
+    ws.Cells(2, cBody).ClearContents        ' 投函の失敗経路(body 空)の入力状態
+    lastBefore = LastRowA(ws)
+
+    modUIInbox.EnsureInboxButtons           ' 冪等であること(下書き行を作り直さない)
+    ECheck "T47-C1-03_body空でも受信箱の行が増えない", LastRowA(ws) = lastBefore, _
+           "before=" & CStr(lastBefore) & " after=" & CStr(LastRowA(ws))
+    ECheck "T47-C1-04_body空でも下書き行のマーカーが残る", _
+           Trim$(CellStr(ws, 2, cId)) = modInboxStore.IB_DRAFT_MARK, _
+           "実際=" & CellStr(ws, 2, cId)
+
+    ' 走査スキップの検査は status を undiagnosed にした状態で行う(status が空
+    ' のままだと「未診断ではない」という別の理由で外れ、IsDraftId の回帰に
+    ' ならない)。cStat が引けないときは status を触らずに検査する。
+    modUtilText.SetCellSafe ws.Cells(2, cBody), "T47下書き本文", "T47/受信箱body"
+    cStat = modUtil.FindHeaderCol(hdr, "status")
+    If cStat > 0 Then
+        origStat = CellStr(ws, 2, cStat)
+        modUtilText.SetCellSafe ws.Cells(2, cStat), "undiagnosed", "T47/受信箱status"
+    End If
+    ECheck "T47-C1-05_下書き行は未診断一覧に混ざらない(走査スキップ)", _
+           InStr(1, modInboxStore.UndiagnosedIds(), modInboxStore.IB_DRAFT_MARK, _
+                 vbBinaryCompare) = 0, _
+           "実際=" & modInboxStore.UndiagnosedIds()
+
+Cleanup:
+    On Error Resume Next
+    If touched Then
+        If LenB(origBody) = 0 Then
+            ws.Cells(2, cBody).ClearContents
+        Else
+            modUtilText.SetCellSafe ws.Cells(2, cBody), origBody, "T47/受信箱body"
+        End If
+        If cStat > 0 Then
+            If LenB(origStat) = 0 Then
+                ws.Cells(2, cStat).ClearContents
+            Else
+                modUtilText.SetCellSafe ws.Cells(2, cStat), origStat, "T47/受信箱status"
+            End If
+        End If
+    End If
+    Exit Sub
+Crashed:
+    ECheck "T47-C1-99_想定外エラー", False, _
            "Err=" & CStr(Err.Number) & " " & Err.Description
     Resume Cleanup
 End Sub

@@ -164,8 +164,6 @@ Public Sub SparringToInbox()
     If Not modUIProgress.TryEnterUiLock("受信箱へ送信") Then Exit Sub
     On Error GoTo Done
 
-    modUIProgress.ParkFocus
-
     Dim ws As Object
     Set ws = modUISheet.BlockSheet(US2_BLOCK)
     If ws Is Nothing Then GoTo Done
@@ -174,8 +172,12 @@ Public Sub SparringToInbox()
     headerRow = modUISheet.BlockRow(US2_BLOCK)
     If headerRow <= 0 Then GoTo Done
 
+    ' 裁定書10補遺 P1: 選択行の取得は ParkFocus より必ず先に行う。
     Dim rowNo As Long
     rowNo = modUISheet.SelectedRow(ws)
+
+    modUIProgress.ParkFocus
+
     If rowNo <= headerRow Then
         Notice "送りたい発話の行を選んでから押してください。"
         GoTo Done

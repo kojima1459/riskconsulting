@@ -50,14 +50,18 @@ Public Sub FeedbackSave()
     If Not modUIProgress.TryEnterUiLock("商談の記録") Then Exit Sub
     On Error GoTo Done
 
-    modUIProgress.ParkFocus
-
     Dim ws As Object
     Set ws = modUISheet.SheetOf(U4_FB)
     If ws Is Nothing Then GoTo Done
 
+    ' 裁定書10補遺 P1: ParkFocus は活性シートの Cells(1,1) を選択するため、先に
+    ' 通すと利用者の行選択が必ず行1へ潰れて以後の処理が成立しない。選択行の
+    ' 取得を先に済ませ、フォーカス退避はその後(および完了時)に行う。
     Dim rowNo As Long
     rowNo = modUISheet.SelectedRow(ws)
+
+    modUIProgress.ParkFocus
+
     If rowNo < 2 Then
         Notice "記録する行を選んでから押してください（1行目は見出しです）。"
         GoTo Done
@@ -147,14 +151,16 @@ Public Sub JudgeSave()
     If Not modUIProgress.TryEnterUiLock("判断を起票") Then Exit Sub
     On Error GoTo Done
 
-    modUIProgress.ParkFocus
-
     Dim ws As Object
     Set ws = modUISheet.SheetOf(U4_JUDGE)
     If ws Is Nothing Then GoTo Done
 
+    ' 裁定書10補遺 P1: 選択行の取得は ParkFocus より必ず先に行う。
     Dim rowNo As Long
     rowNo = modUISheet.SelectedRow(ws)
+
+    modUIProgress.ParkFocus
+
     If rowNo < 2 Then
         Notice "起票する下書き行を選んでから押してください（1行目は見出しです）。"
         GoTo Done
@@ -192,7 +198,15 @@ Public Sub JudgeSave()
     End If
 
     ' 起票済みの行が2本にならないよう、成功を確かめてから下書き行を消す。
-    ws.Rows(rowNo).Delete
+    ' 裁定書10補遺 P2: NewJudgement は judge_id 列基準の最終行の**次**へ確定行を書く
+    ' ため、下書き行が台帳末尾直下にあると確定行と同じ位置になる。削除前に当該行の
+    ' judge_id が空であることを確かめ、空でなければ(=その行が確定行へ昇格した)
+    ' 削除しない。
+    If LenB(Trim$(ColText(ws, hdr, rowNo, "judge_id"))) = 0 Then
+        ws.Rows(rowNo).Delete
+    Else
+        modLog.LogError "E0603", U4_SRC & ".JudgeSave", "draft_row_promoted:" & judgeId
+    End If
 
     Notice "判断台帳へ起票しました: " & judgeId
 

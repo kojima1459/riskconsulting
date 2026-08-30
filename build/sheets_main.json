@@ -738,7 +738,7 @@
         {"name": "log_max_rows", "value": 2000, "note": "err/usage/run共通ローテ閾値"},
         {"name": "anonymize_default", "value": true, "note": "案件入力の匿名化ボタン既定(16章 E-31/OQ-6)"},
         {"name": "feature_inbox", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"},
-        {"name": "feature_judgelog", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"}
+        {"name": "feature_judgelog", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"}, {"name": "operator", "value": "", "note": "判定・実行の記録に残す実施者。個人名ではなくグループ名まで"}
       ]
     },
 

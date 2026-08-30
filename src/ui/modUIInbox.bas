@@ -344,14 +344,16 @@ Public Sub InboxSaveJudgement()
     If Not modUIProgress.TryEnterUiLock("判定の保存") Then Exit Sub
     On Error GoTo Done
 
-    modUIProgress.ParkFocus
-
     Dim ws As Object
     Set ws = modUISheet.SheetOf(UI2_SHEET)
     If ws Is Nothing Then GoTo Done
 
+    ' 裁定書10補遺 P1: 選択行の取得は ParkFocus より必ず先に行う。
     Dim rowNo As Long
     rowNo = modUISheet.SelectedRow(ws)
+
+    modUIProgress.ParkFocus
+
     If rowNo < 2 Then
         Notice "判定する行を選んでから押してください（1行目は見出しです）。"
         GoTo Done
