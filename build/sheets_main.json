@@ -149,7 +149,7 @@
           "_note": "この4行は modUIProgress.SetStage がリボン呼出の前に書き切る(16章 E-50a)。",
           "fields": [
             {"range": "hm_progress_step", "label": "実行中の段", "type": "String", "input": false, "note": "いま動いている段の名前です。自動で書かれます"},
-            {"range": "hm_progress_started_at", "label": "開始時刻", "type": "String", "input": false, "note": "hh:mm:ss"},
+            {"range": "hm_progress_started_at", "label": "開始時刻", "type": "String", "input": false, "note": "処理を始めた時刻です。自動で書かれます"},
             {"range": "hm_progress_max_wait", "label": "最大待ち時間", "type": "String", "input": false, "note": "これ以上かかったら中断する時間の目安です"},
             {"range": "hm_progress_note", "label": "案内", "type": "String", "input": false, "note": "「画面が白くなっても処理は続いています」の固定案内文"}
           ]
@@ -165,9 +165,9 @@
         {
           "title": "受信箱",
           "fields": [
-            {"range": "hm_inbox_undiagnosed", "label": "未診断", "type": "Long", "input": false, "note": "書込専用"},
-            {"range": "hm_inbox_diagnosed", "label": "診断済", "type": "Long", "input": false, "note": "書込専用"},
-            {"range": "hm_inbox_hold", "label": "条件付き保留", "type": "Long", "input": false, "note": "書込専用"}
+            {"range": "hm_inbox_undiagnosed", "label": "未診断", "type": "Long", "input": false, "note": "受信箱にたまっている、まだ診断していない件数です。自動で書かれます"},
+            {"range": "hm_inbox_diagnosed", "label": "診断済", "type": "Long", "input": false, "note": "受信箱で診断が済んだ件数です。自動で書かれます"},
+            {"range": "hm_inbox_hold", "label": "条件付き保留", "type": "Long", "input": false, "note": "受信箱で「条件付き保留」になっている件数です。自動で書かれます"}
           ]
         }
       ]
@@ -300,7 +300,7 @@
       "tab_color": "6B7280",
       "header_title": "S1_企業プロファイル",
       "header_fields": [
-        {"range": "s1_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+        {"range": "s1_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
       ],
       "blocks": [
         {
@@ -372,7 +372,7 @@
         },
         {
           "name": "s1_input_quality",
-          "title": "入力充足度 s1_input_quality (14行固定・行順は19章§3の定義順)",
+          "title": "入力の充足度(14項目・行の順番は決まっています)",
           "reserve_rows": 14,
           "prefill": {"aspect": ["会社概要", "事業・製品", "拠点・設備", "沿革", "直近の動き", "採用・人員", "有報・財務リスク", "営業情報", "SNS評判", "競合・業界事故", "市況・マクロ", "財務状態", "付保・提案の経緯", "拠点ハザード"]},
           "columns": [
@@ -401,7 +401,7 @@
       "tab_color": "6B7280",
       "header_title": "S2_リスク仮説",
       "header_fields": [
-        {"range": "s2_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+        {"range": "s2_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
       ],
       "blocks": [
         {
@@ -476,7 +476,7 @@
       "tab_color": "6B7280",
       "header_title": "S3_提案",
       "header_fields": [
-        {"range": "s3_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+        {"range": "s3_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
       ],
       "blocks": [
         {
@@ -530,7 +530,7 @@
       "tab_color": "6B7280",
       "header_title": "S4_骨子",
       "header_fields": [
-        {"range": "s4_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
+        {"range": "s4_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
       ],
       "blocks": [
         {
@@ -600,7 +600,7 @@
       "spec_ref": "13章§2.17",
       "header_title": "壁打ち(PL-04)",
       "header_fields": [
-        {"range": "sp_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "dossier_tier が t3_sparring へ自動昇格"},
+        {"range": "sp_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "壁打ちを始めると、この案件の「調査の深さ」は自動で「壁打ち」になります"},
         {"range": "sp_context_note", "label": "コンテキスト", "type": "String", "input": false, "note": "注入済みコンテキストの表示。書込専用"},
         {"range": "sp_input", "label": "発話入力", "type": "String", "input": true, "note": "送信後にクリア"}
       ],

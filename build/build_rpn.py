@@ -117,6 +117,16 @@ TITLE_BAND_FONT = Font(bold=True, size=14, color=WHITE)
 SECTION_FILL = PatternFill("solid", fgColor=SECTION_TINT)
 TITLE_BAND_COLS = 3          # A:C を帯にする(帳票型の A=見出し / B=値 / C=注記)
 
+# タイトル帯の**文字**を置く列(既定=A列)。帯の塗り(A:C)は変えない。
+# 裁定書16 F3: S1-S4は1行目のボタンが左端(A・B列)に生えるため、A1へ表題を書くと
+# 文字がボタンの下に隠れて読めない。この4枚だけ表題をC1へ寄せる(帯は A1:C1 のまま)。
+TITLE_BAND_TEXT_COL = {
+    "S1_企業プロファイル": 3,
+    "S2_リスク仮説": 3,
+    "S3_提案": 3,
+    "S4_骨子": 3,
+}
+
 
 def _rel_luminance(hex_rgb):
     """WCAG 2.x の相対輝度(0.0-1.0)。modSkin.bas のコントラスト検算と同じ式。"""
@@ -610,11 +620,19 @@ def _apply_dv(ctx, ws, enum_key, target):
     return True
 
 
-def _title_band(ws, row, text):
+def _title_band(ws, row, text, text_col=None):
     """シート1行目のタイトル帯(裁定書14 裁定7)。BRAND_DARK 地＋白太字を A:C の
     3列へ敷く(結合はしない。結合セルは実行時の図形・行操作と相性が悪いため、
-    同じ値の見た目だけを3列ぶん塗る)。"""
-    cell = ws.cell(row=row, column=1, value=_clean(text))
+    同じ値の見た目だけを3列ぶん塗る)。
+
+    text_col: 表題**文字**を置く列(既定は TITLE_BAND_TEXT_COL、無ければA列)。
+    帯の塗り範囲は text_col によらず A:C で不変(裁定書16 F3)。"""
+    if text_col is None:
+        text_col = TITLE_BAND_TEXT_COL.get(ws.title, 1)
+    if not 1 <= int(text_col) <= TITLE_BAND_COLS:
+        raise BuildError(
+            f"タイトル帯の文字列配置列が帯の範囲外です: シート '{ws.title}' col={text_col}")
+    cell = ws.cell(row=row, column=int(text_col), value=_clean(text))
     cell.font = TITLE_BAND_FONT
     cell.alignment = Alignment(vertical="center", indent=1)
     for i in range(1, TITLE_BAND_COLS + 1):

@@ -206,10 +206,16 @@ Private Function ResultLines(ByVal summary As String, ByVal reportText As String
             End If
         Next i
 
-        ' (3) 収まらなかった行数を最終行に出す。
+        ' (3) 収まらなかった行数を最終行に出す。最終行は打切り表示で**置換**される
+        '     ため、そこにあった本文1行も欠落数に数える(数えないと1行少なく申告
+        '     することになる)。
+        '     例: 本文25行なら 1行目=サマリ+本文19行を置いた時点で n=20、
+        '         rest=25-19=6。最終行が打切り表示に化けて本文は18行しか残らない
+        '         ので、申告は 25-18=7 行が正しい。
         Dim rest As Long
         rest = (UBound(src) - LBound(src) + 1) - (n - 1)
         If rest > 0 Then
+            rest = rest + 1
             outLines(TR_RESULT_ROWS - 1) = "（以下省略・残り" & CStr(rest) & "行）"
         End If
     End If
