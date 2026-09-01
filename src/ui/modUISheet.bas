@@ -33,7 +33,7 @@ Private Const US_SHAPE_TEXTBOX As Long = 1          ' msoTextOrientationHorizont
 Private Const US_SHEET_VERY_HIDDEN As Long = 2      ' xlSheetVeryHidden
 Private Const US_SHEET_VISIBLE As Long = -1         ' xlSheetVisible
 Private Const US_ALIGN_CENTER As Long = 2           ' xlCenter / msoAlignCenter相当
-Private Const US_COLOR_BTN As Long = 15921906&      ' 淡い青(RGB 242,242,242相当)
+Private Const US_COLOR_BTN As Long = 15921906&      ' 淡いグレー(RGB 242,242,242相当)
 Private Const US_COLOR_WARN As Long = 13551615&     ' 淡い赤(超過表示)
 Private Const US_COLOR_NONE As Long = 16777215&     ' 白
 

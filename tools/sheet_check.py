@@ -778,7 +778,7 @@ def run(book_path: Path | None, rep: Report) -> None:
                     rep.eq_seq(f"[ブック] {sheet}/{bname} のヘッダ行", cols, bgot)
 
     # --- 4. 名前付きレンジ ----------------------------------------------------
-    print("\n[4] 名前付きレンジ(帳票型 hm_/ci_ と 見出し用 hs_/sp_)")
+    print("\n[4] 名前付きレンジ(帳票型 hm_/ci_/gd_ と 見出し用 hs_/sp_)")
     total_hs_sp = 0
     for sheet, want in ch13.named_ranges.items():
         got = led.named_ranges(sheet)

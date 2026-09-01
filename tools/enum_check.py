@@ -26,6 +26,14 @@ enum_check.py - 19章§3 enumレジストリ と modUICase の変換表の一致
     [4] 1グループ内で機械値・日本語ラベルがそれぞれ一意であること
         (重複すると EnumEn / EnumJa の逆引きが一意に決まらない)。
     [5] 値・ラベルに CSV の区切り(",")や改行が含まれないこと(表形式が壊れる)。
+    [6] build/sheets_main.json の `enums` にある `*_ja`(入力規則へ焼く日本語ラベル
+        の配列)が、対応するenumグループの19章§3の日本語ラベルと**並び順まで**
+        一致すること(裁定書14 裁定1。発見Fの根治)。
+        19章を直しても入力規則の焼き込み台帳が置き去りになり、画面のドロップ
+        ダウンだけが旧ラベルのまま残る事故を止める。対応づけは**キー名から機械
+        導出**する(`<グループ名>_ja` -> グループ名)。導出できないキー
+        (`judge_to_ja` のようにグループ名と綴りが違うもの)は**検査対象外として
+        申告出力**し、黙って通したことにしない。
 
 なぜ .bas を静的評価するのか:
     LibreOffice を起動して EnumPairsCsv を実行する手もあるが、それでは
@@ -44,6 +52,7 @@ enum_check.py - 19章§3 enumレジストリ と modUICase の変換表の一致
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -52,7 +61,9 @@ TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 DEFAULT_SPEC = REPO_ROOT / "docs" / "spec" / "19_用語集とレジストリ.md"
 DEFAULT_SRC = REPO_ROOT / "src" / "ui" / "modUICase.bas"
+DEFAULT_SHEETS_JSON = REPO_ROOT / "build" / "sheets_main.json"
 PAIRS_FUNC = "EnumPairsCsv"
+JA_SUFFIX = "_ja"
 
 # ==============================================================================
 # [1] 19章§3の行 -> 変換表のグループ名
@@ -446,6 +457,52 @@ def compare(want: list[tuple[str, str, str]],
     return problems
 
 
+# ==============================================================================
+# [6] build/sheets_main.json の *_ja と19章§3の日本語ラベルの一致検査
+# ------------------------------------------------------------------------------
+# 台帳の `enums` は入力規則(ドロップダウン)へそのまま焼かれる配列である。
+# 日本語ラベルを持つ列の入力規則は `<グループ名>_ja` という命名で置かれており、
+# グループ名は modUICase の変換表グループ名(=REQUIRED の右辺)と同じ綴りである。
+# ここではその命名だけを手がかりに機械導出し、REQUIRED 由来の期待ラベル列と
+# 並び順まで突き合わせる。命名から対応が取れないキーは検査せず、その事実を
+# 出力へ出す(検査できていない範囲を隠さない)。
+# ==============================================================================
+def check_json_ja(pairs: list[tuple[str, str, str]],
+                  json_path: Path) -> tuple[list[str], list[str], int]:
+    """(問題一覧, 検査対象外として申告するキー一覧, 検査したキー数) を返す。"""
+    if not json_path.exists():
+        return ([f"シート台帳が見つかりません: {json_path}"], [], 0)
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        return ([f"シート台帳をJSONとして読めません({json_path}): {e}"], [], 0)
+
+    want: dict[str, list[str]] = {}
+    for group, _value, label in pairs:
+        want.setdefault(group, []).append(label)
+
+    enums = (data.get("enums") or {})
+    problems: list[str] = []
+    unmatched: list[str] = []
+    checked = 0
+    for key in sorted(k for k in enums if isinstance(k, str) and k.endswith(JA_SUFFIX)):
+        group = key[:-len(JA_SUFFIX)]
+        if group not in want:
+            unmatched.append(key)
+            continue
+        got = enums.get(key)
+        checked += 1
+        if not isinstance(got, list):
+            problems.append(f"[{key}] enums の値が配列ではありません: {got!r}")
+            continue
+        if got != want[group]:
+            problems.append(
+                f"[{key}] 19章§3の日本語ラベルと一致しません(並び順を含む)")
+            problems.append(f"    19章 : {want[group]}")
+            problems.append(f"    台帳 : {got}")
+    return (problems, unmatched, checked)
+
+
 def to_bas(pairs: list[tuple[str, str, str]]) -> str:
     """.bas の連結文へ整形(--dump-bas。実装を手で書き写す事故を防ぐため)。"""
     out = []
@@ -459,6 +516,8 @@ def main() -> int:
         description="19章§3 enumレジストリ と modUICase の変換表の一致検査(17章§4-2)")
     ap.add_argument("--spec", default=str(DEFAULT_SPEC))
     ap.add_argument("--src", default=str(DEFAULT_SRC))
+    ap.add_argument("--sheets", default=str(DEFAULT_SHEETS_JSON),
+                    help="build/sheets_main.json のパス(検査[6]用)")
     ap.add_argument("--dump", action="store_true", help="期待されるCSV本文を出力")
     ap.add_argument("--dump-bas", action="store_true", help="上を .bas の連結文で出力")
     args = ap.parse_args()
@@ -497,6 +556,16 @@ def main() -> int:
     print(f"  実装のペア数   : {len(got)}  ({Path(args.src).name}.{PAIRS_FUNC})")
 
     problems = compare(want, got)
+
+    # [6] 台帳(sheets_main.json)の *_ja と19章§3の日本語ラベル。
+    ja_problems, ja_unmatched, ja_checked = check_json_ja(want, Path(args.sheets))
+    print(f"  台帳の*_ja検査 : {ja_checked}キーを19章§3と照合 "
+          f"({Path(args.sheets).name} の enums)")
+    if ja_unmatched:
+        print("    検査対象外(キー名からenumグループを機械導出できないため): "
+              + ", ".join(ja_unmatched))
+    problems = problems + ja_problems
+
     if problems:
         print("-" * 78)
         for p in problems:
