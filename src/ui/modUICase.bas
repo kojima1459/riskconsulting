@@ -59,8 +59,8 @@ Public Function EnumPairsCsv() As String
     Dim s As String
     s = s & "case_type,new,新規開拓" & vbLf
     s = s & "case_type,renewal,更新" & vbLf
-    s = s & "dossier_tier,t1_quick,クイック" & vbLf
-    s = s & "dossier_tier,t2_full,フルドシエ" & vbLf
+    s = s & "dossier_tier,t1_quick,かんたん調査" & vbLf
+    s = s & "dossier_tier,t2_full,しっかり調査" & vbLf
     s = s & "dossier_tier,t3_sparring,壁打ち" & vbLf
     s = s & "channel,wholesale,ホール" & vbLf
     s = s & "channel,retail,リテール" & vbLf

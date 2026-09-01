@@ -59,7 +59,7 @@
     "boolean": ["TRUE", "FALSE"],
 
     "case_type_ja": ["新規開拓", "更新"],
-    "dossier_tier_ja": ["クイック", "フルドシエ", "壁打ち"],
+    "dossier_tier_ja": ["かんたん調査", "しっかり調査", "壁打ち"],
     "channel_ja": ["ホール", "リテール"],
     "kanji_ja": ["幹事", "非幹事", "共保"],
     "bid_ja": ["あり", "なし"],
@@ -114,6 +114,7 @@
       "role": "form",
       "state": "visible",
       "spec_ref": "13章§2.10",
+      "tab_color": "006C4F",
       "label_width": 24,
       "value_width": 62,
       "note_width": 52,
@@ -121,29 +122,29 @@
         {
           "title": "案件",
           "fields": [
-            {"range": "hm_case_id", "label": "対象案件ID", "type": "String", "input": true, "note": "入力規則=案件一覧の case_id リスト(W3で隠しレンジ化)。空=未選択"},
-            {"range": "hm_case_label", "label": "対象案件(表示)", "type": "String", "input": false, "note": "<case_id> <company>(<case_typeの日本語>)。書込専用"},
-            {"range": "hm_status", "label": "状態", "type": "String", "input": false, "note": "案件一覧 status の日本語ラベル(19章§3)"},
-            {"range": "hm_round_no", "label": "ラウンド", "type": "Long", "input": false, "note": "案件一覧 round_no の複写。書込専用"},
-            {"range": "hm_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "既定はティア連動(config quality_mode)。案件単位の上書きはここで選ぶ"}
+            {"range": "hm_case_id", "label": "対象案件ID", "type": "String", "input": true, "note": "一覧から案件を選びます。空のときは案件が選ばれていません"},
+            {"range": "hm_case_label", "label": "対象案件(表示)", "type": "String", "input": false, "note": "いま選ばれている案件の表示名です。自動で書かれます"},
+            {"range": "hm_status", "label": "状態", "type": "String", "input": false, "note": "案件がどこまで進んだかを表します。自動で書かれます"},
+            {"range": "hm_round_no", "label": "ラウンド", "type": "Long", "input": false, "note": "何巡目かを表します。自動で書かれます"},
+            {"range": "hm_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "空のままなら調査の深さに合わせて自動で決まります。この案件だけ変えたいときに選びます"}
           ]
         },
         {
           "title": "進捗",
           "_note": "この4行は modUIProgress.SetStage がリボン呼出の前に書き切る(16章 E-50a)。",
           "fields": [
-            {"range": "hm_progress_step", "label": "実行中のStep", "type": "String", "input": false, "note": "modUIProgress.SetStage が呼び出し前に書く"},
+            {"range": "hm_progress_step", "label": "実行中の段", "type": "String", "input": false, "note": "いま動いている段の名前です。自動で書かれます"},
             {"range": "hm_progress_started_at", "label": "開始時刻", "type": "String", "input": false, "note": "hh:mm:ss"},
-            {"range": "hm_progress_max_wait", "label": "最大待ち時間", "type": "String", "input": false, "note": "config llm_wait_sec を分に換算した文言"},
+            {"range": "hm_progress_max_wait", "label": "最大待ち時間", "type": "String", "input": false, "note": "これ以上かかったら中断する時間の目安です"},
             {"range": "hm_progress_note", "label": "案内", "type": "String", "input": false, "note": "「画面が白くなっても処理は続いています」の固定案内文"}
           ]
         },
         {
           "title": "状態表示",
           "fields": [
-            {"range": "hm_kb_status", "label": "ナレッジ読込状態", "type": "String", "input": false, "note": "例 読込OK(メニュー42/型22/事例8)。スナップショット使用時はその旨"},
-            {"range": "hm_transport_banner", "label": "経路の警告帯", "type": "String", "input": false, "note": "transport が ribbon 以外のとき常時表示する赤帯文言。ribbon時は空"},
-            {"range": "hm_warning", "label": "直近の警告", "type": "String", "input": false, "note": "E-35 批判スキップ / E-36 改訂破棄 / 充足度low / 打切り発生。無いとき空"}
+            {"range": "hm_kb_status", "label": "ナレッジ読込状態", "type": "String", "input": false, "note": "社内ナレッジを読めているかを表します。読めていないときは管理者へ連絡してください"},
+            {"range": "hm_transport_banner", "label": "経路の警告帯", "type": "String", "input": false, "note": "お試し用の経路で動いているときに赤い文が出ます。その出力はお客様に見せないでください"},
+            {"range": "hm_warning", "label": "直近の警告", "type": "String", "input": false, "note": "直前の実行で気をつけることがあれば出ます。何も無いときは空です"}
           ]
         },
         {
@@ -158,73 +159,94 @@
     },
 
     {
+      "name": "操作ガイド",
+      "role": "form",
+      "guide": true,
+      "state": "visible",
+      "spec_ref": "13章§2.18",
+      "tab_color": "00B050",
+      "test_result_rows": 20,
+      "_note": "ビルドが本文セルを全部書き切る案内専用シート(裁定書14 裁定3)。build_rpn.py の _make_guide が章立て・目次・シート内リンクを生成する。台帳が持つのは『どこに何という名前付きレンジを置くか』だけで、本文は _make_guide が唯一の値源(実装の文字列から引き、推測で書かない)。",
+      "sections": [
+        {
+          "title": "自己テスト",
+          "fields": [
+            {"range": "gd_btn_test", "label": "テストの実行", "type": "String", "input": false, "note": "[テストを実行]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
+            {"range": "gd_test_result", "label": "テストの結果", "type": "String", "input": false, "note": "結果全文の書込先(縦20行×1列)。実行のたびに上書きされる"}
+          ]
+        }
+      ]
+    },
+
+    {
       "name": "案件入力",
       "role": "form",
       "state": "visible",
       "spec_ref": "13章§2.11",
+      "tab_color": "0070C0",
       "label_width": 26,
       "value_width": 70,
       "note_width": 54,
       "sections": [
         {
-          "title": "属性欄(保存時に案件一覧へ書く。enum欄は日本語ラベルを選び modUICase が機械値へ変換する)",
+          "title": "この案件のこと",
           "fields": [
-            {"range": "ci_case_id", "label": "案件ID", "type": "String", "input": false, "note": "自動採番・書込専用。新規モードでは「(新規)」と表示され、[保存して戻る]で採番される(13章§2.11・裁定書12 V1)"},
-            {"range": "ci_case_type", "label": "種別", "type": "String", "input": true, "dv": "case_type_ja", "note": "案件一覧 case_type (new / renewal)"},
-            {"range": "ci_company", "label": "企業名(必須)", "type": "String", "input": true, "note": "案件一覧 company。必須(16章 E-01)"},
-            {"range": "ci_industry_code", "label": "業種コード", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則=起動時に modBoot がナレッジスナップショットの業種マスタから隠しレンジへ複製して張る(13章§2.11・裁定書9 §4)。ナレッジ未接続かつスナップショット無しのときは張らず手入力のまま続行(16章 E-08)"},
-            {"range": "ci_industry_name", "label": "業種名", "type": "String", "input": true, "note": "業種マスタ実在(16章 E-24)。入力規則は ci_industry_code と同じく modBoot が起動時に張る(13章§2.11・裁定書9 §4)"},
-            {"range": "ci_dossier_tier", "label": "収集ティア", "type": "String", "input": true, "dv": "dossier_tier_ja", "note": "既定 クイック。壁打ち開始時に自動昇格。入力打切り上限の選択もこの値で決まる(16章 E-03)"},
-            {"range": "ci_channel", "label": "取引", "type": "String", "input": true, "dv": "channel_ja", "note": "案件一覧 channel"},
-            {"range": "ci_kanji", "label": "幹事", "type": "String", "input": true, "dv": "kanji_ja", "note": "案件一覧 kanji"},
-            {"range": "ci_bid", "label": "BID", "type": "String", "input": true, "dv": "bid_ja", "note": "案件一覧 bid"},
-            {"range": "ci_reins", "label": "再保・キャプティブ", "type": "String", "input": true, "dv": "reins_ja", "note": "案件一覧 reins"},
-            {"range": "ci_other_insurers", "label": "他社付保メモ", "type": "String", "input": true, "note": "案件一覧 other_insurers。自由記述"},
-            {"range": "ci_s4_variant", "label": "S4出力", "type": "String", "input": true, "dv": "s4_variant_ja", "note": "案件一覧 s4_variant"},
-            {"range": "ci_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "config上書き。空=ティア連動の既定に従う"},
-            {"range": "ci_anonymize", "label": "匿名化", "type": "String", "input": true, "dv": "boolean", "note": "匿名化ボタンの状態。既定は config anonymize_default(16章 E-31)"}
+            {"range": "ci_case_id", "label": "案件ID", "type": "String", "input": false, "note": "自動で付く番号です。新しい案件では「(新規)」と表示され、[保存して戻る]を押したときに番号が決まります"},
+            {"range": "ci_case_type", "label": "種別", "type": "String", "input": true, "dv": "case_type_ja", "note": "新しく取りにいく案件か、更新の案件かを選びます"},
+            {"range": "ci_company", "label": "企業名(必須)", "type": "String", "input": true, "note": "お客様の会社名です。空のままでは保存できません"},
+            {"range": "ci_industry_code", "label": "業種コード", "type": "String", "input": true, "note": "一覧から選びます。一覧が出ないときは社内ナレッジを読めていないので、そのまま手で入力しても続けられます"},
+            {"range": "ci_industry_name", "label": "業種名", "type": "String", "input": true, "note": "業種コードと同じ一覧から選びます。一覧が出ないときは手で入力しても続けられます"},
+            {"range": "ci_dossier_tier", "label": "調査の深さ", "type": "String", "input": true, "dv": "dossier_tier_ja", "note": "はじめは「かんたん調査」です。貼れる文章の上限もこの選択で変わります"},
+            {"range": "ci_channel", "label": "取引", "type": "String", "input": true, "dv": "channel_ja", "note": "取引の形を選びます"},
+            {"range": "ci_kanji", "label": "幹事", "type": "String", "input": true, "dv": "kanji_ja", "note": "幹事・非幹事・共保のどれかを選びます"},
+            {"range": "ci_bid", "label": "BID", "type": "String", "input": true, "dv": "bid_ja", "note": "入札の案件かどうかを選びます"},
+            {"range": "ci_reins", "label": "再保・キャプティブ", "type": "String", "input": true, "dv": "reins_ja", "note": "再保険やキャプティブを使う案件かを選びます"},
+            {"range": "ci_other_insurers", "label": "他社付保メモ", "type": "String", "input": true, "note": "他社の付保状況で分かっていることを自由に書きます"},
+            {"range": "ci_s4_variant", "label": "提案書の種類", "type": "String", "input": true, "dv": "s4_variant_ja", "note": "最後に作る提案書の種類を選びます"},
+            {"range": "ci_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "空のままなら調査の深さに合わせて自動で決まります"},
+            {"range": "ci_anonymize", "label": "匿名化", "type": "String", "input": true, "dv": "boolean", "note": "TRUEにすると、人の名前などをAIへ渡す前に伏せ字にします"}
           ]
         },
         {
-          "title": "貼付欄(並び順=15章 BuildS1User の9ブロック出現順。続き欄は末尾番号の昇順に連結される)",
+          "title": "調べたことを貼る(上から順に貼ります。長いときは続き欄へ)",
           "tall": true,
           "fields": [
-            {"range": "ci_paste_hp_1", "label": "1 HPテキスト(必須)", "type": "String", "input": true, "note": "data_key input_hp"},
-            {"range": "ci_paste_hp_2", "label": "1 HPテキスト 続き1", "type": "String", "input": true, "note": "data_key input_hp"},
-            {"range": "ci_paste_hp_3", "label": "1 HPテキスト 続き2", "type": "String", "input": true, "note": "data_key input_hp"},
-            {"range": "ci_paste_yuho_1", "label": "2 有報リスク章(任意)", "type": "String", "input": true, "note": "data_key input_yuho"},
-            {"range": "ci_paste_yuho_2", "label": "2 有報リスク章 続き1", "type": "String", "input": true, "note": "data_key input_yuho"},
-            {"range": "ci_paste_yuho_3", "label": "2 有報リスク章 続き2", "type": "String", "input": true, "note": "data_key input_yuho"},
-            {"range": "ci_paste_memo_1", "label": "3 営業メモ(任意)", "type": "String", "input": true, "note": "data_key input_memo。続き欄なし"},
-            {"range": "ci_paste_contract_1", "label": "4 現契約サマリ(更新時必須)", "type": "String", "input": true, "note": "data_key input_contract"},
-            {"range": "ci_paste_contract_2", "label": "4 現契約サマリ 続き1", "type": "String", "input": true, "note": "data_key input_contract"},
-            {"range": "ci_paste_contract_3", "label": "4 現契約サマリ 続き2", "type": "String", "input": true, "note": "data_key input_contract"},
-            {"range": "ci_paste_prev_renewal_1", "label": "5 前回更新メモ(任意)", "type": "String", "input": true, "note": "data_key input_prev_renewal。続き欄なし"},
-            {"range": "ci_paste_dossier_1", "label": "6 追加ドシエ(T2)", "type": "String", "input": true, "note": "data_key input_dossier"},
-            {"range": "ci_paste_dossier_2", "label": "6 追加ドシエ 続き1", "type": "String", "input": true, "note": "data_key input_dossier"},
-            {"range": "ci_paste_dossier_3", "label": "6 追加ドシエ 続き2", "type": "String", "input": true, "note": "data_key input_dossier"},
-            {"range": "ci_paste_field_notes_1", "label": "7 現場メモ(何でも欄)", "type": "String", "input": true, "note": "data_key input_field_notes。続き欄なし"},
-            {"range": "ci_paste_coverage_note_1", "label": "8 付保の見立て", "type": "String", "input": true, "note": "data_key input_coverage_note。続き欄なし"},
-            {"range": "ci_paste_hearing_answers_1", "label": "9 ヒアリング回答(第2ラウンド用)", "type": "String", "input": true, "note": "data_key input_hearing_answers。続き欄なし"}
+            {"range": "ci_paste_hp_1", "label": "1 HPテキスト(必須)", "type": "String", "input": true, "note": "会社のホームページから写した文章を貼ります。長いときは続き欄へ分けます"},
+            {"range": "ci_paste_hp_2", "label": "1 HPテキスト 続き1", "type": "String", "input": true, "note": "1 HPテキストの続きを貼ります"},
+            {"range": "ci_paste_hp_3", "label": "1 HPテキスト 続き2", "type": "String", "input": true, "note": "1 HPテキストの続きを貼ります"},
+            {"range": "ci_paste_yuho_1", "label": "2 有報リスク章(任意)", "type": "String", "input": true, "note": "有価証券報告書の事業等のリスクの章を貼ります"},
+            {"range": "ci_paste_yuho_2", "label": "2 有報リスク章 続き1", "type": "String", "input": true, "note": "2 有報リスク章の続きを貼ります"},
+            {"range": "ci_paste_yuho_3", "label": "2 有報リスク章 続き2", "type": "String", "input": true, "note": "2 有報リスク章の続きを貼ります"},
+            {"range": "ci_paste_memo_1", "label": "3 営業メモ(任意)", "type": "String", "input": true, "note": "自分の営業メモを貼ります。続き欄はありません"},
+            {"range": "ci_paste_contract_1", "label": "4 現契約サマリ(更新時必須)", "type": "String", "input": true, "note": "いまの契約の内容をまとめた文章を貼ります"},
+            {"range": "ci_paste_contract_2", "label": "4 現契約サマリ 続き1", "type": "String", "input": true, "note": "4 現契約サマリの続きを貼ります"},
+            {"range": "ci_paste_contract_3", "label": "4 現契約サマリ 続き2", "type": "String", "input": true, "note": "4 現契約サマリの続きを貼ります"},
+            {"range": "ci_paste_prev_renewal_1", "label": "5 前回更新メモ(任意)", "type": "String", "input": true, "note": "前回の更新のときのメモを貼ります。続き欄はありません"},
+            {"range": "ci_paste_dossier_1", "label": "6 追加調査の結果", "type": "String", "input": true, "note": "AIに追加で調べさせた結果を貼ります。「しっかり調査」で使います"},
+            {"range": "ci_paste_dossier_2", "label": "6 追加調査の結果 続き1", "type": "String", "input": true, "note": "6 追加調査の結果の続きを貼ります"},
+            {"range": "ci_paste_dossier_3", "label": "6 追加調査の結果 続き2", "type": "String", "input": true, "note": "6 追加調査の結果の続きを貼ります"},
+            {"range": "ci_paste_field_notes_1", "label": "7 現場メモ(何でも欄)", "type": "String", "input": true, "note": "現場で見聞きしたことを何でも書きます。続き欄はありません"},
+            {"range": "ci_paste_coverage_note_1", "label": "8 付保の見立て", "type": "String", "input": true, "note": "付保についての自分の見立てを書きます。続き欄はありません"},
+            {"range": "ci_paste_hearing_answers_1", "label": "9 ヒアリング回答(第2ラウンド用)", "type": "String", "input": true, "note": "訪問して聞いてきた答えを貼ります。続き欄はありません"}
           ]
         },
         {
-          "title": "文字数カウンタ(数式ではなく SetCellSafe でVBAが値を書く。16章 E-46)",
+          "title": "貼った文字の数(自動で数えます)",
           "fields": [
             {"range": "ci_count_hp", "label": "1 HPテキスト", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
             {"range": "ci_count_yuho", "label": "2 有報リスク章", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
             {"range": "ci_count_memo", "label": "3 営業メモ", "type": "Long", "input": false, "note": "合計字数"},
             {"range": "ci_count_contract", "label": "4 現契約サマリ", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
             {"range": "ci_count_prev_renewal", "label": "5 前回更新メモ", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_dossier", "label": "6 追加ドシエ", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
+            {"range": "ci_count_dossier", "label": "6 追加調査の結果", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
             {"range": "ci_count_field_notes", "label": "7 現場メモ", "type": "Long", "input": false, "note": "合計字数"},
             {"range": "ci_count_coverage_note", "label": "8 付保の見立て", "type": "Long", "input": false, "note": "合計字数"},
             {"range": "ci_count_hearing_answers", "label": "9 ヒアリング回答", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_total", "label": "合計", "type": "Long", "input": false, "note": "9欄の合計字数。ティア別上限(max_context_chars / t2_max_context_chars)に対する超過を色で示す"}
+            {"range": "ci_count_total", "label": "合計", "type": "Long", "input": false, "note": "9欄の合計字数。調査の深さごとの上限を超えると色で知らせます"}
           ]
         },
         {
-          "title": "収集レシピ(15章§2.0の14観点。利用者の自己確認用であり保存条件にしない。T1では01-08のみ表示)",
+          "title": "調べる項目の確認リスト(自分用のチェック。空でも保存できます)",
           "fields": [
             {"range": "ci_recipe_01", "label": "01 会社概要", "type": "String", "input": true, "dv": "boolean"},
             {"range": "ci_recipe_02", "label": "02 事業・製品", "type": "String", "input": true, "dv": "boolean"},
@@ -234,21 +256,21 @@
             {"range": "ci_recipe_06", "label": "06 採用・人員", "type": "String", "input": true, "dv": "boolean"},
             {"range": "ci_recipe_07", "label": "07 有報・財務リスク", "type": "String", "input": true, "dv": "boolean"},
             {"range": "ci_recipe_08", "label": "08 営業情報", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_09", "label": "09 SNS評判(T2)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_10", "label": "10 競合・業界事故(T2)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_11", "label": "11 市況・マクロ(T2)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_12", "label": "12 財務状態(T2)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_13", "label": "13 付保・提案の経緯(T2)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_14", "label": "14 拠点ハザード(T2)", "type": "String", "input": true, "dv": "boolean"}
+            {"range": "ci_recipe_09", "label": "09 SNS評判(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
+            {"range": "ci_recipe_10", "label": "10 競合・業界事故(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
+            {"range": "ci_recipe_11", "label": "11 市況・マクロ(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
+            {"range": "ci_recipe_12", "label": "12 財務状態(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
+            {"range": "ci_recipe_13", "label": "13 付保・提案の経緯(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
+            {"range": "ci_recipe_14", "label": "14 拠点ハザード(しっかり調査)", "type": "String", "input": true, "dv": "boolean"}
           ]
         },
         {
-          "title": "追加収集(S1の research_requests。実行後に表示)",
+          "title": "もっと調べるとよいこと(実行すると出ます)",
           "anchor_table": {
             "range": "ci_research_anchor",
             "headers": ["purpose", "prompt_text"],
             "reserve_rows": 10,
-            "note": "ci_research_anchor は一覧の左上セル。ここを起点に purpose / prompt_text の2列をN行書き出す(各行にコピーボタンを置く。11章)"
+            "note": "実行すると、追加で調べるとよいことと、そのまま使える調査の文が並びます。各行の[コピー]で写せます"
           }
         }
       ]
@@ -259,6 +281,7 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.12",
+      "tab_color": "6B7280",
       "header_title": "S1_企業プロファイル",
       "header_fields": [
         {"range": "s1_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
@@ -359,6 +382,7 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.13",
+      "tab_color": "6B7280",
       "header_title": "S2_リスク仮説",
       "header_fields": [
         {"range": "s2_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
@@ -433,6 +457,7 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.14",
+      "tab_color": "6B7280",
       "header_title": "S3_提案",
       "header_fields": [
         {"range": "s3_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}
@@ -486,6 +511,7 @@
       "role": "table",
       "state": "visible",
       "spec_ref": "13章§2.15",
+      "tab_color": "6B7280",
       "header_title": "S4_骨子",
       "header_fields": [
         {"range": "s4_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "読取専用の案件ID表示セル(13章§2.12・裁定書9 B1/N4)。DrawStep が描き切ったときだけ書く。SaveEditedStep は本セルと保存先の案件IDが一致しなければ1セルも保存しない"}

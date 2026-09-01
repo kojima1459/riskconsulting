@@ -51,7 +51,8 @@ import zipfile
 
 import openpyxl
 from openpyxl.comments import Comment
-from openpyxl.styles import Alignment, Font, PatternFill, Protection
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
+from openpyxl.worksheet.hyperlink import Hyperlink
 from openpyxl.utils import get_column_letter, quote_sheetname
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -98,6 +99,52 @@ NOTE_FONT = Font(size=9, color="808080")
 SHEET_TITLE_FONT = Font(bold=True, size=14)
 LOCKED = Protection(locked=True)
 UNLOCKED = Protection(locked=False)
+
+# ---------------------------------------------------------------------------
+# ビルド時装飾の配色(裁定書14 裁定7)
+# ---------------------------------------------------------------------------
+# 白抜き文字を置く面は WCAG 2.x のコントラスト比 4.5:1 以上であることを
+# _assert_contrast() がビルド時に機械検算する(目視で「読めるつもり」の配色を
+# 焼き込まないため)。テーブル型ヘッダの HEADER_FILL(黒字)は現状維持。
+BRAND_DARK = "014D44"        # RGB(1,77,68)  シート1行目のタイトル帯
+BRAND_MID = "0B7D6E"         # 操作ガイドの章内見出し・手順番号バッジ
+SECTION_TINT = "E7F3EE"      # 淡緑。セクション見出し(TITLE_FONT行)の地
+WHITE = "FFFFFF"
+CONTRAST_MIN = 4.5
+
+TITLE_BAND_FILL = PatternFill("solid", fgColor=BRAND_DARK)
+TITLE_BAND_FONT = Font(bold=True, size=14, color=WHITE)
+SECTION_FILL = PatternFill("solid", fgColor=SECTION_TINT)
+TITLE_BAND_COLS = 3          # A:C を帯にする(帳票型の A=見出し / B=値 / C=注記)
+
+
+def _rel_luminance(hex_rgb):
+    """WCAG 2.x の相対輝度(0.0-1.0)。modSkin.bas のコントラスト検算と同じ式。"""
+    v = []
+    for i in (0, 2, 4):
+        c = int(hex_rgb[i:i + 2], 16) / 255.0
+        v.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]
+
+
+def _contrast_ratio(fg_hex, bg_hex):
+    a, b = _rel_luminance(fg_hex), _rel_luminance(bg_hex)
+    hi, lo = max(a, b), min(a, b)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _assert_contrast(pairs):
+    """(前景, 背景, 用途) の全組で 4.5:1 以上を機械検算する。落ちたらビルド中止。"""
+    bad = []
+    for fg, bg, where in pairs:
+        r = _contrast_ratio(fg, bg)
+        if r < CONTRAST_MIN:
+            bad.append(f"{where}: #{fg} on #{bg} = {r:.2f}:1 (< {CONTRAST_MIN}:1)")
+    if bad:
+        raise BuildError(
+            "配色のコントラスト比が基準(4.5:1)に届きません(裁定書14 裁定7):\n  "
+            + "\n  ".join(bad))
+    return [(fg, bg, where, _contrast_ratio(fg, bg)) for fg, bg, where in pairs]
 
 _ILLEGAL_XML = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
@@ -517,12 +564,26 @@ class BuildCtx:
         self.block_headers = {}  # sheet -> [(block名, [列名])]
         self.dv_skipped = []     # [(sheet, target, enumキー, 長さ)]
         self.injected = []
+        self.tests_expected = read_tests_expected(root)
 
 
 def _add_name(ctx, ws, name, col, row):
     """ブック内で一意の名前付きレンジを1セルに定義する(13章§2.9)。"""
     coord = f"{get_column_letter(col)}{row}"
     ref = f"{quote_sheetname(ws.title)}!${get_column_letter(col)}${row}"
+    if any(n == name for n, _, _ in ctx.names):
+        raise BuildError(f"名前付きレンジ '{name}' が重複しています(ブック内で一意。13章§2.9)")
+    ctx.wb.defined_names.add(DefinedName(name, attr_text=ref))
+    ctx.names.append((name, ws.title, coord))
+
+
+def _add_name_block(ctx, ws, name, col, row, height):
+    """縦N行×1列の範囲へ名前を定義する(13章§2.18 gd_test_result)。
+    _add_name と同じ台帳(ctx.names)へ積むので、自己検証がそのまま参照先を突き合わせる。"""
+    letter = get_column_letter(col)
+    last = row + max(int(height), 1) - 1
+    coord = f"{letter}{row}:{letter}{last}"
+    ref = f"{quote_sheetname(ws.title)}!${letter}${row}:${letter}${last}"
     if any(n == name for n, _, _ in ctx.names):
         raise BuildError(f"名前付きレンジ '{name}' が重複しています(ブック内で一意。13章§2.9)")
     ctx.wb.defined_names.add(DefinedName(name, attr_text=ref))
@@ -543,10 +604,37 @@ def _apply_dv(ctx, ws, enum_key, target):
     dv = DataValidation(type="list", formula1=formula, allow_blank=True,
                         showErrorMessage=True,
                         errorTitle="入力できない値です",
-                        error="一覧から選んでください(19章§3のenumレジストリが正)。")
+                        error="一覧から選んでください。")
     ws.add_data_validation(dv)
     dv.add(target)
     return True
+
+
+def _title_band(ws, row, text):
+    """シート1行目のタイトル帯(裁定書14 裁定7)。BRAND_DARK 地＋白太字を A:C の
+    3列へ敷く(結合はしない。結合セルは実行時の図形・行操作と相性が悪いため、
+    同じ値の見た目だけを3列ぶん塗る)。"""
+    cell = ws.cell(row=row, column=1, value=_clean(text))
+    cell.font = TITLE_BAND_FONT
+    cell.alignment = Alignment(vertical="center", indent=1)
+    for i in range(1, TITLE_BAND_COLS + 1):
+        c = ws.cell(row=row, column=i)
+        c.fill = TITLE_BAND_FILL
+        c.protection = LOCKED
+    ws.row_dimensions[row].height = 26
+    return cell
+
+
+def _style_section_title(ws, row, text):
+    """セクション見出し(TITLE_FONT行)。淡緑地を A:C へ敷く(裁定書14 裁定7)。"""
+    cell = ws.cell(row=row, column=1, value=_clean(text))
+    cell.font = TITLE_FONT
+    cell.alignment = Alignment(vertical="center", indent=1)
+    for i in range(1, TITLE_BAND_COLS + 1):
+        c = ws.cell(row=row, column=i)
+        c.fill = SECTION_FILL
+        c.protection = LOCKED
+    return cell
 
 
 def _style_header_cell(cell, note):
@@ -658,16 +746,21 @@ def _make_form(wb, spec, ctx):
     """帳票型(13章§2.9/§2.10/§2.11): 1行目ヘッダを持たず、全ての値を名前付きレンジで
     読み書きする。A=見出し / B=値(名前付きレンジ) / C=注記 の3列で組む。
     見た目を変えても名前付きレンジ名は変えない(セル番地をコードに書かせないため)。"""
+    if spec.get("guide"):
+        # 帳票型のうち案内専用シート(13章§2.18)。1行目ヘッダを持たず名前付き
+        # レンジで参照する点は帳票型と同じだが、A=見出し/B=値/C=注記の3列組では
+        # なく章立ての読み物なので、生成路だけを分ける(台帳の role は form)。
+        return _make_guide(wb, spec, ctx)
     ws = wb.create_sheet(spec["name"])
     ws.protection.sheet = False
     ws.column_dimensions["A"].width = spec.get("label_width", 24)
     ws.column_dimensions["B"].width = spec.get("value_width", 60)
     ws.column_dimensions["C"].width = spec.get("note_width", 50)
 
-    ws.cell(row=1, column=1, value=_clean(spec["name"])).font = SHEET_TITLE_FONT
+    _title_band(ws, 1, spec["name"])
     row = 3
     for sec in spec.get("sections") or []:
-        ws.cell(row=row, column=1, value=_clean(sec.get("title", ""))).font = TITLE_FONT
+        _style_section_title(ws, row, sec.get("title", ""))
         row += 1
         tall = bool(sec.get("tall"))
         for fld in sec.get("fields") or []:
@@ -740,8 +833,7 @@ def _make_table(wb, spec, ctx):
     row = 1
     if spec.get("header_fields"):
         ws.column_dimensions["A"].width = 22
-        ws.cell(row=row, column=1,
-                value=_clean(spec.get("header_title", spec["name"]))).font = SHEET_TITLE_FONT
+        _title_band(ws, row, spec.get("header_title", spec["name"]))
         row += 2
         for fld in spec["header_fields"]:
             lab = ws.cell(row=row, column=1, value=_clean(fld.get("label", fld["range"])))
@@ -764,7 +856,7 @@ def _make_table(wb, spec, ctx):
         raise BuildError(f"sheets_main.json: シート '{spec['name']}' に columns も blocks もありません")
     seen = []
     for blk in blocks:
-        ws.cell(row=row, column=1, value=_clean(blk["title"])).font = TITLE_FONT
+        _style_section_title(ws, row, blk["title"])
         row += 1
         header_row = row
         last = _write_block(ctx, ws, blk["columns"], header_row,
@@ -775,6 +867,290 @@ def _make_table(wb, spec, ctx):
         # ブロックとブロックの間には空行を1行以上置く(13章§2.9・§2.2 逆シリアライズ規約5)
         row = last + 2
     ctx.block_headers[spec["name"]] = seen
+    ws.sheet_state = spec.get("state", "visible")
+    return ws
+
+
+# ---------------------------------------------------------------------------
+# 操作ガイド(13章§2.18・裁定書14 裁定3)
+# ---------------------------------------------------------------------------
+# 移植元: PoC「マイ本棚AI」 build/build_mybookshelf.py の _make_howto。
+#   section / step / kv / note / back_to_toc の5ヘルパー、目次を先に「行だけ
+#   予約」しておいて全章を書き終えてからハイパーリンクを書き戻す2パス方式、
+#   および「目次の予約行数と実際の章数が食い違ったらビルドを止める」検問を
+#   そのまま持ち込んだ(予約行数と章数がずれると以降の章が目次へ食い込む=
+#   気づきにくい表示崩れになるため)。
+#
+# 本シートの約束(裁定書14 裁定3):
+#   ・図形を1つも作らない(セルとシート内リンクだけ)。ボタンは実行時に
+#     modUISheet.EnsureButton が gd_btn_test の位置へ生やす。
+#   ・文言は専門用語を使わず、失敗の案内は「何が起きたか。どうすればよいか。」
+#     の2文で書く。ボタン名・画面の文言は実装の文字列から引く(推測で書かない)。
+GUIDE_HEAD_FILL = PatternFill("solid", fgColor=BRAND_DARK)
+GUIDE_SUB_FILL = PatternFill("solid", fgColor=BRAND_MID)
+GUIDE_HEAD_FONT = Font(bold=True, size=12, color=WHITE)
+GUIDE_STEP_FONT = Font(bold=True, size=10, color=WHITE)
+GUIDE_KEY_FONT = Font(bold=True, size=10, color=BRAND_DARK)
+GUIDE_BODY_FONT = Font(size=10)
+GUIDE_NOTE_FONT = Font(size=9, italic=True, color="6B7280")
+GUIDE_LINK_FONT = Font(bold=True, size=10.5, color="1155CC", underline="single")
+GUIDE_BACK_FONT = Font(size=9, bold=True, color="1155CC", underline="single")
+GUIDE_WARN_FILL = PatternFill("solid", fgColor="FFF4D6")
+GUIDE_ZEBRA_FILL = PatternFill("solid", fgColor="F4F6FB")
+GUIDE_RESULT_FILL = PatternFill("solid", fgColor="F7F9FA")
+GUIDE_THIN = Side(style="thin", color="D9E1EC")
+
+# HOMEの17ボタン。**modUIHome.EnsureHomeButtons のキャプションと逐語一致**
+# させること(実装の文字列から引く。推測で書かない)。[S1][S2][S3][S4] の4つは
+# 1行にまとめて説明するため、早見表の行数は実装のボタン本数と一致しない。
+GUIDE_HOME_BUTTONS = [
+    ("＋新規案件", "新しい案件を作ります。案件入力の画面が空になってから開きます。"),
+    ("案件入力を開く", "いま選んでいる案件の入力画面を開きます。"),
+    ("一括実行", "S1からS4までを続けて実行します。ふだんはこれだけで足ります。"),
+    ("S1 / S2 / S3 / S4", "段ごとに実行し直します。直した内容から先だけやり直したいときに使います。"),
+    ("リスクレポートHTML", "お客様に見せるリスクレポートを書き出します。"),
+    ("ヒアリングシート", "訪問時に聞くことを紙1枚に書き出します。"),
+    ("企業ファイルを開く", "その会社ぶんの調べた材料をまとめたファイルを開きます。"),
+    ("企業ファイルへ保存", "いまの案件の材料を、その会社のファイルへ保存します。"),
+    ("第2ラウンド開始", "訪問で聞いてきたことを足して、もう一度作り直す準備をします。"),
+    ("ナレッジ再読込", "社内ナレッジを読み直します。ナレッジ読込状態がおかしいときに押します。"),
+    ("プリフライト診断", "受信箱にたまった投稿をまとめて診断します。"),
+    ("受信箱を開く", "投稿・現場の声・ウォッチ結果の一覧を開きます。"),
+    ("商談の記録", "商談の結果を記録する画面を開きます。"),
+    ("判断台帳", "引受の判断を記録する画面を開きます。"),
+    ("壁打ち", "AIと相談しながら座組を考える画面を開きます。"),
+]
+
+# 困ったとき(docs/25章§12「困ったときの1行対処」の要約。平易語)。
+GUIDE_TROUBLES = [
+    ("画面が白いまま動かない", "処理の最中です。触らずに待ってください。"),
+    ("「対象案件が選ばれていません」と出た", "案件が選ばれていません。HOMEの対象案件を選び直してください。"),
+    ("「先にStep1を実行してください。」と出た", "前の段がまだ終わっていません。[S1]を押してから出力してください。"),
+    ("「本日のAI利用枠の上限です」と出た", "きょうの利用枠を使い切りました。翌日に続きの段から押し直してください。"),
+    ("「画面の案件と保存先が一致しません。再描画してください」と出た",
+     "別の案件の画面が残っています。HOMEで対象案件を選び直し、その段のシートを開き直してください。"),
+    ("「ナレッジが読めていません」と出た", "社内ナレッジにつながっていません。管理者へ連絡してください(そのまま使うと提案の質が落ちます)。"),
+    ("ボタンを押しても何も起きない", "ほかの処理が動いています。終わるまで待ってください。"),
+    ("英語で Trust... というメッセージが出た", "VBAの信頼設定がまだ終わっていません。①の手順3と4をやり直してください。"),
+    ("出力の内容が明らかにおかしい", "AIの答えがずれています。シートを直して、その段から作り直してください。直らなければ管理者へ連絡してください。"),
+]
+
+GUIDE_GLOSSARY = [
+    ("かんたん調査", "いちばん軽い調べ方。ホームページと営業メモくらいで進めます。"),
+    ("しっかり調査", "重要な案件向け。AIに追加で調べさせた結果も貼って進めます。"),
+    ("壁打ち", "AIと相談しながら座組を考える画面のこと。使い始めると調査の深さが自動で切り替わります。"),
+    ("受信箱", "投稿・現場の声・ウォッチ結果をいったん受ける一覧のこと。"),
+    ("ナレッジ", "社内にためた事例・メニュー・型のこと。別ファイル(ナレッジブック)にあります。"),
+    ("判断台帳", "引受の判断と、その後どうなったかを残す記録のこと。"),
+    ("段(S1からS4)", "S1=会社を知る、S2=リスクを出す、S3=提案を作る、S4=提案書の骨子を作る、の4段階のこと。"),
+    ("入念", "AIに自分の答えを批判させて直させる作り方。時間はかかりますが質が上がります。"),
+]
+
+
+def _make_guide(wb, spec, ctx):
+    """操作ガイド: ブックの中だけで操作を学べる案内シート(セルのみ・図形なし)。"""
+    ws = wb.create_sheet(spec["name"])
+    ws.protection.sheet = False
+    ws.sheet_view.showGridLines = False
+    ws.column_dimensions["A"].width = 4
+    ws.column_dimensions["B"].width = 28
+    ws.column_dimensions["C"].width = 82
+
+    _title_band(ws, 1, f"{APP_TITLE} 操作ガイド")
+
+    row = [3]
+
+    def anchor(cell, target_row, tip):
+        cell.hyperlink = Hyperlink(
+            ref="", location=f"{quote_sheetname(ws.title)}!A{target_row}", tooltip=tip)
+
+    def section(title, fill=BRAND_DARK):
+        if row[0] > 3:
+            row[0] += 1
+        r = row[0]
+        c = ws.cell(row=r, column=1, value=_clean(title))
+        c.font = GUIDE_HEAD_FONT
+        c.alignment = Alignment(vertical="center", indent=1)
+        for i in range(1, 4):
+            ws.cell(row=r, column=i).fill = PatternFill("solid", fgColor=fill)
+        ws.row_dimensions[r].height = 24
+        row[0] = r + 2
+        return r
+
+    def back_to_toc(target_row):
+        r = row[0]
+        c = ws.cell(row=r, column=2, value="▲ 目次へ戻る")
+        c.font = GUIDE_BACK_FONT
+        c.alignment = Alignment(vertical="center", indent=1)
+        anchor(c, target_row, "クリックで目次に戻ります")
+        ws.row_dimensions[r].height = 18
+        row[0] = r + 2
+
+    def step(n, text, warn=False):
+        r = row[0]
+        c0 = ws.cell(row=r, column=1, value=n)
+        c0.font = GUIDE_STEP_FONT
+        c0.fill = GUIDE_SUB_FILL
+        c0.alignment = Alignment(horizontal="center", vertical="center")
+        c = ws.cell(row=r, column=2, value=_clean(text))
+        c.font = GUIDE_BODY_FONT
+        c.alignment = Alignment(vertical="center", wrap_text=True, indent=1)
+        if warn:
+            c.fill = GUIDE_WARN_FILL
+        ws.row_dimensions[r].height = max(20, 15 * (text.count("\n") + 1) + 6)
+        row[0] = r + 1
+
+    def kv(k, v, i=0):
+        r = row[0]
+        ck = ws.cell(row=r, column=2, value=_clean(k))
+        ck.font = GUIDE_KEY_FONT
+        ck.alignment = Alignment(vertical="center", wrap_text=True, indent=1)
+        cv = ws.cell(row=r, column=3, value=_clean(v))
+        cv.font = GUIDE_BODY_FONT
+        cv.alignment = Alignment(vertical="center", wrap_text=True, indent=1)
+        if i % 2 == 1:
+            ck.fill = GUIDE_ZEBRA_FILL
+            cv.fill = GUIDE_ZEBRA_FILL
+        for c in (ck, cv):
+            c.border = Border(bottom=GUIDE_THIN)
+        ws.row_dimensions[r].height = max(20, 15 * (v.count("\n") + 1) + 5)
+        row[0] = r + 1
+
+    def note(text):
+        r = row[0]
+        c = ws.cell(row=r, column=2, value=_clean(text))
+        c.font = GUIDE_NOTE_FONT
+        c.alignment = Alignment(vertical="center", wrap_text=True, indent=1)
+        ws.row_dimensions[r].height = max(18, 14 * (text.count("\n") + 1) + 5)
+        row[0] = r + 2
+
+    # ---- 目次(行だけ予約しておき、全章を書き終えてから書き戻す) ----------
+    toc_n = 6
+    toc_header_row = row[0]
+    row[0] = toc_header_row + 2
+    toc_first_row = row[0]
+    row[0] += toc_n
+    row[0] += 1
+
+    # ==== ① これは何? + 最初に1回だけやること ==============================
+    ch1 = section("① これは何? + 最初に1回だけやること")
+    kv("ひとことで言うと",
+       "会社について調べた文章を貼ると、リスクの見立てと提案の下書きまで作ってくれるExcelです。", 0)
+    kv("人がやること",
+       "材料を貼る。実行を押す。出てきた中身を読んで直す。この3つだけです。", 1)
+    kv("AIに任せないこと",
+       "お客様に出す最終判断は人がします。中身を読まずにそのまま出さないでください。", 0)
+
+    section("はじめに1回だけやること(ここでつまずく人がいちばん多いです)", BRAND_MID)
+    step("1", "このファイルをExcelで開きます。")
+    step("2", "画面の上に黄色い帯で「セキュリティの警告」が出たら、\nその中の「コンテンツの有効化」を押します。", warn=True)
+    step("3", "[ファイル] → [オプション] → [トラストセンター] →\n[トラストセンターの設定] → [マクロの設定] と進みます。")
+    step("4", "「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」に\nチェックを入れて [OK] を押します。", warn=True)
+    step("5", "Excelをいったん全部閉じて、もう一度このファイルを開きます。")
+    step("6", "少し待つと画面が自動で組み上がります。これで準備は終わりです。")
+    note("英語で Trust... というメッセージが出たときは、手順3と手順4がまだ終わっていない合図です。\n"
+         "このファイルは初回に自分で画面を組み立てる作りなので、この許可が必要です。")
+    note("ファイルが圧縮フォルダ(zip)の中にあるときは、中から直接開かないでください。\n"
+         "右クリックして「すべて展開」で取り出してから開きます。")
+    back_to_toc(toc_header_row)
+
+    # ==== ② 画面と流れ =====================================================
+    ch2 = section("② 画面と流れ")
+    note("流れは5つだけです。 調べる → 貼る → 実行する → 直す → 出す。")
+    kv("1. 調べる", "社内のディープリサーチに会社のことを調べさせて、返ってきた文章を手元に用意します。", 0)
+    kv("2. 貼る", "HOMEの[＋新規案件]を押し、案件入力の貼付欄へ上から順に貼ります。\n長い文章は「続き1」「続き2」の欄へ分けて貼ります。", 1)
+    kv("3. 実行する", "HOMEへ戻って[一括実行]を押します。数分かかります。画面が白くなっても処理は続いています。", 0)
+    kv("4. 直す", "S1からS4のシートを読んで、違うところを手で直します。ここが人の仕事です。", 1)
+    kv("5. 出す", "HOMEの[リスクレポートHTML]と[ヒアリングシート]で、お客様に見せるものを書き出します。", 0)
+    note("画面の名前: HOME(入口) / 案件入力(材料を貼る) / S1 会社を知る / S2 リスクを出す /\n"
+         "S3 提案を作る / S4 提案書の骨子 / ヒアリングシート / 壁打ち。")
+    back_to_toc(toc_header_row)
+
+    # ==== ③ ボタン早見表 ===================================================
+    ch3 = section("③ ボタン早見表(HOMEのボタン)")
+    for i, (cap, desc) in enumerate(GUIDE_HOME_BUTTONS):
+        kv(f"[{cap}]", desc, i)
+    note("ボタンは起動したときに自動で並びます。並んでいないときは、①の手順をやり直してください。")
+    back_to_toc(toc_header_row)
+
+    # ==== ④ 困ったとき =====================================================
+    ch4 = section("④ 困ったとき")
+    for i, (sym, fix) in enumerate(GUIDE_TROUBLES):
+        kv(sym, fix, i)
+    note("それでも直らないときは、その画面のまま管理者へ連絡してください(自分で直そうとしなくて大丈夫です)。")
+    back_to_toc(toc_header_row)
+
+    # ==== ⑤ 自己テスト =====================================================
+    ch5 = section("⑤ 自己テスト(このブックが正しく動くかを自分で確かめる)")
+    note("配ったファイルが途中で壊れていないかを、このブックの中だけで確かめられます。\n"
+         "新しい版を受け取ったときと、動きがおかしいと感じたときに1回押してください。")
+    step("1", "下の[テストを実行]を押します。確認の画面が出たら[はい]を押します。")
+    step("2", "数分かかります。終わると合否が出て、下の結果欄に全文が入ります。")
+    step("3", "合格でなければ、結果欄をそのままコピーして管理者へ送ってください。")
+
+    r = row[0]
+    lab = ws.cell(row=r, column=2, value="テストの実行")
+    lab.font = GUIDE_KEY_FONT
+    lab.alignment = Alignment(vertical="center", indent=1)
+    btn_cell = ws.cell(row=r, column=3)
+    btn_cell.alignment = Alignment(vertical="center", indent=1)
+    _add_name(ctx, ws, "gd_btn_test", 3, r)
+    ws.row_dimensions[r].height = 28
+    row[0] = r + 2
+
+    r = row[0]
+    lab = ws.cell(row=r, column=2, value="テストの結果")
+    lab.font = GUIDE_KEY_FONT
+    lab.alignment = Alignment(vertical="top", indent=1)
+    result_rows = int(spec.get("test_result_rows") or 20)
+    for k in range(result_rows):
+        c = ws.cell(row=r + k, column=3)
+        c.font = GUIDE_BODY_FONT
+        c.fill = GUIDE_RESULT_FILL
+        c.number_format = ctx.text_fmt
+        c.alignment = Alignment(vertical="top", wrap_text=True, indent=1)
+        c.protection = LOCKED
+    _add_name_block(ctx, ws, "gd_test_result", 3, r, result_rows)
+    row[0] = r + result_rows + 1
+    note("結果欄は実行するたびに上書きされます(前回ぶんは残りません)。")
+    back_to_toc(toc_header_row)
+
+    # ==== ⑥ 用語のミニ辞書 =================================================
+    ch6 = section("⑥ 用語のミニ辞書")
+    for i, (word, mean) in enumerate(GUIDE_GLOSSARY):
+        kv(word, mean, i)
+    back_to_toc(toc_header_row)
+
+    # ---- 目次の書き戻し ---------------------------------------------------
+    hc = ws.cell(row=toc_header_row, column=1, value="目次(クリックすると各章へ移動します)")
+    hc.font = GUIDE_HEAD_FONT
+    hc.alignment = Alignment(vertical="center", indent=1)
+    for i in range(1, 4):
+        ws.cell(row=toc_header_row, column=i).fill = GUIDE_HEAD_FILL
+    ws.row_dimensions[toc_header_row].height = 24
+
+    toc_entries = [
+        (ch1, "① これは何? + 最初に1回だけやること"),
+        (ch2, "② 画面と流れ"),
+        (ch3, "③ ボタン早見表(HOMEのボタン)"),
+        (ch4, "④ 困ったとき"),
+        (ch5, "⑤ 自己テスト"),
+        (ch6, "⑥ 用語のミニ辞書"),
+    ]
+    if len(toc_entries) != toc_n:
+        raise BuildError(
+            f"_make_guide: 目次の予約行数({toc_n})と実際の章数({len(toc_entries)})が"
+            "不一致です(以降の章が目次へ食い込みます)")
+    for i, (target_row, title) in enumerate(toc_entries):
+        r = toc_first_row + i
+        c = ws.cell(row=r, column=2, value=title)
+        c.font = GUIDE_LINK_FONT
+        c.alignment = Alignment(vertical="center", wrap_text=True, indent=1)
+        if i % 2 == 1:
+            c.fill = GUIDE_ZEBRA_FILL
+        anchor(c, target_row, "クリックでこの章へ移動します")
+        ws.row_dimensions[r].height = 20
+
     ws.sheet_state = spec.get("state", "visible")
     return ws
 
@@ -807,6 +1183,12 @@ def _make_vba_src(wb, spec, ctx):
         injected.append(m["name"])
         row += 1
 
+    # 固定セル(13章§2.9に位置を1行記録): E1=起動直後の modBoot.Boot 予約時刻
+    # (自己インストーラが Application.OnTime で置く。**ビルドは触らない**)。
+    # E2=ブック内テストの期待本数(裁定書14 裁定5)。wintest/tests_expected.txt の
+    # 1行目を焼き込み、実行時に modTestsRunnerUi が読む。読めなければ実行しない
+    # (fail-closed)ため、txtの欠落・非整数はここでビルドを止める。
+    ws.cell(row=2, column=5, value=ctx.tests_expected)
     ws.column_dimensions["A"].width = 24
     ws.column_dimensions["B"].width = 8
     ws.column_dimensions["C"].width = 80
@@ -814,6 +1196,27 @@ def _make_vba_src(wb, spec, ctx):
     ws.sheet_state = spec.get("state", "veryHidden")
     ctx.injected = injected
     return ws
+
+
+TESTS_EXPECTED_PATH = os.path.join("wintest", "tests_expected.txt")
+
+
+def read_tests_expected(root):
+    """wintest/tests_expected.txt の1行目の整数(ブック内テストの期待本数)を返す。
+    欠落・非整数はビルドを止める(裁定書14 裁定5。実行時は E2 を読めなければ
+    テストを実行しない fail-closed なので、焼き込み側で必ず担保する)。"""
+    path = os.path.join(root, TESTS_EXPECTED_PATH)
+    if not os.path.exists(path):
+        raise BuildError(
+            f"{TESTS_EXPECTED_PATH} が見つかりません({path})。"
+            "ブック内テストの期待本数(vba_src!E2)を焼き込めないためビルドを中止します。")
+    with open(path, encoding="utf-8-sig") as fp:
+        first = fp.readline().strip()
+    if not re.fullmatch(r"[0-9]+", first):
+        raise BuildError(
+            f"{TESTS_EXPECTED_PATH} の1行目が整数ではありません: {first!r}。"
+            "ブック内テストの期待本数(vba_src!E2)として使えないためビルドを中止します。")
+    return int(first)
 
 
 SHEET_BUILDERS = {
@@ -1278,6 +1681,12 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
         actual = wb2[name].sheet_state
         if actual != want_state:
             errors.append(f"シート'{name}'の可視性不一致: 期待={want_state} 実際={actual}")
+        want_tab = (spec.get("tab_color") or "").upper()
+        if want_tab:
+            got_tab = getattr(wb2[name].sheet_properties.tabColor, "rgb", None) or ""
+            if not str(got_tab).upper().endswith(want_tab):
+                errors.append(
+                    f"シート'{name}'のタブ色不一致: 期待={want_tab} 実際={got_tab!r}")
 
     vba_spec = next((s for s in sheets if s.get("role") == "vba_src"), None)
     if vba_spec and vba_spec["name"] in wb2.sheetnames:
@@ -1301,6 +1710,15 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
                 f"vba_srcモジュール集合が不一致: 期待={sorted(expected_vba_src_names)} "
                 f"実際={sorted(got_names)}")
         errors.extend(_verify_vba_src_bodies(ws, got_names, present_modules, root))
+        # 裁定書14 裁定5: E2=ブック内テストの期待本数(wintest/tests_expected.txt)。
+        if ctx is not None:
+            got_e2 = ws.cell(row=2, column=5).value
+            ok_e2 = (isinstance(got_e2, (int, float)) and not isinstance(got_e2, bool)
+                     and int(got_e2) == ctx.tests_expected)
+            if not ok_e2:
+                errors.append(
+                    f"vba_src!E2(ブック内テストの期待本数)が {TESTS_EXPECTED_PATH} と"
+                    f"不一致: 期待={ctx.tests_expected} 実際={got_e2!r}")
     else:
         errors.append("vba_src シートが存在しない")
 
@@ -1492,16 +1910,28 @@ def main():
               ".xlsm として生成します(シート雛形の検査は成立します)。")
 
     print(f"Stage 2: シート生成 (sheets_main.json 全{len(sheets)}シート)...")
-    ctx = BuildCtx(wb, sheets_data, mock_llm, app_version, present, root)
     try:
+        # 白字を置く面のコントラスト比を機械検算してから塗り始める(裁定書14 裁定7)。
+        checked = _assert_contrast([
+            (WHITE, BRAND_DARK, "シート1行目のタイトル帯"),
+            (WHITE, BRAND_MID, "操作ガイドの章内見出し・手順番号バッジ"),
+        ])
+        ctx = BuildCtx(wb, sheets_data, mock_llm, app_version, present, root)
         for spec in sheets:
             role = spec.get("role")
             builder = SHEET_BUILDERS.get(role)
             if builder is None:
                 raise BuildError(f"sheets_main.json: 未知の role '{role}'(シート {spec['name']})")
             builder(wb, spec, ctx)
+            tab = spec.get("tab_color")
+            if tab:
+                wb[spec["name"]].sheet_properties.tabColor = tab
     except BuildError as e:
         sys.exit(f"ERROR: {e}")
+    print("  白字面のコントラスト比(4.5:1以上を機械検算): "
+          + " / ".join(f"{w} {r:.1f}:1" for _, _, w, r in checked))
+    print(f"  ブック内テストの期待本数(vba_src!E2 へ焼込): {ctx.tests_expected} "
+          f"({TESTS_EXPECTED_PATH})")
 
     injected = ctx.injected
     n_blocks = sum(len(v) for v in ctx.block_headers.values())
@@ -1594,7 +2024,7 @@ def main():
           "vba_src本文がsrc/と完全一致 / vba_src D列(期待行数)がsrc由来の計算値と一致 / "
           "configキー列(順序含む)と全キーの説明・mock_llm・app_version / "
           "名前付きレンジの本数と参照先 / 1行目ヘッダとブロックアンカー先ヘッダ行 / "
-          "パッケージ content type")
+          "タブ色 / vba_src!E2(ブック内テストの期待本数) / パッケージ content type")
     if has_vba_project:
         print("  自己インストーラ外科パッチ検証(3項目): "
               "ThisWorkbook復元確認 / dir MOFFSET=0 / "
