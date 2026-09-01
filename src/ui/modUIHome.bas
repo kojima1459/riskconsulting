@@ -53,6 +53,37 @@ Private Const UH_MSG_NO_CASE As String = "対象案件が選ばれていませ�
 Private Const UH_DIR_KEY As String = "html_out_dir"
 Private Const UH_DIR_DEFAULT As String = "%USERPROFILE%\Documents\RPN出力"
 
+' ボタンの間隔と探索範囲。
+Private Const UH_BTN_GAP As Double = 8#
+Private Const UH_BTN_COL_FIRST As Long = 4
+Private Const UH_BTN_COL_LAST As Long = 60
+
+' 1行ぶんの並び。1件 = "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。
+Private Const UH_ROW_MAIN As String = _
+    "btn_hm_newcase;① 案件を作る;modUIHome.HomeNewCase;128" & vbLf & _
+    "btn_hm_runall;② 一括実行;modUIHome.HomeRunAll;128" & vbLf & _
+    "btn_hm_html;③ レポートを出す;modUIHome.HomeExportHtml;140" & vbLf & _
+    "btn_hm_hearing;④ ヒアリングシート;modUIHome.HomeBuildHearing;140"
+Private Const UH_ROW_SUB1 As String = _
+    "btn_hm_caseinput;案件入力を開く;modUIHome.HomeOpenCaseInput;112" & vbLf & _
+    "btn_hm_cfopen;企業ファイルを開く;modUIHome.HomeCompanyOpen;124" & vbLf & _
+    "btn_hm_cfsave;企業ファイルへ保存;modUIHome.HomeCompanySave;124" & vbLf & _
+    "btn_round_freeze;第2ラウンド開始;modUIHome.HomeFreezeRound;116"
+Private Const UH_ROW_SUB2 As String = _
+    "btn_hm_s1;S1;modUIHome.HomeRunS1;44" & vbLf & _
+    "btn_hm_s2;S2;modUIHome.HomeRunS2;44" & vbLf & _
+    "btn_hm_s3;S3;modUIHome.HomeRunS3;44" & vbLf & _
+    "btn_hm_s4;S4;modUIHome.HomeRunS4;44" & vbLf & _
+    "btn_hm_pf;プリフライト診断;modUIHome.HomePreflightAll;116"
+Private Const UH_ROW_SUB3 As String = _
+    "btn_hm_inbox;受信箱を開く;modUIHome.HomeOpenInbox;100" & vbLf & _
+    "btn_hm_fb;商談の記録;modUIHome.HomeOpenFeedback;92" & vbLf & _
+    "btn_hm_judge;判断台帳;modUIHome.HomeOpenJudgeLog;92" & vbLf & _
+    "btn_hm_sparring;壁打ち;modUIHome.HomeOpenSparring;80"
+Private Const UH_ROW_SUB4 As String = _
+    "btn_hm_kb;ナレッジ再読込;modUIHome.HomeReloadKnowledge;108"
+
+
 ' ============================================================================
 ' 起動時の画面用意(11章§5の図形ボタンとenum入力規則)。modBoot から呼ぶ。
 ' ============================================================================
@@ -65,12 +96,27 @@ Public Sub EnsureScreens()
     modUICase4.EnsureRecordButtons
     modUIInbox.EnsureInboxButtons
     modUISparring.EnsureSparringButtons
+    ' 操作ガイドの[テストを実行][ツアーをもう一度見る](裁定書14 裁定5/6)
+    modUIGuide.EnsureGuideButtons
 
     RefreshHome
 End Sub
 
-' HOMEの図形ボタン。位置は名前付きレンジの行を基準に決める(帳票の見た目を
-' 変えても配線が壊れないよう、セル番地をコードに書かない。13章§2.9)。
+' ============================================================================
+' HOMEの図形ボタン(裁定書14 裁定7＋追補1: 番号つき動線への再レイアウト)
+' ----------------------------------------------------------------------------
+' 上段に主要動線4本(①案件を作る/②一括実行/③レポートを出す/④ヒアリングシート)を
+' 横一列で置き、残り14本は「くわしい操作」区画へ縦に並べる。
+'
+' 重なりを構造的に起こさない置き方(実機でボタンが重なった件=追補1):
+'   縦 = 1行に置くのは1段ぶんだけにし、行高は modUISheet.EnsureButtonEx が
+'        ボタン高＋余白まで広げる(隣接行のボタンと重ならない)。
+'   横 = 列アンカーの**実測の左端**(modUISheet.CellLeft)を読み、直前のボタンの
+'        右端＋UH_BTN_GAP より右にある最初の列だけをアンカーにする(FitCol)。
+'        列幅を仮定しないので、帳票の列幅を変えても重ならない。
+' セル番地はコードに書かない(13章§2.9)。行の基準は名前付きレンジから引く。
+' ============================================================================
+
 Private Sub EnsureHomeButtons()
     On Error Resume Next
 
@@ -78,55 +124,64 @@ Private Sub EnsureHomeButtons()
     Set ws = modUISheet.SheetOf(UH_SHEET)
     If ws Is Nothing Then Exit Sub
 
+    ' 上段: 主要動線4本(①→④の順に押す)。
+    PlaceButtonRow ws, RowOfNamed(UH_CASE_ID), UH_ROW_MAIN, "primary"
+
+    ' 下段: くわしい操作。受信箱の件数欄の下を起点に1行ずつ下へ並べる。
     Dim r As Long
-
-    r = RowOfNamed(UH_CASE_ID)
-    modUISheet.EnsureButton ws, "btn_hm_newcase", "＋新規案件", r, 4, 84#, _
-                            "modUIHome.HomeNewCase"
-    modUISheet.EnsureButton ws, "btn_hm_caseinput", "案件入力を開く", r, 5, 96#, _
-                            "modUIHome.HomeOpenCaseInput"
-
-    r = RowOfNamed(UH_QUALITY)
-    modUISheet.EnsureButton ws, "btn_hm_runall", "一括実行", r, 4, 72#, _
-                            "modUIHome.HomeRunAll"
-    modUISheet.EnsureButton ws, "btn_hm_s1", "S1", r, 5, 40#, "modUIHome.HomeRunS1"
-    modUISheet.EnsureButton ws, "btn_hm_s2", "S2", r, 6, 40#, "modUIHome.HomeRunS2"
-    modUISheet.EnsureButton ws, "btn_hm_s3", "S3", r, 7, 40#, "modUIHome.HomeRunS3"
-    modUISheet.EnsureButton ws, "btn_hm_s4", "S4", r, 8, 40#, "modUIHome.HomeRunS4"
-
-    r = RowOfNamed(UH_STATUS)
-    modUISheet.EnsureButton ws, "btn_hm_html", "リスクレポートHTML", r, 4, 128#, _
-                            "modUIHome.HomeExportHtml"
-    modUISheet.EnsureButton ws, "btn_hm_hearing", "ヒアリングシート", r, 5, 112#, _
-                            "modUIHome.HomeBuildHearing"
-
-    r = RowOfNamed(UH_ROUND)
-    modUISheet.EnsureButton ws, "btn_hm_cfopen", "企業ファイルを開く", r, 4, 116#, _
-                            "modUIHome.HomeCompanyOpen"
-    modUISheet.EnsureButton ws, "btn_hm_cfsave", "企業ファイルへ保存", r, 5, 116#, _
-                            "modUIHome.HomeCompanySave"
-    ' 11章 HOMEワイヤー(裁定書9 A-2/N7): 第2ラウンドの開始。round_no の行に置く。
-    modUISheet.EnsureButton ws, "btn_round_freeze", "第2ラウンド開始", r, 6, 116#, _
-                            "modUIHome.HomeFreezeRound"
-
-    r = RowOfNamed(UH_KB)
-    modUISheet.EnsureButton ws, "btn_hm_kb", "ナレッジ再読込", r, 4, 100#, _
-                            "modUIHome.HomeReloadKnowledge"
-
-    r = RowOfNamed(UH_INBOX_UND)
-    modUISheet.EnsureButton ws, "btn_hm_pf", "プリフライト診断", r, 4, 108#, _
-                            "modUIHome.HomePreflightAll"
-    modUISheet.EnsureButton ws, "btn_hm_inbox", "受信箱を開く", r, 5, 92#, _
-                            "modUIHome.HomeOpenInbox"
-
-    r = RowOfNamed(UH_WARNING)
-    modUISheet.EnsureButton ws, "btn_hm_fb", "商談の記録", r, 4, 84#, _
-                            "modUIHome.HomeOpenFeedback"
-    modUISheet.EnsureButton ws, "btn_hm_judge", "判断台帳", r, 5, 84#, _
-                            "modUIHome.HomeOpenJudgeLog"
-    modUISheet.EnsureButton ws, "btn_hm_sparring", "壁打ち", r, 6, 84#, _
-                            "modUIHome.HomeOpenSparring"
+    r = RowOfNamed(UH_INBOX_HOLD) + 2
+    modUISheet.EnsureLabel ws, "lbl_hm_more", "くわしい操作", r, UH_BTN_COL_FIRST, 160#, 0#
+    PlaceButtonRow ws, r + 1, UH_ROW_SUB1, "plain"
+    PlaceButtonRow ws, r + 2, UH_ROW_SUB2, "plain"
+    PlaceButtonRow ws, r + 3, UH_ROW_SUB3, "plain"
+    PlaceButtonRow ws, r + 4, UH_ROW_SUB4, "plain"
 End Sub
+
+' 1行ぶんのボタンを左から右へ、重ならない位置に置く。
+Private Sub PlaceButtonRow(ByVal ws As Object, ByVal rowNo As Long, _
+                           ByVal specText As String, ByVal kind As String)
+    If rowNo <= 0 Then Exit Sub
+
+    Dim specs() As String
+    Dim flds() As String
+    Dim i As Long
+    Dim col As Long
+    Dim widthPt As Double
+    Dim minLeft As Double
+
+    specs = Split(specText, vbLf)
+    col = UH_BTN_COL_FIRST
+    minLeft = modUISheet.CellLeft(ws, rowNo, UH_BTN_COL_FIRST)
+    If minLeft < 0 Then Exit Sub
+
+    For i = LBound(specs) To UBound(specs)
+        flds = Split(specs(i), ";")
+        If UBound(flds) - LBound(flds) >= 3 Then
+            widthPt = Val(flds(3))
+            col = FitCol(ws, rowNo, col, minLeft)
+            If col <= 0 Then Exit Sub
+            modUISheet.EnsureButtonEx ws, flds(0), flds(1), rowNo, col, widthPt, _
+                                      flds(2), kind
+            minLeft = modUISheet.CellLeft(ws, rowNo, col) + widthPt + UH_BTN_GAP
+        End If
+    Next i
+End Sub
+
+' 左端が minLeft 以上になる最初のアンカー列(0=範囲内に無い)。
+'   直前のボタンの右端＋余白を minLeft に渡すことで、横の重なりが起きない。
+Private Function FitCol(ByVal ws As Object, ByVal rowNo As Long, _
+                        ByVal fromCol As Long, ByVal minLeft As Double) As Long
+    Dim c As Long
+    Dim x As Double
+    For c = fromCol To UH_BTN_COL_LAST
+        x = modUISheet.CellLeft(ws, rowNo, c)
+        If x < 0 Then Exit Function
+        If x >= minLeft Then
+            FitCol = c
+            Exit Function
+        End If
+    Next c
+End Function
 
 ' 名前付きレンジの行番号(不在なら1)。
 Private Function RowOfNamed(ByVal rangeName As String) As Long
@@ -741,7 +796,7 @@ Private Function AskCompanyFile(ByVal caseId As String) As String
     ' 既定の置き場所を題名で示す(GetOpenFilename は初期パスを引数に取れない)。
     Dim picked As Variant
     picked = Application.GetOpenFilename("Excelブック (*.xlsx),*.xlsx", 1, _
-                                         "企業ドシエファイル: " & initPath)
+                                         "企業ファイル " & initPath)
     If VarType(picked) = vbBoolean Then Exit Function
     AskCompanyFile = CStr(picked)
     Exit Function

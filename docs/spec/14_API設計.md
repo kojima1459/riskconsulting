@@ -1,5 +1,7 @@
 # 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.4
 
+> v2.5.5（裁定書14: W5 社内環境対応＋UI/UX改善）: §6の登記表へ本裁定で許可した新設名を登記した。**`modUIGuide`**（初回ガイドツアー。`StartTourIfFirstRun` / `RestartTour` / `OnTourNext` / `OnTourSkip` / `ClearTour` / `EnsureGuideButtons`）・**`modTestsRunnerUi.RunAllTestsFromBook`**（ブック内テスト実行＝17章 T-48）・**`modTestRunner.PassCount` / `FailCount` / `SkipCount` / `ExecutedCount`**（計数の読み出し口）・**`modUISheet.EnsureButtonEx` / `CellLeft`**（種別つき図形ボタンと幾何計算の読み口）・config キー **`guide_tour_done`**・Shape接頭辞 **`gt_`**・名前付きレンジ **`gd_btn_tour`**・HOMEの主要動線4本の新キャプション（[① 案件を作る]／[② 一括実行]／[③ レポートを出す]／[④ ヒアリングシート]）。**本波で許可した新設はこの範囲のみ**。
+>
 > v2.5.4（裁定書13: W4.5 クローズパッチ）: §6の登記表へ **`modUICase4.ClearCaseInput`**（W1。案件入力の全クリア。HOMEの[＋新規案件]が新規モードのマーカーを書く前に呼ぶ唯一の口。30,000字契約により `modUICase3` へ置けないため `CopyResearchRow` と同じ移設先へ置く）を登記した。**本波で許可した新設はこの1件のみ**。
 
 > v2.5.3（裁定書12: W4.4 最終収束パッチ）: §6の登記表へ **`modUICase3.U3_NEW_MARK`**（V1。案件入力の新規モードの固定マーカー `(新規)`。`modInboxStore.IB_DRAFT_MARK` と同作法の公開定数）を登記した。**本波での公開関数の新設・移設はゼロ**。あわせて `AnswerMemoCount` の別案件確認文言を実物へ逐語化した（V9）。
@@ -1197,6 +1199,15 @@ Public Function RunExcelTests2() As Long
   | - | `modUICase4.ClearCaseInput` | 公開関数（ui層内部ヘルパ） | 本章§6・13章§2.11 | 案件入力の全クリア（属性欄11・貼付欄17・実行後表示欄）。`modUIHome.HomeNewCase` が `ci_case_id` へ `(新規)` を書く**前**に呼ぶ。呼んでよいのは modUIHome のみ。30,000字契約により `modUICase3` に置けないため `CopyResearchRow` と同じ移設先へ置く（v2.5.4・裁定書13 W1） |
   | - | `modUICase3.U3_NEW_MARK`（値 `(新規)`） | 公開定数（モジュール間で共有する固定マーカー。`modInboxStore.IB_DRAFT_MARK` と同作法） | 本章§6・13章§2.11 | 案件入力の**新規モード**の固定マーカー。HOMEの[＋新規案件]（`modUIHome.HomeNewCase`）が `ci_case_id` へ書き、`modUICase3.CaseSave` の3値判定がこの値のときだけ採番する（v2.5.3・裁定書12 V1）。**公開関数の新設は本波では無い** |
   | - | `modUICase5` の Public 4本（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`） | ui層内部ヘルパ（W4.1分割裁定） | 本章§6 | 30,000字契約による `modUICase2` の分割先。呼んでよいのは modUICase2 のみ（裁定書10 §1でM2を解消） |
+
+  | - | `modUIGuide`（`StartTourIfFirstRun` / `RestartTour` / `OnTourNext` / `OnTourSkip` / `ClearTour` / `EnsureGuideButtons`） | 公開関数（ui層。図形の OnAction と modBoot からの結線先） | 本章§6・13章§2.18 | 初回ガイドツアー（カード3枚）と`操作ガイド`の図形ボタン。起動シーケンスからの結線は `modBoot` の**1行**（`StartTourIfFirstRun`）だけ。`EnsureGuideButtons` は `modUIHome.EnsureScreens` が他の `Ensure*Buttons` と同じ並びで呼ぶ（v2.5.5・裁定書14 裁定6） |
+  | - | Shape接頭辞 `gt_` | 図形名の接頭辞（HOME上のツアーのカード・ボタン） | 本章§6 | `modUIGuide` が置く図形はすべてこの接頭辞。削除は名前を配列へ集めてから行う。既存の `btn_` / `lbl_` / `btncopy_` と衝突しない（v2.5.5・裁定書14 裁定6） |
+  | - | config `guide_tour_done`（既定 `0`） | configキー | 13章§2.3 | 初回ガイドツアーを見終えたか。`1`=済。`1` 以外はすべて未完了として扱う（v2.5.5・裁定書14 裁定6） |
+  | - | `gd_btn_tour` | 名前付きレンジ（`操作ガイド`②のボタンアンカー） | 13章§2.18 | [ツアーをもう一度見る]の置き場所。OnAction は `modUIGuide.RestartTour`（v2.5.5・裁定書14 裁定6） |
+  | - | `modTestsRunnerUi.RunAllTestsFromBook` | 公開関数（test層。図形の OnAction。引数なし） | 本章§6・17章 T-48 | ブック内テスト実行。`操作ガイド`⑤の[テストを実行]から呼び、ps1と同一の4条件を判定して `gd_test_result` へ書く。ui層からこの1本だけを参照してよい（`tools/vba_lint.py` の R1例外表に名指しで登録。v2.5.5・裁定書14 裁定5） |
+  | - | `modTestRunner.PassCount` / `FailCount` / `SkipCount` / `ExecutedCount` | 公開関数（test層。読み出し専用） | 本章§6・17章§4-1 | 集計値の読み出し口。**集計の仕方は変えない**（R4の純ロジックのまま。LibreOffice実行テストへの影響なし）。`modTestRunner` は closed な公開契約なので本4本を `vba_lint.py` の required にも同期する（v2.5.5・裁定書14 裁定5） |
+  | - | `modUISheet.EnsureButtonEx(ws, shapeKey, caption, anchorRow, anchorCol, widthPt, onActionName, kind)` / `modUISheet.CellLeft(ws, rowNo, colNo)` | 公開関数（ui層内部ヘルパ） | 本章§6・13章§2.10 | 種別つき図形ボタン（`kind` = `primary` / `plain` / `danger`）と、列アンカーの実測左端の読み口。`EnsureButton` は `plain` の薄い包みになり**呼出側のシグネチャは不変**。ボタン高は26ptで、アンカー行の行高をボタンが収まる高さまで広げてから置く（縦の重なりを構造的に潰す）。`CellLeft` は HOMEの横並びの幾何計算（直前のボタンの右端＋8pt より右の列だけをアンカーにする）に使う（v2.5.5・裁定書14 裁定7＋追補1） |
+  | - | HOMEの主要動線4本のキャプション（[① 案件を作る] / [② 一括実行] / [③ レポートを出す] / [④ ヒアリングシート]） | 図形ボタンのキャプション | 13章§2.10 | 番号つき動線への再レイアウト。図形名（`btn_hm_newcase` / `btn_hm_runall` / `btn_hm_html` / `btn_hm_hearing`）と OnAction は不変で、キャプションだけを改めた。`操作ガイド`③の早見表（`build/build_rpn.py` の `GUIDE_HOME_BUTTONS`）と逐語一致させる（v2.5.5・裁定書14 追補1） |
 
   これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。
 

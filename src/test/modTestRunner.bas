@@ -134,6 +134,29 @@ Public Function Failures() As Long
 End Function
 
 ' ----------------------------------------------------------------------------
+' 計数の公開アクセサ(裁定書14 裁定5)
+'   ブック内テスト実行(modTestsRunnerUi)が ps1 と同じ4条件(FAIL 0 / SKIP 0 /
+'   純層の実行本数=期待 / 層(b) 1本以上)をVBA側で判定するための読み出し口。
+'   **読み出すだけ**であり集計の仕方は変えない(R4=純ロジックのまま。
+'   LibreOffice実行テストへの影響も無い)。
+' ----------------------------------------------------------------------------
+Public Function PassCount() As Long
+    PassCount = mTotalCount - mFailCount
+End Function
+
+Public Function FailCount() As Long
+    FailCount = mFailCount
+End Function
+
+Public Function SkipCount() As Long
+    SkipCount = mSkipCount
+End Function
+
+Public Function ExecutedCount() As Long
+    ExecutedCount = mTotalCount
+End Function
+
+' ----------------------------------------------------------------------------
 ' ReportText: 集計行に続けて未実行一覧・失敗一覧・未実行一覧(再掲)を返す
 '   例:
 '     PASS 41 / FAIL 1 / SKIP 2
@@ -149,8 +172,8 @@ End Function
 Public Function ReportText() As String
     If Not mStarted Then ResetTests
 
-    Dim passCount As Long
-    passCount = mTotalCount - mFailCount
+    Dim passN As Long
+    passN = mTotalCount - mFailCount
 
     Dim expectedText As String
     If mExpectedSet Then
@@ -167,7 +190,7 @@ Public Function ReportText() As String
     ReDim parts(0 To n - 1)
 
     Dim k As Long
-    parts(0) = "PASS " & passCount & " / FAIL " & mFailCount & " / SKIP " & mSkipCount
+    parts(0) = "PASS " & passN & " / FAIL " & mFailCount & " / SKIP " & mSkipCount
     parts(1) = "EXECUTED " & mTotalCount & " / EXPECTED " & expectedText
     k = 2
 

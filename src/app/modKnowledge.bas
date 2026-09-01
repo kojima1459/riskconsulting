@@ -547,6 +547,11 @@ Private Function OpenKbBook(ByVal readOnlyMode As Boolean) As Object
     Dim pathText As String
     pathText = Trim$(modConfig.GetStr("kb_path", vbNullString))
     If LenB(pathText) = 0 Then Exit Function
+    ' 追補3: 在ることを先に確かめる(無いとExcelの素のダイアログが出る)。
+    ' URL経路は Dir$ で判定できないので従来どおり開きに行く。
+    If InStr(1, pathText, "://", vbBinaryCompare) = 0 Then
+        If LenB(Dir$(pathText)) = 0 Then Exit Function
+    End If
     Set OpenKbBook = Application.Workbooks.Open(pathText, 0, readOnlyMode)
     Exit Function
 Failed:

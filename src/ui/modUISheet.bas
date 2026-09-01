@@ -33,11 +33,22 @@ Private Const US_SHAPE_TEXTBOX As Long = 1          ' msoTextOrientationHorizont
 Private Const US_SHEET_VERY_HIDDEN As Long = 2      ' xlSheetVeryHidden
 Private Const US_SHEET_VISIBLE As Long = -1         ' xlSheetVisible
 Private Const US_ALIGN_CENTER As Long = 2           ' xlCenter / msoAlignCenter相当
-Private Const US_COLOR_BTN As Long = 15921906&      ' 淡いグレー(RGB 242,242,242相当)
+Private Const US_COLOR_BTN As Long = 16777215&      ' ボタン地=白(RGB 255,255,255)
 Private Const US_COLOR_WARN As Long = 13551615&     ' 淡い赤(超過表示)
 Private Const US_COLOR_NONE As Long = 16777215&     ' 白
 
-Private Const US_BTN_HEIGHT As Double = 20#
+' 裁定書14 裁定7(ボタンの刷新)。値は「RGB(r,g,b) = r + g*256 + b*65536」。
+Private Const US_COLOR_BTN_LINE As Long = 13616055& ' 枠線(RGB 183,195,207)
+Private Const US_COLOR_BTN_TEXT As Long = 2562065&  ' 文字(RGB 17,24,39)
+Private Const US_COLOR_BTN_PRIMARY As Long = 5990145&  ' 主要動線の地(RGB 1,103,91)
+Private Const US_COLOR_BTN_DANGER As Long = 2500316&   ' 取り消し系の地(RGB 220,38,38)
+Private Const US_BTN_FONT As String = "Yu Gothic UI"
+Private Const US_BTN_FONT_SIZE As Double = 10#
+Private Const US_PLACEMENT_FREE As Long = 3         ' xlFreeFloating
+Private Const US_BTN_ROUND As Double = 0.35         ' 角丸の深さ(Adjustments(1))
+Private Const US_BTN_ROW_PAD As Double = 4#         ' アンカー行に足す余白
+
+Private Const US_BTN_HEIGHT As Double = 26#
 Private Const US_LABEL_HEIGHT As Double = 16#
 Private Const US_SRC As String = "modUISheet"
 
@@ -386,14 +397,32 @@ End Sub
 ' 図形ボタンを1つ用意する。戻り値 True=置けた。
 '   shapeKey は Shape.Name(ブック内で安定・一意にする)。
 '   onActionName は "modUIHome.HomeRunAll" 形式の**Publicプロシージャ名**。
+'   見た目(書体・角丸・配色)は EnsureButtonEx の "plain" と同一であり、
+'   呼び出し側のシグネチャは裁定書14 裁定7の前後で変えていない。
 Public Function EnsureButton(ByVal ws As Object, ByVal shapeKey As String, _
                              ByVal caption As String, ByVal anchorRow As Long, _
                              ByVal anchorCol As Long, ByVal widthPt As Double, _
                              ByVal onActionName As String) As Boolean
+    EnsureButton = EnsureButtonEx(ws, shapeKey, caption, anchorRow, anchorCol, _
+                                  widthPt, onActionName, "plain")
+End Function
+
+' 種別つきの図形ボタン(裁定書14 裁定7)。kind:
+'   "primary" = 主要動線(濃緑地＋白の太字) / "plain" = 既定(白地＋枠) /
+'   "danger"  = 取り消し系(赤地＋白の太字)。未知の値は "plain" として扱う。
+' 高さは US_BTN_HEIGHT(26pt)で固定し、**アンカー行の行高をボタンが収まる高さまで
+'   広げてから**置く。行高がボタンより低いと隣接行のボタンと縦に重なる(実機で
+'   起きた不具合。裁定書14 追補1)ため、重なりの芽をここで摘む。
+Public Function EnsureButtonEx(ByVal ws As Object, ByVal shapeKey As String, _
+                               ByVal caption As String, ByVal anchorRow As Long, _
+                               ByVal anchorCol As Long, ByVal widthPt As Double, _
+                               ByVal onActionName As String, _
+                               ByVal kind As String) As Boolean
     On Error GoTo Failed
     If ws Is Nothing Then Exit Function
 
     DropShape ws, shapeKey
+    GrowRowForButton ws, anchorRow
 
     Dim anchor As Object
     Set anchor = ws.Cells(anchorRow, anchorCol)
@@ -404,17 +433,60 @@ Public Function EnsureButton(ByVal ws As Object, ByVal shapeKey As String, _
     If shp Is Nothing Then Exit Function
 
     shp.Name = shapeKey
-    shp.Fill.ForeColor.RGB = US_COLOR_BTN
+    shp.Placement = US_PLACEMENT_FREE
+    On Error Resume Next
+    shp.Adjustments(1) = US_BTN_ROUND
+    On Error GoTo Failed
+
+    Dim fillColor As Long
+    Dim textColor As Long
+    Dim boldText As Boolean
+    fillColor = US_COLOR_BTN
+    textColor = US_COLOR_BTN_TEXT
+    boldText = False
+    If StrComp(kind, "primary", vbBinaryCompare) = 0 Then
+        fillColor = US_COLOR_BTN_PRIMARY
+        textColor = US_COLOR_NONE
+        boldText = True
+    ElseIf StrComp(kind, "danger", vbBinaryCompare) = 0 Then
+        fillColor = US_COLOR_BTN_DANGER
+        textColor = US_COLOR_NONE
+        boldText = True
+    End If
+
+    shp.Fill.ForeColor.RGB = fillColor
     shp.Line.Visible = True
+    shp.Line.ForeColor.RGB = US_COLOR_BTN_LINE
     shp.TextFrame.Characters.Text = caption
     shp.TextFrame.HorizontalAlignment = US_ALIGN_CENTER
-    shp.TextFrame.Characters.Font.Size = 9
-    shp.TextFrame.Characters.Font.Color = 0
+    shp.TextFrame.Characters.Font.Name = US_BTN_FONT
+    shp.TextFrame.Characters.Font.Size = US_BTN_FONT_SIZE
+    shp.TextFrame.Characters.Font.Color = textColor
+    shp.TextFrame.Characters.Font.Bold = boldText
     shp.OnAction = onActionName
-    EnsureButton = True
+    EnsureButtonEx = True
     Exit Function
 Failed:
-    EnsureButton = False
+    EnsureButtonEx = False
+End Function
+
+' アンカー行をボタンが収まる高さまで広げる(縮めはしない)。
+Private Sub GrowRowForButton(ByVal ws As Object, ByVal anchorRow As Long)
+    On Error Resume Next
+    If anchorRow <= 0 Then Exit Sub
+    Dim needed As Double
+    needed = US_BTN_HEIGHT + US_BTN_ROW_PAD
+    If ws.Rows(anchorRow).RowHeight < needed Then ws.Rows(anchorRow).RowHeight = needed
+End Sub
+
+' ボタンの左端(pt)。幾何計算を呼び出し側で組み立てるための読み取り口。
+'   取れないときは -1(呼び出し側は配置をあきらめて既定の列アンカーへ落とす)。
+Public Function CellLeft(ByVal ws As Object, ByVal rowNo As Long, ByVal colNo As Long) As Double
+    On Error GoTo Failed
+    CellLeft = ws.Cells(rowNo, colNo).Left
+    Exit Function
+Failed:
+    CellLeft = -1#
 End Function
 
 ' 表示専用のラベル図形(名前付きレンジを持たない表示欄。11章のワイヤーで

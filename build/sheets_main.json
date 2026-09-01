@@ -187,6 +187,7 @@
           "title": "自己テスト",
           "fields": [
             {"range": "gd_btn_test", "label": "テストの実行", "type": "String", "input": false, "note": "[テストを実行]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
+            {"range": "gd_btn_tour", "label": "はじめの案内", "type": "String", "input": false, "note": "[ツアーをもう一度見る]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
             {"range": "gd_test_result", "label": "テストの結果", "type": "String", "input": false, "note": "結果全文の書込先(縦20行×1列)。実行のたびに上書きされる"}
           ]
         }
@@ -780,7 +781,8 @@
         {"name": "anonymize_default", "value": true, "note": "案件入力の匿名化ボタン既定(16章 E-31/OQ-6)"},
         {"name": "feature_inbox", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"},
         {"name": "feature_judgelog", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"},
-        {"name": "operator", "value": "", "note": "判定・実行の記録に残す実施者。個人名ではなく部署・グループ名まで"}
+        {"name": "operator", "value": "", "note": "判定・実行の記録に残す実施者。個人名ではなく部署・グループ名まで"},
+        {"name": "guide_tour_done", "value": "0", "note": "初回ガイドツアーを見終えたか(1=済)。1以外は未完了として扱う"}
       ]
     },
 

@@ -238,7 +238,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 対象企業名: {{company}}
 業種: {{industryName}}
 案件種別: {{case_typeの日本語}}
-収集ティア: {{dossier_tierの日本語: クイック / フルドシエ / 壁打ち}}
+調査の深さ: {{dossier_tierの日本語: かんたん調査 / しっかり調査 / 壁打ち}}
 {{BLOCK_RENEWAL_S1 ※renewalのみ}}
 
 ■■■企業情報ここから■■■

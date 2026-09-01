@@ -174,6 +174,9 @@ Private Sub BootStep(ByVal stepNo As Long)
     Case 11
         ' フォーカス退避(16章E-51(c))。実装は ui層 modUIProgress が唯一持つ。
         modUIProgress.ParkFocus
+        ' 初回ガイドツアー(裁定書14 裁定6)。実装は modUIGuide が唯一持ち、
+        ' 起動シーケンスからの結線はこの1行だけにする(2回目以降は何もしない)。
+        modUIGuide.StartTourIfFirstRun
     End Select
     Exit Sub
 
@@ -243,6 +246,8 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "operator", vbNullString
     modConfig.RegisterDefault "feature_inbox", "TRUE"
     modConfig.RegisterDefault "feature_judgelog", "TRUE"
+    ' 裁定書14 裁定6: 初回ガイドツアーを見終えたか("1"=済)。既定は "0"。
+    modConfig.RegisterDefault "guide_tour_done", "0"
 End Sub
 
 ' ----------------------------------------------------------------------------

@@ -407,7 +407,7 @@ Private Function DossierSummaryOf(ByVal caseId As String, ByRef ctx As TCaseCtx)
 
     modUtil.BufInit buf, cnt
     modUtil.BufAdd buf, cnt, "企業: " & ctx.company & "(" & ctx.industry_name & ")"
-    modUtil.BufAdd buf, cnt, "案件区分: " & ctx.case_type & " / 収集ティア: " & ctx.dossier_tier
+    modUtil.BufAdd buf, cnt, "案件区分: " & ctx.case_type & " / 調査の深さ: " & ctx.dossier_tier
 
     s1Json = modCaseStore.ResolveStepJson(caseId, 1)
     If LenB(s1Json) > 0 Then

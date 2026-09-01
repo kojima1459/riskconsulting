@@ -89,8 +89,10 @@ MODULE_REGISTRY = {
     #   modUICase4  = 同上。フィードバック・判断台帳(13章§2.5/§2.7)。
     #   modUICaseFmt= 同上。13章§2.2 セル格納規約の変換(セル<->JSON値)の純関数。
     #                 modKnowledgeFmt が15章の整形規約を持つのと同じ切り口。
+    #   modUIGuide  = 初回ガイドツアーと操作ガイドの図形ボタン(裁定書14 裁定6)。
+    #                 起動からの結線は modBoot の1行(StartTourIfFirstRun)のみ。
     "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICase5",
-    "modUICaseFmt",
+    "modUICaseFmt", "modUIGuide",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -111,7 +113,9 @@ MODULE_REGISTRY = {
     "modGatewayRPN", "modGatewayDirect", "modJsonLite", "modConfig", "modLog",
     "modUtil", "modUtilText", "modTypes",
     # ---- test 層 ----
-    "modTestRunner", "modTestsExcel", "modMockLlm",
+    # modTestsRunnerUi = ブック内テスト実行(17章 T-48・裁定書14 裁定5)。
+    #   ターミナルの使えない社内PC向けに ps1 と同じ4条件をブック内で回す。
+    "modTestRunner", "modTestsExcel", "modMockLlm", "modTestsRunnerUi",
 }
 # 分割される可能性のあるモジュール名(末尾に1以上の数字が付く)。
 # modMockLlm1..n は 12章§2(v2.4.1)が 30,000字契約による分割を明記している。
@@ -397,6 +401,14 @@ CONTRACT: dict[str, dict] = {
     # (MODULE_REGISTRY⇔CONTRACT)を満たすために required=[] で登録する。
     # closed=False なので追加 Public は許容する。
     "modUISheet": {"closed": False, "required": []},
+    # modUIGuide: 裁定書14 裁定6。起動の入口 StartTourIfFirstRun と再視聴の
+    # RestartTour、操作ガイドのボタン EnsureGuideButtons を required で固定する
+    # (modBoot / modUIHome / 図形の OnAction の結線先そのものであり、改名・
+    #  Private化はその場で結線が切れる)。
+    "modUIGuide": {
+        "closed": False,
+        "required": ["StartTourIfFirstRun", "RestartTour", "EnsureGuideButtons"],
+    },
     "modUIHome": {"closed": False, "required": []},
     "modUICase2": {"closed": False, "required": []},
     "modUICase3": {"closed": False, "required": []},
@@ -412,10 +424,16 @@ CONTRACT: dict[str, dict] = {
         "required": [
             "ResetTests", "Check", "Failures", "ReportText", "RunAllPureTests",
             "SetExpectedCount",
+            # 裁定書14 裁定5: ブック内テスト実行が ps1 と同じ4条件を判定する
+            # ための計数の読み出し口(集計の仕方は変えない)。
+            "PassCount", "FailCount", "SkipCount", "ExecutedCount",
         ],
     },
     # modTestsExcel: 14章§6のtest層契約(層(b)=実Excel E2Eスモークの入口。17章T-47)。
     "modTestsExcel": {"closed": False, "required": ["RunAllExcelTests"]},
+    # modTestsRunnerUi: 17章 T-48(裁定書14 裁定5)。操作ガイドの[テストを実行]の
+    # OnAction。引数なし公開1本のみ(Alt+F8からも実行できるようにするため)。
+    "modTestsRunnerUi": {"closed": False, "required": ["RunAllTestsFromBook"]},
     # modTestsExcel2: 30,000字契約(12章§2)による modTestsExcel の分割先。
     # wintest からの入口は RunAllExcelTests のままで、本数だけ合流させる。
     "modTestsExcel2": {"closed": False, "required": ["RunExcelTests2"]},
@@ -571,8 +589,16 @@ CORE_PRODUCT_VOCAB = [
 #   他の core->test 参照、および modGatewayRPN から modMockLlm の別メンバへの
 #   参照は引き続き ERROR。緩和を1行増やすには司令塔の裁定を要する。
 # ==============================================================================
+#
+# 2件目(裁定書14 裁定5・17章 T-48): 操作ガイドの[テストを実行]ボタンの OnAction
+#   文字列 "modTestsRunnerUi.RunAllTestsFromBook" を ui層(modUIGuide)が図形へ
+#   配線する。禁止理由(配布物からテストを外せなくなる)が当てはまらないことは
+#   modMockLlm と同じで、テスト一式は build/modules.json に登録されて vba_src へ
+#   焼き込まれる**配布物同梱の自己検査**であり(12章§2)、社内PCにはターミナルが
+#   無いためブック内から回す口が唯一の検問になる。粒度は完全一致1件のみ。
 R1_TEST_LAYER_EXCEPTIONS = {
     ("modGatewayRPN", "modMockLlm", "MockResponse"),
+    ("modUIGuide", "modTestsRunnerUi", "RunAllTestsFromBook"),
 }
 
 # 型落ち検出: Dim/Static文

@@ -110,7 +110,7 @@ Public Function BuildS1User() As String
     s = s & "対象企業名: {{company}}" & vbLf
     s = s & "業種: {{industryName}}" & vbLf
     s = s & "案件種別: {{case_typeの日本語}}" & vbLf
-    s = s & "収集ティア: {{dossier_tierの日本語}}" & vbLf
+    s = s & "調査の深さ: {{dossier_tierの日本語}}" & vbLf
     s = s & "{{BLOCK_RENEWAL_S1}}" & vbLf
     s = s & vbLf
     s = s & "■■■企業情報ここから■■■" & vbLf

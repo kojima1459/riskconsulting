@@ -54,7 +54,7 @@ Private Const CF_NOTE_KEYS As String = "input_field_notes;input_hearing_answers"
 Private Const CF_NOTE_TAG As String = "field_insights"
 
 ' ファイル名(13章§2.8)。1社1ファイルなので `_2` の連番は付けない。
-Private Const CF_TAIL As String = "リスクドシエ"
+Private Const CF_TAIL As String = "企業カルテ"
 Private Const CF_EXT As String = ".xlsx"
 
 ' 1セルに入れる最大字数(case_data と同方式。16章 E-22)。

@@ -352,6 +352,13 @@
       "wave": "T-34"
     },
     {
+      "name": "modUIGuide",
+      "path": "src/ui/modUIGuide.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-30"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",
@@ -455,6 +462,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-47"
+    },
+    {
+      "name": "modTestsRunnerUi",
+      "path": "src/test/modTestsRunnerUi.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-48"
     },
     {
       "name": "modMockLlm",
