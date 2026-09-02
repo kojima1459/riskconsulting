@@ -52,7 +52,12 @@ Private Const TE_BAND_SEQ As Long = 100001
 ' 本モジュールが打つ Check の総本数(自己照合用。テストを増減したら更新)。
 ' (裁定書12: V5で1本・V1で2本を modTestsExcel2 へ追加し 44 -> 47)
 ' (裁定書22 M4: W6.1のナビ貼付3本を modTestsExcel2 へ追加し 47 -> 50)
-Private Const TE_EXPECTED As Long = 50
+' (裁定書22 仕上げ: v3.1の予約行方式を前提にしていた modTestsExcel2 の
+'  旧 Q9/Q1/V1 群 12本を撤去し、新経路(保管+プレビュー)の Q9N 5本・V1N 2本へ
+'  書き換えたため 50 -> 45。内訳 = 本モジュール34本 + modTestsExcel2 11本。
+'  Q1(overflowの永続ガード)は v3.2 で**事象そのものが消えた**ため書き換え先を
+'  持たない(跡地の理由は modTestsExcel2 の「跡地」節が持つ))
+Private Const TE_EXPECTED As Long = 45
 
 Private mRun As Long    ' ECheck が数える実行本数
 
