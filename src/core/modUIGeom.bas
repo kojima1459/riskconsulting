@@ -220,7 +220,7 @@ Public Function LineCountFor(ByVal bodyText As String, ByVal colChars As Long) A
     Dim rows As Long
     For i = LBound(lines) To UBound(lines)
         Dim n As Long
-        n = (Len(lines(i)) + cols - 1) \ cols
+        n = CLng(Fix((Len(lines(i)) + cols - 1) / cols))
         If n < 1 Then n = 1
         rows = rows + n
     Next i

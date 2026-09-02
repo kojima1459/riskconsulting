@@ -652,7 +652,7 @@ End Function
 ' 15章§0.7 の予算配分(貼付7割 / ナレッジ3割)。
 Public Function BudgetOf(ByVal limitChars As Long, ByVal pct As Long) As Long
     If limitChars <= 0 Then Exit Function
-    BudgetOf = (limitChars \ 10) * pct
+    BudgetOf = CLng(Fix(limitChars / 10)) * pct
 End Function
 
 ' 打切らない4欄だけで上限超過か(E-03(4)の実行前警告の条件)。

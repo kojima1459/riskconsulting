@@ -2338,6 +2338,63 @@ def check_hex_literal_suffix(info: ModuleInfo) -> None:
             )
 
 
+# ==============================================================================
+# 整数除算演算子 `\` の禁止(裁定書23 C-3)
+# ------------------------------------------------------------------------------
+# Mac版Excelで vba_src からの AddFromString を通すと、`\`(U+005C)がMacの日本語
+# コードページで別バイトへ化け、コンパイルエラーになる(実機で8行・10ファイルが
+# 全滅)。演算子としての `\` は 0 方向切り捨ての除算なので、`Fix(a / b)`(Long へ
+# 入れるなら `CLng(Fix(a / b))`)へ書き換えれば同値。文字列リテラルの中とコメント
+# の中の `\`(パス・JSONエスケープの説明)は化けても実害が無いので対象外。
+# ==============================================================================
+def check_integer_division_operator(info: ModuleInfo) -> None:
+    r"""R-BS: 文字列リテラル・コメント外の `\` 演算子を禁止(裁定書23 C-3)。"""
+    for lineno, stmt in info.statements:
+        masked = _blank_string_literals(stmt)
+        if "\\" not in masked:
+            continue
+        info.add(
+            "ERROR", lineno,
+            "整数除算演算子 `\\` は禁止です(裁定書23 C-3: Mac版Excelの日本語"
+            "コードページで別バイトに化けてコンパイルエラーになります)。"
+            "`a \\ b` は `Fix(a / b)`(Longへ入れるなら `CLng(Fix(a / b))`)へ"
+            f"書き換えてください: 「{stmt.strip()[:80]}」",
+        )
+
+
+# 上のルールの自己テスト(骨抜き防止)。正例=findingが出てはいけない書き方、
+# 負例=必ずERRORが出なければならない書き方。run_lint の冒頭で毎回走らせる。
+_INTDIV_SELFTEST_OK = [
+    'mins = CLng(Fix(waitSec / 60))',
+    'p = "C:\\work\\out.txt"',
+    "s = Replace$(s, \"\\\\\", \"/\")",
+]
+_INTDIV_SELFTEST_NG = [
+    'mins = waitSec \\ 60',
+    'n = (Len(t) + cols - 1) \\ cols',
+]
+
+
+def _selftest_integer_division_operator() -> list[str]:
+    """正例/負例を check_integer_division_operator に通し、食い違いを文字列で返す。"""
+    problems: list[str] = []
+    for src in _INTDIV_SELFTEST_OK:
+        probe = ModuleInfo(path=Path("selftest.bas"), relpath=Path("selftest.bas"),
+                           raw_text=src, vb_name="selftest",
+                           filename_stem="selftest", statements=[(1, src)])
+        check_integer_division_operator(probe)
+        if probe.findings:
+            problems.append(f"正例が誤検知されました: {src!r}")
+    for src in _INTDIV_SELFTEST_NG:
+        probe = ModuleInfo(path=Path("selftest.bas"), relpath=Path("selftest.bas"),
+                           raw_text=src, vb_name="selftest",
+                           filename_stem="selftest", statements=[(1, src)])
+        check_integer_division_operator(probe)
+        if not probe.findings:
+            problems.append(f"負例が検知されませんでした: {src!r}")
+    return problems
+
+
 def check_excel_tokens(info: ModuleInfo) -> None:
     """R4: Excelトークンは ui層 と R4_EXCEL_ALLOWED_MODULES のみ(12章§2)。"""
     name = module_name_for_display(info)
@@ -2712,6 +2769,7 @@ def run_lint(src_root: Path) -> int:
         check_vba_reserved_words(info)
         check_msvbal_reserved_names(info)
         check_hex_literal_suffix(info)
+        check_integer_division_operator(info)
         check_excel_tokens(info)
         check_application_run_whitelist(info)
         check_cell_write_guard(info)
@@ -2757,6 +2815,15 @@ def run_lint(src_root: Path) -> int:
         for f in sorted(info.findings,
                         key=lambda x: (x.level != "ERROR", x.level != "WARN", x.line)):
             print(f"  {f.level:<5} L{f.line}: {f.message}")
+
+    # `\\` 禁止ルールの自己テスト(裁定書23 C-3): 正例/負例が期待どおりに
+    # 判定できているか。ルールを空振りさせる改変はここが赤で止める。
+    intdiv_selftest = _selftest_integer_division_operator()
+    if intdiv_selftest:
+        print("\n[整数除算演算子 `\\` 禁止ルールの自己テスト]")
+        for msg in intdiv_selftest:
+            print(f"  ERROR L1: {msg}")
+        total_error += len(intdiv_selftest)
 
     if _bytes_unscanned:
         print("\n[行長バイト検査の自己検査 - 検査が走っていないモジュール]")

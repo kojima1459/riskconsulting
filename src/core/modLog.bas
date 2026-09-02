@@ -301,7 +301,7 @@ Private Sub TrimLog(ByVal ws As Object)
     ' 判定は ShouldRotate に一本化する(閾値の意味を2箇所に書かない)。毎回削ると
     ' 重いので、実際に削り始めるのは上限を1割超えてからにする=閾値側に余裕を
     ' 足して渡す。削る先は上限ちょうど。
-    If Not ShouldRotate(dataRows, maxRows + (maxRows \ 10) + 1) Then Exit Sub
+    If Not ShouldRotate(dataRows, maxRows + CLng(Fix(maxRows / 10)) + 1) Then Exit Sub
 
     ' 残すのは末尾 maxRows 行。ヘッダ(1行目)の直下から余った分だけ消す。
     Dim dropCount As Long

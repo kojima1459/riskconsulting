@@ -123,8 +123,8 @@ Public Function SplitForCells(ByVal s As String, ByVal chunkLen As Long) As Stri
 
     ' 断片数の上限見積り(必ず実際の件数以上になる)。
     Dim maxN As Long
-    maxN = (Len(s) \ 1) + 1
-    If lim > 1 Then maxN = (Len(s) \ (lim - 1)) + 2
+    maxN = Len(s) + 1
+    If lim > 1 Then maxN = CLng(Fix(Len(s) / (lim - 1))) + 2
 
     Dim outArr() As String
     ReDim outArr(0 To maxN - 1)

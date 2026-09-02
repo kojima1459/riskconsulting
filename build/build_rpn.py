@@ -213,6 +213,16 @@ class BuildError(Exception):
 #   ・Boot は同期呼び出しだと注入直後に 1004 になることがあるため OnTime で1秒
 #     後ろへ切り離し、予約時刻を vba_src!E1 に置く(modBoot 側が任意で取り消す)。
 #     OnTime予約自体が失敗したら同期で modBoot.Boot を呼ぶフォールバックを持つ。
+#   ・焼き付け(bake。裁定書23 C-1): 注入が全件成功した回の Save 直前に
+#     vba_src!E3 へ "baked" を書く。次回以降の起動は Install 冒頭で E3 を読み、
+#     "baked" なら VBProject に一切触らずそのまま OnTime(失敗時 Application.Run)
+#     で modBoot.Boot へ渡る。VBProject に触らないので利用者に「VBAプロジェクト
+#     オブジェクト モデルへのアクセスを信頼」(VBOM)を求めない。焼き付けは
+#     VBOM有効の開発PC(Windows)で1回開いて閉じるだけで済む。
+#     baked なのに Application.Run が失敗した(=モジュールが焼き付いていない)
+#     ときだけ "Setup NG: modules missing. Ask the developer." の1文で止める。
+#     E3 が空なら従来どおりの注入経路(VBOM必須)。ビルドは E3 を書かない
+#     (成果物の E3 が空であることは verify_build が確認する)。
 # ===========================================================================
 _INSTALLER_SRC_TEXT = '''Attribute VB_Name = "ThisWorkbook"
 Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
@@ -227,10 +237,16 @@ End Sub
 Public Sub Install()
   Dim p As Object, w As Worksheet, c As Object, e As Object
   Dim r As Long, n As String, s As String, l As Long, f As Long
+  Dim b As Boolean
+  On Error GoTo Done
+  Set w = ThisWorkbook.Worksheets("vba_src")
+  If CStr(w.Cells(3, 5).Value) = "baked" Then
+    b = True
+    GoTo Boot
+  End If
   On Error GoTo Trust
   Set p = ThisWorkbook.VBProject
   On Error GoTo Done
-  Set w = ThisWorkbook.Worksheets("vba_src")
   l = w.Cells(w.Rows.Count, 1).End(-4162).Row
   For r = 2 To l
     n = CStr(w.Cells(r, 1).Value)
@@ -265,7 +281,10 @@ Public Sub Install()
     ThisWorkbook.Saved = True
     Exit Sub
   End If
+  w.Cells(3, 5).Value = "baked"
   ThisWorkbook.Save
+Boot:
+  On Error Resume Next
   Err.Clear
   Dim bt As Date
   bt = Now + TimeSerial(0, 0, 1)
@@ -273,6 +292,9 @@ Public Sub Install()
   If Err.Number <> 0 Then
     Err.Clear
     Application.Run "modBoot.Boot"
+    If Err.Number <> 0 And b Then
+      MsgBox "Setup NG: modules missing. Ask the developer.", vbCritical
+    End If
   Else
     w.Cells(1, 5).Value = CDbl(bt)
     Err.Clear
@@ -1507,6 +1529,9 @@ def _make_vba_src(wb, spec, ctx):
     # E2=ブック内テストの期待本数(裁定書14 裁定5)。wintest/tests_expected.txt の
     # 1行目を焼き込み、実行時に modTestsRunnerUi が読む。読めなければ実行しない
     # (fail-closed)ため、txtの欠落・非整数はここでビルドを止める。
+    # E3=焼き付けマーカー "baked"(裁定書23 C-1)。**ビルドは触らない**。実機の
+    # Excelが1回目の起動で注入に全件成功したときだけ書き、以後の起動は
+    # VBProject に触らない(利用者にVBOM不要)。
     ws.cell(row=2, column=5, value=ctx.tests_expected)
     ws.column_dimensions["A"].width = 24
     ws.column_dimensions["B"].width = 8
@@ -1915,8 +1940,27 @@ def _verify_installer_patch(vba_bin, installer_src):
     別実装(ovba.CFBReader)で読み戻して検証する3項目(PoC由来):
     (1) ThisWorkbookストリームの復元確認(先頭一致+末尾NULパディングのみ)
     (2) dir ストリームの ThisWorkbook.MOFFSET が 0
-    (3) _VBA_PROJECT の無害化(サイズ不変・Version=0xFFFF・PerformanceCacheゼロ埋め)"""
+    (3) _VBA_PROJECT の無害化(サイズ不変・Version=0xFFFF・PerformanceCacheゼロ埋め)
+    (4) 焼き付け(baked)経路の存在(裁定書23 C-1)"""
     errors = []
+
+    # (4) 焼き付け経路の存在検査。E3="baked" の読み書き・VBProjectを避ける分岐・
+    #     Run失敗時の1文が揃っていなければ、利用者にVBOMを求めない配布が成立しない。
+    src_text = installer_src.decode("ascii", errors="replace") if installer_src else ""
+    for needle, why in (
+            ('If CStr(w.Cells(3, 5).Value) = "baked" Then',
+             "起動時に vba_src!E3 を読む baked 分岐"),
+            ('w.Cells(3, 5).Value = "baked"',
+             "注入成功時に vba_src!E3 へ baked を書く行"),
+            ('Application.Run "modBoot.Boot"',
+             "OnTime失敗時の Application.Run フォールバック"),
+            ('MsgBox "Setup NG: modules missing. Ask the developer."',
+             "baked なのに Run が失敗したときの1文"),
+    ):
+        if needle not in src_text:
+            errors.append(
+                f"自己インストーラに{why}がありません(裁定書23 C-1): {needle!r}")
+
     try:
         cfb = ovba.CFBReader(vba_bin)
 
@@ -2038,6 +2082,15 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
                 errors.append(
                     f"vba_src!E2(ブック内テストの期待本数)が {TESTS_EXPECTED_PATH} と"
                     f"不一致: 期待={ctx.tests_expected} 実際={got_e2!r}")
+        # 裁定書23 C-1: E3=焼き付けマーカー。ビルドは書かない(焼き付けは実機の
+        # Excelが1回目の起動でだけ書く)。成果物に baked が立っていると、まだ
+        # モジュールが焼き付いていないファイルが注入をスキップしてしまう。
+        got_e3 = ws.cell(row=3, column=5).value
+        if got_e3 not in (None, ""):
+            errors.append(
+                f"vba_src!E3(焼き付けマーカー)が成果物で空ではありません: 実際={got_e3!r}"
+                "(ビルドはE3を書きません。焼き付け前に baked が立っていると"
+                "モジュール注入がスキップされます)")
     else:
         errors.append("vba_src シートが存在しない")
 
@@ -2344,11 +2397,13 @@ def main():
           "vba_src本文がsrc/と完全一致 / vba_src D列(期待行数)がsrc由来の計算値と一致 / "
           "configキー列(順序含む)と全キーの説明・mock_llm・app_version / "
           "名前付きレンジの本数と参照先 / 1行目ヘッダとブロックアンカー先ヘッダ行 / "
-          "タブ色 / vba_src!E2(ブック内テストの期待本数) / パッケージ content type")
+          "タブ色 / vba_src!E2(ブック内テストの期待本数) / vba_src!E3(焼き付けマーカーが空) / "
+          "パッケージ content type")
     if has_vba_project:
-        print("  自己インストーラ外科パッチ検証(3項目): "
+        print("  自己インストーラ外科パッチ検証(4項目): "
               "ThisWorkbook復元確認 / dir MOFFSET=0 / "
-              "_VBA_PROJECT無害化(Version=0xFFFF・PerformanceCacheゼロ埋め・3,061B不変)")
+              "_VBA_PROJECT無害化(Version=0xFFFF・PerformanceCacheゼロ埋め・3,061B不変) / "
+              "焼き付け(baked)経路の存在")
     print("  ※13章との突合(シート名・列名・順序・configキー・名前付きレンジ)は "
           "tools/sheet_check.py が行う。")
     print("\nDone.")

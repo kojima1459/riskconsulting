@@ -103,7 +103,7 @@ End Function
 '   秒を分へ換算し、端数は切り上げる(短く見せない)。
 Private Function MaxWaitText(ByVal waitSec As Long) As String
     Dim mins As Long
-    mins = waitSec \ 60
+    mins = CLng(Fix(waitSec / 60))
     If mins * 60 < waitSec Then mins = mins + 1
     If mins < 1 Then mins = 1
     MaxWaitText = "最大" & CStr(mins) & "分（1Stepあたり " & CStr(waitSec) & " 秒）"

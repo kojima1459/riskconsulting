@@ -433,7 +433,7 @@ Public Function Fnv1a64Hex(ByVal s As String) As String
 
         Dim byteLo As Long, byteHi As Long
         byteLo = code And &HFF
-        byteHi = (code \ 256) And &HFF
+        byteHi = CLng(Fix(code / 256)) And &HFF
 
         hLo = hLo Xor byteLo
         MulU64ByPrime hHi, hLo

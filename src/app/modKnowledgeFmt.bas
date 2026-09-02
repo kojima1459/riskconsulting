@@ -168,7 +168,7 @@ Public Function TrimPlan(ByRef counts() As Long, ByVal budgetChars As Long) As L
     Dim newChars As Double
     For i = 0 To FM_PLAN_N - 1
         If total <= CDbl(budgetChars) Then Exit For
-        newRows = (rowsNow(i) + 1) \ 2
+        newRows = CLng(Fix((rowsNow(i) + 1) / 2))
         If newRows < CLng(Val(CStr(floors(i)))) Then newRows = CLng(Val(CStr(floors(i))))
         If newRows > rowsNow(i) Then newRows = rowsNow(i)
         newChars = 0
