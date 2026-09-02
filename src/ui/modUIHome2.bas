@@ -90,8 +90,26 @@ Public Sub HomeRunAll()
         GoTo Done
     End If
 
-    modUIProgress.SetStage "下書きを4枚まとめて作っています", WaitSec(), 1, 4
-    If modPipeline.RunAll(caseId, QualityOverride()) Then
+    ' 裁定書22 M3: 段ごとに SetStage を出す(進捗が「4枚まとめて」の1行のまま
+    '   10～20分止まって見えるのを止める)。modPipeline.RunAll の中身は
+    '   「For i=1 To 4: RunStep -> 失敗で Exit / DoEvents」だけであり、前後処理を
+    '   1つも持たない(ResetDeepOutcome は裁定書10 M1 で呼び出し側=本ハンドラの
+    '   冒頭へ移してあり、E-35/E-36 の警告収集は ShowDeepWarning、run_log は
+    '   RunStep の中の modGatewayRPN が書く)。したがって本ループは RunAll と
+    '   **等価**である(app層は触らない)。
+    Dim stepNo As Long
+    Dim okAll As Boolean
+    okAll = True
+    For stepNo = 1 To 4
+        modUIProgress.SetStage StageNameOf(stepNo), WaitSec(), stepNo, 4
+        If Not modPipeline.RunStep(caseId, stepNo, QualityOverride()) Then
+            okAll = False
+            Exit For
+        End If
+        DoEvents
+    Next stepNo
+
+    If okAll Then
         modUIHome.DrawAllSteps caseId
         modUIToast.ShowNext 2
         ShowDeepWarning

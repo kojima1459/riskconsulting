@@ -157,12 +157,17 @@ Private Function LockLimitSec() As Double
     LockLimitSec = CDbl(waitSec) + UP_LOCK_MARGIN_SEC
 End Function
 
-' 実行中クリックの案内。ダイアログを出さず警告欄へ1行書くだけにする(E-50(c))。
+' 実行中クリックの案内。ダイアログを出さず警告欄へ1行書く(E-50(c))。
+'   裁定書22 m7: **同じ1行をトースト(warn)でも出す**。hm_warning はナビの
+'   区画④まで下げないと見えないため、押しても何も起きていないように見えていた
+'   (11章§4.1「全ボタンにトーストを出す(例外なし)」。§4.1 は不変)。
 Private Sub NoticeBusy(ByVal stepName As String)
     On Error Resume Next
-    modUISheet.WriteNamed "hm_warning", _
-        "実行中のため「" & stepName & "」は受け付けませんでした（" & _
-        gLockStep & " の完了をお待ちください）。"
+    Dim msgText As String
+    msgText = "実行中のため「" & stepName & "」は受け付けませんでした（" & _
+              gLockStep & " の完了をお待ちください）。"
+    modUISheet.WriteNamed "hm_warning", msgText
+    modUIToast.ShowToast msgText, "warn"
 End Sub
 
 ' ============================================================================

@@ -249,6 +249,27 @@ Public Function SplitFieldNotes(ByVal bodyText As String, ByRef memoText As Stri
 End Function
 
 ' ============================================================================
+' FitsInRows - 本文が rows 行の枠に収まるか(11章§3.3.7 の現場メモ60行の判定)。
+' ----------------------------------------------------------------------------
+'   True=収まる(1行1セルで rows 行以内) / False=はみ出す。
+'   ・rows <= 0 は「枠が無い」ので False(fail-closed。書ける保証が無い)
+'   ・空文字は 0 行として True(空を書くのは常に安全)
+'   ・改行は vbCrLf / vbCr / vbLf のいずれも1つの改行として数える
+'   呼び出し側は False のとき **1行も書かない**(途中まで書いて切れた枠を作らない)。
+' ============================================================================
+Public Function FitsInRows(ByVal bodyText As String, ByVal rows As Long) As Boolean
+    If rows <= 0 Then Exit Function
+    If LenB(bodyText) = 0 Then
+        FitsInRows = True
+        Exit Function
+    End If
+
+    Dim lines() As String
+    lines = Split(NormalizeEol(bodyText), vbLf)
+    FitsInRows = ((UBound(lines) - LBound(lines) + 1) <= rows)
+End Function
+
+' ============================================================================
 ' JoinFieldNotes - SplitFieldNotes の逆(画面の枠へ戻すときの1本化)。
 '   memoText は3見出しを含む正規形であることを前提にし、末尾へ【そのほか】節を
 '   足す。SplitFieldNotes(JoinFieldNotes(m, o)) が (m, o) に戻ることが契約。

@@ -239,3 +239,18 @@ Public Function CardWaitMsFor(ByVal bodyText As String, ByVal minMs As Long, _
     If maxMs > 0 And ms > maxMs Then ms = maxMs
     CardWaitMsFor = ms
 End Function
+
+' ============================================================================
+' ToastSecondsFor - トースト1枚の表示秒数(11章§4.1・裁定書22 m9)。
+' ----------------------------------------------------------------------------
+'   秒 = 3 + 字数 / 20 を 3秒～9秒でクリップする。短い1文は3秒で消え、
+'   2文の長い案内は最長9秒まで残る(読み切る前に消えたという苦情を止める)。
+'   固定秒(6秒)をやめた理由: 文の長さが2倍違っても同じ時間で消えていた。
+' ============================================================================
+Public Function ToastSecondsFor(ByVal bodyText As String) As Double
+    Dim sec As Double
+    sec = 3# + CDbl(Len(bodyText)) / 20#
+    If sec < 3# Then sec = 3#
+    If sec > 9# Then sec = 9#
+    ToastSecondsFor = sec
+End Function

@@ -115,100 +115,126 @@ Public Function StepAnchor(ByVal stepNo As Long) As String
 End Function
 
 ' ============================================================================
+' 優先順位10行の純関数(11章§3.1.1・裁定書22 M4)
+' ----------------------------------------------------------------------------
+' CurrentStep は「シートを読む」と「10行を上から評価する」の2つを1本の中で
+' やっていたため、優先順位の入れ替わりを層(a)から一度も確かめられなかった。
+' **判定だけを純関数へ割り出す**(Excelを1つも触らない):
+'   StepRuleOf   5つの状態 -> 当たった行の番号(1..10。どれにも当たらなければ11)
+'   StepFor      同じ5つ   -> STEP番号(1..6)
+'   StepActionOf 行の番号  -> hm_next_action の逐語文
+' CurrentStep はシートから5つを読んで、この3本を呼ぶだけの薄い口にする。
+' ============================================================================
+Public Function StepRuleOf(ByVal kbReady As Boolean, ByVal locked As Boolean, _
+                           ByVal hasCompany As Boolean, ByVal anyArea As Boolean, _
+                           ByVal statusText As String) As Long
+    If Not kbReady Then
+        StepRuleOf = 1
+    ElseIf locked Then
+        StepRuleOf = 2
+    ElseIf Not hasCompany Then
+        StepRuleOf = 3
+    ElseIf Not anyArea Then
+        StepRuleOf = 4
+    ElseIf StrComp(statusText, "error", vbBinaryCompare) = 0 Then
+        StepRuleOf = 5
+    ElseIf StrComp(statusText, "draft", vbBinaryCompare) = 0 Then
+        StepRuleOf = 6
+    ElseIf StrComp(statusText, "s1_done", vbBinaryCompare) = 0 _
+           Or StrComp(statusText, "s2_done", vbBinaryCompare) = 0 _
+           Or StrComp(statusText, "s3_done", vbBinaryCompare) = 0 Then
+        StepRuleOf = 7
+    ElseIf StrComp(statusText, "s4_done", vbBinaryCompare) = 0 Then
+        StepRuleOf = 8
+    ElseIf StrComp(statusText, "exported", vbBinaryCompare) = 0 Then
+        StepRuleOf = 9
+    ElseIf StrComp(statusText, "feedback_done", vbBinaryCompare) = 0 Then
+        StepRuleOf = 10
+    Else
+        StepRuleOf = 11
+    End If
+End Function
+
+' StepFor - 5つの状態から STEP番号(1..6)を決める(利用者は選べない)。
+Public Function StepFor(ByVal kbReady As Boolean, ByVal locked As Boolean, _
+                        ByVal hasCompany As Boolean, ByVal anyArea As Boolean, _
+                        ByVal statusText As String) As Long
+    StepFor = StepNoOfRule(StepRuleOf(kbReady, locked, hasCompany, anyArea, statusText))
+End Function
+
+' 行の番号 -> STEP番号(11章§3.1.1 の表の3列目)。
+Private Function StepNoOfRule(ByVal ruleNo As Long) As Long
+    Select Case ruleNo
+    Case 1, 3
+        StepNoOfRule = 1
+    Case 4
+        StepNoOfRule = 2
+    Case 10
+        StepNoOfRule = 3
+    Case 8
+        StepNoOfRule = 5
+    Case 9
+        StepNoOfRule = 6
+    Case Else
+        StepNoOfRule = 4
+    End Select
+End Function
+
+' 行の番号 -> hm_next_action の逐語文(11章§3.1.1 の表の4列目)。
+'   上表の文を使う行は StepText を引く(1字も別の文を作らない)。
+Public Function StepActionOf(ByVal ruleNo As Long) As String
+    Select Case ruleNo
+    Case 1
+        StepActionOf = "ナレッジブック.xlsx を、この本体と同じフォルダに置いて" & _
+                       "[ナレッジを読み直す]を押してください。" & _
+                       "置いてあるのに出ないときは、ファイル名が違わないかご確認ください。"
+    Case 2
+        StepActionOf = "いま作っています。終わるまでボタンを押さずにお待ちください。"
+    Case 3
+        StepActionOf = StepText(1)
+    Case 4
+        StepActionOf = StepText(2)
+    Case 5
+        StepActionOf = "前回が途中で止まりました。もう一度③の[まとめて作る]を" & _
+                       "押してください。直らないときは、使い方タブの[記録を見る]を押して、" & _
+                       "いちばん下の行を開発担当へ送ってください。"
+    Case 7
+        StepActionOf = "途中まで出来ています。もう一度③の[まとめて作る]を押すと、" & _
+                       "最後まで作ります。"
+    Case 8
+        StepActionOf = StepText(5)
+    Case 9
+        StepActionOf = "④の[ヒアリングシートを出す]を押して、訪問に持っていく紙を" & _
+                       "印刷してください。"
+    Case 10
+        StepActionOf = "訪問おつかれさまでした。聞いてきたことを②の「ヒアリング回答」へ" & _
+                       "貼ると、提案が深まります。"
+    Case Else
+        StepActionOf = StepText(4)
+    End Select
+End Function
+
+' ============================================================================
 ' CurrentStep - いまどのSTEPかを状態から決める(11章§3.1.1 の優先順位10行)。
 ' ----------------------------------------------------------------------------
-' 上から評価し、最初に当たったものを採る。**利用者はSTEPを選べない**
-' ([← 戻る][次へ →]は画面をその区画へ動かすだけで、番号は書き換えない)。
-' actionText には、上表以外の文を使う行ではその逐語文を返す。
+' シートから5つの状態を読み、判定は上の純関数へ委ねる。**利用者はSTEPを
+' 選べない**([← 戻る][次へ →]は画面をその区画へ動かすだけで、番号は書き換え
+' ない)。
 ' ============================================================================
 Public Function CurrentStep(ByRef actionText As String) As Long
     Dim caseId As String
     caseId = modUIHome.SelectedCaseId()
 
-    ' 1: 社内ナレッジが読めていない
-    If Not KnowledgeReady() Then
-        actionText = "ナレッジブック.xlsx を、この本体と同じフォルダに置いて" & _
-                     "[ナレッジを読み直す]を押してください。" & _
-                     "置いてあるのに出ないときは、ファイル名が違わないかご確認ください。"
-        CurrentStep = 1
-        Exit Function
-    End If
-
-    ' 2: 実行中(ui_lock 保持中)
-    If modUIProgress.IsUiLocked() Then
-        actionText = "いま作っています。終わるまでボタンを押さずにお待ちください。"
-        CurrentStep = 4
-        Exit Function
-    End If
-
-    ' 3: 会社名が空
-    If LenB(modUISheet.ReadNamed("ci_company")) = 0 Then
-        actionText = StepText(1)
-        CurrentStep = 1
-        Exit Function
-    End If
-
-    ' 4: 会社名あり・②の6欄がすべて空
-    If Not AnyAreaFilled(caseId) Then
-        actionText = StepText(2)
-        CurrentStep = 2
-        Exit Function
-    End If
-
     Dim statusText As String
     If LenB(caseId) > 0 Then statusText = modUICase3.CaseCellText(caseId, "status")
 
-    ' 5: 選択中の案件が error
-    If StrComp(statusText, "error", vbBinaryCompare) = 0 Then
-        actionText = "前回が途中で止まりました。もう一度③の[まとめて作る]を" & _
-                     "押してください。直らないときは、使い方タブの[記録を見る]を押して、" & _
-                     "いちばん下の行を開発担当へ送ってください。"
-        CurrentStep = 4
-        Exit Function
-    End If
-
-    ' 6: draft かつ②に貼付あり
-    If StrComp(statusText, "draft", vbBinaryCompare) = 0 Then
-        actionText = StepText(4)
-        CurrentStep = 4
-        Exit Function
-    End If
-
-    ' 7: s1_done / s2_done / s3_done
-    If StrComp(statusText, "s1_done", vbBinaryCompare) = 0 _
-       Or StrComp(statusText, "s2_done", vbBinaryCompare) = 0 _
-       Or StrComp(statusText, "s3_done", vbBinaryCompare) = 0 Then
-        actionText = "途中まで出来ています。もう一度③の[まとめて作る]を押すと、" & _
-                     "最後まで作ります。"
-        CurrentStep = 4
-        Exit Function
-    End If
-
-    ' 8: s4_done
-    If StrComp(statusText, "s4_done", vbBinaryCompare) = 0 Then
-        actionText = StepText(5)
-        CurrentStep = 5
-        Exit Function
-    End If
-
-    ' 9: exported
-    If StrComp(statusText, "exported", vbBinaryCompare) = 0 Then
-        actionText = "④の[ヒアリングシートを出す]を押して、訪問に持っていく紙を" & _
-                     "印刷してください。"
-        CurrentStep = 6
-        Exit Function
-    End If
-
-    ' 10: feedback_done
-    If StrComp(statusText, "feedback_done", vbBinaryCompare) = 0 Then
-        actionText = "訪問おつかれさまでした。聞いてきたことを②の「ヒアリング回答」へ" & _
-                     "貼ると、提案が深まります。"
-        CurrentStep = 3
-        Exit Function
-    End If
-
-    actionText = StepText(4)
-    CurrentStep = 4
+    ' 状態は**1回ずつだけ**読む(2度読むと読んだ間に変わりうる)。
+    Dim ruleNo As Long
+    ruleNo = StepRuleOf(KnowledgeReady(), modUIProgress.IsUiLocked(), _
+                        (LenB(modUISheet.ReadNamed("ci_company")) > 0), _
+                        AnyAreaFilled(caseId), statusText)
+    actionText = StepActionOf(ruleNo)
+    CurrentStep = StepNoOfRule(ruleNo)
 End Function
 
 ' 社内ナレッジを読めているか(11章§4.5 の3状態のうち「読めた」だけを True)。

@@ -34,13 +34,10 @@ Option Explicit
 Private Const UT_PREFIX As String = "ts_"
 Private Const UT_CARD As String = "ts_card"
 
-' HOMEの[① 調べる指示文を出す]の飛び先(13章§2.18・司令塔追補)。見出しの文字列を
-' 探さず、名前付きレンジ1点をアンカーにする(章立てが動いても壊れない)。
-Private Const UT_GUIDE_SHEET As String = "使い方"
-Private Const UT_CH7_ANCHOR As String = "gd_ch7_head"
-Private Const UT_LOCK_NAME As String = "調べる指示文"
-Private Const UT_MSG_RESEARCH As String = _
-    "調べる指示文の章を開きました。上から順に1本ずつ、社内のディープリサーチへ貼って投げてください。"
+' 【廃止】UT_GUIDE_SHEET / UT_CH7_ANCHOR / UT_LOCK_NAME / UT_MSG_RESEARCH と
+' ShowResearchPrompts は W6.1(裁定書22)で撤去した。v3.2 で HOME そのものが無く
+' なり、調べる文はナビの区画①にその場で出るため、使い方タブ⑦へ飛ばす導線は
+' 二重動線になっていた(押す口も無かった)。14章§6は「廃止」として残す。
 
 ' 見た目。Yu Gothic UI 11pt・角丸カード・右上に固定幅。
 Private Const UT_FONT As String = "Yu Gothic UI"
@@ -49,7 +46,6 @@ Private Const UT_WIDTH As Double = 400#
 Private Const UT_MIN_H As Double = 40#
 Private Const UT_MAX_H As Double = 132#
 Private Const UT_EDGE As Double = 24#
-Private Const UT_SEC As Double = 6#
 
 ' Excel組み込み定数の数値(名前を書かず、LibreOffice側の構文チェックで未定義名に
 ' ならないようにする。modUIGuide / modUISheet と同じ流儀)。
@@ -82,9 +78,12 @@ Private Const UT_ERRLOG_NOTE As String = _
 ' 予約済み OnTime の時刻(0=予約なし)。永続しない画面制御変数であり
 ' 14章§6「状態保持の例外」には当たらない(modUIGuide の gStep と同じ)。
 Private gHideAt As Date
+' 直近に出した文(表示秒数を文の長さから決めるため。裁定書22 m9)。
+Private gShownText As String
 
 ' ============================================================================
-' ShowToast - 画面の右上へカードを1枚出し、6秒後に自分で消える。
+' ShowToast - 画面の右上へカードを1枚出し、文の長さに応じた秒数(3～9秒。
+'   modUIGeom.ToastSecondsFor)で自分で消える。
 '   kind: "info"(白地・緑枠) / "warn"(黄地) / "error"(赤地・白字)。
 '   空文字のときは何もしない(消し込みの呼び出しでカードを出さない)。
 ' ============================================================================
@@ -131,6 +130,7 @@ Public Sub ShowToast(ByVal messageText As String, Optional ByVal kind As String 
 
     FitCardHeight card
     card.ZOrder UT_FRONT
+    gShownText = messageText
     ScheduleHide
 End Sub
 
@@ -140,26 +140,6 @@ End Sub
 Public Sub ShowNext(ByVal stepNo As Long)
     On Error Resume Next
     ShowToast NextTextOf(stepNo), "info"
-End Sub
-
-' ============================================================================
-' ShowResearchPrompts - HOMEの[① 調べる指示文を出す]の OnAction。
-'   操作ガイドの⑦章「AIに調べさせる指示文」の見出しへ飛ばし、次の一手を出す
-'   (司令塔追補。指示文はアプリの中にあり、docs/08 を配らなくても届く)。
-'   置き場所が modUIToast なのは modUIHome に残量が無いため(30,000字契約)。
-' ============================================================================
-Public Sub ShowResearchPrompts()
-    On Error Resume Next
-    If Not modUIProgress.TryEnterUiLock(UT_LOCK_NAME) Then Exit Sub
-
-    modUISheet.ShowSheet UT_GUIDE_SHEET
-
-    Dim anchor As Object
-    Set anchor = modUISheet.NamedCell(UT_CH7_ANCHOR)
-    If Not anchor Is Nothing Then Application.Goto anchor, True
-
-    ShowToast UT_MSG_RESEARCH, "info"
-    modUIProgress.ExitUiLock
 End Sub
 
 ' ============================================================================
@@ -260,7 +240,7 @@ End Sub
 Private Sub ScheduleHide()
     On Error Resume Next
     Dim t As Date
-    t = Now + UT_SEC / 86400#
+    t = Now + modUIGeom.ToastSecondsFor(gShownText) / 86400#
     Application.OnTime EarliestTime:=t, Procedure:=HideProcName()
     If Err.Number <> 0 Then
         Err.Clear

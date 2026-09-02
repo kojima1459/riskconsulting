@@ -95,7 +95,59 @@ Private Function BodyRangeOf(ByVal n As Long) As String
     BodyRangeOf = "dr_body_" & Format$(n, "00")
 End Function
 
+' ============================================================================
+' PlaceholderTable - `{{ }}` の差し込み表(11章§3.2 / 13章§2.19 が正)。
+' ----------------------------------------------------------------------------
+' 1行 = "プレースホルダ|種別|穴の文言" を vbLf 区切り。**置換辞書はここ1本**で
+' あり、FillTemplate はこの表を上から順に当てるだけにする(表と実装が2箇所に
+' 分かれると、docs/08 が語を増やしたときに片方だけ直る)。
+'   種別 v_company  = 会社名をそのまま
+'        v_place    = 本社の場所と業種名を「・」でつないだもの
+'        v_address  = 本社の場所をそのまま
+'        v_industry = 業種名をそのまま
+'        h_seccode  = 証券コード。空なら穴
+'        h_sites    = 調べたい拠点。空なら穴
+'        x          = 画面に入力口が無い。常に穴
+' 並びの規約: `{{本社所在地・業種}}` は `{{本社所在地}}` より**前**に置く
+' (前方一致で食い違わないための保険。互いに部分文字列ではないが、表の並びで
+'  意図を示しておく)。
+' ============================================================================
+Public Function PlaceholderTable() As String
+    Dim s As String
+    s = s & "{{企業名}}|v_company|" & vbLf
+    s = s & "{{本社所在地・業種}}|v_place|" & vbLf
+    s = s & "{{本社所在地}}|v_address|" & vbLf
+    s = s & "{{業界名}}|v_industry|" & vbLf
+    s = s & "{{業種名}}|v_industry|" & vbLf
+    s = s & "{{コード}}|h_seccode|証券コードを書いてください（上場していなければ消してください）" & vbLf
+    s = s & "{{拠点リスト（名称・住所）}}|h_sites|拠点の名前と住所" & vbLf
+    s = s & "{{企業規模}}|x|会社の規模（従業員数や売上のめやす）" & vbLf
+    s = s & "{{リスク/課題}}|x|気になっていること" & vbLf
+    s = s & "{{前回更新からの期間}}|x|前回の更新からの期間" & vbLf
+    s = s & "{{直近決算期}}|x|決算期を書いてください（例: 2026年3月期）" & vbLf
+    s = s & "{{公式ドメイン}}|x|会社の公式サイトのURL"
+    PlaceholderTable = s
+End Function
+
+' PlaceholderKeys - 置換辞書の見出し語だけを vbLf 区切りで返す。
+'   層(a)が「docs/08 が使う `{{ }}` の集合 ⊆ 置換辞書」を機械で確かめる口。
+Public Function PlaceholderKeys() As String
+    Dim lines() As String
+    lines = Split(PlaceholderTable(), vbLf)
+    Dim i As Long
+    Dim acc As String
+    For i = LBound(lines) To UBound(lines)
+        Dim f() As String
+        f = Split(lines(i), "|")
+        If LenB(acc) > 0 Then acc = acc & vbLf
+        acc = acc & f(0)
+    Next i
+    PlaceholderKeys = acc
+End Function
+
 ' `{{ }}` の差し込みと、埋まらない穴の日本語化(11章§3.2 の表が正)。
+'   **戻り値に `{{` が1つも残らないことが契約**である(利用者は `{{ }}` の
+'   意味を知らない)。層(a)が8本ぶんの雛形で全穴埋め・全空の2系を固定する。
 Public Function FillTemplate(ByVal tpl As String, ByVal company As String, _
                              ByVal address As String, ByVal industry As String, _
                              ByVal secCode As String, ByVal sites As String) As String
@@ -113,17 +165,34 @@ Public Function FillTemplate(ByVal tpl As String, ByVal company As String, _
         End If
     End If
 
-    s = Replace$(s, "{{企業名}}", company)
-    s = Replace$(s, "{{本社所在地・業種}}", placeText)
-    s = Replace$(s, "{{本社所在地}}", address)
-    s = Replace$(s, "{{業界名}}", industry)
-    s = Replace$(s, "{{業種名}}", industry)
-    s = Replace$(s, "{{コード}}", secCode)
-    s = Replace$(s, "{{拠点リスト（名称・住所）}}", HoleOr(sites, "拠点の名前と住所"))
-    s = Replace$(s, "{{リスク/課題}}", Hole("気になっていること"))
-    s = Replace$(s, "{{前回更新からの期間}}", Hole("前回の更新からの期間"))
-    s = Replace$(s, "{{直近決算期}}", Hole("決算期を書いてください（例: 2026年3月期）"))
-    s = Replace$(s, "{{公式ドメイン}}", Hole("会社の公式サイトのURL"))
+    Dim lines() As String
+    lines = Split(PlaceholderTable(), vbLf)
+
+    Dim i As Long
+    For i = LBound(lines) To UBound(lines)
+        Dim f() As String
+        f = Split(lines(i), "|")
+        If UBound(f) - LBound(f) >= 2 Then
+            Dim rep As String
+            Select Case f(1)
+            Case "v_company"
+                rep = company
+            Case "v_place"
+                rep = placeText
+            Case "v_address"
+                rep = address
+            Case "v_industry"
+                rep = industry
+            Case "h_seccode"
+                rep = HoleOr(secCode, f(2))
+            Case "h_sites"
+                rep = HoleOr(sites, f(2))
+            Case Else
+                rep = Hole(f(2))
+            End Select
+            s = Replace$(s, f(0), rep)
+        End If
+    Next i
     FillTemplate = s
 End Function
 
