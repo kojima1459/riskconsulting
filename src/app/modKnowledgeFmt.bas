@@ -28,6 +28,7 @@ Option Explicit
 ' --- 1行書式(15章§3/§4/§6.1)。"ラベル=列名;..." 形式のスペック ---
 '     ラベルが空なら値だけを出す。値が空の項目は項目ごと省略する。
 Private Const FM_SP_RISK As String = "カテゴリ=category;リスク=risk_name;典型シナリオ=typical_scenario;典型頻度=typical_freq;典型影響=typical_impact;確認点=check_points"
+Private Const FM_SP_INC As String = "カテゴリ=category;見出し=headline;原因=cause;損害規模=loss_scale;教訓=lesson;出所=source"
 Private Const FM_SP_CASE As String = "業種=industry_code;顧客像=customer_profile;提示リスク=risk_presented;提案=proposal;決め手=why_it_worked"
 Private Const FM_SP_RULE As String = "class=rule_class;基準=rule_text"
 Private Const FM_SP_RT As String = "=theme_name;status=status"
@@ -49,6 +50,8 @@ Private Const FM_PP_MECH As String = "適用リスク=target_categories"
 Private Const FM_NONE As String = "(登録なし)"
 Private Const FM_NONE_RISK As String = "(この業種の登録知識はまだありません)"
 Private Const FM_NONE_S3 As String = "なし"
+' 15章§3 {{incidentsText}} の0行時の文言(13章§3.11)。
+Private Const FM_NONE_INC As String = "(この業種の登録事例はまだありません)"
 
 Private Const FM_PIPE As String = " | "
 Private Const FM_SPACE As String = " "
@@ -61,8 +64,6 @@ Private Const FM_ELLIPSIS As String = "…"
 ' 15章§0.7 ナレッジ側の切詰め順(成功事例→型→メニュー→種目→リスクライブラリ)
 ' の下限行数。メニュー・種目・リスクは5行未満にするとS3のID実在制約と
 ' §0.5第2層が崩れるため0にできない。
-Private Const FM_PLAN_N As Long = 5
-Private Const FM_FLOORS As String = "0;0;5;5;5"
 
 ' === 公開: 種類別の整形(14章§6のmodKnowledgeFmt節。ここに無い名前は公開しない) ===
 
@@ -117,6 +118,12 @@ Public Function FmtMechs(ByVal rows As Variant) As String
     FmtMechs = RowsText(rows, "mech_id", vbNullString, FM_SP_MECH, FM_PP_MECH, FM_NONE)
 End Function
 
+' FmtIncidents - 15章§3 incidentsText(事故事例。13章§3.11)。空欄の項目は
+'   その部分ごと省略する(market_note と同じ作法)。0行は業種専用の文言。
+Public Function FmtIncidents(ByVal rows As Variant) As String
+    FmtIncidents = RowsText(rows, "inc_id", vbNullString, FM_SP_INC, vbNullString, FM_NONE_INC)
+End Function
+
 ' ============================================================================
 ' TrimKbLine - 15章§0.7 最終段「各行を先頭400字で切り『…』を付す」。
 '   400字以内は**何も足さずそのまま返す**。超過時は先頭400字(サロゲート安全)へ
@@ -128,57 +135,6 @@ Public Function TrimKbLine(ByVal s As String) As String
         Exit Function
     End If
     TrimKbLine = modUtil.SafeLeft(s, FM_LINE_MAX) & FM_ELLIPSIS
-End Function
-
-' ============================================================================
-' TrimPlan - 15章§0.7 ナレッジ側の切詰めを**計画するだけ**の純関数。
-'   counts: 10要素。前半(0..4)=現在の行数、後半(5..9)=現在の文字数。並びは
-'     切詰め順 成功事例→型→メニュー→種目→リスクライブラリ。5要素以下のときは
-'     文字数0とみなす(=切詰め不要)。
-'   budgetChars: ナレッジ注入に許される合計文字数(§0.7「上限の3割」)。0以下は
-'     上限なしとして現在の行数をそのまま返す。
-'   戻り値: 5要素の「注入してよい行数」。1段ずつ順に適用し、そのつど総量を
-'     再計算して budgetChars 以下になった時点で止める(1対象あたり半減は1回)。
-'     半減は端数切上げ、下限は 0/0/5/5/5 行。
-' ============================================================================
-Public Function TrimPlan(ByRef counts() As Long, ByVal budgetChars As Long) As Long()
-    Dim res() As Long
-    ReDim res(0 To FM_PLAN_N - 1)
-
-    Dim rowsNow(0 To 4) As Long
-    Dim charsNow(0 To 4) As Double
-    Dim floors As Variant
-    floors = Split(FM_FLOORS, FM_SEMI)
-
-    Dim i As Long
-    Dim total As Double
-    For i = 0 To FM_PLAN_N - 1
-        rowsNow(i) = LongAt(counts, i)
-        charsNow(i) = CDbl(LongAt(counts, FM_PLAN_N + i))
-        res(i) = rowsNow(i)
-        total = total + charsNow(i)
-    Next i
-
-    If budgetChars <= 0 Then
-        TrimPlan = res
-        Exit Function
-    End If
-
-    Dim newRows As Long
-    Dim newChars As Double
-    For i = 0 To FM_PLAN_N - 1
-        If total <= CDbl(budgetChars) Then Exit For
-        newRows = CLng(Fix((rowsNow(i) + 1) / 2))
-        If newRows < CLng(Val(CStr(floors(i)))) Then newRows = CLng(Val(CStr(floors(i))))
-        If newRows > rowsNow(i) Then newRows = rowsNow(i)
-        newChars = 0
-        If rowsNow(i) > 0 Then newChars = charsNow(i) * CDbl(newRows) / CDbl(rowsNow(i))
-        total = total - charsNow(i) + newChars
-        charsNow(i) = newChars
-        rowsNow(i) = newRows
-        res(i) = newRows
-    Next i
-    TrimPlan = res
 End Function
 
 ' === 内部(すべて純関数) ===
@@ -287,17 +243,4 @@ Private Function RowCount(ByVal rows As Variant) As Long
     Exit Function
 Zero0:
     RowCount = 0
-End Function
-
-' counts(LBound+i) を安全に読む(範囲外・未初期化は0)。
-Private Function LongAt(ByRef arr() As Long, ByVal i As Long) As Long
-    On Error GoTo Zero0
-    Dim lo As Long, hi As Long
-    lo = LBound(arr)
-    hi = UBound(arr)
-    If lo + i > hi Then Exit Function
-    LongAt = arr(lo + i)
-    Exit Function
-Zero0:
-    LongAt = 0
 End Function

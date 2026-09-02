@@ -20,12 +20,12 @@ Option Explicit
 '   行の 社内実績: の参照IDも)。17章 T-21「ID集合と完全一致」のため。業種コードは
 '   IDではない。切詰め後の行のIDだけを積む。
 ' 15章§0.7: 行数上限(kb_*_rows)は本モジュールが適用。総量3割超のときの段階的な
-'   半減を計画するのは modKnowledgeFmt.TrimPlan、適用するのは modPipeline であり、
+'   半減を計画するのは modPipeline4.TrimPlan、適用するのは modPipeline4 であり、
 '   各注入関数の Optional maxRows がその口(0=config既定。14章§6)。
 ' ============================================================================
 
 ' --- シート索引(13章§3)。KB_SHEETS の並びと対応 ---
-Private Const KB_N As Long = 11
+Private Const KB_N As Long = 12
 Private Const KB_I_RISK As Long = 2
 Private Const KB_I_MENU As Long = 3
 Private Const KB_I_LINE As Long = 4
@@ -35,9 +35,10 @@ Private Const KB_I_PAT As Long = 8
 Private Const KB_I_SCHEME As Long = 9
 Private Const KB_I_MECH As Long = 10
 Private Const KB_I_RT As Long = 11
-Private Const KB_SHEETS As String = "業種マスタ|リスクライブラリ|メニュー一覧|種目マスタ|メニュー種目対応|成功事例|判断基準|パターンマスタ|型ライブラリ|機構ライブラリ|研究テーマ一覧"
-Private Const KB_IDCOLS As String = "industry_code|risk_lib_id|menu_id|line_id||case_lib_id|rule_id|pattern_id|scheme_id|mech_id|rt_id"
-Private Const KB_REQCOLS As String = "industry_code;industry_name|risk_lib_id;industry_code;category;risk_name;typical_scenario;typical_freq;typical_impact;check_points|menu_id;menu_name;summary;target_categories;target_industries;is_active|line_id;line_name;market_note|menu_id;line_id|case_lib_id;industry_code;customer_profile;risk_presented;proposal;why_it_worked|rule_id;rule_class;rule_text;workaround|pattern_id;pattern_name;structure;conditions;examples_public;internal_refs|scheme_id;scheme_name;pattern_id;structure;conditions;signals;status;target_industries|mech_id;mech_text;layer;target_categories|rt_id;theme_name;status;note"
+Private Const KB_I_INC As Long = 12
+Private Const KB_SHEETS As String = "業種マスタ|リスクライブラリ|メニュー一覧|種目マスタ|メニュー種目対応|成功事例|判断基準|パターンマスタ|型ライブラリ|機構ライブラリ|研究テーマ一覧|事故事例"
+Private Const KB_IDCOLS As String = "industry_code|risk_lib_id|menu_id|line_id||case_lib_id|rule_id|pattern_id|scheme_id|mech_id|rt_id|inc_id"
+Private Const KB_REQCOLS As String = "industry_code;industry_name|risk_lib_id;industry_code;category;risk_name;typical_scenario;typical_freq;typical_impact;check_points|menu_id;menu_name;summary;target_categories;target_industries;is_active|line_id;line_name;market_note|menu_id;line_id|case_lib_id;industry_code;customer_profile;risk_presented;proposal;why_it_worked|rule_id;rule_class;rule_text;workaround|pattern_id;pattern_name;structure;conditions;examples_public;internal_refs|scheme_id;scheme_name;pattern_id;structure;conditions;signals;status;target_industries|mech_id;mech_text;layer;target_categories|rt_id;theme_name;status;note|inc_id;industry_code;category;headline;cause;lesson;source"
 Private Const KB_SHEET_GAP As String = "新サービス候補"
 Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_risk,operator"
 
@@ -171,6 +172,15 @@ Public Function ResearchingText(Optional ByVal maxRows As Long = 0) As String
                              CapAll(maxRows, KB_I_RT), "researching")
 End Function
 
+' IncidentsFor - S2用の業種別事故事例(15章§3 {{incidentsText}}。13章§3.11)。
+'   riskLibText と**同じ経路**(業種別抽出 -> modKnowledgeFmt の1行整形)。
+'   maxRows は15章§0.7 の半減を外から掛ける口で、0=config kb_incident_rows
+'   (既定5)。0行は専用文言(16章 E-09 と同じ扱い)。
+Public Function IncidentsFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+    IncidentsFor = Inject(KB_I_INC, "inc_id", "industry_code", industryCode, _
+                          CapCfg(maxRows, "kb_incident_rows", 5), "incidents")
+End Function
+
 ' MechsText - 機構ライブラリ抜粋(壁打ちsystem)。Phase 1.5のため常に「(登録なし)」。
 Public Function MechsText(Optional ByVal maxRows As Long = 0) As String
     MechsText = Inject(KB_I_MECH, "mech_id", vbNullString, vbNullString, _
@@ -268,6 +278,8 @@ Private Function FormatBy(ByVal fieldName As String, ByVal rows As Variant) As S
             FormatBy = modKnowledgeFmt.FmtResearching(rows)
         Case "mechs"
             FormatBy = modKnowledgeFmt.FmtMechs(rows)
+        Case "incidents"
+            FormatBy = modKnowledgeFmt.FmtIncidents(rows)
     End Select
 End Function
 
@@ -425,6 +437,8 @@ Private Sub ValidateKb()
         End If
     Next i
     LogBad "bad_category_rows:", modKnowledge2.BadRowsOf(gKbBlocks(KB_I_RISK), gKbRows(KB_I_RISK), "category", "cat")
+    ' 13章§3.11: 事故事例の category も同じ10分類(E-34 の検査対象)。
+    LogBad "bad_category_rows:事故事例:", modKnowledge2.BadRowsOf(gKbBlocks(KB_I_INC), gKbRows(KB_I_INC), "category", "cat")
 End Sub
 
 ' 非空のときだけ E0402 を記録する(E-34)。

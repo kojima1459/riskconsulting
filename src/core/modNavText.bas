@@ -249,6 +249,47 @@ Public Function SplitFieldNotes(ByVal bodyText As String, ByRef memoText As Stri
 End Function
 
 ' ============================================================================
+' CoverageNoteOf - 【付保の見立て】節の本文だけを取り出す(13章§2.11(d) v2.6)。
+' ----------------------------------------------------------------------------
+'   入力は SplitFieldNotes が返した memoText(3節を見出しごと連結した1本)、
+'   または現場メモの原文のどちらでもよい(見出しの判定規約は同じ)。
+'   戻り値は**見出し行を除いた本文**で、節が空なら空文字。
+'   ・見出しの判定は前後の空白を除いた行の完全一致(SplitFieldNotes と同じ)
+'   ・「例: 」で始まる行は落とす(先置きの例文をAIへ渡さない)
+'   ・次の見出しが現れたらそこで打ち切る
+'   これは input_coverage_note への**派生(読み取り専用の写し)**を作るための
+'   関数であり、input_memo からは何も落とさない(二重保存。裁定書25 S1)。
+' ============================================================================
+Public Function CoverageNoteOf(ByVal bodyText As String) As String
+    Dim lines() As String
+    lines = Split(NormalizeEol(bodyText), vbLf)
+
+    Dim inSection As Boolean
+    Dim acc As String
+    Dim i As Long
+    For i = LBound(lines) To UBound(lines)
+        Dim s As String
+        s = Trim$(lines(i))
+        If StrComp(s, NT_HEAD_COVER, vbBinaryCompare) = 0 Then
+            inSection = True
+        ElseIf IsHeadLine(s) Then
+            inSection = False
+        ElseIf inSection Then
+            If Not IsExampleLine(lines(i)) Then acc = AppendLine(acc, lines(i))
+        End If
+    Next i
+    CoverageNoteOf = TrimTrailingBlankLines(acc)
+End Function
+
+' 4見出しのいずれかの行か(前後の空白を除いた完全一致)。
+Private Function IsHeadLine(ByVal s As String) As Boolean
+    IsHeadLine = (StrComp(s, NT_HEAD_SALES, vbBinaryCompare) = 0 _
+                  Or StrComp(s, NT_HEAD_PREV, vbBinaryCompare) = 0 _
+                  Or StrComp(s, NT_HEAD_COVER, vbBinaryCompare) = 0 _
+                  Or StrComp(s, NT_HEAD_OTHER, vbBinaryCompare) = 0)
+End Function
+
+' ============================================================================
 ' FitsInRows - 本文が rows 行の枠に収まるか(11章§3.3.7 の現場メモ60行の判定)。
 ' ----------------------------------------------------------------------------
 '   True=収まる(1行1セルで rows 行以内) / False=はみ出す。

@@ -115,6 +115,12 @@ REQUIRED: dict[str, str] = {
     "input_quality.status": "input_quality_status",
     "input_quality.overall": "input_quality_overall",
     "field_insights.tag": "field_insight_tag",
+    # v2.6(裁定書25 S1/S3): S1シートの「日本語表示」列(13章§2.12)。
+    #   current_coverage.certainty = s1_current_coverage の certainty 列、
+    #   financials.source = s1_basic の fin_source 列。どちらも18章 SEC-08 /
+    #   画面の両方で日本語ラベルを出すため、ラベルの正を19章§3へ一本化する。
+    "current_coverage.certainty": "certainty",
+    "financials.source": "financials_source",
     # --- 壁打ち(13章§2.17 role: 日本語表示 自分/AI) ---
     "sparring.role": "sparring_role",
     # --- 受信箱の判定入力列(v2.5・裁定書9 B2/N5。13章§2.6) ---
@@ -150,6 +156,7 @@ EXCLUDED: dict[str, str] = {
     "pf.survival": "同上(pf_survival 列。診断結果の要約列)",
     "pf.relation": "PF診断JSONの中の日本語enum。受信箱シートに列が無い",
     "pf.approach": "同上(3手)",
+    "case.outcome": "ナレッジブック側の列(13章§3.1 成功事例)。本体UIは描かない(入力規則は build/sheets_kb.json の enums.case_outcome が機械値で持つ)",
     "scheme.status": "ナレッジブック側の列(13章§3.4)。本体UIは描かない",
     "mech.layer": "ナレッジブック側の列(13章§3.5)",
     "watch.source_kind": "ナレッジブック側の列(13章§3.8)",

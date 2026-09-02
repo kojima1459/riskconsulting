@@ -33,6 +33,19 @@
   (OnAction を取り違えると押しても別の処理が走る=キャプション照合だけでは
    捕まらない)。
 
+(F) 区画②の7欄の説明1行・例文2行(v2.6・裁定書25 S3。17章 T-56 のDoD③):
+  11章§3.3.3(a) の表が**唯一の逐語の値源**であり、実体は
+  `build/sheets_main.json` のナビ区画②(`nv_sec2`)のテキスト行にある。
+  W7 で7本目「決算・財務」を足したときに、この2系統がずれていても誰も
+  気づけなかった(ボタン名と違い、説明文はどの検問も見ていなかった)。
+  照合は欄ごとに「説明1行 + 例文2行」を順序つきで突き合わせる。
+
+  **表のセルの引用符の読み方(11章§3.3.3(a) の書式)**: セルは全体を「」で
+  括り、その内側の引用符は『』で表す(§3.3.2 のワイヤーが示す実際の表示は
+  内側も「」である)。したがって照合の前に、セル全体の外側の「」を1組だけ
+  外し、内側の『』を「」へ戻す。**この2つ以外の正規化は行わない**
+  (1字でも違えば赤にする)。
+
 繰り返しキャプションを載せない規約(13章§2.10(f)):
   区画①の[コピー]8本と区画②の6欄×3種18本は、同じ語が複数出ると逐語照合の
   突合が壊れるため**配置表にも早見にも載せない**(生成規則の側が正を持つ)。
@@ -45,6 +58,7 @@
 使い方: python3 tools/caption_check.py   (gate.py の "caption" ゲート)
 """
 import io
+import json
 import os
 import re
 import sys
@@ -73,6 +87,9 @@ REPEATING_CAPTIONS = {
     "コピー", "ここに貼る", "中身を見る", "消す", "表示する", "ナビへ戻る",
     "記録を見る", "テストを実行", "ツアーをもう一度見る",
 }
+
+SRC_SPEC11 = os.path.join("docs", "spec", "11_画面設計.md")
+SRC_LEDGER = os.path.join("build", "sheets_main.json")
 
 BRACKET = re.compile(r"\[([^\[\]]+)\]")
 # (E3) 13章§2.18 の動作ボタン表の行(1列目が [～] で始まる行だけを表とみなす)。
@@ -286,6 +303,108 @@ def adv_actions_from_spec():
     return out
 
 
+def _unquote_cell(cell):
+    """11章§3.3.3(a) の表のセルを、画面へ出る実際の文字列へ戻す。
+
+    (1) 全体を括る「」を1組だけ外す (2) 内側の『』を「」へ戻す。
+    それ以外の正規化はしない(部分一致・空白の畳み込みもしない)。
+    """
+    s = cell.strip()
+    if s.startswith("「") and s.endswith("」"):
+        s = s[1:-1]
+    return s.replace("『", "「").replace("』", "」")
+
+
+def field_texts_from_spec11():
+    """(F) 11章§3.3.3(a) の表 -> {欄名: [説明, 例文1, 例文2, ...]}。"""
+    text = read(SRC_SPEC11)
+    if text is None:
+        return {}
+    m = re.search(r"^##### \(a\) .*?$(.*?)^##### \(b\) ", text, re.M | re.S)
+    if not m:
+        fail("%s に §3.3.3(a) の節が見つからない" % SRC_SPEC11)
+        return {}
+    out = {}
+    for line in m.group(1).split("\n"):
+        if not line.startswith("| `"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            fail("%s §3.3.3(a) の表の行が3列でない: %r" % (SRC_SPEC11, line[:40]))
+            continue
+        name = cells[0].strip("`").strip()
+        rows = [_unquote_cell(cells[1])]
+        rows += [_unquote_cell(x) for x in cells[2].split("<br>") if x.strip()]
+        out[name] = rows
+    if not out:
+        fail("%s §3.3.3(a) の表から1欄も読み取れなかった" % SRC_SPEC11)
+    return out
+
+
+def field_texts_from_ledger():
+    """(F) build/sheets_main.json のナビ区画② -> {欄名: [説明, 例文...]}。
+
+    見出し行 `── ⑥ 決算・財務 ──　[...]` から次の見出し行までの text 要素の
+    うち、状態行などのレンジ行より前に並ぶ連続したテキストを拾う。
+    """
+    path = os.path.join(REPO, SRC_LEDGER)
+    if not os.path.isfile(path):
+        fail("対象ファイルが見つからない: %s" % SRC_LEDGER)
+        return {}
+    data = json.load(io.open(path, encoding="utf-8"))
+    nav = None
+    for sh in data.get("sheets", []):
+        if sh.get("name") == "ナビ":
+            nav = sh
+    if nav is None:
+        fail("%s に「ナビ」シートが無い" % SRC_LEDGER)
+        return {}
+    sec2 = None
+    for sec in nav.get("sections", []):
+        if sec.get("anchor") == "nv_sec2":
+            sec2 = sec
+    if sec2 is None:
+        fail("%s のナビに区画②(nv_sec2)が無い" % SRC_LEDGER)
+        return {}
+
+    head = re.compile(r"^──\s*[①-⑳]\s*(.+?)\s*──")
+    out = {}
+    cur = None
+    for fld in sec2.get("fields", []):
+        txt = fld.get("text")
+        if txt is None:
+            # レンジ行。欄の説明・例文はこの行より前にしか置かない。
+            cur = None
+            continue
+        hit = head.match(txt)
+        if hit:
+            cur = hit.group(1).strip()
+            out[cur] = []
+        elif cur is not None:
+            out[cur].append(txt)
+    if not out:
+        fail("%s のナビ区画②から欄の見出しを1本も読み取れなかった" % SRC_LEDGER)
+    return out
+
+
+def check_field_texts():
+    """(F) 11章§3.3.3(a) <-> build/sheets_main.json の逐語照合。"""
+    spec = field_texts_from_spec11()
+    led = field_texts_from_ledger()
+    if not spec or not led:
+        return 0
+    # 現場メモは(b)の枠内先置きであり(a)の表に無い。台帳側だけにあってよい。
+    for name, want in spec.items():
+        got = led.get(name)
+        if got is None:
+            fail("11章§3.3.3(a) の欄「%s」がナビ区画②(%s)に無い" % (name, SRC_LEDGER))
+            continue
+        if got != want:
+            fail("欄「%s」の説明・例文が11章§3.3.3(a)と逐語一致しない:\n"
+                 "      11章 = %r\n      台帳 = %r" % (name, want, got))
+    return len(spec)
+
+
 def compare_sets(label, impl, other):
     missing = sorted(set(impl) - set(other))
     extra = sorted(set(other) - set(impl))
@@ -348,6 +467,9 @@ def main():
         else:
             compare_sets("13章§2.18 の動作ボタン表", adv_impl, adv_spec)
 
+    # (F) 区画②の7欄の説明1行・例文2行(11章§3.3.3(a)。v2.6・T-56)。
+    n_fields = check_field_texts()
+
     if errors:
         print("[caption_check] ナビのボタン名の逐語照合")
         for e in errors:
@@ -360,6 +482,7 @@ def main():
           % (len(guide), len(spec), len(tour)))
     print("使い方タブ⑦の動作ボタン: %d本(キャプション＋OnActionを build と 13章§2.18 へ照合)"
           % len(adv_impl))
+    print("区画②の欄の説明・例文: %d欄を11章§3.3.3(a)と逐語照合" % n_fields)
     print("OK: 全%d本のキャプションが3系統と一致しました（コーチ帯%d / 4区画%d）"
           % (len(impl), len(main_caps), len(sub_caps)))
     return 0

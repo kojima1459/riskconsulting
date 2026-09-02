@@ -74,101 +74,14 @@ Public Function HeadHtml(ByVal themeName As String, ByVal coverFields As String)
     s = s & "</title>" & vbLf
     s = s & "<style>" & vbLf
     s = s & modHtmlTheme.ThemeCss(themeName) & vbLf ' SAFE:html
-    s = s & CommonCss() ' SAFE:html
+    s = s & modHtmlTemplate7.CommonCss() ' SAFE:html
     s = s & modHtmlTemplate7.PartsCss() ' SAFE:html
+    s = s & modHtmlTemplate8.TalkCss() ' SAFE:html
     s = s & "</style>" & vbLf
     s = s & "</head>" & vbLf
     HeadHtml = s
 End Function
 
-' CommonCss - 骨格の共通CSS(18章§4.4「HeadHtml に一元化」)。上部ナビ・ヒーロー・
-'   節見出し・カード・表・バッジ・印刷。セクション固有の部品は
-'   modHtmlTemplate7.PartsCss にある。生の色は #fff 以外書かない(§5.1)。
-'   rgba() の半透明は下地の色を変えず濃さだけを作るので例外(§5.1の規約)。
-Private Function CommonCss() As String
-    Dim s As String
-    s = s & "*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0}" & vbLf
-    s = s & "body{background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:var(--font-size);line-height:var(--line-height);-webkit-print-color-adjust:exact;print-color-adjust:exact}" & vbLf
-    s = s & "a{color:var(--brand);text-decoration:none}a:hover{text-decoration:underline}" & vbLf
-    s = s & ".wrap{max-width:var(--page-width);margin:0 auto;padding:0 var(--page-pad)}" & vbLf
-    s = s & ".print-only{display:none}" & vbLf
-    ' --- 上部ナビ(18章§3.6・§6(7)) ---
-    s = s & ".topbar{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:1px solid var(--line)}" & vbLf
-    s = s & ".topbar-inner{max-width:var(--page-width);margin:auto;padding:9px var(--page-pad);display:flex;gap:8px;align-items:center;overflow-x:auto;white-space:nowrap}" & vbLf
-    s = s & ".topbar a{display:inline-flex;align-items:center;font-size:12px;color:var(--ink);font-weight:600;padding:6px 10px;border:1px solid var(--line);background:var(--soft-brand);border-radius:8px}" & vbLf
-    s = s & ".topbar a:hover{border-color:var(--brand);text-decoration:none}" & vbLf
-    ' --- ヒーロー(18章§3 SEC-01。表紙の差替) ---
-    s = s & ".hero{background:linear-gradient(135deg,var(--brand2) 0%,var(--brand) 62%,var(--kaki) 100%);color:#fff;padding:56px 0 48px}" & vbLf
-    s = s & ".hero-inner{max-width:var(--page-width);margin:auto;padding:0 var(--page-pad)}" & vbLf
-    s = s & ".eyebrow{font-size:11px;letter-spacing:.16em;font-weight:800;opacity:.88;margin:0 0 10px}" & vbLf
-    s = s & ".hero h1{font-size:34px;line-height:1.22;margin:0 0 10px;letter-spacing:.01em}" & vbLf
-    s = s & ".hero-subtitle{font-size:16px;font-weight:600;margin:0 0 16px;color:#fff;opacity:.94}" & vbLf
-    s = s & ".hero-meta{display:flex;flex-wrap:wrap;gap:8px}" & vbLf
-    s = s & ".pill{font-size:12px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);padding:5px 10px;border-radius:999px}" & vbLf
-    s = s & ".btn{font-family:inherit;font-size:12px;margin-top:16px;padding:7px 16px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;cursor:pointer}" & vbLf
-    ' --- 警告バナー(18章§2 meta.warnings) ---
-    s = s & ".banner{margin:16px auto 0;max-width:var(--page-width);padding:10px 14px;background:var(--warn);border:1px solid var(--warn-line);border-radius:10px;font-size:12.5px}" & vbLf
-    s = s & ".banner-h{color:var(--kaki);font-weight:700;margin:0 0 3px}.banner p{margin:0}" & vbLf
-    ' --- 節の見出し(18章§3.0 キッカー) ---
-    s = s & "main{padding-top:26px;padding-bottom:70px}" & vbLf
-    s = s & ".sec{scroll-margin-top:56px;margin:0 0 30px}" & vbLf
-    s = s & ".section-head{margin:0 0 13px}" & vbLf
-    s = s & ".section-kicker{font-size:11px;color:var(--brand);font-weight:800;letter-spacing:.16em;margin:0 0 2px}" & vbLf
-    s = s & ".sec h2{font-size:23px;line-height:1.3;margin:0;font-weight:700}" & vbLf
-    s = s & ".sec h3{font-size:15px;margin:16px 0 7px;font-weight:700}" & vbLf
-    s = s & ".sec h4{font-size:13px;margin:12px 0 5px;color:var(--sub)}" & vbLf
-    s = s & "p{margin:0 0 8px}" & vbLf
-    s = s & ".sub,.muted{color:var(--sub);font-size:12.5px}.lead{font-size:14.5px}" & vbLf
-    s = s & ".note{border:1px solid var(--warn-line);background:var(--warn);padding:9px 13px;border-radius:10px;font-size:12.5px;margin:0 0 12px}" & vbLf
-    ' --- 本文先頭の目次(印刷用。18章§3.6) ---
-    s = s & ".tocprint{margin:0 0 24px;padding:12px 16px;background:var(--mist);border:1px solid var(--line);border-radius:10px}" & vbLf
-    s = s & ".toc-h{font-size:11.5px;letter-spacing:.2em;color:var(--sub);margin:0 0 7px}" & vbLf
-    s = s & ".tocprint ol{margin:0;padding-left:1.5em;columns:2;font-size:12.5px}" & vbLf
-    s = s & ".tocprint li{margin:0 0 3px;break-inside:avoid}.tocprint a{color:var(--ink)}" & vbLf
-    ' --- カード・表・バッジ ---
-    s = s & ".card{background:var(--paper);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);padding:18px;margin:0 0 12px;break-inside:avoid}" & vbLf
-    s = s & ".card h3{margin:0 0 6px}.card-kaki{border-left:3px solid var(--kaki)}" & vbLf
-    s = s & ".card-deep{border-left:3px solid var(--deep)}.card-matsu{border-left:3px solid var(--matsu)}" & vbLf
-    s = s & ".hook{color:var(--brand);font-size:13px;margin:0 0 8px}" & vbLf
-    s = s & ".tblwrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);margin:0 0 12px}" & vbLf
-    s = s & "table{border-collapse:collapse;width:100%;min-width:960px;font-size:11.5px}" & vbLf
-    s = s & "th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}" & vbLf
-    s = s & "th{background:var(--mist);color:var(--sub);font-weight:700;font-size:10.5px;white-space:nowrap;position:sticky;top:0;z-index:1}" & vbLf
-    s = s & "tr{break-inside:avoid}td.nw,th.nw{white-space:nowrap}" & vbLf
-    s = s & ".bdg{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:999px;color:#fff;white-space:nowrap;font-weight:700}" & vbLf
-    s = s & ".bdg-cover{background:var(--tr-cover)}.bdg-partial{background:var(--tr-partial)}.bdg-hard{background:var(--tr-hard)}" & vbLf
-    s = s & ".bdg-ok{background:var(--iq-ok)}.bdg-iqpartial{background:var(--iq-partial)}.bdg-missing{background:var(--iq-missing)}" & vbLf
-    s = s & ".bdg-sub{background:var(--sub)}.bdg-brand{background:var(--brand)}" & vbLf
-    s = s & ".bdg-kaki{background:var(--kaki)}.bdg-matsu{background:var(--matsu)}.bdg-deep{background:var(--deep)}" & vbLf
-    s = s & ".chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}" & vbLf
-    s = s & ".chip{font-size:11.5px;padding:3px 11px;border:1px solid var(--line);background:var(--paper);border-radius:999px;color:var(--sub)}" & vbLf
-    s = s & ".chip-brand{border-color:var(--brand);color:var(--brand);background:var(--soft-brand)}" & vbLf
-    s = s & ".dl{display:grid;grid-template-columns:9em 1fr;gap:5px 14px;font-size:13px;margin:0 0 14px}" & vbLf
-    s = s & ".dl .dt{color:var(--sub);font-size:12px;padding-top:2px}.dl .dd{margin:0}" & vbLf
-    s = s & ".rowline{display:grid;grid-template-columns:3.4em 1fr 9em;gap:8px;align-items:baseline;font-size:13.5px;margin:0 0 5px}" & vbLf
-    s = s & ".rank-no{color:var(--brand);font-size:12px;font-weight:800}" & vbLf
-    ' --- SEC-16 ラウンド更新 ---
-    s = s & ".rublock{margin:0 0 14px;break-inside:avoid}" & vbLf
-    s = s & ".rubh{font-size:13.5px;font-weight:700;margin:0 0 6px;padding:4px 10px;background:var(--mist);border-left:3px solid var(--brand);border-radius:0 8px 8px 0}" & vbLf
-    s = s & ".rubh-rej{border-left-color:var(--kaki)}.rubh-new{border-left-color:var(--deep)}" & vbLf
-    s = s & ".strike{text-decoration:line-through}" & vbLf
-    s = s & ".disc{font-size:11px;color:var(--sub);background:var(--mist);border:1px solid var(--line);border-radius:12px;padding:16px}.disc p{margin:0 0 5px}" & vbLf
-    ' 18章§6: 印刷(A4縦)との両立。@page の余白はCSS変数で解決されないため
-    ' リテラルで書く(§5.1・§6(1))。
-    s = s & "@page{size:A4 portrait;margin:14mm 12mm;}" & vbLf
-    s = s & "@media print{.no-print,.topbar{display:none}.print-only{display:block}" & vbLf
-    s = s & "body{background:#fff;font-size:12px;line-height:1.7}" & vbLf
-    s = s & ".hero{padding:26px 0}.hero h1{font-size:26px}" & vbLf
-    s = s & ".wrap,.hero-inner,.topbar-inner{max-width:none;padding-left:0;padding-right:0}" & vbLf
-    s = s & ".tblwrap{overflow:visible}table{font-size:10px;min-width:0}th{position:static}" & vbLf
-    s = s & ".card,.disc{box-shadow:none}" & vbLf
-    s = s & ".sec-exec{break-after:page}a{color:var(--ink);text-decoration:none}" & vbLf
-    s = s & ".card,.rublock,tr,.sec{break-inside:avoid}}" & vbLf
-    s = s & "@media (max-width:900px){.dl{grid-template-columns:1fr}}" & vbLf
-    s = s & "@media (max-width:640px){.hero h1{font-size:24px}.sec h2{font-size:19px}" & vbLf
-    s = s & ".tocprint ol{columns:1}.rowline{grid-template-columns:2.8em 1fr}}" & vbLf
-    CommonCss = s
-End Function
 
 ' BodyShellHtml - 骨格・上部ナビ・ヒーロー・操作要素・<noscript>(18章§4.1)。
 '   VBAが静的HTMLとして書き出すのは (a)<title> (b)ヒーローの会社名/案件ID/
@@ -243,6 +156,7 @@ Public Function SectionsJs() As String
     s = s & modHtmlTemplate5.SecSourceJs() ' SAFE:html
     s = s & modHtmlTemplate5.SecDisclaimerJs() ' SAFE:html
     s = s & modHtmlTemplate7.SecGrowthJs() ' SAFE:html
+    s = s & modHtmlTemplate8.SecTalkJs() ' SAFE:html
 
     ' (b) 登録配列
     s = s & "var SECTIONS=[" & vbLf
@@ -256,7 +170,7 @@ Public Function SectionsJs() As String
     s = s & "{id:'SEC-16',slug:'round-update',title:'訪問で分かったこと（ラウンド更新）'," & vbLf
     s = s & "need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
     s = s & "{id:'SEC-07',slug:'risks',title:'リスク一覧',need:['s2'],empty:'hide',render:renderRisks}," & vbLf
-    s = s & "{id:'SEC-08',slug:'coverage',title:'保険カバレッジ表',need:['s1'],empty:'hide',render:renderCoverage}," & vbLf
+    s = s & "{id:'SEC-08',slug:'coverage',title:'保険カバレッジ表',need:['s2'],empty:'hide',render:renderCoverage}," & vbLf
     s = s & "{id:'SEC-11',slug:'prevent',title:'未然防止メニュー',need:['s2'],empty:'hide',render:renderPrevent}," & vbLf
     s = s & "{id:'SEC-12',slug:'limit',title:'当社にできないこと・提案を控えること',need:['s2'],empty:'note'," & vbLf
     s = s & "note:'該当なし',render:renderLimit}," & vbLf
@@ -265,6 +179,7 @@ Public Function SectionsJs() As String
     s = s & "note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
     s = s & "{id:'SEC-17',slug:'growth',title:'攻めの保険活用',need:['s3'],empty:'hide',render:renderGrowth}," & vbLf
     s = s & "{id:'SEC-10',slug:'story',title:'提案ストーリー（当社にできること）',need:['s3'],empty:'hide',render:renderStory}," & vbLf
+    s = s & "{id:'SEC-18',slug:'talk',title:'経営層への話し方',need:['s3'],empty:'hide',render:renderTalk}," & vbLf
     s = s & "{id:'SEC-13',slug:'hearing',title:'ヒアリング事項',need:['s1'],empty:'hide',render:renderHearing}," & vbLf
     s = s & "{id:'SEC-14',slug:'source',title:'出典と根拠',need:['s2'],empty:'hide',render:renderSource}," & vbLf
     s = s & "{id:'SEC-15',slug:'disclaimer',title:'免責とご確認事項',need:['meta'],empty:'always',render:renderDisclaimer}" & vbLf
@@ -297,6 +212,8 @@ Private Function HelperJs() As String
     s = s & "function NB(v){return S(v).replace(/^\s+|\s+$/g,'').length>0;}" & vbLf
     s = s & "function AR(v){return (v&&v.length)?v:[];}" & vbLf
     s = s & "function LB(map,k){var t=S(k);return map[t]?map[t]:t;}" & vbLf
+    ' 18章§3.8: 空文字の列は `-` を出す(空欄と「確認点なし」を見分けさせない)。
+    s = s & "function DASH(v){return NB(v)?S(v):'-';}" & vbLf
     s = s & "function CLIP(t,n){var x=S(t);" & vbLf
     s = s & "return (x.length>n)?(x.slice(0,n)+'…'):x;}" & vbLf
     s = s & "function PARA(p,text,cls){var a=S(text).split(/\r\n|\r|\n/);" & vbLf

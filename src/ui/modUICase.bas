@@ -157,6 +157,14 @@ Public Function EnumPairsCsv() As String
     s = s & "field_insight_tag,constraint,制約・NG" & vbLf
     s = s & "field_insight_tag,opportunity,商機" & vbLf
     s = s & "field_insight_tag,other,その他" & vbLf
+    s = s & "certainty,confirmed,確認済み" & vbLf
+    s = s & "certainty,assumed,見立て" & vbLf
+    s = s & "financials_source,yuho,有報" & vbLf
+    s = s & "financials_source,kessan_kokoku,決算公告" & vbLf
+    s = s & "financials_source,tdb,信用調査" & vbLf
+    s = s & "financials_source,view,VIEW情報" & vbLf
+    s = s & "financials_source,memo,営業メモ" & vbLf
+    s = s & "financials_source,unknown,不明" & vbLf
     s = s & "sparring_role,user,自分" & vbLf
     s = s & "sparring_role,ai,AI" & vbLf
     s = s & "inbox_judge_to,adopted,採択" & vbLf

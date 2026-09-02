@@ -51,8 +51,6 @@ Private Const PL_CUT_LABELS As String = "dossier|prev_renewal|yuho|memo|hp"
 ' 16章E-03(3) 打切らない4欄(現契約/現場メモ/付保見立て/ヒアリング回答)。
 Private Const PL_KEEP_IDX As String = "3|6|7|8"
 ' 15章§0.7 切詰め順(成功事例/型/メニュー/種目/リスクライブラリ)。
-Private Const PL_KB_LABELS As String = "cases|schemes|menus|lines|risklib"
-Private Const PL_KB_ZERO As String = "なし"
 
 ' 16章E-07(ID幻覚=E0301)の検証ケースID(15章§11)。他の不合格は E0302。
 Private Const PL_GHOST_CASES As String = "|V-S2-06|V-S3-03|V-S3-04|V-S3-05|V-S3-06|"
@@ -63,6 +61,8 @@ Private Const PL_T2_MAX_CTX_DFLT As Long = 100000
 Private Const PL_PPT_MAX_DFLT As Long = 10
 Private Const PL_REPAIR_DFLT As Long = 1
 Private Const PL_PCT_KB As Long = 3
+' 15章§6.1: 0行に切り詰めたスロットの代替文言(KbRowCount が0行と数える)。
+Private Const PL_KB_ZERO As String = "なし"
 Private Const PL_PCT_PASTE As Long = 7
 
 ' 1Step分の検証文脈。Check系は純関数でJSONの外側の文脈を引数で受ける(14章§6)。
@@ -75,6 +75,7 @@ Private Type TChkCtx
     linesText As String
     schemesText As String
     casesText As String
+    incidentsText As String
     riskLibText As String
     s1Json As String
     s2Json As String
@@ -258,7 +259,8 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
         hearing = OrNone(Sanitized(caseId, "input_hearing_answers", detailAcc))
         sysText = modPromptsCore.BuildS2System()
         userText = modPipeline3.S2UserText(ctx, caseId, c.s1Json, c.riskLibText, _
-                                           c.menusText, c.prevS2Json, hearing)
+                                           c.menusText, c.prevS2Json, hearing, _
+                                           c.incidentsText)
         schemaText = modSchemas.SchemaS2()
 
     Case 3
@@ -345,77 +347,26 @@ Private Function Sanitized(ByVal caseId As String, ByVal dataKey As String, _
     If markerN > 0 Then AddNote detailAcc, "e04_marker=" & CStr(markerN)
 End Function
 
-' LoadKb - ナレッジ注入と15章§0.7の切詰め。切詰めたら注入IDを積み直す
-'   (LastInjectedIds は実際に注入したIDのみ)。
+' LoadKb - ナレッジ注入と15章§0.7の切詰め(6段)。手順の実体は modPipeline4 が
+'   唯一持つ(T-57。modPipeline2 と写経していたものを畳んだ)。
 Private Sub LoadKb(ByRef ctx As TCaseCtx, ByRef c As TChkCtx, _
                    ByVal limitChars As Long, ByRef detailAcc As String)
-    Dim counts(0 To 9) As Long
-    Dim txt(0 To 4) As String
-    Dim plan As Variant
-    Dim i As Long, trimmed As Boolean
+    Dim txt() As String
 
-    FetchKb ctx, c.stepNo, txt, -1, 0
-    For i = 0 To 4
-        counts(i) = KbRowCount(txt(i))
-        counts(5 + i) = Len(txt(i))
-    Next i
-
-    plan = modKnowledgeFmt.TrimPlan(counts, BudgetOf(limitChars, PL_PCT_KB))
-    For i = 0 To 4
-        If plan(i) < counts(i) Then trimmed = True
-    Next i
-
-    If trimmed Then
-        modKnowledge.ResetInjectedIds
-        For i = 0 To 4
-            If counts(i) > 0 Then FetchKb ctx, c.stepNo, txt, i, plan(i)
-            If plan(i) < counts(i) Then
-                AddNote detailAcc, "truncated:" & PickAt(PL_KB_LABELS, i) & _
-                                   "=" & CStr(counts(i) - plan(i))
-            End If
-        Next i
-    End If
-
+    modPipeline4.LoadKbSlots ctx, c.stepNo, BudgetOf(limitChars, PL_PCT_KB), txt, detailAcc
     c.casesText = txt(0)
-    c.schemesText = txt(1)
-    c.menusText = txt(2)
-    c.linesText = txt(3)
-    c.riskLibText = txt(4)
+    c.incidentsText = txt(1)
+    c.schemesText = txt(2)
+    c.menusText = txt(3)
+    c.linesText = txt(4)
+    c.riskLibText = txt(5)
 End Sub
 
-' slotIdx=-1 は全スロットを既定行数(config)で、0以上はそのスロットだけ maxRows 行
-'   (0なら既定文言)で取り直す。メニューはStepで別物(12章§3)。
-Private Sub FetchKb(ByRef ctx As TCaseCtx, ByVal stepNo As Long, ByRef txt() As String, _
-                    ByVal slotIdx As Long, ByVal maxRows As Long)
-    Dim i As Long, n As Long
-
-    For i = 0 To 4
-        If (slotIdx < 0 Or slotIdx = i) And UsesSlot(stepNo, i) Then
-            n = 0
-            If slotIdx >= 0 Then n = maxRows
-            If slotIdx >= 0 And maxRows <= 0 Then
-                txt(i) = PL_KB_ZERO
-            ElseIf i = 0 Then
-                txt(i) = modKnowledge.CasesFor(ctx.industry_code, n)
-            ElseIf i = 1 Then
-                txt(i) = modKnowledge.SchemesFor(ctx.industry_code, n)
-            ElseIf i = 2 And stepNo = 2 Then
-                txt(i) = modKnowledge.MenusSummaryFor(ctx.industry_code, n)
-            ElseIf i = 2 Then
-                txt(i) = modKnowledge.MenusFor(ctx.industry_code, n)
-            ElseIf i = 3 Then
-                txt(i) = modKnowledge.LinesText(n)
-            Else
-                txt(i) = modKnowledge.RiskLibFor(ctx.industry_code, n)
-            End If
-        End If
-    Next i
-End Sub
-
-' 12章§3: S2=リスクライブラリ+メニュー要約 / S3=メニュー/種目/型/事例。
+' 12章§3: S2=リスクライブラリ+メニュー要約+事故事例(15章§3。裁定書25 S6) /
+'   S3=メニュー/種目/型/事例。slot番号は15章§0.7 の切詰め順(modPipeline4 冒頭)。
 Public Function UsesSlot(ByVal stepNo As Long, ByVal slot As Long) As Boolean
-    If stepNo = 2 Then UsesSlot = (slot = 2 Or slot = 4)
-    If stepNo = 3 Then UsesSlot = (slot <= 3)
+    If stepNo = 2 Then UsesSlot = (slot = 1 Or slot = 3 Or slot = 5)
+    If stepNo = 3 Then UsesSlot = (slot = 0 Or (slot >= 2 And slot <= 4))
 End Function
 
 ' CallGuarded - 1Step分の呼出と防衛線(14章§5)。修復リトライは1回まで。

@@ -20,6 +20,8 @@ Option Explicit
 '                      V-S3-21(constraint があるのに taboo 0件)/ 正例1本
 '   計 12本
 '
+' 末尾から modTestsPure16.RunAll(W7・17章 T-56 の16本)を呼ぶ。
+'
 ' 素材は 15章§8.1 の mock 応答(MK-S1-NEW / MK-S1-RNW / MK-S2-NEW / MK-S2-RNW /
 '   MK-S3)であり、狙った1ケースだけを Replace で壊して**発火の差**を見る
 '   (ChkFire。素材のままでは出ず、壊すと出ることの2点を同時に固定する)。
@@ -47,6 +49,9 @@ WB:
 WC:
     On Error GoTo FC
     T_W7C_CheckS3
+WD:
+    On Error GoTo FD
+    modTestsPure16.RunAll
 WDone:
     Exit Sub
 FA:
@@ -57,6 +62,9 @@ FB:
     Resume WC
 FC:
     GroupFail "W7C CheckS3(v2.6)"
+    Resume WD
+FD:
+    GroupFail "modTestsPure16.RunAll"
     Resume WDone
 End Sub
 

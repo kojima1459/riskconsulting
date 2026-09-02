@@ -14,6 +14,8 @@ Option Explicit
 '      ナレッジの事故事例)。
 '   2) 15章§0 原則9 の無害化(SanitizeInput)と、1行属性の改行畳み込み。
 '   3) 未提供時の既定文言(15章の各プレースホルダ注記が定める文言)。
+'      **例外は事故事例**: 0行のときの文言はKB側(modKnowledgeFmt)が返すので、
+'      ここには置かない(T-57 裁定。同じ文言を2箇所に書かない)。
 '   4) modPromptsOps.Asm*User への薄い受け渡し(呼出側= modPipeline /
 '      modPipeline2 の行を増やさないための包み)。
 '
@@ -28,12 +30,8 @@ Option Explicit
 
 ' 15章§2 user【決算・財務】の未提供時の値。
 Private Const P3_NONE_TEXT As String = "なし"
-' 15章§3 user {{incidentsText}} の0行時の既定文言。
-Private Const P3_INCIDENTS_ZERO As String = "(この業種の登録事例はまだありません)"
 ' 15章§1.2c {{focus_line_ids}} の空時の既定文言。
 Private Const P3_FOCUS_NONE As String = "指定なし"
-' 13章§2.3 config `kb_incident_rows` の既定値(15章§0.7 の切詰め表)。
-Private Const P3_INCIDENT_ROWS_DFLT As Long = 5
 
 ' --------------------------------------------------------------------------
 ' 純関数(15章の各プレースホルダの値づくり)
@@ -49,13 +47,11 @@ Public Function FinanceBlockText(ByVal rawText As String) As String
     FinanceBlockText = t
 End Function
 
-' {{incidentsText}} の値。0行なら15章§3の既定文言。
+' {{incidentsText}} の値。無害化して前後の空白を落とすだけ(15章§0 原則9)。
+'   0行のときの文言は modKnowledge.IncidentsFor が返す(T-57 裁定。呼出側は
+'   既定文言を持たない)。
 Public Function IncidentsBlockText(ByVal rawText As String) As String
-    Dim t As String
-
-    t = Trim$(modUtilText.SanitizeInput(rawText))
-    If LenB(t) = 0 Then t = P3_INCIDENTS_ZERO
-    IncidentsBlockText = t
+    IncidentsBlockText = Trim$(modUtilText.SanitizeInput(rawText))
 End Function
 
 ' {{focus_line_ids}} の値。1行属性なので改行・タブを空白へ畳む(15章§0 原則9)。
@@ -71,16 +67,14 @@ Public Function FocusLineIdsAttr(ByVal rawIds As String) As String
 End Function
 
 ' --------------------------------------------------------------------------
-' IncidentsFor - 事故事例(13章§3.11)の1行整形テキスト。**W7時点はスタブ**
+' IncidentsFor - 事故事例(13章§3.11)の1行整形テキストの**呼び口1本**
 ' --------------------------------------------------------------------------
-'   本実装は班C(17章 T-56 ②)が modKnowledge 側に `IncidentsFor(industryCode,
-'   maxRows)` として作る。班Bは呼び口だけを1本に固定し、暫定では空文字を返す
-'   (= IncidentsBlockText が15章§3の「(この業種の登録事例はまだありません)」へ
-'   落とす)。差し替え時はこの関数の中身を
-'   `IncidentsFor = modKnowledge.IncidentsFor(industryCode, maxRows)` の1行に
-'   置き換えるだけでよい(呼出側は変えない)。
+'   実装は班C(17章 T-56 ②)の modKnowledge.IncidentsFor(業種別抽出 ->
+'   modKnowledgeFmt.FmtIncidents)。T-57 でスタブから差し替えた(統合)。
+'   0行のときの文言(15章§3「(この業種の登録事例はまだありません)」)は
+'   **KB側が返す**。呼出側は既定文言を持たない(答えを2箇所に書かない)。
 Public Function IncidentsFor(ByVal industryCode As String, ByVal maxRows As Long) As String
-    IncidentsFor = vbNullString
+    IncidentsFor = modKnowledge.IncidentsFor(industryCode, maxRows)
 End Function
 
 ' --------------------------------------------------------------------------
@@ -90,15 +84,6 @@ End Function
 ' case_data の input_finance(13章§2.11(a) 7本目の貼付欄)。
 Public Function FinanceTextOf(ByVal caseId As String) As String
     FinanceTextOf = FinanceBlockText(modCaseStore.LoadData(caseId, "input_finance"))
-End Function
-
-' 事故事例の注入テキスト(config `kb_incident_rows` 既定5)。
-Public Function IncidentsTextFor(ByVal industryCode As String) As String
-    Dim n As Long
-
-    n = modConfig.GetLong("kb_incident_rows", P3_INCIDENT_ROWS_DFLT)
-    If n < 0 Then n = 0
-    IncidentsTextFor = IncidentsBlockText(IncidentsFor(industryCode, n))
 End Function
 
 ' 案件一覧の focus_line_ids(13章§2.1。班C が列を足すまでは空= 指定なし)。
@@ -130,13 +115,15 @@ Public Function S1UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
                                          FinanceTextOf(caseId))
 End Function
 
-' 15章§3 user。{{incidentsText}} と第2ラウンドの絞り込みをここで解決する。
+' 15章§3 user。第2ラウンドの絞り込みをここで解決する。{{incidentsText}} は
+'   15章§0.7 の切詰め(6段の順2)を通った値を呼出側から受ける(T-57)。
 Public Function S2UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
                            ByVal s1Json As String, ByVal riskLib As String, _
                            ByVal menus As String, ByVal prevS2Json As String, _
-                           ByVal hearingAnswers As String) As String
+                           ByVal hearingAnswers As String, _
+                           ByVal incidents As String) As String
     S2UserText = modPromptsOps.AsmS2User(ctx, s1Json, riskLib, menus, prevS2Json, _
-                                         hearingAnswers, IncidentsTextFor(ctx.industry_code), _
+                                         hearingAnswers, IncidentsBlockText(incidents), _
                                          FocusIdsOf(caseId), RoundNoOf(caseId))
 End Function
 

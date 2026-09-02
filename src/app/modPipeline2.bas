@@ -47,7 +47,6 @@ Private Const P2_REPAIR_DFLT As Long = 1
 Private Const P2_TIER_T1 As String = "t1_quick"
 
 ' ナレッジ0行・入力なしの既定文言(modPipeline と同じ扱い)。
-Private Const P2_KB_ZERO As String = "なし"
 Private Const P2_NONE_TEXT As String = "なし"
 
 ' パイプの結末(13章§2.4 detail・16章 E-35/E-36)。
@@ -85,6 +84,7 @@ Private Type TDeepCtx
     linesText As String
     schemesText As String
     casesText As String
+    incidentsText As String
     riskLibText As String
 End Type
 
@@ -253,7 +253,8 @@ Private Function RunRevision(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
     If d.stepNo = 2 Then
         sysText = modPromptsCore.BuildS2System()
         userText = modPipeline3.S2UserText(ctx, d.caseId, d.s1Json, d.riskLibText, _
-                                           d.menusText, d.prevS2Json, HearingOf(d.caseId))
+                                           d.menusText, d.prevS2Json, HearingOf(d.caseId), _
+                                           d.incidentsText)
         schemaText = modSchemas.SchemaS2()
     Else
         sysText = modPromptsCore.BuildS3System()
@@ -612,69 +613,21 @@ End Sub
 ' 入力の取り直し(単一の値源から同じ手順で組み直す。冒頭の注記を参照)
 ' ============================================================================
 
-' LoadKb - ナレッジ注入と15章§0.7の切詰め。行数の数え方(KbRowCount)・Step別の
-'   枠(UsesSlot)・予算配分(BudgetOf)は modPipeline が公開した判定核、切詰めの
-'   計画は modKnowledgeFmt.TrimPlan が唯一の実装(答えを2箇所に書かない)。
+' LoadKb - ナレッジ注入と15章§0.7の切詰め(6段)。手順の実体は modPipeline4 が
+'   唯一持つ(T-57。modPipeline と写経していたものを畳んだ)。予算配分だけは
+'   modPipeline.BudgetOf が唯一の配分点(16章 E-03)。
 Private Sub LoadKb(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx)
-    Dim txt(0 To 4) As String
-    Dim counts(0 To 9) As Long
-    Dim plan As Variant
-    Dim i As Long
-    Dim trimmed As Boolean
+    Dim txt() As String
+    Dim detailAcc As String
 
-    modKnowledge.ResetInjectedIds
-    FetchKb ctx, d.stepNo, txt, -1, 0
-    For i = 0 To 4
-        counts(i) = modPipeline.KbRowCount(txt(i))
-        counts(5 + i) = Len(txt(i))
-    Next i
-
-    plan = modKnowledgeFmt.TrimPlan(counts, _
-        modPipeline.BudgetOf(ContextLimitOf(ctx.dossier_tier), P2_PCT_KB))
-    For i = 0 To 4
-        If plan(i) < counts(i) Then trimmed = True
-    Next i
-    If trimmed Then
-        modKnowledge.ResetInjectedIds
-        For i = 0 To 4
-            If counts(i) > 0 Then FetchKb ctx, d.stepNo, txt, i, plan(i)
-        Next i
-    End If
-
+    modPipeline4.LoadKbSlots ctx, d.stepNo, _
+        modPipeline.BudgetOf(ContextLimitOf(ctx.dossier_tier), P2_PCT_KB), txt, detailAcc
     d.casesText = txt(0)
-    d.schemesText = txt(1)
-    d.menusText = txt(2)
-    d.linesText = txt(3)
-    d.riskLibText = txt(4)
-End Sub
-
-' slotIdx=-1 は全スロットを既定行数(config)で、0以上はそのスロットだけ maxRows
-'   行(0なら既定文言)で取り直す。メニューはStepで別物(12章§3)。
-Private Sub FetchKb(ByRef ctx As TCaseCtx, ByVal stepNo As Long, ByRef txt() As String, _
-                    ByVal slotIdx As Long, ByVal maxRows As Long)
-    Dim i As Long, n As Long
-
-    For i = 0 To 4
-        If (slotIdx < 0 Or slotIdx = i) And modPipeline.UsesSlot(stepNo, i) Then
-            n = 0
-            If slotIdx >= 0 Then n = maxRows
-            If slotIdx >= 0 And maxRows <= 0 Then
-                txt(i) = P2_KB_ZERO
-            ElseIf i = 0 Then
-                txt(i) = modKnowledge.CasesFor(ctx.industry_code, n)
-            ElseIf i = 1 Then
-                txt(i) = modKnowledge.SchemesFor(ctx.industry_code, n)
-            ElseIf i = 2 And stepNo = 2 Then
-                txt(i) = modKnowledge.MenusSummaryFor(ctx.industry_code, n)
-            ElseIf i = 2 Then
-                txt(i) = modKnowledge.MenusFor(ctx.industry_code, n)
-            ElseIf i = 3 Then
-                txt(i) = modKnowledge.LinesText(n)
-            Else
-                txt(i) = modKnowledge.RiskLibFor(ctx.industry_code, n)
-            End If
-        End If
-    Next i
+    d.incidentsText = txt(1)
+    d.schemesText = txt(2)
+    d.menusText = txt(3)
+    d.linesText = txt(4)
+    d.riskLibText = txt(5)
 End Sub
 
 ' 16章E-03(1): ティアで上限config(modPipeline と同じキーを見る)。

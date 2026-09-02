@@ -46,6 +46,13 @@ Public Function LabelJs() As String
     s = s & "var LSRC={hp:'HP',yuho:'有報',memo:'営業メモ',contract:'現契約'," & vbLf
     s = s & "prev_renewal:'前回更新メモ',knowledge:'社内ナレッジ',inference:'推定'};" & vbLf
     s = s & "var LGAP={uninsured:'無保険',underinsured:'過小',overlap:'重複'};" & vbLf
+    ' 19章§3 current_coverage.certainty(18章§3.8 の現契約表の確度列)。
+    s = s & "var LCERT={confirmed:'確認済み',assumed:'見立て'};" & vbLf
+    ' 19章§3 financials.source(15章 SchemaS1 の financials.source)。
+    s = s & "var LFSRC={yuho:'有報',kessan_kokoku:'決算公告',tdb:'信用調査'," & vbLf
+    s = s & "view:'VIEW情報',memo:'営業メモ',unknown:'不明'};" & vbLf
+    ' 19章§3 case.outcome(成功事例シートの成否。13章§3.1)。
+    s = s & "var LOUT={won:'刺さった',lost:'刺さらなかった'};" & vbLf
     s = s & "var LPK={upsell:'補償拡大',cross_sell:'新種目提案',scheme:'座組提案'};" & vbLf
     ' 19章§3 growth.difficulty(15章 SchemaS3 の growth_ideas[].difficulty)。
     ' DIFO は18章§3.7の並び「difficulty の易しい順」を決める順位表。
@@ -73,7 +80,7 @@ End Function
 
 ' 18章§3.0 のキッカー(節番号+英字ラベル)。セクション登録表の7キーを増やさない
 '   ため、キッカーはセクションIDから引くこの表が持つ(18章§4.2)。**節の先頭
-'   セクションにだけ**付けるので、集約される側(SEC-04/08/11/12/15/16)は持たない。
+'   セクションにだけ**付けるので、集約される側(SEC-04/08/11/12/15/16/18)は持たない。
 Private Function KickJs() As String
     Dim s As String
     s = s & "var KICK={'SEC-02':'01 / Executive Summary'," & vbLf

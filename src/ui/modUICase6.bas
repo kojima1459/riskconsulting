@@ -66,8 +66,8 @@ Private Const U6_MSG_SAVE_NG As String = "保存できませんでした"
 Private Const U6_TMP_PREFIX As String = "rpn_view_"
 Private Const U6_TMP_KEEP_DAYS As Long = 7
 
-' 6欄の定義(13章§2.11(a))。data_key 9本は不変。現場メモだけはプレビューを持た
-' ない(実体の入力枠そのものが画面)。
+' 7欄の定義(13章§2.11(a)。v2.6・裁定書25 S3 で6→7欄・data_key は10本)。
+' 現場メモだけはプレビューを持たない(実体の入力枠そのものが画面)。
 '   欄キー|data_key|画面ラベル|プレビュー|直貼り枠|見張り行|状態行
 Public Function AreaTable() As String
     Dim s As String
@@ -81,6 +81,8 @@ Public Function AreaTable() As String
             "ci_sent_field_notes|ci_count_field_notes" & vbLf
     s = s & "contract|input_contract|いまの契約|ci_prev_contract|ci_raw_contract|" & _
             "ci_sent_contract|ci_count_contract" & vbLf
+    s = s & "finance|input_finance|決算・財務|ci_prev_finance|ci_raw_finance|" & _
+            "ci_sent_finance|ci_count_finance" & vbLf
     s = s & "hearing_answers|input_hearing_answers|ヒアリング回答|ci_prev_hearing_answers|" & _
             "ci_raw_hearing_answers|ci_sent_hearing_answers|ci_count_hearing_answers"
     AreaTable = s
@@ -556,9 +558,13 @@ Private Sub SaveFieldNotes(ByVal caseId As String)
 
     StoreArea caseId, "input_memo", memoText
     StoreArea caseId, "input_field_notes", othersText
-    ' 画面の欄を持たない2本は常に空文字で保存する(13章§2.11(a))。
+    ' 13章§2.11(d) v2.6(裁定書25 S1): 【付保の見立て】節は input_memo に残したまま
+    '   input_coverage_note へも保存する(**二重保存**。派生=読み取り専用の写し)。
+    '   片方を落とすと、現場メモの見出しを消した利用者の入力が丸ごと消える経路が
+    '   できる。可逆性は input_memo 側だけで成立させる。
+    StoreArea caseId, "input_coverage_note", modNavText.CoverageNoteOf(memoText)
+    ' 画面の欄を持たない input_prev_renewal は常に空文字で保存する(13章§2.11(a))。
     modCaseStore.SaveData caseId, "input_prev_renewal", vbNullString
-    modCaseStore.SaveData caseId, "input_coverage_note", vbNullString
 End Sub
 
 ' 属性欄を案件一覧へ書き、調査の深さを自動決定する(11章§5 #1)。
@@ -668,17 +674,17 @@ Private Function ScreenCaseId() As String
 End Function
 
 ' 出る条件(13章§2.11(a))。偽の欄は行ごと非表示にし、中身は消さない。
+'   v2.6(裁定書25 S1): 「いまの契約」は**案件種別に関係なく常に出す**。新規先でも
+'   営業が知る範囲を貼れば付保ギャップ(SEC-08)が出るため、出る条件を外した。
+'   条件を持つのは「ヒアリング回答」(第2ラウンド以降)の1欄だけである。
 Public Function AreaHidden(ByVal areaKey As String) As Boolean
-    If StrComp(areaKey, "contract", vbBinaryCompare) = 0 Then
-        AreaHidden = (StrComp(modUICase.EnumEn("case_type", _
-                      modUISheet.ReadNamed("ci_case_type")), "renewal", vbBinaryCompare) <> 0)
-    ElseIf StrComp(areaKey, "hearing_answers", vbBinaryCompare) = 0 Then
+    If StrComp(areaKey, "hearing_answers", vbBinaryCompare) = 0 Then
         AreaHidden = (Val(modUISheet.ReadNamed("hm_round_no")) < 2)
     End If
 End Function
 
 ' ============================================================================
-' OnAction ハンドラ(18本。13章§2.11(b))。実体は共通の PasteIntoArea /
+' OnAction ハンドラ(21本。13章§2.11(b) v2.6)。実体は共通の PasteIntoArea /
 ' ShowArea / ClearArea で、ここは「どの欄か」を渡すだけの薄い口である。
 ' 16章E-11: OnActionで配線される公開Subは先頭で TryEnterUiLock を通す。
 ' ============================================================================
@@ -709,6 +715,12 @@ End Sub
 Public Sub PasteIntoContract()
     If Not modUIProgress.TryEnterUiLock(U6_LOCK_PASTE) Then Exit Sub
     PasteIntoArea "contract"
+    modUIProgress.ExitUiLock
+End Sub
+
+Public Sub PasteIntoFinance()
+    If Not modUIProgress.TryEnterUiLock(U6_LOCK_PASTE) Then Exit Sub
+    PasteIntoArea "finance"
     modUIProgress.ExitUiLock
 End Sub
 
@@ -748,6 +760,12 @@ Public Sub ShowAreaContract()
     modUIProgress.ExitUiLock
 End Sub
 
+Public Sub ShowAreaFinance()
+    If Not modUIProgress.TryEnterUiLock(U6_LOCK_SHOW) Then Exit Sub
+    ShowArea "finance"
+    modUIProgress.ExitUiLock
+End Sub
+
 Public Sub ShowAreaHearingAnswers()
     If Not modUIProgress.TryEnterUiLock(U6_LOCK_SHOW) Then Exit Sub
     ShowArea "hearing_answers"
@@ -781,6 +799,12 @@ End Sub
 Public Sub ClearAreaContract()
     If Not modUIProgress.TryEnterUiLock(U6_LOCK_CLEAR) Then Exit Sub
     ClearArea "contract"
+    modUIProgress.ExitUiLock
+End Sub
+
+Public Sub ClearAreaFinance()
+    If Not modUIProgress.TryEnterUiLock(U6_LOCK_CLEAR) Then Exit Sub
+    ClearArea "finance"
     modUIProgress.ExitUiLock
 End Sub
 

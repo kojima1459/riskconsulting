@@ -137,37 +137,58 @@ Public Function SecRisksJs() As String
     SecRisksJs = s
 End Function
 
-' SEC-08 coverage。2枚組の表(現契約 / ギャップ)。current_coverage が0件
-'   (新規案件)なら注記を出してギャップ側の表だけを描く。両方0件なら何も
-'   描かない(登録表の empty:'hide' が拾ってセクションごと落とす)。
-'   移転可能性の内訳は s2.risks[].insurability.transferability の集計。
+' SEC-08 coverage(18章§3.8。v1.3・裁定書25 S1/S5)。**リスク単位の表**(主表)・
+'   現契約の表・未充足リスク一覧の3枚を上から順に描く。見本05節の粒度は契約
+'   単位ではなくリスク単位であり、契約が1本も無い新規先でも「このリスクは、
+'   ふつうどの保険で、どこまで移せて、何を確かめる必要があるか」が並ぶことが
+'   この節の価値である(髙橋FB①)。
+'   ・(1)は s2.risks[] を risk_no 昇順で全件。分類ごとにグループ化しない
+'   ・(2)は current_coverage が0件(新規案件)なら表ごと省き注記1行。assumed の
+'     行は淡色にし、表の直前に「確認前の見立てを含みます」の1行を出す
+'   ・(3)は gaps が0件なら表ごと省く(「該当なし」も出さない)
+'   **旧「両方0件なら非表示」は撤回した**。s2 が null のときだけ登録表の
+'   need:['s2'] がセクションごと落とす。
 Public Function SecCoverageJs() As String
     Dim s As String
-    s = s & "function renderCoverage(D,el){var s1=D.s1||{};var s2=D.s2||{};" & vbLf
-    s = s & "var cc=AR(s1.current_coverage);var gp=AR(s2.gaps);" & vbLf
-    s = s & "if(!cc.length&&!gp.length){return;}" & vbLf
+    s = s & "function covMain(D,el){var rs=RISKS(D);if(!rs.length){return;}" & vbLf
+    s = s & "var a=rs.slice(0);" & vbLf
+    s = s & "a.sort(function(x,y){return (x.risk_no||0)-(y.risk_no||0);});" & vbLf
+    s = s & "var rows=[];" & vbLf
+    s = s & "for(var i=0;i<a.length;i++){var x=a[i];" & vbLf
+    s = s & "var ins=x.insurability||{};var tr=S(ins.transferability);" & vbLf
+    s = s & "var im=x.impact_score||0;var fq=x.frequency_score||0;" & vbLf
+    ' 積の帯は SEC-06 の heat と同じ区切り(2-3 / 4-5 / 6-7 / 8-9 / 10)。
+    s = s & "var ev=E('span','prod heat'+Math.floor((im+fq)/2));" & vbLf
+    s = s & "ev.textContent='影響'+im+' × 頻度'+fq+'（積 '+(im*fq)+'）';" & vbLf
+    s = s & "var bd=E('span');" & vbLf
+    s = s & "BDG(bd,TRCLS[tr]?TRCLS[tr]:'bdg-sub',LB(LTR,tr));" & vbLf
+    s = s & "rows.push([S(x.risk_no),LB(LCAT,x.category),S(x.risk_name),ev," & vbLf
+    s = s & "DASH(ins.line_note),bd,DASH(ins.gap_note),DASH(ins.control_note)]);}" & vbLf
+    s = s & "TBL(el,['No','分類','リスク','評価','想定される既存商品'," & vbLf
+    s = s & "'カバー可能性','ギャップ・確認点','管理策'],rows);}" & vbLf
+    s = s & "function covNow(D,el){var s1=D.s1||{};var cc=AR(s1.current_coverage);" & vbLf
     s = s & "T(el,'h3',null,'現在のご契約');" & vbLf
-    ' 18章§3 SEC-08 の注記は逐語(文言を足さない)。
+    ' 18章§3・§3.8 の注記は逐語(文言を足さない)。
     s = s & "if(!cc.length){T(el,'p','note','新規案件のため現契約なし。"
-    s = s & "以下は必要補償の見立て');}" & vbLf
-    s = s & "else{var rows=[];" & vbLf
+    s = s & "以下は必要補償の見立て');return;}" & vbLf
+    s = s & "var anyA=false;" & vbLf
+    s = s & "for(var k=0;k<cc.length;k++){if(S(cc[k].certainty)==='assumed'){anyA=true;}}" & vbLf
+    s = s & "if(anyA){T(el,'p','note','確認前の見立てを含みます');}" & vbLf
+    s = s & "var rows=[];" & vbLf
     s = s & "for(var i=0;i<cc.length;i++){var x=cc[i];" & vbLf
-    s = s & "rows.push([S(x.line_name),S(x.coverage_summary),S(x.limit_note),"
-    s = s & "S(x.special_note)]);}" & vbLf
-    s = s & "TBL(el,['種目','補償の概要','限度額','特約・注記'],rows);}" & vbLf
-    s = s & "if(gp.length){T(el,'h3',null,'補償のギャップ');var rows2=[];" & vbLf
+    s = s & "var ct=S(x.certainty);" & vbLf
+    s = s & "var cell=E('span',(ct==='assumed')?'cov-assumed':null);" & vbLf
+    s = s & "cell.textContent=LB(LCERT,ct);" & vbLf
+    s = s & "rows.push([S(x.line_name),S(x.coverage_summary),S(x.limit_note)," & vbLf
+    s = s & "S(x.special_note),cell]);}" & vbLf
+    s = s & "TBL(el,['種目名','補償内容','限度額','主要特約・免責','確度'],rows);}" & vbLf
+    s = s & "function covGaps(D,el){var s2=D.s2||{};var gp=AR(s2.gaps);" & vbLf
+    s = s & "if(!gp.length){return;}" & vbLf
+    s = s & "T(el,'h3',null,'未充足リスク一覧');var rows=[];" & vbLf
     s = s & "for(var j=0;j<gp.length;j++){var y=gp[j];" & vbLf
-    s = s & "rows2.push([S(y.gap_no),LB(LGAP,y.gap_type),S(y.target),S(y.description)," & vbLf
+    s = s & "rows.push([S(y.gap_no),LB(LGAP,y.gap_type),S(y.target),S(y.description)," & vbLf
     s = s & "S(y.risk_evidence),S(y.coverage_evidence)]);}" & vbLf
-    s = s & "TBL(el,['No','種別','対象','内容','リスク側の根拠','契約側の根拠'],rows2);}" & vbLf
-    s = s & "var rs=RISKS(D);if(!rs.length){return;}" & vbLf
-    s = s & "var c={cover:0,partial:0,hard:0};" & vbLf
-    s = s & "for(var k=0;k<rs.length;k++){var ins=rs[k].insurability||{};" & vbLf
-    s = s & "var t=S(ins.transferability);if(c[t]!==undefined){c[t]++;}}" & vbLf
-    s = s & "T(el,'h4',null,'リスクの移転可能性の内訳');" & vbLf
-    s = s & "var box=T(el,'div','chips');var keys=['cover','partial','hard'];" & vbLf
-    s = s & "for(var m=0;m<keys.length;m++){var sp=E('span','chip');" & vbLf
-    s = s & "BDG(sp,TRCLS[keys[m]],LB(LTR,keys[m]));" & vbLf
-    s = s & "T(sp,'span',null,' '+c[keys[m]]+'件');box.appendChild(sp);}}" & vbLf
+    s = s & "TBL(el,['No','種別','対象','説明','リスク側の根拠','契約側の根拠'],rows);}" & vbLf
+    s = s & "function renderCoverage(D,el){covMain(D,el);covNow(D,el);covGaps(D,el);}" & vbLf
     SecCoverageJs = s
 End Function

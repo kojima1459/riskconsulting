@@ -93,6 +93,13 @@
       "wave": "T-20"
     },
     {
+      "name": "modCaseStore3",
+      "path": "src/app/modCaseStore3.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-56"
+    },
+    {
       "name": "modCaseRead",
       "path": "src/app/modCaseRead.bas",
       "role": "app",
@@ -182,6 +189,13 @@
       "role": "app",
       "type": "std",
       "wave": "T-55"
+    },
+    {
+      "name": "modPipeline4",
+      "path": "src/app/modPipeline4.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-57"
     },
     {
       "name": "modInboxStore",
@@ -287,6 +301,13 @@
       "role": "app",
       "type": "std",
       "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate8",
+      "path": "src/app/modHtmlTemplate8.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-56"
     },
     {
       "name": "modExportHtml",
@@ -553,6 +574,20 @@
       "role": "test",
       "type": "std",
       "wave": "T-55"
+    },
+    {
+      "name": "modTestsPure16",
+      "path": "src/test/modTestsPure16.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-56"
+    },
+    {
+      "name": "modTestsPure17",
+      "path": "src/test/modTestsPure17.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-57"
     },
     {
       "name": "modTestsExcel",

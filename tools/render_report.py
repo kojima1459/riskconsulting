@@ -48,7 +48,7 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
 
 検査(DoD):
     (1) 先頭付近に `<meta charset="utf-8"` がある(18章§5.3(3))
-    (2) 18章§3の全17セクション(v1.2で SEC-17 growth を追加)が登録表にある
+    (2) 18章§3の全18セクション(v1.3で SEC-18 talk を追加)が登録表にある
         (id と slug と描画関数名の3点)
     (3) node があれば、最小DOMスタブでページ内スクリプトを実際に走らせ、
         `sec-<slug>` の要素がすべて生成されることと、上部ナビ・目次の
@@ -97,9 +97,13 @@ RENDER_MODULES = [
     "modHtmlTheme",
     "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
     "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
-    "modHtmlTemplate7",
+    "modHtmlTemplate7", "modHtmlTemplate8",
     "modExportHtml",
-    "modMockLlm", "modMockLlm2",
+    # modMockLlm3 は W7(T-55)で新設した MK-S2-NEW / MK-S2-RNW の本体。
+    #   modMockLlm.ResponseById が両IDでここへ委譲するので、載せ忘れると
+    #   Basicライブラリに関数が無く soffice がダイアログで止まる
+    #   (=exit 124 のタイムアウトになり「HTMLが生成されませんでした」に化ける)。
+    "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
 
 # 18章§3のセクション一覧(ID / slug / 描画関数名)。この表が本ツールの検査基準。
@@ -118,6 +122,7 @@ SECTIONS = [
     ("SEC-09", "newrisk", "renderNewRisk"),
     ("SEC-17", "growth", "renderGrowth"),
     ("SEC-10", "story", "renderStory"),
+    ("SEC-18", "talk", "renderTalk"),
     ("SEC-13", "hearing", "renderHearing"),
     ("SEC-14", "source", "renderSource"),
     ("SEC-15", "disclaimer", "renderDisclaimer"),
@@ -318,7 +323,37 @@ function runPass(mutate) {
 
 const passA = runPass(null);
 const passB = runPass(function (D) { if (D && D.meta) { D.meta.round_no = 1; } });
-console.log(JSON.stringify({ A: passA, B: passB }));
+// C = 18章§3.8/§3.9 の回帰(裁定書25 S1/S2。17章 T-56 のDoD④)。
+//   ・新規案件の形(current_coverage=0件・gaps=2件)にしても SEC-08 が描かれる
+//     (旧規定「両方0件なら非表示」の撤回。素材そのままだと現契約が入っている
+//      ので、この分岐は落として初めて実測できる)
+//   ・talk_script を与えると SEC-18 が本文と目次の両方に出る
+const passC = runPass(function (D) {
+  if (!D) { return; }
+  if (D.s1) { D.s1.current_coverage = []; }
+  if (D.s2) {
+    D.s2.gaps = [
+      { gap_no: 1, gap_type: 'uninsured', target: '生産物賠償', description: 'テスト',
+        risk_evidence: 'リスク側', coverage_evidence: '該当契約なし' },
+      { gap_no: 2, gap_type: 'uninsured', target: '休業損失', description: 'テスト',
+        risk_evidence: 'リスク側', coverage_evidence: '該当契約なし' }
+    ];
+  }
+  if (D.s3) {
+    D.s3.talk_script = {
+      opening: '御社の利益を止めないための話をさせてください。',
+      flow: ['いまの事業の姿を確かめます。', '止まると困る所を並べます。',
+             'いまの保険で足りるかを見ます。', '足りない所の埋め方を出します。'],
+      closing: '次回までに現契約の写しをご用意ください。',
+      taboo: ['前任者の担当時期の話には触れない。']
+    };
+  }
+});
+// D = 与えないときに SEC-18 が本文からも目次からも消えること(§3の空のときの挙動)。
+const passD = runPass(function (D) {
+  if (D && D.s3) { delete D.s3.talk_script; }
+});
+console.log(JSON.stringify({ A: passA, B: passB, C: passC, D: passD }));
 """
 
 
@@ -441,6 +476,11 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
         print(f"[render_report] パスB(round_no=1)のid: {sorted(ids_b)}")
     problems = []
     for sec_id, slug, _fn in SECTIONS:
+        # SEC-18 は素材(mock MK-S3)が talk_script を持つかどうかで出方が変わる。
+        # パスAで固定の期待値を置くと、mock 側の改訂でこの検問が意味を失うので、
+        # SEC-18 の回帰は**パスC/D**(与えたら出る / 与えなければ消える)が持つ。
+        if sec_id == "SEC-18":
+            continue
         hidden_expected = faithful and sec_id == "SEC-16"
         present = ("sec-" + slug) in ids_a
         if hidden_expected and present:
@@ -460,6 +500,31 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
     # パスBが「SEC-16以外まで消えた」状態でないこと(ガードの効きすぎ・空振り防止)。
     if "sec-exec" not in ids_b:
         problems.append("パスB(round_no=1)で sec-exec まで消えています(DOM検査が空振り)")
+
+    # --- 18章§3.8 SEC-08(パスC): 新規案件の形でもリスク単位の主表を描く ---
+    ids_c = set(got["C"]["ids"])
+    hrefs_c = set(got["C"]["hrefs"])
+    if "sec-coverage" not in ids_c:
+        problems.append(
+            "新規案件の形(current_coverage=0件・gaps=2件)で sec-coverage が"
+            "描かれていません(18章§3.8 v1.3。旧「両方0件なら非表示」は撤回)")
+    # --- 18章§3.9 SEC-18(パスC/D): 与えたら本文と目次の両方に出る / 消える ---
+    if "sec-talk" not in ids_c:
+        problems.append("talk_script を与えたのに sec-talk が描かれていません(18章§3.9)")
+    if "#sec-talk" not in hrefs_c:
+        problems.append("talk_script を与えたのに目次に #sec-talk がありません(18章§3.6)")
+    ids_d = set(got["D"]["ids"])
+    hrefs_d = set(got["D"]["hrefs"])
+    if "sec-talk" in ids_d:
+        problems.append(
+            "talk_script が無いのに sec-talk が描かれています"
+            "(18章§3 SEC-18「talk_script が無いならセクションごと非表示」)")
+    if "#sec-talk" in hrefs_d:
+        problems.append(
+            "talk_script が無いのに目次に #sec-talk が残っています"
+            "(18章§3「非表示のセクションは目次からも同時に落とす」)")
+    if "sec-story" not in ids_d:
+        problems.append("パスD で sec-story まで消えています(DOM検査が空振り)")
 
     # --- 11章§3.8.3(1)(2): 上部ナビのアンカー本数 = 表示対象数、id は slug と1対1 ---
     # 見出しを持たない SEC-01 cover はナビにも目次にも並べない(18章§3.6)ので、
@@ -523,12 +588,38 @@ def parse_disclaimer(spec: str) -> list[str]:
     return out
 
 
-def parse_growth_note(spec: str) -> list[str]:
-    """§3.7「節の先頭に次の1文を逐語で置く」の固定文をバッククォートから取る。"""
-    body = spec.split("### 3.7 ")[1].split("## 4. ")[0]
+def _numbered_literals(body: str) -> list[str]:
+    """節の本文から `1. \`……\`` の形の固定文を拾う。"""
     out = []
     for line in body.splitlines():
         mm = re.match(r"^\d+\. `(.+?)`", line.strip())
+        if mm:
+            out.append(mm.group(1))
+    return out
+
+
+def parse_growth_note(spec: str) -> list[str]:
+    """§3.7「節の先頭に次の1文を逐語で置く」の固定文をバッククォートから取る。
+
+    切り出しの終端は **`"### 3.8"`**(v1.3)。`"## 4. "` までにすると §3.9 の
+    固定文(SEC-18 の1文)まで拾ってしまい、SEC-18 の漂流を「§3.7 SEC-17 の
+    免責固定文が入っていない」と**誤ってラベルする**(実際にW7で発生した)。
+    """
+    return _numbered_literals(spec.split("### 3.7 ")[1].split("### 3.8")[0])
+
+
+def parse_talk_note(spec: str) -> list[str]:
+    """§3.9「節の先頭に次の1文を逐語で置く」の固定文(SEC-18)を取る。"""
+    return _numbered_literals(spec.split("### 3.9 ")[1].split("## 4. ")[0])
+
+
+def parse_sec08_notes(spec: str) -> list[str]:
+    """§3.8 の注記(新規案件の1行・確度の見立ての1行)を逐語で取る。"""
+    body = spec.split("### 3.8 ")[1].split("### 3.9")[0]
+    out = []
+    for pat in (r"`(新規案件のため現契約なし。[^`]+)`",
+                r"「(確認前の見立てを含みます)」"):
+        mm = re.search(pat, body)
         if mm:
             out.append(mm.group(1))
     return out
@@ -600,6 +691,24 @@ def check_spec18_literals(html: str) -> list[str]:
         if _literal_missing(html, line):
             problems.append(
                 f"18章§3.7 SEC-17 の免責固定文が逐語で入っていません: [{line}]"
+                f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
+
+    talk = parse_talk_note(spec)
+    if len(talk) != 1:
+        problems.append(f"18章§3.9 の固定文が1本読めません({len(talk)}本)")
+    for line in talk:
+        if _literal_missing(html, line):
+            problems.append(
+                f"18章§3.9 SEC-18 の固定文が逐語で入っていません: [{line}]"
+                f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
+
+    notes08 = parse_sec08_notes(spec)
+    if len(notes08) != 2:
+        problems.append(f"18章§3.8 の注記が2本読めません({len(notes08)}本)")
+    for line in notes08:
+        if _literal_missing(html, line):
+            problems.append(
+                f"18章§3.8 SEC-08 の注記が逐語で入っていません: [{line}]"
                 f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
 
     for label, phrase in parse_fixed_phrases(spec):

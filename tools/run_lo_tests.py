@@ -131,7 +131,8 @@ PURE_ALLOWLIST = [
     # (lint の R4 が Excelトークンの混入を機械的に禁止している)。
     "modHtmlTheme", "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
     "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
-    "modHtmlTemplate7",
+    # modHtmlTemplate8 = SEC-18 talk と TalkCss(18章§4.4 v1.3・T-56)。
+    "modHtmlTemplate7", "modHtmlTemplate8",
     # T-33(W3)。modExportHtml はファイルI/O(ADODB.Stream)とstore経由の読取を
     # 持つが、純組立関数(BuildReportHtml / BuildMetaJson)はどちらにも触れない
     # ため、テストが叩くのはその2本だけ(技術メモ4)。tools/render_report.py も
@@ -142,7 +143,9 @@ PURE_ALLOWLIST = [
     # modKnowledgeFmt は全体が純文字列(整形と15章§0.7の切詰め)。
     # modPipeline は store/log/LLM経由でExcelに触れるが、テストが叩くのは
     # 14章§6が公開を宣言した判定核16本(純関数)だけ。
-    "modKnowledgeFmt", "modCaseStore", "modPipeline",
+    # modCaseStore3 は data_key の一覧とラウンド確定の付帯処理を持つが、テストが
+    # 叩くのは純関数 NormalizeStoryNos / CollectLineIds だけ(技術メモ4)。
+    "modKnowledgeFmt", "modCaseStore", "modCaseStore3", "modPipeline",
     # T-25/T-28(裁定書8 B-7/B-10)で 14章§6 が公開を宣言した判定核を持つ3本。
     # いずれもモジュール全体としてはシート・LLMに触れるが、テストが叩くのは
     # 純関数だけ(技術メモ4)。
@@ -159,6 +162,10 @@ PURE_ALLOWLIST = [
     #   (FinanceBlockText / IncidentsBlockText / FocusLineIdsAttr)だけで、
     #   S*UserText / *Of 系はシートを読むため実行に到達しない(技術メモ4)。
     "modPipeline3",
+    # W7(T-57)。modPipeline の分割先。テストが叩くのは純関数 TrimPlan
+    #   (15章§0.7 の6段の切詰め計画)だけで、LoadKbSlots はシートを読むため
+    #   実行に到達しない(技術メモ4)。
+    "modPipeline4",
     # T-27(裁定書8 B-9)で 14章§6 が公開を宣言した壁打ちの純核3本を持つ。
     # モジュール全体は store/受信箱/LLM経由でExcelに触れるが、テストが叩くのは
     #   modSparring : HistoryJoinOf(保存形式 -> 新しい順の";;;"連結)/
@@ -231,6 +238,15 @@ PURE_ALLOWLIST = [
     #   検証ルール(V-S1-12/13・V-S2-12b/18・V-S3-19/20/21 と V-S1-04・V-S2-16 の
     #   改訂)を叩く。modTestsPure14.RunAll の末尾から呼ぶ。
     "modTestsPure15",
+    # modTestsPure16: W7(裁定書25・17章 T-56)の純層16本。13章v2.6 §2.1 / §2.11(d) /
+    #   §3.11 と 15章§3の整形例だけを根拠に、modKnowledgeFmt.FmtIncidents(事故事例の
+    #   1行整形)・modCaseStore3.NormalizeStoryNos / CollectLineIds(focus_line_ids の
+    #   導出)・modNavText.CoverageNoteOf(【付保の見立て】の派生)を叩く。
+    #   modTestsPure15.RunAll の末尾から呼ぶ。
+    "modTestsPure16",
+    # modTestsPure17: W7(17章 T-57・統合班)の純層。15章§0.7 の切詰め6段化
+    #   (modPipeline4.TrimPlan)だけを根拠に叩く。modTestsPure16.RunAll の末尾から呼ぶ。
+    "modTestsPure17",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
 

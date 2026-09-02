@@ -357,20 +357,32 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
 '   **既定は True**＝不明なら黙らず出す（V-S1-11 の判定は「警告」。15章§0 原則10）
 Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
                         Optional ByVal menusText As String, _
-                        Optional ByVal prevS2Json As String) As String
+                        Optional ByVal prevS2Json As String, _
+                        Optional ByVal s1Json As String) As String
 ' menusText: S2へ注入した menusSummary（MenusSummaryFor の戻り値。V-S2-06 の実在判定）。
 ' prevS2Json: 前ラウンドのS2 JSON（case_data `s2_prev_json`）。"" または "なし" は初回実行
 '   （V-S2-09 は初回のみ / V-S2-10 は第2ラウンド以降のみ）
+' s1Json（v2.6・裁定書25 S3。T-55 で追加・T-57 で本表へ追認）: 同じ案件のS1 JSON。
+'   V-S2-18（純資産が既知なら loss_scale_note で必ず対比する）が `financials.net_assets`
+'   を読むために要る。**省略・空は「純資産不明」**として V-S2-18 を当てない
+'   （既知かどうかを呼び出し側でしか判定できないため、fail-open ではなく事実の欠落）。
+'   Optional String に `= ""` は書かない（LibreOffice 制約。本節冒頭の注記）
 Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
                         Optional ByVal menusText As String, _
                         Optional ByVal linesText As String, _
                         Optional ByVal schemesText As String, _
                         Optional ByVal casesText As String, _
-                        Optional ByVal caseType As String) As String
+                        Optional ByVal caseType As String, _
+                        Optional ByVal s1SummaryJson As String) As String
 ' menusText/linesText/schemesText/casesText: S3へ注入した一覧（MenusFor / LinesText /
 '   SchemesFor / CasesFor の戻り値。V-S3-03..06 の実在判定）。caseType は V-S3-13 用
 '   （省略時は s2Json の gaps 非空から更新案件を導く。V-S2-12 が「新規で gaps 1件以上」を
 '    不合格にしているため確定できる）
+' s1SummaryJson（v2.6・裁定書25 S2。T-55 で追加・T-57 で本表へ追認）: S3へ注入したのと
+'   同じ要約JSON（`modPipeline.S1SummaryOf` の戻り値）。V-S3-19〜21 の talk_script 検査が
+'   案件側の事実（current_coverage / field_insights）と突き合わせるために要る。
+'   **省略・空でも talk_script の構造検査（flow 3〜5件 / opening 1〜80字 /
+'   constraint があるのに taboo 0件）は当てる**（構造は案件に依らないため）
 Public Function CheckS4(ByVal json As String, _
                         Optional ByVal dossierTier As String, _
                         Optional ByVal maxSlidesT2 As Long = 10) As String
@@ -407,7 +419,8 @@ Public Function CheckS3GrowthCore(ByVal json As String) As String
 ' === app: modKnowledge ===
 ' 各注入関数の `Optional ByVal maxRows As Long = 0` は**15章§0.7の段階的な半減を外から
 ' 掛けるための口**（0=config既定＝`kb_*_rows`。正の値を渡すとその行数で打ち切る）。
-' modPipeline は `modKnowledgeFmt.TrimPlan` が返した行数をここへ渡して再取得する。
+' `modPipeline4.LoadKbSlots` は `modPipeline4.TrimPlan` が返した行数をここへ渡して再取得する
+' （v2.6・T-57 で modKnowledgeFmt から移設。それ以前は `modKnowledgeFmt.TrimPlan`）。
 ' 整形（1行の書式・0行の既定文言・空項目の省略）そのものは **modKnowledgeFmt** の純関数が
 ' 行い、本モジュールは「読む・絞る・注入IDを積む」だけを担う（12章§2）。
 Public Function LoadKnowledge() As Boolean            ' 起動時/再読込。スナップショット保存込み
@@ -487,20 +500,10 @@ Public Function TrimKbLine(ByVal s As String) As String  ' 適用点はmodKnowle
 ' 15章§0.7 の最終段「各行を先頭400字で切り『…』を付す」の実体。**400字以内はそのまま返す**
 ' （何も足さない）。超える場合は先頭400字（`modUtil.SafeLeft` と同じサロゲート安全な切り方）へ
 ' `…`（U+2026。CP932内）を付けて返すので、戻り値は最大401字になる。
-Public Function TrimPlan(ByRef counts() As Long, ByVal budgetChars As Long) As Long()
-' 15章§0.7「ナレッジ側の切詰め」を**計画するだけ**の純関数（実際に削るのは modKnowledge の
-' maxRows）。切詰め順は 成功事例→型→メニュー→種目→リスクライブラリ で固定。
-'   counts: 10要素（0始まり）。前半 counts(0..4)＝各対象の**現在の行数**、
-'           後半 counts(5..9)＝同じ並びの**現在の文字数**。並びは上の切詰め順。
-'           要素が5個以下のときは文字数を0とみなす（＝切詰め不要と判断する）。
-'   budgetChars: ナレッジ注入に許される**合計文字数**（15章§0.7「上限の3割」）。0以下は
-'           上限なしとして扱い、現在の行数をそのまま返す。
-' 戻り値: 5要素（0始まり）の「注入してよい行数」。**1～5を順に1段ずつ**適用し、そのつど
-'   総量を再計算して budgetChars 以下になった時点で止める（§0.7の本文どおり。1対象あたり
-'   半減は1回まで）。半減は端数切上げ、**下限は 0 / 0 / 5 / 5 / 5 行**（メニュー・種目・
-'   リスクライブラリを5行未満にすると S3のID実在制約と§0.5第2層が崩れるため）。
-'   文字数は行数に比例すると見積もる（削った行の実長は事前に測れないため）。5段すべてを
-'   適用してなお超過する場合も戻り値は下限どおりで、次の手当ては `TrimKbLine` の行内切詰め。
+' **`TrimPlan`（行数の切詰め計画）は本モジュールから外れた**（v2.6・T-57）。15章§0.7 の
+' 切詰めが5段→6段（事故事例が順2。裁定書25 S6）へ増えたのを機に **`modPipeline4.TrimPlan`**
+' へ移設した（宣言は同名の節が正）。modKnowledgeFmt が持つのは**行内**の切詰め
+' （`TrimKbLine`＝§0.7の最終段）だけである。
 
 ' === app: modPromptsCore / modPromptsBlocks / modPromptsOps / modSchemas ===
 ' **テンプレート層と組立層の二層に分ける**（W2aで「Build* が受け取った引数を1つも使わず
@@ -553,27 +556,42 @@ Public Function Fill(ByVal tpl As String, ByRef names() As String, ByRef vals() 
 Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
                           ByVal memoTxt As String, ByVal contractTxt As String, ByVal prevRenewalTxt As String, _
                           ByVal dossierTxt As String, ByVal fieldNotes As String, ByVal coverageNote As String, _
-                          ByVal hearingAnswers As String) As String
+                          ByVal hearingAnswers As String, ByVal financeTxt As String) As String
 ' 15章§2 S1 userの9貼付ブロックを順に埋める（hp→yuho→memo→contract→prevRenewal→dossier→
-' fieldNotes→coverageNote→hearingAnswers）。coverageNote=13章 input_coverage_note（付保の見立て。
+' fieldNotes→coverageNote→hearingAnswers）。
+' financeTxt（v2.6・裁定書25 S3。T-55 で追加・T-57 で本表へ追認）: 15章§2 user の
+' 【決算・財務】ブロックへ入れる `{{financeText}}`。値源は case_data `input_finance`
+' （13章§2.11(a) の7欄目）で、解決は `modPipeline3.FinanceTextOf` が唯一の口。
+' **未提供は "なし"**（S1 systemルール10が「財務が読めないときは source=unknown」を命じる）。coverageNote=13章 input_coverage_note（付保の見立て。
 ' 伝聞情報だが insurance_ctx 観点の充足度評価に算入するため省略不可）。
 ' **条件ブロック**: ctx.case_type="renewal" のとき `{{BLOCK_RENEWAL_S1}}` の行を BlockRenewalS1() の
 ' 本文へ差し替え、それ以外では**その行ごと削除する**（空行を残さない。15章§10.1(d)）
 Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
                           ByVal menus As String, ByVal prevS2Json As String, _
-                          ByVal hearingAnswers As String) As String
+                          ByVal hearingAnswers As String, ByVal incidents As String, _
+                          ByVal focusIds As String, ByVal roundNo As Long) As String
 ' 15章§3 S2 user。menus=MenusSummaryFor()（preventions.related_menu_id の候補一覧。空で渡すと
 ' CheckS2の「実在ID」検査が構造的に落ちる）。prevS2Json=case_data の s2_prev_json、
 ' hearingAnswers=input_hearing_answers（いずれも初回ラウンドは "なし"）。FR-35のstatusライフサイクル
 ' （confirmed/rejected/new）はこの2引数がなければ成立しない。
 ' `{{BLOCK_CTX}}` は BlockCtx() を ctx で埋めたものへ、`{{BLOCK_RENEWAL_S2}}` は AsmS1User と同じ規約
+' incidents（v2.6・裁定書25 S6。T-55 で追加・T-57 で本表へ追認）: 15章§3 user の
+'   `{{incidentsText}}`。値源は `modKnowledge.IncidentsFor`（呼び口は `modPipeline3.IncidentsFor`
+'   の1本）で、**15章§0.7 の切詰め6段の順2**を通った値を受ける（modPipeline4.LoadKbSlots）。
+'   **0行のときの文言はKB側が返す**（呼出側は既定文言を持たない。T-57 裁定）。
+' focusIds / roundNo（v2.6・裁定書25 S4。同上）: 15章§1.2c `BLOCK_ROUND2_FOCUS` の
+'   `{{focus_line_ids}}` と `{{round_no}}`。**roundNo<=1 のときは行ごと削除**（§10.1(d)）。
+'   focusIds は1行属性なので改行・タブを空白へ畳む（`modPipeline3.FocusLineIdsAttr`）。空は「指定なし」
 Public Function AsmS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
                           ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
-                          ByVal cases As String) As String
+                          ByVal cases As String, ByVal focusIds As String, _
+                          ByVal roundNo As Long) As String
 ' 15章§4 S3 user。s1Summary=S1出力の business_summary / strategy_outlook / current_coverage /
 ' field_insights だけを抜き出した要約JSON（S3 systemルール7が field_insights の参照を命じており、
 ' S2 JSONには含まれないため必須）。menus=MenusFor()（S3は実在サービスの一覧。S2の要約とは別テキスト）。
 ' `{{BLOCK_RENEWAL_S3}}` は AsmS1User と同じ規約
+' focusIds / roundNo（v2.6・裁定書25 S4。T-55 で追加・T-57 で本表へ追認）: AsmS2User と同義
+'   （15章§1.2c `BLOCK_ROUND2_FOCUS`。roundNo<=1 は行ごと削除）
 Public Function AsmS4System(ByVal variantName As String, ByVal tier As String, _
                             Optional ByRef fallbackNote As String = "") As String
 ' 15章§5。**S4バリアント差替の唯一の担い手**。variantName="proposal" なら BlockS4Proposal()、
@@ -755,6 +773,75 @@ Public Sub ResetDeepOutcome()
 '   "" へ戻す。呼ぶのは ui層（`modUIHome2.RunStepUi` / `HomeRunAll`）の**実行開始前に1回**だけ。
 '   `RunStep` / `RunAll` 自身は呼ばない（実行の途中で立った警告を実行自身が消さない）
 
+' === app: modPipeline3（15章 v2.6 の3プレースホルダの値源組立。T-55。裁定書25）===
+' 30,000字契約による modPipeline の分割先（12章§2）。**分割の継ぎ目**であり、呼んでよいのは
+'   modPipeline / modPipeline2 だけ。15章の本文は1文字も持たない（本文の正は modPromptsCore /
+'   modPromptsBlocks。ここは値だけを組み立てて `modPromptsOps.Asm*User` へ渡す）。
+'   R4: シートには modCaseStore / modCaseRead 経由でしか触れない。
+' --- 純関数3本（層(a)の回帰網が叩く。Private へ戻すことは契約違反）---
+Public Function FinanceBlockText(ByVal rawText As String) As String
+' 15章§2 user `{{financeText}}` の値。SanitizeInput（15章§0 原則9）と前後空白の除去。
+'   **空は "なし"**（未提供の既定文言はこの1箇所だけが持つ）
+Public Function IncidentsBlockText(ByVal rawText As String) As String
+' 15章§3 user `{{incidentsText}}` の値。SanitizeInput と前後空白の除去**だけ**。
+'   **0行のときの文言は持たない**（KB側＝`modKnowledgeFmt.FmtIncidents` が返す。T-57 裁定。
+'   同じ文言を2箇所に書かない）
+Public Function FocusLineIdsAttr(ByVal rawIds As String) As String
+' 15章§1.2c `{{focus_line_ids}}` の値。**1行属性**なので改行・タブを空白へ畳む。空は「指定なし」
+' --- 値源の解決（シート・ナレッジを読む）---
+Public Function IncidentsFor(ByVal industryCode As String, ByVal maxRows As Long) As String
+' 事故事例（13章§3.11）の1行整形テキストへの**呼び口1本**。実体は `modKnowledge.IncidentsFor`
+'   （T-57 でスタブから差し替え）。maxRows は15章§0.7 の半減を掛ける口で、0=config
+'   `kb_incident_rows`（既定5）。**注入経路をここ1本に絞る**ことで、切詰めの適用点
+'   （`modPipeline4.LoadKbSlots`）を素通りする経路を作らない
+Public Function FinanceTextOf(ByVal caseId As String) As String   ' case_data `input_finance` を解決
+Public Function FocusIdsOf(ByVal caseId As String) As String      ' 案件一覧 `focus_line_ids` を解決
+Public Function RoundNoOf(ByVal caseId As String) As Long         ' 案件一覧 `round_no`（読めないときは1）
+' --- Asm*User への薄い包み（呼出側の行を増やさないための入口）---
+Public Function S1UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
+                           ByRef pasted() As String) As String
+' pasted は modPipeline の PL_S1_KEYS 順の9欄。`AsmS1User` へ financeTxt を足して渡す
+Public Function S2UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
+                           ByVal s1Json As String, ByVal riskLib As String, _
+                           ByVal menus As String, ByVal prevS2Json As String, _
+                           ByVal hearingAnswers As String, ByVal incidents As String) As String
+' `AsmS2User` へ incidents（**切詰め済み**の値を呼出側から受ける。T-57）/ focusIds / roundNo を足して渡す
+Public Function S3UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
+                           ByVal s1Summary As String, ByVal s2Json As String, _
+                           ByVal menus As String, ByVal lines As String, _
+                           ByVal schemes As String, ByVal cases As String) As String
+' `AsmS3User` へ focusIds / roundNo を足して渡す
+
+' === app: modPipeline4（15章§0.7 ナレッジ側の切詰め。T-57。裁定書25 S6）===
+' 30,000字契約による modPipeline の分割先（12章§2）。切詰め表が5段から**6段**（事故事例が
+'   順2）へ増えたのを機に、計画（`TrimPlan`。modKnowledgeFmt から移設）と適用
+'   （`LoadKbSlots`。modPipeline と modPipeline2 に写経されていた LoadKb/FetchKb を畳んだ）を
+'   1箇所へ集めた。行数の数え方（`modPipeline.KbRowCount`）・Step別の枠（同 `UsesSlot`）・
+'   予算配分（同 `BudgetOf`）は**呼ぶだけで持たない**（答えを2箇所に書かない）。
+'   R4: シートには modKnowledge 経由でしか触れない。
+Public Function TrimPlan(ByRef counts() As Long, ByVal budgetChars As Long) As Long()
+' 15章§0.7「ナレッジ側の切詰め」を**計画するだけ**の純関数（実際に削るのは modKnowledge の
+' maxRows）。切詰め順は 成功事例→**事故事例**→型→メニュー→種目→リスクライブラリ で固定。
+'   counts: 12要素（0始まり）。前半 counts(0..5)＝各対象の**現在の行数**、
+'           後半 counts(6..11)＝同じ並びの**現在の文字数**。並びは上の切詰め順。
+'           要素が6個以下のときは文字数を0とみなす（＝切詰め不要と判断する）。
+'   budgetChars: ナレッジ注入に許される**合計文字数**（15章§0.7「上限の3割」）。0以下は
+'           上限なしとして扱い、現在の行数をそのまま返す。
+' 戻り値: 6要素（0始まり）の「注入してよい行数」。**1～6を順に1段ずつ**適用し、そのつど
+'   総量を再計算して budgetChars 以下になった時点で止める（§0.7の本文どおり。1対象あたり
+'   半減は1回まで）。半減は端数切上げ、**下限は 0 / 0 / 0 / 5 / 5 / 5 行**（メニュー・種目・
+'   リスクライブラリを5行未満にすると S3のID実在制約と§0.5第2層が崩れるため）。
+'   文字数は行数に比例すると見積もる（削った行の実長は事前に測れないため）。6段すべてを
+'   適用してなお超過する場合も戻り値は下限どおりで、次の手当ては `TrimKbLine` の行内切詰め。
+Public Sub LoadKbSlots(ByRef ctx As TCaseCtx, ByVal stepNo As Long, _
+                       ByVal budgetChars As Long, ByRef txt() As String, _
+                       ByRef detailAcc As String)
+' 切詰めの**適用**（唯一の実装）。txt を ReDim(0 To 5) して6スロットを埋める（並びは TrimPlan と
+'   同順）。切り詰めたら `modKnowledge.ResetInjectedIds` のうえ plan の行数で取り直す
+'   （`LastInjectedIds` に「見せていない知識」を残さない＝§0.7「記録」）。detailAcc へは
+'   `truncated:<対象>=<削った行数>` を ";" 区切りで積む（黙って削らない）。事故事例の取得は
+'   `modPipeline3.IncidentsFor` の1本を通す
+
 ' === app: modSparring（PL-04 壁打ち。T-27。裁定書8 B-9）===
 ' 自由対話（スキーマなし）。呼び出しは `CallChat` の1本だけで、成否は `ByRef ok`
 '   （＝`DecideOk`）でしか判定しない。JSON防衛線（§5）は通さない。run_log は
@@ -833,6 +920,14 @@ Public Function ReadCaseCtx(ByVal caseId As String, ByRef ctx As TCaseCtx, _
 ' `last_ok_step` / `failed_step` の**書込**口（16章E-06）は modCaseStore.SetStepOutcome
 '   （本節の modCaseStore の項）。裁定書8 A-2 で新設し、modPipeline の成功経路・失敗経路
 '   から結線済み（usage_log への退避は廃止した）
+Public Function CaseColumnOf(ByVal caseId As String, ByVal headerName As String) As String
+' 案件一覧1行の**1セルを列名で読む**（v2.6・裁定書25 S4。T-55 で新設・T-57 で本表へ追認）。
+'   `ReadCaseCtx` が返す10列の外にある列（`round_no` / `focus_line_ids` /
+'   `adopted_story_nos` 等）を、シートアクセスを modCaseRead 1箇所に閉じたまま引くための口。
+'   見出しは 13章§2.1 の物理名で、位置ではなく名前で引く（`modUtil.FindHeaderCol`）。
+'   **列が無い・行が無い・シートが無いときは ""**（呼び出し側の既定値へ落とす。
+'   `modPipeline3.FocusIdsOf` は "指定なし"、`RoundNoOf` は 1）。書込は持たない。
+
 
 ' === app: modPii（PII走査の本体。16章E-05・12章§2/§4。裁定書7 B-5）===
 ' 走査の実施点は16章E-05の一覧（modUICase / modUIInbox / modSparring / modJudgeStore /
@@ -1075,6 +1170,31 @@ Public Function ResolveDataKey(ByVal stepNo As Long, ByVal hasEdited As Boolean,
 '   **本節の公開契約面には載せない**（modCompanyFile2 と同じく modCaseStore の下位実装で
 '   あり、呼んでよいのは modCaseStore だけ。vba_lint の CONTRACT は required=[] で登録する）
 
+' === app: modCaseStore3（30,000字契約による modCaseStore の分割先。T-56。裁定書25 S4）===
+' **分割の継ぎ目**であり、呼んでよいのは modCaseStore だけ（依存は一方向）。R4の幅は
+'   modCaseStore と同じ本体ブック内で広がっていない。セル書込は modCaseStore2.PutText に集約する。
+' --- 純関数3本（層(a)の回帰網が叩く。Private へ戻すことは契約違反）---
+Public Function DataKeys() As String
+' 13章§2.2 の `data_key` 一覧（";" 区切り。v2.6 で `input_finance` を足して**全29値**）。
+'   **値源はここ1箇所**であり、`modCaseStore.SaveData` の許可リストと 19章§3 の登記はこれに従う
+Public Function NormalizeStoryNos(ByVal usedProposals As String) As String
+' 13章§2.5 `used_proposals` を案件一覧 `adopted_story_nos` の形へ整える。区切りは ";"、
+'   前後空白は落とし、**10進整数として読めない要素は捨て**（利用者の走り書きを列へ入れない）、
+'   重複は先に出たものだけ残す（並びは変えない）。1つも残らなければ ""（＝採用の記録なし）
+Public Function CollectLineIds(ByVal s3Json As String, ByVal storyNos As String) As String
+' 採用した story の `line_ids` を集めて `focus_line_ids` の素をつくる（13章§2.1）。重複は
+'   1本へ畳む。storyNos が空・s3Json が空・該当 story が無ければ ""。
+'   **実在チェックはここではしない**（ナレッジを触らない純関数に保つため。実在で絞るのは下記）
+' --- ナレッジ・シートを読む2本 ---
+Public Function ExistingLineIds(ByVal lineIds As String) As String
+' 種目マスタに実在するIDだけを残す（13章§2.1）。実在しないIDは**黙って落とす**
+'   （幻覚IDを案件一覧へ書かない。空になっても空を書く）
+Public Sub ApplyRoundFocus(ByVal caseId As String, ByVal s3Json As String)
+' ラウンド確定の付帯処理（13章§2.1・§2.5。`modCaseStore.FreezeRound` から呼ぶ）。
+'   商談の記録の `used_proposals` → `adopted_story_nos` → 採用storyの `line_ids` から
+'   `focus_line_ids` を導出して案件一覧へ書く。**採用の記録が無ければ2列とも空にする**
+'   （前ラウンドの絞り込みを残さない＝第2ラウンドの深掘り指定が古い値で汚れない）
+
 ' === ui: modUIProgress ===
 Public Sub SetStage(ByVal stepName As String, ByVal maxWaitSec As Long)
 ' LLM呼出の**前**に、Step名・開始時刻・最大待ち時間（maxWaitSec=config llm_wait_sec）・
@@ -1208,7 +1328,7 @@ Public Function RunExcelTests2() As Long
 ' 呼出側の本数自己照合(TE_EXPECTED)へ合流させる
 ```
 
-- **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）
+- **`modHtmlTemplate1..n` / `modHtmlTheme` の関数契約（`BuildDocument` / `HeadHtml` / `BodyShellHtml` / `SectionsJs` / `RuntimeJs` / `ThemeCss` / `ThemeNames` 等）は18章§4.4・§5.2が正**（本章は宣言を持たない。追加・分割の規約も18章に従う）。v2.6（T-56）で新設した **`modHtmlTemplate8`（`SecTalkJs` / `TalkCss`。SEC-18 経営層への話し方）** も同じく18章§4.4の割り当て表が正であり、本章には宣言を置かない
 - **`modValidate` の CheckS2C / CheckS3C**、**`modSchemas` の SchemaS2C / SchemaS3C** は入念モード用の追加分（15章§4.5～4.6・§7の表）
 - 呼出前の走査: 外部へ送るテキスト（CallStep / CallChat の systemPrompt・userPrompt、企業ドシエファイルの書出、HTMLレポート出力）は送信・保存の直前に `modPii` を通す（16章 E-05／E-31。走査結果は run_log と dossier_meta に記録）
 - **名前付きレンジ・図形ボタン・入力列の新設（v2.5・裁定書9 §1。v2.5.1・裁定書10で改訂）**: 本章§6は公開関数だけでなく**名前の唯一の正**でもある。新設を許可したのは次の表のみであり、実体の定義（配置・列順・書式）は各章が持つ。

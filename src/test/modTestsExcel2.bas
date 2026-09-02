@@ -59,6 +59,7 @@ Public Function RunExcelTests2() As Long
     TestV1NavNumbering
     TestV5DraftRowNotCounted
     TestW61NavPaste
+    TestW7FinanceRoundTrip
     RunExcelTests2 = m2Run
 End Function
 
@@ -352,6 +353,56 @@ End Sub
 '   (3) ci_case_id が案件ID書式でも固定マーカーでもない画面からの
 '       [貼ったものを保存する]は**1欄も書かず**不一致文言を出す(第2の壁)
 ' ============================================================================
+' ============================================================================
+' W7: 7欄目「決算・財務」の保管->結合の往復(13章§2.11(a)・§2.2。裁定書25 S3)
+' ----------------------------------------------------------------------------
+'   v2.6 で増えたのは**欄1本と data_key 1本**だけであり、経路は既存6欄と同じ
+'   (StoreArea -> modCaseStore.SaveData -> SplitForCells -> LoadData の区切りなし
+'   連結)。層(a)からは case_data のシートI/Oへ到達できないため、
+'   「input_finance が data_key として受理され、32,000字の分割境界をまたいでも
+'   1字も変わらずに戻る」ことは層(b)でしか確かめられない。
+'   1本の Check に (0)4レンジが引ける (1)往復の字数一致 (2)往復の原文一致 を
+'   すべて詰める(欄が1本増えただけの回帰なので本数を増やさない)。
+' ============================================================================
+Private Sub TestW7FinanceRoundTrip()
+    Dim okAll As Boolean
+    Dim detText As String
+    Dim finText As String
+    Dim back1 As String
+    On Error GoTo Crashed
+
+    detText = "前提不成立"
+
+    ' (0) v2.6 で足した7欄目の4レンジ(13章§2.10(c) の65本の増分)。
+    okAll = Not (modUISheet.NamedCell("ci_count_finance") Is Nothing)
+    okAll = okAll And Not (modUISheet.NamedCell("ci_prev_finance") Is Nothing)
+    okAll = okAll And Not (modUISheet.NamedCell("ci_raw_finance") Is Nothing)
+    okAll = okAll And Not (modUISheet.NamedCell("ci_sent_finance") Is Nothing)
+    detText = "ci_count/prev/raw/sent_finance の4本"
+    If Not okAll Then GoTo Report
+
+    ' (1)(2) 32,000字の分割境界を1字またぐ本文で往復させる。
+    finText = "純資産 12億円、売上 85億円（2025年3月期・決算公告）" & vbLf & _
+              String$(T2_CHUNK - 4, "あ") & "境界" & String$(996, "い") & "末尾"
+    modUICase6.StoreArea T2_CASE, "input_finance", finText
+    back1 = modUICase6.LoadArea(T2_CASE, "input_finance")
+    okAll = okAll And (Len(back1) = Len(finText))
+    okAll = okAll And (StrComp(back1, finText, vbBinaryCompare) = 0)
+    detText = "元=" & CStr(Len(finText)) & " 往復後=" & CStr(Len(back1))
+
+Report:
+    ECheck "T47B-W7-01_7欄目input_financeの保管->結合の往復が原文と一致する", _
+           okAll, detText
+
+    On Error Resume Next
+    modCaseStore.SaveData T2_CASE, "input_finance", vbNullString
+    Exit Sub
+Crashed:
+    okAll = False
+    detText = "Err=" & CStr(Err.Number) & " " & Err.Description
+    Resume Report
+End Sub
+
 Private Sub TestW61NavPaste()
     Dim wsCases As Object
     Dim hdr As Variant

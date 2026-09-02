@@ -21,11 +21,12 @@ Option Explicit
 '
 ' 設計判断(R4準拠): Excelトークン不使用。改行は vbLf 基準。
 '
-' テスト本数: 80本 = G18 Fmt* 21 / G19 TrimKbLine 4 / G20 TrimPlan 9 /
+' テスト本数: 81本 = G18 Fmt* 21 / G19 TrimKbLine 4 / G20 TrimPlan 10 /
 '   G21 Fill 8 / G22 Asm* 13 / G23 CaseId 6 / G24 CanTransition 7 /
 '   G25 ResolveDataKey 10 / G26 BufText 2。期待値の根拠章は各テスト名の末尾。
 '
-' 前提とする公開契約(14章§6): modKnowledgeFmt.Fmt*(10本)/TrimKbLine/TrimPlan、
+' 前提とする公開契約(14章§6): modKnowledgeFmt.Fmt*(10本)/TrimKbLine、
+'   modPipeline4.TrimPlan(T-57 で modKnowledgeFmt から移設・6段化)、
 '   modPromptsOps.Fill/AsmS1User/AsmS2User/AsmS4System/AsmS4User、modCaseStore.
 '   BuildCaseId/IsValidCaseId/CanTransition/ResolveDataKey、modUtil.Buf*、TCaseCtx
 ' ============================
@@ -409,73 +410,80 @@ Private Sub T_TrimKbLine()
 End Sub
 
 ' ----------------------------
-' G20 TrimPlan(15章§0.7 ナレッジ側の切詰め)
-'   順序は 1成功事例 -> 2型 -> 3メニュー -> 4種目 -> 5リスクライブラリ。counts は
-'   10要素(0..4=行数 / 5..9=文字数・並びは同順)。1段ずつ適用し総量を再計算し
-'   budgetChars 以下で止める。半減は端数切上げ・下限 0/0/5/5/5・文字数は行数に
-'   比例と見積もる。サンプル(行数5/10/60/20/20・文字数各1000)の各段の見積りは
-'   4600 -> 4100 -> 3600 -> 3100 -> 2600 と割り切れる値を選んである。
+' G20 TrimPlan(15章§0.7 ナレッジ側の切詰め。T-57 で6段化・modPipeline4 へ移設)
+'   順序は 1成功事例 -> 2事故事例 -> 3型 -> 4メニュー -> 5種目 ->
+'   6リスクライブラリ。counts は12要素(0..5=行数 / 6..11=文字数・並びは同順)。
+'   1段ずつ適用し総量を再計算し budgetChars 以下で止める。半減は端数切上げ・
+'   下限 0/0/0/5/5/5・文字数は行数に比例と見積もる。サンプル(行数
+'   5/5/10/60/20/20・文字数各1000=総量6000)の各段の見積りは
+'   5600 -> 5200 -> 4700 -> 4200 -> 3700 -> 3200 と割り切れる値を選んである。
 ' ----------------------------
 Private Sub T_TrimPlan()
-    Dim c10(0 To 9) As Long
-    Dim c5(0 To 4) As Long
-    Dim f10(0 To 9) As Long
+    Dim c12(0 To 11) As Long
+    Dim c6(0 To 5) As Long
+    Dim f12(0 To 11) As Long
     Dim i As Long
 
-    c10(0) = 5
-    c10(1) = 10
-    c10(2) = 60
-    c10(3) = 20
-    c10(4) = 20
-    For i = 5 To 9
-        c10(i) = 1000
+    c12(0) = 5
+    c12(1) = 5
+    c12(2) = 10
+    c12(3) = 60
+    c12(4) = 20
+    c12(5) = 20
+    For i = 6 To 11
+        c12(i) = 1000
     Next i
 
     ChkS "TrimPlan_予算0は上限なしで現在の行数のまま_14章§6", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 0)), "5,10,60,20,20"
+        PlanText(modPipeline4.TrimPlan(c12, 0)), "5,5,10,60,20,20"
 
     ChkS "TrimPlan_総量が予算以下なら1段も削らない_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 5000)), "5,10,60,20,20"
+        PlanText(modPipeline4.TrimPlan(c12, 6000)), "5,5,10,60,20,20"
 
     ChkS "TrimPlan_1段目は成功事例を端数切上げで半減_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 4700)), "3,10,60,20,20"
+        PlanText(modPipeline4.TrimPlan(c12, 5900)), "3,5,10,60,20,20"
 
-    ChkS "TrimPlan_2段目は型ライブラリ_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 4300)), "3,5,60,20,20"
+    ChkS "TrimPlan_2段目は事故事例_15章§0.7", _
+        PlanText(modPipeline4.TrimPlan(c12, 5400)), "3,3,10,60,20,20"
 
-    ChkS "TrimPlan_3段目はメニュー_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 3900)), "3,5,30,20,20"
+    ChkS "TrimPlan_3段目は型ライブラリ_15章§0.7", _
+        PlanText(modPipeline4.TrimPlan(c12, 5000)), "3,3,5,60,20,20"
 
-    ChkS "TrimPlan_4段目は種目_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 3400)), "3,5,30,10,20"
+    ChkS "TrimPlan_4段目はメニュー_15章§0.7", _
+        PlanText(modPipeline4.TrimPlan(c12, 4500)), "3,3,5,30,20,20"
 
-    ChkS "TrimPlan_5段目はリスクライブラリ_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(c10, 3000)), "3,5,30,10,10"
+    ChkS "TrimPlan_5段目は種目_15章§0.7", _
+        PlanText(modPipeline4.TrimPlan(c12, 4000)), "3,3,5,30,10,20"
 
-    ' 下限 0/0/5/5/5。半減の結果が下限と一致する行数を与えてあるので、
+    ChkS "TrimPlan_6段目はリスクライブラリ_15章§0.7", _
+        PlanText(modPipeline4.TrimPlan(c12, 3500)), "3,3,5,30,10,10"
+
+    ' 下限 0/0/0/5/5/5。半減の結果が下限と一致する行数を与えてあるので、
     ' 「下限で止める」「下限そのものを返す」のどちらの読みでも同じ値になる。
-    f10(0) = 0
-    f10(1) = 0
-    f10(2) = 10
-    f10(3) = 10
-    f10(4) = 10
-    f10(5) = 0
-    f10(6) = 0
-    f10(7) = 1000
-    f10(8) = 1000
-    f10(9) = 1000
-    ChkS "TrimPlan_下限は0と0と5と5と5_15章§0.7", _
-        PlanText(modKnowledgeFmt.TrimPlan(f10, 1)), "0,0,5,5,5"
+    f12(0) = 0
+    f12(1) = 0
+    f12(2) = 0
+    f12(3) = 10
+    f12(4) = 10
+    f12(5) = 10
+    f12(6) = 0
+    f12(7) = 0
+    f12(8) = 0
+    f12(9) = 1000
+    f12(10) = 1000
+    f12(11) = 1000
+    ChkS "TrimPlan_下限は0と0と0と5と5と5_15章§0.7", _
+        PlanText(modPipeline4.TrimPlan(f12, 1)), "0,0,0,5,5,5"
 
-    ' 要素が5個以下のときは文字数を0とみなす=切詰め不要と判断する(14章§6)。
-    For i = 0 To 4
-        c5(i) = c10(i)
+    ' 要素が6個以下のときは文字数を0とみなす=切詰め不要と判断する(14章§6)。
+    For i = 0 To 5
+        c6(i) = c12(i)
     Next i
-    ChkS "TrimPlan_文字数を伴わない5要素は切詰め不要_14章§6", _
-        PlanText(modKnowledgeFmt.TrimPlan(c5, 1)), "5,10,60,20,20"
+    ChkS "TrimPlan_文字数を伴わない6要素は切詰め不要_14章§6", _
+        PlanText(modPipeline4.TrimPlan(c6, 1)), "5,5,10,60,20,20"
 End Sub
 
-' TrimPlan の戻り(5要素・0始まり)を "a,b,c,d,e" の1行にする。5要素でない場合は
+' TrimPlan の戻り(6要素・0始まり)を "a,b,c,d,e,f" の1行にする。6要素でない場合は
 ' その事実が期待値との差分として現れるように件数を出す。
 Private Function PlanText(ByVal p As Variant) As String
     Dim i As Long
@@ -485,12 +493,12 @@ Private Function PlanText(ByVal p As Variant) As String
     On Error Resume Next
     n = UBound(p) - LBound(p) + 1
     On Error GoTo 0
-    If n <> 5 Then
+    If n <> 6 Then
         PlanText = "(要素数=" & n & ")"
         Exit Function
     End If
     s = ""
-    For i = 0 To 4
+    For i = 0 To 5
         If i > 0 Then s = s & ","
         s = s & p(LBound(p) + i)
     Next i

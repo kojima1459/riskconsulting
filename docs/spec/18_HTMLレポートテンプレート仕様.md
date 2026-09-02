@@ -1,6 +1,6 @@
 # 18. HTMLレポートテンプレート仕様 v1.3
 
-v1.3（W7・裁定書25「W7センターピン整合」）: 4点を改訂した。**(1) SEC-08 の「両方0件なら非表示」を撤回**（裁定書25 S1）。`s2.risks[].insurability` があれば必ず描く。新規案件で現契約が無くても「保険カバレッジ表・未充足リスク一覧」が出る状態にした（UC案 Output3-4・見本05節）。**(2) §3.8 を新設**（同 S5）: SEC-08 の主表を**リスク単位の8列表**（見本05節と同じ粒度）とし、現契約表・gaps表をその下に置く。読むJSONパスに `insurability.gap_note`（15章 v2.6 で `line_note` から分離）を加えた。**(3) SEC-18 talk を新設**（同 S2）: `s3.talk_script` を描く。**改番はしていない**（SEC-01..SEC-17 は不変。追加は SEC-18 以降という §3 の規約どおり）。§3.0 の対応表では見本08節に SEC-10 と並置し、キッカーは節の先頭である SEC-10 が持つ。描き方は §3.9。**(4)** SEC-07 リスク一覧の読むJSONパスへ `insurability.gap_note` を追加した。§3.5 の免責フッタ（「保険料の試算は本資料の対象外です（要見積）。」）は**据え置き**である。
+v1.3（W7・裁定書25「W7センターピン整合」）: 4点を改訂した。**（T-56 実装時の追認）** §4.4 の分割表で `CommonCss` の持ち主を `modHtmlTemplate7` へ移した（`modHtmlTemplate8` の連結行と `TalkCss` の追加で `modHtmlTemplate1` が25,000字規約を超えたため。関数名は変えていない）。**(1) SEC-08 の「両方0件なら非表示」を撤回**（裁定書25 S1）。`s2.risks[].insurability` があれば必ず描く。新規案件で現契約が無くても「保険カバレッジ表・未充足リスク一覧」が出る状態にした（UC案 Output3-4・見本05節）。**(2) §3.8 を新設**（同 S5）: SEC-08 の主表を**リスク単位の8列表**（見本05節と同じ粒度）とし、現契約表・gaps表をその下に置く。読むJSONパスに `insurability.gap_note`（15章 v2.6 で `line_note` から分離）を加えた。**(3) SEC-18 talk を新設**（同 S2）: `s3.talk_script` を描く。**改番はしていない**（SEC-01..SEC-17 は不変。追加は SEC-18 以降という §3 の規約どおり）。§3.0 の対応表では見本08節に SEC-10 と並置し、キッカーは節の先頭である SEC-10 が持つ。描き方は §3.9。**(4)** SEC-07 リスク一覧の読むJSONパスへ `insurability.gap_note` を追加した。§3.5 の免責フッタ（「保険料の試算は本資料の対象外です（要見積）。」）は**据え置き**である。
 
 v1.2（裁定書21・11章v3.2 §3.8「HTMLレポートの体裁」）: 体裁の正を `docs/design/出力見本_春華堂統合提案_v0.1.html`（以下「見本」）へ移し、次の6点を改訂した。**(1)** §3のセクション表へ **SEC-17 growth（攻めの保険活用）** を新設し（読むJSONパスは `s3.growth_ideas[]`。15章§4 v2.5）、描き方を§3.7へ逐語で定めた。**(2)** §3の並びを見本の10節の流れへ**並べ替え**た（IDの改番はしていない。§4.3「並べ替えは登録配列の行順の入れ替えだけ」）。どのセクションが見本のどの節に集まるかは**§3.0の対応表**が持つ。**(3)** §3.6 の目次を**上部ナビ（`position:sticky` のアンカー帯）**へ差し替え、印刷時は帯を消して本文先頭に目次を出す形にした。**(4)** §5.1 のCSS変数の閉じた一覧を **28個→39個**へ拡張した（`--brand` / `--brand2` / `--accent` / `--navy` / `--bg` / `--shadow` / `--soft-*` 6色を追加し、旧 `--ai` は `--brand` へ改称）。**(5)** テーマを3本（`standard`＝見本の臙脂 / `mono`＝白黒印刷 / `ds`＝DS版の白地＋青帯）にした。**(6)** §4.4 の分割表へ `modHtmlTemplate7`（SEC-17 と部品CSS）を足した。§4.1「描画はJSが行う」「innerHTML系を使わない」・§5.3のエスケープ・§6の印刷規約は**変えていない**。
 
@@ -305,19 +305,19 @@ s = s & "];" & vbLf
 
 | モジュール | 持つもの |
 |---|---|
-| `modHtmlTemplate1` | `BuildDocument`（全体組立）／`HeadHtml`（`<meta charset>`・`<title>`・共通CSS・テーマCSSの差込口）／`BodyShellHtml`（骨格と `<noscript>`）／**`SectionsJs`（§4.2のセクション登録表。編集が最も多い1関数）**／`RuntimeJs`（目次生成・登録配列の走査・`need`/`empty` の判定・共通の描画ヘルパ） |
+| `modHtmlTemplate1` | `BuildDocument`（全体組立）／`HeadHtml`（`<meta charset>`・`<title>`・共通CSSの呼び口・テーマCSSの差込口）／`BodyShellHtml`（骨格と `<noscript>`）／**`SectionsJs`（§4.2のセクション登録表。編集が最も多い1関数）**／`RuntimeJs`（目次生成・登録配列の走査・`need`/`empty` の判定・共通の描画ヘルパ） |
 | `modHtmlTemplate2` | SEC-01 cover ／ SEC-02 exec ／ SEC-03 profile ／ SEC-04 sufficiency |
 | `modHtmlTemplate3` | SEC-05 riskuniv ／ SEC-06 riskmap ／ SEC-07 risks ／ SEC-08 coverage |
 | `modHtmlTemplate4` | SEC-09 newrisk ／ SEC-16 round-update ／ SEC-10 story |
 | `modHtmlTemplate5` | SEC-11 prevent ／ SEC-12 limit ／ SEC-13 hearing ／ SEC-14 source ／ SEC-15 disclaimer |
 | `modHtmlTemplate6` | `LabelJs`（19章§3・15章§0のenum変換表を返す。`RuntimeJs` から呼ぶ下請け。19章の改訂でしか動かない表を、編集が最も多い `SectionsJs` と同じモジュールに置かないための切り出し） |
-| `modHtmlTemplate7` | SEC-17 growth（§3.7）／`PartsCss`（見本の部品CSS＝ヒーロー・上部ナビ・カード・表・ユニバース・ヒートマップ・レーダー・アイデア・提案ブロック・設問カード。`HeadHtml` が `CommonCss` の直後に連結する。v1.2で `modHtmlTemplate1` が25,000字を超える見込みになったため分けた。§4.4の「共通CSSは HeadHtml に一元化」は**呼び口が1本であること**を意味しており、字数規約で切り出した下請けは同じ一元化の中にある） |
+| `modHtmlTemplate7` | SEC-17 growth（§3.7）／**`CommonCss`**（骨格の共通CSS。v1.3・T-56 で `modHtmlTemplate1` が25,000字を超えたため、§4.4の分割規約どおり**関数名を変えずに**移した。呼び口は `HeadHtml` の1本のまま）／`PartsCss`（見本の部品CSS＝ヒーロー・上部ナビ・カード・表・ユニバース・ヒートマップ・レーダー・アイデア・提案ブロック・設問カード。`HeadHtml` が `CommonCss` の直後に連結する。v1.2で `modHtmlTemplate1` が25,000字を超える見込みになったため分けた。§4.4の「共通CSSは HeadHtml に一元化」は**呼び口が1本であること**を意味しており、字数規約で切り出した下請けは同じ一元化の中にある） |
 
 | `modHtmlTemplate8` | SEC-18 talk（§3.9）／`TalkCss`（吹き出しと番号付きカードの部品CSS。`HeadHtml` が `PartsCss` の直後に連結する。v1.3で新設。`modHtmlTemplate7` の字数余白ではなく新モジュールで受けるのは§4.4の25,000字規約による） |
 
 - 上の表は**現時点の実態**であり、25,000字規約に従って切り出した結果はここへ反映する（表と実装がずれたまま放置しない）。セクションの担当モジュールは§4.3の手順1が「空きのあるテンプレモジュール」と定めるとおり流動的で、正は登録表(§4.2)の(a)連結行である。
 
-- 共通CSSは `modHtmlTemplate1.HeadHtml` に一元化し（実体は `CommonCss` ＋ `modHtmlTemplate7.PartsCss` ＋ `modHtmlTemplate8.TalkCss` の3本を `HeadHtml` が連結する。25,000字規約による分割であって、CSSの持ち主が増えたわけではない）、セクション別のテンプレ関数に `<style>` を書かない（CSSが散ると見た目のフィードバックを1箇所で吸収できなくなる）。セクション固有のスタイルはクラス名を `sec-<slug>-*` の接頭辞で共通CSSに置く。
+- 共通CSSは `modHtmlTemplate1.HeadHtml` に一元化し（実体は `modHtmlTemplate7.CommonCss` ＋ `modHtmlTemplate7.PartsCss` ＋ `modHtmlTemplate8.TalkCss` の3本を `HeadHtml` が連結する。25,000字規約による分割であって、CSSの持ち主が増えたわけではない）、セクション別のテンプレ関数に `<style>` を書かない（CSSが散ると見た目のフィードバックを1箇所で吸収できなくなる）。セクション固有のスタイルはクラス名を `sec-<slug>-*` の接頭辞で共通CSSに置く。
 - 文字列の組み立ては15章と同じ `s = s & "..." & vbLf` 方式とする（`Const` は1論理行1,023字・行継続25本の制約に当たるため使わない。14章§7と同じ理由）。
 
 ---
@@ -410,6 +410,7 @@ s = s & "];" & vbLf
 **規約**
 
 - 共通CSS（`modHtmlTemplate1.HeadHtml` と `modHtmlTemplate7.PartsCss`）は**色・書体・本文幅をリテラルで書かない**。必ず `var(--xxx)` を通す。唯一の例外は、色付きバッジ・見出し帯の上に載せる文字色 `#fff` であり、これ以外の生の16進色を書かない。**`rgba()` による半透明の重ね（白の被膜・影・枠の透過）は、下地の色を変えずに濃さだけを作るものなので例外とし、テーマ変数にしない**（テーマを増やしても半透明の度合いは変えたくないため）。
+- **`.heat1`〜`.heat5` のクラスは `modHtmlTemplate7.PartsCss` が定義する**（v1.3・T-57 追認）。中身は `background:var(--heat-1)`〜`var(--heat-5)` の5行だけで、**SEC-06（リスクマップ）と SEC-08（付保の見立て）が共用する**（§3.6のセル背景の帯と、リスク単位8列表の帯は同じ濃さの尺度＝`impact_score + frequency_score` の和。§3.6）。**節ごとに別クラスを作らない**（同じ意味の色を2箇所で定義すると濃さが割れる）。
 - `@page` の余白はCSS変数で解決されないため、テーマ変数にせず共通CSSにリテラルで書く（§6）。テーマから紙面余白は変えられない、と割り切る。
 - 機械検査（17章 T-35 のDoD）: (1) `ThemeCss` の戻り値が `:root{` で始まり `}` で終わり、内側が `--` で始まる宣言のみであること (2) 全テーマが上表39変数を**過不足なく**定義していること (3) 共通CSS中に `var(--` を伴わない16進色指定が `#fff` 以外に出現しないこと。
 
