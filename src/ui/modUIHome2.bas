@@ -29,8 +29,8 @@ Option Explicit
 Private Const UH_QUALITY As String = "hm_quality_mode"
 
 ' 18章§1.1(1): S1未実行時のレポート出力は**エラーコードを立てず**中止する。
-Private Const UH_MSG_NEED_S1 As String = "先にStep1を実行してください。"
-Private Const UH_MSG_NO_CASE As String = "対象案件が選ばれていません（HOMEの対象案件IDをご確認ください）。"
+Private Const UH_MSG_NEED_S1 As String = "先に③の[まとめて作る]を押してください。会社の理解の下書きがまだありません。"
+Private Const UH_MSG_NO_CASE As String = "案件が選ばれていません。いちばん上の帯で、案件を選んでください。"
 
 ' 企業ドシエファイルの保存先。13章§2.3 に専用キーが無いため、出力の共通
 ' フォルダ(html_out_dir)を使う(17章の裁定事項として申し送り)。
@@ -90,7 +90,7 @@ Public Sub HomeRunAll()
         GoTo Done
     End If
 
-    modUIProgress.SetStage "一括実行（Step1～Step4）", WaitSec()
+    modUIProgress.SetStage "下書きを4枚まとめて作っています", WaitSec(), 1, 4
     If modPipeline.RunAll(caseId, QualityOverride()) Then
         modUIHome.DrawAllSteps caseId
         modUIToast.ShowNext 2
@@ -104,6 +104,23 @@ Done:
     modUIProgress.ExitUiLock
     modUIProgress.ParkFocus
 End Sub
+
+' 段の名前(11章§4.2(4): ステータスバー・カード・進捗4行・トーストの4箇所で
+'   同じ段名を使う。4箇所で違う呼び方をしない)。
+Public Function StageNameOf(ByVal stepNo As Long) As String
+    Select Case stepNo
+    Case 1
+        StageNameOf = "① 会社の理解を作っています"
+    Case 2
+        StageNameOf = "② リスクの洗い出しを作っています"
+    Case 3
+        StageNameOf = "③ 提案の候補を作っています"
+    Case 4
+        StageNameOf = "④ 提案の骨子を作っています"
+    Case Else
+        StageNameOf = "下書きを作っています"
+    End Select
+End Function
 
 Public Sub HomeRunS1()
     If Not modUIProgress.TryEnterUiLock("Step1") Then Exit Sub
@@ -147,7 +164,7 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     SaveUpstreamEdits caseId, stepNo
     If Not ConfirmInvalidate(caseId, stepNo) Then GoTo Done
 
-    modUIProgress.SetStage "Step" & CStr(stepNo) & " を実行中", WaitSec()
+    modUIProgress.SetStage StageNameOf(stepNo), WaitSec(), stepNo, 4
     If modPipeline.RunStep(caseId, stepNo, QualityOverride()) Then
         modUICase2.DrawStep caseId, stepNo
         modUISheet.ShowSheet modUICase2.SheetNameOf(stepNo)
@@ -230,8 +247,9 @@ Public Sub HomeNewCase()
     ' 案件の case_data として確定する(切り詰まった描画のあとでも同じ)。
     ' **新規モードは空画面から始まる**。
     modUICase4.ClearCaseInput
+    modUINavDraw.ResetForNewCase vbNullString
     modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
-    modUISheet.ShowSheet "案件入力"
+    modUISheet.ShowSheet "ナビ"
     modUIToast.ShowNext 1
 
 Done:
@@ -239,11 +257,13 @@ Done:
     modUIProgress.ParkFocus
 End Sub
 
+' v3.2: 「案件入力」シートは廃止され、区画②はナビの中にある(11章§1.1)。
+'   本ハンドラは残るが、開くのはナビであり、描き直しは modUINav が行う。
 Public Sub HomeOpenCaseInput()
-    If Not modUIProgress.TryEnterUiLock("案件入力を開く") Then Exit Sub
+    If Not modUIProgress.TryEnterUiLock("貼る欄を開く") Then Exit Sub
     On Error GoTo Done
-    modUICase3.DrawCaseInput modUIHome.SelectedCaseId()
-    modUISheet.ShowSheet "案件入力"
+    modUISheet.ShowSheet "ナビ"
+    modUINav.DrawNav
 Done:
     modUIProgress.ExitUiLock
 End Sub
@@ -350,7 +370,7 @@ Public Sub HomeExportHtml()
         GoTo Done
     End If
 
-    modUIProgress.SetStage "リスクレポートHTMLを生成中", WaitSec()
+    modUIProgress.SetStage "レポートを作っています", WaitSec(), 1, 1
 
     Dim outPath As String
     Dim errText As String
@@ -424,10 +444,15 @@ Public Sub HomeBuildHearing()
     End If
 
     If modExportHearing.BuildHearingSheet(caseId) Then
+        ' 13章§2.9(v3.2): 既定は非表示。作成に成功したときだけ可視にし、
+        ' 1行目へ[ナビへ戻る]を置く(行き止まりを作らない。11章§3.5)。
+        Dim hsWs As Object
+        Set hsWs = modUISheet.SheetOf("ヒアリングシート")
+        If Not hsWs Is Nothing Then modUISheet.EnsureBackButton hsWs
         modUISheet.ShowSheet "ヒアリングシート"
         modUIToast.ShowNext 4
     Else
-        modUIHome.ShowWarning "ヒアリングシートを生成できませんでした（先にStep4を実行してください）。"
+        modUIHome.ShowWarning "ヒアリングシートを作れませんでした。先に③の[まとめて作る]を押してください。"
     End If
 
 Done:
@@ -550,7 +575,7 @@ Public Sub HomeReloadKnowledge()
     On Error GoTo Done
 
     modUIProgress.ParkFocus
-    modUIProgress.SetStage "ナレッジブックを読み込み中", WaitSec()
+    modUIProgress.SetStage "社内ナレッジを読み込んでいます", WaitSec(), 1, 1
 
     If Not modKnowledge.LoadKnowledge() Then
         modUIHome.ShowWarning "ナレッジブックへ接続できませんでした（前回の知識で続行します）。"
@@ -569,7 +594,7 @@ Public Sub HomePreflightAll()
     On Error GoTo Done
 
     modUIProgress.ParkFocus
-    modUIProgress.SetStage "未診断の投函をプリフライト診断中", WaitSec()
+    modUIProgress.SetStage "投函をまとめて診断しています", WaitSec(), 1, 1
 
     Dim n As Long
     n = modPlayOps.RunPreflightAll()

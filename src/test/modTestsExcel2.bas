@@ -25,7 +25,7 @@ Option Explicit
 ' フィクスチャ案件(書式は IsValidCaseId 合格・実在しない未来日付系)。
 Private Const T2_CASE As String = "C-97990102-903"
 Private Const T2_COMPANY As String = "T47検査用商事"
-Private Const T2_SHEET As String = "案件入力"
+Private Const T2_SHEET As String = "ナビ"
 
 ' 貼付欄の1セル上限(modUICase3.U3_CHUNK と同値。ここを超えると続き欄へ回る)。
 Private Const T2_CHUNK As Long = 32000
@@ -70,7 +70,7 @@ Private Sub TestQ9PasteRoundTrip()
     Dim actOrig As String
     On Error GoTo Crashed
 
-    ' 裁定書13 W5: CaseSave は成功・ブロックのどちらでも ShowSheet "HOME" を通る
+    ' 裁定書13 W5: CaseSave は成功・ブロックのどちらでも ShowSheet "ナビ" を通る
     ' ため、本テストの途中で活性シートが移る。実行前のシート名を覚えておき、
     ' Cleanup で必ず戻す(以降の層(b)テストの前提を壊さない)。画面遷移は ui層の
     ' 責務なので、素の Activate ではなく modUISheet.ShowSheet を通す。

@@ -101,6 +101,11 @@ HEADER_FILL = PatternFill("solid", fgColor="DDEBF7")
 TITLE_FONT = Font(bold=True, size=12)
 HEADER_FONT = Font(bold=True)
 NOTE_FONT = Font(size=9, color="808080")
+# 11章§3.3.3: 6欄の例文は「薄い灰色 RGB(150,150,150)」で本文と見分けさせる。
+GRAY_FONT = Font(size=9, color="969696")
+# 区画の中の小見出し(「── 1 調べた結果 ──」等)。区画見出し(TITLE_FONT)より弱く、
+# 注記(NOTE_FONT)より強い1段を作る。
+SUBHEAD_FONT = Font(bold=True, size=10)
 SHEET_TITLE_FONT = Font(bold=True, size=14)
 LOCKED = Protection(locked=True)
 UNLOCKED = Protection(locked=False)
@@ -797,12 +802,50 @@ def _make_form(wb, spec, ctx):
     row = 3
     for sec in spec.get("sections") or []:
         _style_section_title(ws, row, sec.get("title", ""))
+        if sec.get("anchor"):
+            # 区画の見出し行そのものを名前付きレンジで持つ(11章§3.1: [次へ]の
+            # 移動先と強調枠の位置決めに使う。行番号をコードへ書かない)。
+            _add_name(ctx, ws, sec["anchor"], 1, row)
         row += 1
         tall = bool(sec.get("tall"))
         for fld in sec.get("fields") or []:
+            # (1) 名前付きレンジを持たない「説明1行」「例文」「見出し」の行。
+            #     11章§3.3.3 が求める常設の案内文で、値ではないので A列へ直に書く。
+            if not fld.get("range"):
+                txt = ws.cell(row=row, column=1, value=_clean(fld.get("text", "")))
+                txt.protection = LOCKED
+                txt.alignment = Alignment(vertical="top", wrap_text=True)
+                if fld.get("gray"):
+                    txt.font = GRAY_FONT
+                elif fld.get("head"):
+                    txt.font = SUBHEAD_FONT
+                else:
+                    txt.font = NOTE_FONT
+                row += 1
+                continue
+
             lab = ws.cell(row=row, column=1, value=_clean(fld.get("label", fld["range"])))
             lab.protection = LOCKED
             lab.alignment = Alignment(vertical="top")
+
+            # (2) 縦N行×1列の名前付きブロック(プレビュー5行・現場メモ60行・
+            #     直貼り枠300行)。予約行方式ではなく、表示と代替入力の枠である
+            #     (13章§2.10(c)・11章§3.3.1)。
+            height = int(fld.get("block_rows") or 0)
+            if height > 0:
+                _add_name_block(ctx, ws, fld["range"], 2, row, height)
+                for r in range(row, row + height):
+                    bc = ws.cell(row=r, column=2)
+                    bc.number_format = ctx.text_fmt
+                    bc.protection = UNLOCKED if fld.get("input") else LOCKED
+                    bc.alignment = Alignment(vertical="top", wrap_text=True)
+                if fld.get("note"):
+                    nt = ws.cell(row=row, column=3, value=_clean(fld["note"]))
+                    nt.font = NOTE_FONT
+                    nt.protection = LOCKED
+                    nt.alignment = Alignment(vertical="top", wrap_text=True)
+                row += height
+                continue
 
             val = ws.cell(row=row, column=2)
             if fld.get("type", "String") == "String":
@@ -836,6 +879,13 @@ def _make_form(wb, spec, ctx):
                     dc.alignment = Alignment(vertical="top", wrap_text=True)
             row += max(int(at.get("reserve_rows") or 1), 1)
         row += 1
+    # 11章§0.1 原則⑥・§3.1.1: コーチ帯はスクロールしても消えない。
+    # ウィンドウ枠固定はビルドが焼く(実行時に窓の設定を触らない)。
+    if spec.get("freeze_panes"):
+        ws.freeze_panes = spec["freeze_panes"]
+    for rng in spec.get("hidden_rows") or []:
+        for r in range(int(rng[0]), int(rng[1]) + 1):
+            ws.row_dimensions[r].hidden = True
     ws.sheet_state = spec.get("state", "visible")
     return ws
 
@@ -953,23 +1003,31 @@ def _wrapped_height(text, cols, line_pt=13.5, pad_pt=8):
 # させること(実装の文字列から引く。推測で書かない)。[S1][S2][S3][S4] の4つは
 # 1行にまとめて説明するため、早見表の行数は実装のボタン本数と一致しない。
 # HOMEのボタン早見表(13章§2.10のボタン一覧と逐語一致。上4本=番号つきの主要動線)。
-GUIDE_HOME_BUTTONS = [
-    ("① 調べる指示文を出す", "このガイドの⑦章へ飛びます。社内のディープリサーチへ貼る文が並んでいます。"),
-    ("② 案件を作って貼る", "新しい案件を作ります。案件入力の画面が空になってから開きます。"),
-    ("③ まとめて作る", "S1からS4までを続けて実行します。ふだんはこれだけで足ります。"),
-    ("④ レポートを出す", "お客様に見せるリスクレポートを書き出します。"),
-    ("⑤ ヒアリングシートを出す", "訪問時に聞くことを紙1枚に書き出します。"),
-    ("案件入力を開く", "いま選んでいる案件の入力画面を開きます。"),
-    ("S1 / S2 / S3 / S4", "段ごとに実行し直します。直した内容から先だけやり直したいときに使います。"),
-    ("企業ファイルを開く", "その会社ぶんの調べた材料をまとめたファイルを開きます。"),
-    ("企業ファイルへ保存", "いまの案件の材料を、その会社のファイルへ保存します。"),
-    ("第2ラウンド開始", "訪問で聞いてきたことを足して、もう一度作り直す準備をします。"),
-    ("ナレッジ再読込", "社内ナレッジを読み直します。ナレッジ読込状態がおかしいときに押します。"),
-    ("プリフライト診断", "受信箱にたまった投稿をまとめて診断します。"),
-    ("受信箱を開く", "投稿・現場の声・ウォッチ結果の一覧を開きます。"),
-    ("商談の記録", "商談の結果を記録する画面を開きます。"),
-    ("判断台帳", "引受の判断を記録する画面を開きます。"),
-    ("壁打ち", "AIと相談しながら座組を考える画面を開きます。"),
+# 使い方タブのボタン早見(11章§3.6・13章§2.10(f))。**キャプションの値源はここではなく
+# `modUINav` の配置表定数**であり、tools/caption_check.py が実装・13章§2.10・初回
+# ツアーの3系統と逐語照合する。第3要素はどの章へ出すか(①〜④と帯)。
+# 繰り返しキャプションのボタン([コピー]8本・区画②の18本)は、同じ語が複数出ると
+# 逐語照合の突合が壊れるため配置表にも本表にも載せない(13章§2.10(f))。
+GUIDE_NAV_BUTTONS = [
+    ("← 戻る", "1つ上の区画へ画面を動かします。STEPの番号は変わりません。", "帯"),
+    ("次へ →", "いまのSTEPの区画へ画面を動かし、黄色い枠をそこへ移します。", "帯"),
+    ("ナレッジを読み直す", "社内ナレッジ(ナレッジブック.xlsx)をもう一度読み込みます。", "帯"),
+    ("使い方を開く", "この「使い方」のタブを開きます。", "帯"),
+    ("＋ もっと調べる（あと5本）", "調べる文の残り5本を出したり隠したりします。", "①"),
+    ("貼ったものを保存する", "6つの欄の中身を、いまの案件として保存します。", "②"),
+    ("まとめて作る", "下書きを4枚作ります。10〜20分かかります。", "③"),
+    ("レポートを出す", "お客様に見せるレポートを作り、ブラウザで開きます。", "④"),
+    ("ヒアリングシートを出す", "訪問で聞くことの紙を作り、そのタブを出します。", "④"),
+    ("下書きを見る", "下書きのタブを4枚出して、いちばん上の①へ移ります。", "④"),
+]
+
+# 使い方タブ⑦「上級」の5行(11章§3.6・§1.1 の1行目の説明文と**同一文**)。
+GUIDE_ADVANCED = [
+    ("壁打ち", "下書きが③まで出来てから、提案の前の予行演習をしたいときに使います。ふだんの案件では使いません。"),
+    ("受信箱", "思いついた新しいサービスの案を、部で持ち寄って診断したいときに使います。日々の案件づくりには使いません。"),
+    ("商談の記録", "商談のあとで、起きたことだけを記録したいときに使います。次アポ・見積依頼・成約などを選ぶだけです。"),
+    ("判断台帳", "引受の判断を記録する台帳です。商品部で使います。営業所では使いません。"),
+    ("案件一覧", "これまでに作った案件を一覧で見たいときに使います。ふだんは見なくて大丈夫です。"),
 ]
 
 # 困ったとき(docs/25章§12「困ったときの1行対処」の要約。平易語)。
@@ -1075,7 +1133,8 @@ GUIDE_GLOSSARY = [
 
 
 def _make_guide(wb, spec, ctx):
-    """操作ガイド: ブックの中だけで操作を学べる案内シート(セルのみ・図形なし)。"""
+    """使い方: ブックの中だけで操作を学べる案内シート(セルのみ・図形なし)。
+    11章§3.6(v3.2)の7章立て。①〜④はナビの4区画と同じ順・同じ見出し語。"""
     prompts = read_dossier_prompts(ctx.root)
     ws = wb.create_sheet(spec["name"])
     ws.protection.sheet = False
@@ -1084,7 +1143,7 @@ def _make_guide(wb, spec, ctx):
     ws.column_dimensions["B"].width = 28
     ws.column_dimensions["C"].width = 82
 
-    _title_band(ws, 1, f"{APP_TITLE} 操作ガイド")
+    _title_band(ws, 1, f"{APP_TITLE} 使い方")
 
     row = [3]
 
@@ -1171,6 +1230,9 @@ def _make_guide(wb, spec, ctx):
         row[0] = r + 2
 
     # ---- 目次(行だけ予約しておき、全章を書き終えてから書き戻す) ----------
+    # 11章§3.6(v3.2): 7章立て。①〜④は**ナビの4区画と同じ順・同じ見出し語**にする
+    # (2箇所で違う呼び方をしない)。各章に書くのは「何をどこへ」「押すと何が起きる」
+    # 「うまくいかないとき」の3つだけで、設計語・開発語は1語も持ち込まない。
     toc_n = 7
     toc_header_row = row[0]
     row[0] = toc_header_row + 2
@@ -1178,38 +1240,27 @@ def _make_guide(wb, spec, ctx):
     row[0] += toc_n
     row[0] += 1
 
-    # ==== ① これは何? + 最初に1回だけやること ==============================
-    ch1 = section("① これは何? + 最初に1回だけやること")
-    kv("ひとことで言うと",
-       "会社について調べた文章を貼ると、リスクの見立てと提案の下書きまで作ってくれるExcelです。", 0)
-    kv("人がやること",
-       "材料を貼る。実行を押す。出てきた中身を読んで直す。この3つだけです。", 1)
-    kv("AIに任せないこと",
-       "お客様に出す最終判断は人がします。中身を読まずにそのまま出さないでください。", 0)
+    def nav_buttons(chapter):
+        """その章に属するボタンの早見(値源は GUIDE_NAV_BUTTONS)。
+        tools/caption_check.py がここのキャプションを実装・13章§2.10と逐語照合する。"""
+        rows = [(c, d) for c, d, ch in GUIDE_NAV_BUTTONS if ch == chapter]
+        for i, (cap, desc) in enumerate(rows):
+            kv(f"[{cap}]", desc, i)
 
-    section("はじめに1回だけやること(ここでつまずく人がいちばん多いです)", BRAND_MID)
-    step("1", "このファイルをExcelで開きます。")
-    step("2", "画面の上に黄色い帯で「セキュリティの警告」が出たら、\nその中の「コンテンツの有効化」を押します。", warn=True)
-    step("3", "[ファイル] → [オプション] → [トラストセンター] →\n[トラストセンターの設定] → [マクロの設定] と進みます。")
-    step("4", "「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」に\nチェックを入れて [OK] を押します。", warn=True)
-    step("5", "Excelをいったん全部閉じて、もう一度このファイルを開きます。")
-    step("6", "少し待つと画面が自動で組み上がります。これで準備は終わりです。")
-    note("英語で Trust... というメッセージが出たときは、手順3と手順4がまだ終わっていない合図です。\n"
-         "このファイルは初回に自分で画面を組み立てる作りなので、この許可が必要です。")
-    note("ファイルが圧縮フォルダ(zip)の中にあるときは、中から直接開かないでください。\n"
-         "右クリックして「すべて展開」で取り出してから開きます。")
-    back_to_toc(toc_header_row)
-
-    # ==== ② 画面と流れ =====================================================
-    ch2 = section("② 画面と流れ")
-    note("流れは5つだけです。 調べる → 貼る → 実行する → 直す → 出す。")
-    kv("1. 調べる", "HOMEの[① 調べる指示文を出す]で⑦章へ飛び、指示文を1本ずつ社内のディープリサーチへ投げます\n(1本ずつしか動きません。各10分ほど待ちます)。返ってきた文章を手元に用意します。", 0)
-    kv("2. 貼る", "HOMEの[② 案件を作って貼る]を押し、案件入力の貼付欄へ上から順に貼ります。\n1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ。", 1)
-    kv("3. 実行する", "HOMEへ戻って[③ まとめて作る]を押します。数分かかります。画面が白くなっても処理は続いています。", 0)
-    kv("4. 直す", "S1からS4のシートを読んで、違うところを手で直します。ここが人の仕事です。", 1)
-    kv("5. 出す", "HOMEの[④ レポートを出す]と[⑤ ヒアリングシートを出す]で、お客様に見せるものを書き出します。", 0)
-    note("画面の名前: HOME(入口) / 案件入力(材料を貼る) / S1 会社を知る / S2 リスクを出す /\n"
-         "S3 提案を作る / S4 提案書の骨子 / ヒアリングシート / 壁打ち。")
+    # ==== ① 会社のこと =====================================================
+    ch1 = section("① 会社のこと")
+    kv("何をどこへ",
+       "ナビの①へ、種別・会社名・業種名・本社の場所の4つを入れます。\n"
+       "4つを入れると、社内のディープリサーチに貼る文がすぐ下に出ます。", 0)
+    kv("押すと何が起きる",
+       "文の右の[コピー]を押すと、その1本ぶんが写ります。社内のディープリサーチに貼って投げます。\n"
+       "1本ずつしか投げられません。返ってきてから次を投げます(各10分ほど)。", 1)
+    kv("うまくいかないとき",
+       "「文を写せませんでした」と出たら、枠の中の文をマウスで選んで Ctrl+C で写してください。\n"
+       "業種の一覧が出ないときは、手で入力しても先へ進めます。", 0)
+    nav_buttons("①")
+    note("いちばん上の帯にあるボタンは、どの区画にいても使えます。")
+    nav_buttons("帯")
 
     # はじめて開いたときに出る案内(ガイドツアー)をもう一度見るためのボタン置き場。
     # 図形は起動時に modUIGuide.EnsureGuideButtons が生やす(ビルドは作らない)。
@@ -1221,25 +1272,65 @@ def _make_guide(wb, spec, ctx):
     _add_name(ctx, ws, "gd_btn_tour", 3, r)
     ws.row_dimensions[r].height = 28
     row[0] = r + 2
-
     back_to_toc(toc_header_row)
 
-    # ==== ③ ボタン早見表 ===================================================
-    ch3 = section("③ ボタン早見表(HOMEのボタン)")
-    for i, (cap, desc) in enumerate(GUIDE_HOME_BUTTONS):
-        kv(f"[{cap}]", desc, i)
-    note("ボタンは起動したときに自動で並びます。並んでいないときは、①の手順をやり直してください。")
+    # ==== ② 貼る ===========================================================
+    ch2 = section("② 貼る")
+    kv("何をどこへ",
+       "ナビの②の6つの枠へ、返ってきた文章・会社のホームページ・有価証券報告書のリスクの章・\n"
+       "いまの契約・ヒアリング回答を貼ります。現場メモだけは見出しの下に手で書きます。", 0)
+    kv("押すと何が起きる",
+       "[ここに貼る]を押すと、表の線や画像が入らずに文だけが入り、字数と貼った時刻がその場で出ます。\n"
+       "枠には先頭の5行だけが出ます(途中で切れて保存されたわけではありません)。", 1)
+    kv("うまくいかないとき",
+       "「枠に入りきりませんでした」と出たら、[ここに貼る]で貼り直してください。長さは気にしなくて大丈夫です。\n"
+       "「貼り付けられませんでした」と出たら、もう一度コピーしてから押してください。", 0)
+    nav_buttons("②")
+    note("[中身を見る]は読むだけの画面です。直したいときは、直した文章を[ここに貼る]で貼り直してください。\n"
+         "[消す]は押す前に必ず確認が出ます。消すと元に戻せません。")
     back_to_toc(toc_header_row)
 
-    # ==== ④ 困ったとき =====================================================
-    ch4 = section("④ 困ったとき")
+    # ==== ③ 作る ===========================================================
+    ch3 = section("③ 作る")
+    kv("何をどこへ", "貼り終えたら、ナビの③のボタンを押すだけです。入れるものはありません。", 0)
+    kv("押すと何が起きる",
+       "下書きを4枚作ります。10〜20分かかります。\n"
+       "画面が白くなっても動いていますので、閉じずにお待ちください。", 1)
+    kv("うまくいかないとき",
+       "「途中で止まりました」と出たら、もう一度押してください。\n"
+       "それでも止まるときは、下の「困ったとき」の[記録を見る]を押してください。", 0)
+    nav_buttons("③")
+    back_to_toc(toc_header_row)
+
+    # ==== ④ 出す ===========================================================
+    ch4 = section("④ 出す")
+    kv("何をどこへ", "ナビの④の3つのボタンを押すだけです。入れるものはありません。", 0)
+    kv("押すと何が起きる",
+       "レポートはブラウザで開きます。ヒアリングシートはタブが出ますので、そのまま印刷します。\n"
+       "下書きは4枚のタブが出ます。違うところは手で直してください。", 1)
+    kv("うまくいかないとき",
+       "「先に③の[まとめて作る]を押してください」と出たら、③へ戻って押してください。", 0)
+    nav_buttons("④")
+    note("お客様に見せる前に、レポートの中身を必ずご確認ください。")
+    back_to_toc(toc_header_row)
+
+    # ==== ⑤ 困ったとき =====================================================
+    ch5 = section("⑤ 困ったとき")
+    note("直らないときは、下の[記録を見る]を押して、いちばん下の行をコピーして開発担当へ送ってください。")
+    r = row[0]
+    lab = ws.cell(row=r, column=2, value="記録を見る")
+    lab.font = GUIDE_KEY_FONT
+    lab.alignment = Alignment(vertical="center", indent=1)
+    ws.cell(row=r, column=3).alignment = Alignment(vertical="center", indent=1)
+    _add_name(ctx, ws, "gd_btn_logs", 3, r)
+    ws.row_dimensions[r].height = 28
+    row[0] = r + 2
     for i, (sym, fix) in enumerate(GUIDE_TROUBLES):
         kv(sym, fix, i)
-    note("それでも直らないときは、その画面のまま管理者へ連絡してください(自分で直そうとしなくて大丈夫です)。")
     back_to_toc(toc_header_row)
 
-    # ==== ⑤ 自己テスト =====================================================
-    ch5 = section("⑤ 自己テスト(このブックが正しく動くかを自分で確かめる)")
+    # ==== ⑥ 自己テスト =====================================================
+    ch6 = section("⑥ 自己テスト(このブックが正しく動くかを自分で確かめる)")
     note("配ったファイルが途中で壊れていないかを、このブックの中だけで確かめられます。\n"
          "新しい版を受け取ったときと、動きがおかしいと感じたときに1回押してください。")
     step("1", "下の[テストを実行]を押します。確認の画面が出たら[はい]を押します。")
@@ -1273,33 +1364,48 @@ def _make_guide(wb, spec, ctx):
     note("結果欄は実行するたびに上書きされます(前回ぶんは残りません)。")
     back_to_toc(toc_header_row)
 
-    # ==== ⑥ 用語のミニ辞書 =================================================
-    ch6 = section("⑥ 用語のミニ辞書")
-    for i, (word, mean) in enumerate(GUIDE_GLOSSARY):
-        kv(word, mean, i)
-    back_to_toc(toc_header_row)
-
-    # ==== ⑦ AIに調べさせる指示文 ===========================================
-    ch7 = section("⑦ AIに調べさせる指示文(社内ディープリサーチ用)")
-    # HOMEの[① 調べる指示文を出す]の飛び先(13章§2.18・司令塔追補)。見出し行を
-    # 名前付きレンジで指し、実行時は文字列検索をしない。
+    # ==== ⑦ 上級 ===========================================================
+    ch7 = section("⑦ 上級(ふだんは使いません)")
+    # ナビの[使い方を開く]と、上級の飛び先(13章§2.18)。見出し行を名前付きレンジで
+    # 指し、実行時は文字列検索をしない。
     _add_name(ctx, ws, "gd_ch7_head", 1, ch7)
-    note("社内のディープリサーチ(外部を検索できるほう)へ、そのままコピーして貼る文です。\n"
-         "{{ }} の中だけを自分で書き換えてから投げてください。")
-    for i, (key, body) in enumerate(GUIDE_PROMPT_RULES):
-        kv(key, body, i)
-
-    section("まずこの3本(しっかり調査のとき)", BRAND_MID)
-    for key, title in GUIDE_PROMPTS_STD:
-        prompt(title, prompts[key])
-    note("この3本を1本ずつ順に投げ、返ってきた文章を『案件入力』の「6 追加調査の結果」へ貼ります。")
-
-    section("必要なときだけ", BRAND_MID)
-    for key, title in GUIDE_PROMPTS_OPT:
-        prompt(title, prompts[key])
-    note("有価証券報告書の中身は取りに行かせないでください(読めずに作り話が混ざります)。\n"
-         "「事業等のリスク」の章は EDINET をブラウザで開いて自分でコピーします。")
+    note("下の[表示する]を押すと、そのタブが1枚だけ出ます。ふだんの案件づくりでは使いません。")
+    for i, (sheet_name, when) in enumerate(GUIDE_ADVANCED):
+        kv(sheet_name, when, i)
+    r = row[0]
+    lab = ws.cell(row=r, column=2, value="上級のタブを出す")
+    lab.font = GUIDE_KEY_FONT
+    lab.alignment = Alignment(vertical="top", indent=1)
+    for k in range(len(GUIDE_ADVANCED)):
+        ws.cell(row=r + k, column=3).alignment = Alignment(vertical="center", indent=1)
+        ws.row_dimensions[r + k].height = 28
+    _add_name_block(ctx, ws, "gd_btn_adv", 3, r, len(GUIDE_ADVANCED))
+    row[0] = r + len(GUIDE_ADVANCED) + 1
+    note("同じ会社を次に担当する人へ引き継ぎたいときは、企業ファイルの[開く][保存]を使います。")
     back_to_toc(toc_header_row)
+
+    # ==== 非表示行: 調べる文8本の雛形 ======================================
+    # 11章§3.2・13章§2.18(v3.2): 利用者が読む面は**ナビの区画①**であり、本文を
+    # ここで章として見せない。ただし値の在処は1箇所でなければならないので、
+    # 本文は本シートの非表示行へ焼き、ナビはこのセルを読んで {{ }} を置換する。
+    r = row[0]
+    hdr = ws.cell(row=r, column=2, value="（ここから下は、ナビが読むための行です。利用者が読む面はナビの①です）")
+    hdr.font = GUIDE_NOTE_FONT
+    ws.row_dimensions[r].hidden = True
+    r += 1
+    for key, title in (GUIDE_PROMPTS_STD + GUIDE_PROMPTS_OPT):
+        idx = (GUIDE_PROMPTS_STD + GUIDE_PROMPTS_OPT).index((key, title)) + 1
+        ck = ws.cell(row=r, column=2, value=_clean(title))
+        ck.font = GUIDE_KEY_FONT
+        cv = ws.cell(row=r, column=3, value=_clean(prompts[key]))
+        cv.font = GUIDE_BODY_FONT
+        cv.number_format = ctx.text_fmt
+        cv.alignment = Alignment(vertical="top", wrap_text=True, indent=1)
+        cv.protection = LOCKED
+        _add_name(ctx, ws, "gd_prompt_%02d" % idx, 3, r)
+        ws.row_dimensions[r].hidden = True
+        r += 1
+    row[0] = r + 1
 
     # ---- 目次の書き戻し ---------------------------------------------------
     hc = ws.cell(row=toc_header_row, column=1, value="目次(クリックすると各章へ移動します)")
@@ -1310,13 +1416,13 @@ def _make_guide(wb, spec, ctx):
     ws.row_dimensions[toc_header_row].height = 24
 
     toc_entries = [
-        (ch1, "① これは何? + 最初に1回だけやること"),
-        (ch2, "② 画面と流れ"),
-        (ch3, "③ ボタン早見表(HOMEのボタン)"),
-        (ch4, "④ 困ったとき"),
-        (ch5, "⑤ 自己テスト"),
-        (ch6, "⑥ 用語のミニ辞書"),
-        (ch7, "⑦ AIに調べさせる指示文(社内ディープリサーチ用)"),
+        (ch1, "① 会社のこと"),
+        (ch2, "② 貼る"),
+        (ch3, "③ 作る"),
+        (ch4, "④ 出す"),
+        (ch5, "⑤ 困ったとき"),
+        (ch6, "⑥ 自己テスト"),
+        (ch7, "⑦ 上級(ふだんは使いません)"),
     ]
     if len(toc_entries) != toc_n:
         raise BuildError(

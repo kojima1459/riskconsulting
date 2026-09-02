@@ -39,7 +39,13 @@ WF:
     On Error GoTo FF
     T_W41F_DeepWarnings
 WDone:
+    On Error GoTo F13
+    modTestsPure13.RunAll
+    On Error GoTo 0
     Exit Sub
+F13:
+    GroupFail "modTestsPure13.RunAll"
+    Resume Next
 FA:
     GroupFail "W41A B5 セミコロン置換"
     Resume WB

@@ -24,7 +24,7 @@ Private Const U4_SRC As String = "modUICase4"
 Private Const U4_FB As String = "フィードバック"
 Private Const U4_JUDGE As String = "判断台帳"
 Private Const U4_SCAN_COLS As Long = 32
-Private Const U4_CASEIN As String = "案件入力"
+Private Const U4_CASEIN As String = "ナビ"
 ' 追加収集ブロックの表示上限行(modUICase3.U3_RESEARCH_ROOM と同値。描いた側と
 ' 消す側で行数が食い違うと消し残りが出る)。
 Private Const U4_RESEARCH_ROOM As Long = 20

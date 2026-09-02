@@ -1,0 +1,438 @@
+Attribute VB_Name = "modUINav"
+Option Explicit
+
+' ============================================================================
+' modUINav - ナビの状態とOnActionハンドラ(ui層・T-49)
+' ----------------------------------------------------------------------------
+' 11章v3.2 §3.1 / §3.1.1 / §3.1.2 と 13章§2.10 が正。描画は modUINavDraw。
+'
+' 本モジュールが持つのは次の3つだけである:
+'   (1) 図形ボタンの**配置表**(区画ごとに1本の定数。tools/caption_check.py が
+'       13章§2.10(f)・使い方タブの早見表・初回ツアーと逐語照合する唯一の値源)
+'   (2) **いまどのSTEPか**の自動決定(11章§3.1.1 の優先順位10行。利用者は選べない)
+'   (3) OnAction で配線されるハンドラ(NavPrev / NavNext / ShowDrafts / BackToNav)
+'
+' 原則⑥(11章§0.1): ナビの最上段は「次にすることを名指しする1行」で始まり、
+'   ウィンドウ枠固定でスクロールしても消えない(枠固定はビルドが焼く)。
+' ============================================================================
+
+Private Const UN_SRC As String = "modUINav"
+Private Const UN_SHEET As String = "ナビ"
+Private Const UN_STEP_COUNT As Long = 6
+
+' 画面制御用のモジュール変数(**永続でない**画面制御の状態。14章§6の
+'   「状態保持の例外」への登録は要らない)。
+'   gShownStep = 直前に描いたSTEP番号([次へ]の移動先を決めるのに使う)
+'   gMoreOpen  = 区画①の[＋ もっと調べる]が開いているか
+'   gDrawOk    = 直近の DrawNav が描き切ったか(B15: 描けなかった画面から保存しない)
+Private gShownStep As Long
+Private gMoreOpen As Boolean
+Private gDrawOk As Boolean
+'   gShownCaseId = 直前に描いた案件ID(変わったら画面の枠を入れ替える)
+'   gDrewOnce    = 一度でも描いたか(起動直後の1回目は必ず枠を用意する)
+Private gShownCaseId As String
+Private gDrewOnce As Boolean
+
+' ============================================================================
+' 図形ボタンの配置表(13章§2.10(f))
+' ----------------------------------------------------------------------------
+' 1件 = "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。
+' **繰り返しキャプションのボタンは載せない**(区画①の[コピー]8本と区画②の18本。
+'   同じ語が複数出ると逐語照合の突合が壊れるため、生成規則の側で正を持つ)。
+' OnAction の修飾名は modUIHome2. である(Z-13 分割でハンドラ18本が移った)。
+'   modUIHome. と書くと押しても何も起きない(最も起きやすい取り違え)。
+' ============================================================================
+Private Const UN_ROW_COACH As String = _
+    "btn_nv_prev;← 戻る;modUINav.NavPrev;96" & vbLf & _
+    "btn_nv_next;次へ →;modUINav.NavNext;96" & vbLf & _
+    "btn_nv_kb;ナレッジを読み直す;modUIHome2.HomeReloadKnowledge;140" & vbLf & _
+    "btn_nv_guide;使い方を開く;modUIGuide.OpenGuide;116"
+Private Const UN_ROW_SEC1 As String = _
+    "btn_nv_more;＋ もっと調べる（あと5本）;modUIResearch.ToggleMore;200"
+Private Const UN_ROW_SEC2 As String = _
+    "btn_ci_save;貼ったものを保存する;modUICase6.SaveNav;200"
+Private Const UN_ROW_SEC3 As String = _
+    "btn_hm_step3;まとめて作る;modUIHome2.HomeRunAll;200"
+Private Const UN_ROW_SEC4 As String = _
+    "btn_hm_step4;レポートを出す;modUIHome2.HomeExportHtml;200" & vbLf & _
+    "btn_hm_step5;ヒアリングシートを出す;modUIHome2.HomeBuildHearing;200" & vbLf & _
+    "btn_nv_drafts;下書きを見る;modUINav.ShowDrafts;200"
+
+Public Function NavRowCoach() As String
+    NavRowCoach = UN_ROW_COACH
+End Function
+
+Public Function NavRowSec1() As String
+    NavRowSec1 = UN_ROW_SEC1
+End Function
+
+Public Function NavRowSec2() As String
+    NavRowSec2 = UN_ROW_SEC2
+End Function
+
+Public Function NavRowSec3() As String
+    NavRowSec3 = UN_ROW_SEC3
+End Function
+
+Public Function NavRowSec4() As String
+    NavRowSec4 = UN_ROW_SEC4
+End Function
+
+' ============================================================================
+' STEPの文(11章§3.1.1 の逐語表)。**7つ目を作らない**。
+' ============================================================================
+Public Function StepText(ByVal stepNo As Long) As String
+    Select Case stepNo
+    Case 1
+        StepText = "会社名と本社の場所を入れてください。" & _
+                   "入れると、社内のディープリサーチに貼る文がすぐ下に出ます。"
+    Case 2
+        StepText = "1本目の[コピー]を押して、社内のディープリサーチに貼ってください。" & _
+                   "1本ずつ・各10分です。"
+    Case 3
+        StepText = "返ってきた文章を、②の枠へ貼ってください。長くても分けなくて大丈夫です。"
+    Case 4
+        StepText = "③の[まとめて作る]を押してください。10～20分で下書きが4枚そろいます。"
+    Case 5
+        StepText = "④の[下書きを見る]を押して、違うところを手で直してください。"
+    Case 6
+        StepText = "④の[レポートを出す]を押すと、お客様に見せるレポートができます。"
+    End Select
+End Function
+
+' [次へ]の移動先(11章§3.1.1 の表)。
+Public Function StepAnchor(ByVal stepNo As Long) As String
+    Select Case stepNo
+    Case 1, 2
+        StepAnchor = "nv_sec1"
+    Case 3
+        StepAnchor = "nv_sec2"
+    Case 4
+        StepAnchor = "nv_sec3"
+    Case Else
+        StepAnchor = "nv_sec4"
+    End Select
+End Function
+
+' ============================================================================
+' CurrentStep - いまどのSTEPかを状態から決める(11章§3.1.1 の優先順位10行)。
+' ----------------------------------------------------------------------------
+' 上から評価し、最初に当たったものを採る。**利用者はSTEPを選べない**
+' ([← 戻る][次へ →]は画面をその区画へ動かすだけで、番号は書き換えない)。
+' actionText には、上表以外の文を使う行ではその逐語文を返す。
+' ============================================================================
+Public Function CurrentStep(ByRef actionText As String) As Long
+    Dim caseId As String
+    caseId = modUIHome.SelectedCaseId()
+
+    ' 1: 社内ナレッジが読めていない
+    If Not KnowledgeReady() Then
+        actionText = "ナレッジブック.xlsx を、この本体と同じフォルダに置いて" & _
+                     "[ナレッジを読み直す]を押してください。" & _
+                     "置いてあるのに出ないときは、ファイル名が違わないかご確認ください。"
+        CurrentStep = 1
+        Exit Function
+    End If
+
+    ' 2: 実行中(ui_lock 保持中)
+    If modUIProgress.IsUiLocked() Then
+        actionText = "いま作っています。終わるまでボタンを押さずにお待ちください。"
+        CurrentStep = 4
+        Exit Function
+    End If
+
+    ' 3: 会社名が空
+    If LenB(modUISheet.ReadNamed("ci_company")) = 0 Then
+        actionText = StepText(1)
+        CurrentStep = 1
+        Exit Function
+    End If
+
+    ' 4: 会社名あり・②の6欄がすべて空
+    If Not AnyAreaFilled(caseId) Then
+        actionText = StepText(2)
+        CurrentStep = 2
+        Exit Function
+    End If
+
+    Dim statusText As String
+    If LenB(caseId) > 0 Then statusText = modUICase3.CaseCellText(caseId, "status")
+
+    ' 5: 選択中の案件が error
+    If StrComp(statusText, "error", vbBinaryCompare) = 0 Then
+        actionText = "前回が途中で止まりました。もう一度③の[まとめて作る]を" & _
+                     "押してください。直らないときは、使い方タブの[記録を見る]を押して、" & _
+                     "いちばん下の行を開発担当へ送ってください。"
+        CurrentStep = 4
+        Exit Function
+    End If
+
+    ' 6: draft かつ②に貼付あり
+    If StrComp(statusText, "draft", vbBinaryCompare) = 0 Then
+        actionText = StepText(4)
+        CurrentStep = 4
+        Exit Function
+    End If
+
+    ' 7: s1_done / s2_done / s3_done
+    If StrComp(statusText, "s1_done", vbBinaryCompare) = 0 _
+       Or StrComp(statusText, "s2_done", vbBinaryCompare) = 0 _
+       Or StrComp(statusText, "s3_done", vbBinaryCompare) = 0 Then
+        actionText = "途中まで出来ています。もう一度③の[まとめて作る]を押すと、" & _
+                     "最後まで作ります。"
+        CurrentStep = 4
+        Exit Function
+    End If
+
+    ' 8: s4_done
+    If StrComp(statusText, "s4_done", vbBinaryCompare) = 0 Then
+        actionText = StepText(5)
+        CurrentStep = 5
+        Exit Function
+    End If
+
+    ' 9: exported
+    If StrComp(statusText, "exported", vbBinaryCompare) = 0 Then
+        actionText = "④の[ヒアリングシートを出す]を押して、訪問に持っていく紙を" & _
+                     "印刷してください。"
+        CurrentStep = 6
+        Exit Function
+    End If
+
+    ' 10: feedback_done
+    If StrComp(statusText, "feedback_done", vbBinaryCompare) = 0 Then
+        actionText = "訪問おつかれさまでした。聞いてきたことを②の「ヒアリング回答」へ" & _
+                     "貼ると、提案が深まります。"
+        CurrentStep = 3
+        Exit Function
+    End If
+
+    actionText = StepText(4)
+    CurrentStep = 4
+End Function
+
+' 社内ナレッジを読めているか(11章§4.5 の3状態のうち「読めた」だけを True)。
+Private Function KnowledgeReady() As Boolean
+    On Error Resume Next
+    KnowledgeReady = (modPipeline.KbRowCount(modKnowledge.MenusFor(vbNullString, 0)) > 0)
+End Function
+
+' ②の6欄のどれかに中身があるか。
+'   現場メモだけは**枠に見出しと例文が先置きされている**ので、字数で判定すると
+'   常に「入っている」になってしまう(STEPが2/6へ進まなくなる)。ひな型と同じ
+'   中身なら「まだ書いていない」と数える。
+Private Function AnyAreaFilled(ByVal caseId As String) As Boolean
+    On Error Resume Next
+    Dim keys() As String
+    keys = Split(modUICase6.AreaKeys(), vbLf)
+    Dim i As Long
+    For i = LBound(keys) To UBound(keys)
+        If StrComp(keys(i), "field_notes", vbBinaryCompare) = 0 Then
+            If FieldNotesWritten() Then
+                AnyAreaFilled = True
+                Exit Function
+            End If
+        ElseIf LenB(modUICase6.AreaBody(caseId, keys(i))) > 0 Then
+            AnyAreaFilled = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' FieldNotesWritten - 現場メモの枠に、先置きのひな型より先の中身があるか。
+'   ひな型と**同じ規約(SplitFieldNotes)を通してから**比べるので、例文の有無や
+'   見出しの並びの違いに引きずられない(「例: 」の行はどちらでも落ちる)。
+Public Function FieldNotesWritten() As Boolean
+    On Error Resume Next
+    Dim m1 As String, o1 As String
+    Dim m2 As String, o2 As String
+    modNavText.SplitFieldNotes modUICase6.ReadFieldNotesArea(), m1, o1
+    modNavText.SplitFieldNotes modUINavDraw.FieldNotesTemplate(), m2, o2
+    FieldNotesWritten = (StrComp(m1 & vbLf & o1, m2 & vbLf & o2, vbBinaryCompare) <> 0)
+End Function
+
+' ============================================================================
+' DrawNav - ナビ1枚を描き直す(11章§3.1)。
+' ----------------------------------------------------------------------------
+' 骨格は notebook/src/ui/modUI.bas:619 Repaint の Resume-cleanup 方式を採った
+' (失敗しても必ず ScreenUpdating=True へ到達する)。ただし DisplayGridlines など
+' 「窓の設定を変える」部分は移していない(他人のブックへ影響しうるため。§8.6)。
+' 描き切ったときだけ gDrawOk を立てる(B15: 描けなかった画面から保存しない)。
+' ============================================================================
+Public Sub DrawNav()
+    gDrawOk = False
+    On Error GoTo Cleanup
+
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(UN_SHEET)
+    If ws Is Nothing Then GoTo Cleanup
+
+    Application.ScreenUpdating = False
+
+    ' 描き直しの前に、ナビの図形の孤児を1回だけ落とす(接頭辞ごとにまとめて)。
+    ' **各描画関数の中で落とさない**(同じ接頭辞を複数の描画が使うため、
+    '  あとから描くものが先に描いたものを消してしまう)。
+    modUINavDraw.DropNavShapes
+
+    Dim caseId As String
+    caseId = modUIHome.SelectedCaseId()
+
+    ' 13章§2.11(e) の書き手(1): 描き切ったときだけ案件IDを書く。案件が変わって
+    ' いたら、その前に画面の枠を空へ戻す(前の案件の画面がそのまま次の案件として
+    ' 確定するのを防ぐ。裁定書13 W1 と同じ趣旨。**case_data は触らない**)。
+    If (Not gDrewOnce) Or StrComp(caseId, gShownCaseId, vbBinaryCompare) <> 0 Then
+        gShownCaseId = caseId
+        gDrewOnce = True
+        modUINavDraw.ResetForNewCase caseId
+    End If
+    modUISheet.WriteNamed "ci_case_id", vbNullString
+
+    ' 出る条件が偽の欄を隠し、補助5本の開閉を戻す(中身は消さない)。
+    modUINavDraw.ApplyAreaVisibility
+    modUINavDraw.ShowMoreRows gMoreOpen
+
+    ' 区画①の調べる文8本をその場で書き直し、[コピー]を置き直す。
+    modUIResearch.BuildPrompts
+    modUIResearch.EnsureCopyButtons
+
+    ' 区画②の状態行・プレビュー・3ボタン。
+    modUINavDraw.RefreshAreas caseId
+    modUINavDraw.EnsureAreaButtons caseId
+
+    ' 区画のパネルとボタン。
+    modUINavDraw.DrawSections
+
+    ' コーチ帯(最後に描く。ここまでの状態を読んでSTEPを決めるため)。
+    Dim actionText As String
+    Dim stepNo As Long
+    stepNo = CurrentStep(actionText)
+    gShownStep = stepNo
+    modUINavDraw.DrawCoachBar stepNo, UN_STEP_COUNT, actionText
+    modUINavDraw.MoveFocusFrame StepAnchor(stepNo)
+
+    ' 13章§2.11(e): 案件が選ばれていなければ**新規モードの固定マーカー**を書く
+    ' (空のままにすると[貼ったものを保存する]が1欄も書かずに止まり、新しい案件を
+    '  作る道が無くなる)。IsValidCaseId は案件ID書式だけを通すので、この値を
+    ' 有効なIDと誤認しない。
+    If LenB(caseId) > 0 Then
+        modUISheet.WriteNamed "ci_case_id", caseId
+    Else
+        modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
+    End If
+
+    gDrawOk = True
+
+Cleanup:
+    If Err.Number <> 0 Then
+        modLog.LogError "E0101", UN_SRC & ".DrawNav", "draw_failed", Err.Number
+        Err.Clear
+    End If
+    Application.ScreenUpdating = True
+End Sub
+
+' 直近の DrawNav が描き切ったか(呼び出し側の保存ブロック判定に使う。B15)。
+Public Function DrawOk() As Boolean
+    DrawOk = gDrawOk
+End Function
+
+' 補助5本の開閉状態(modUIResearch.ToggleMore が読み書きする)。
+Public Function MoreOpen() As Boolean
+    MoreOpen = gMoreOpen
+End Function
+
+Public Sub SetMoreOpen(ByVal openIt As Boolean)
+    gMoreOpen = openIt
+End Sub
+
+' ============================================================================
+' OnAction ハンドラ(13章§2.10(f))
+' ============================================================================
+
+' [← 戻る] 1つ上の区画へ画面を動かす(STEP番号は変えない)。
+Public Sub NavPrev()
+    If Not modUIProgress.TryEnterUiLock("画面の移動") Then Exit Sub
+    On Error GoTo Done
+    GotoSection PrevAnchor()
+    modUIToast.ShowToast "1つ上へ動きました。", "info"
+Done:
+    modUIProgress.ExitUiLock
+End Sub
+
+' [次へ →] いまのSTEPの区画へ画面を動かし、強調枠をそこへ移す。
+Public Sub NavNext()
+    If Not modUIProgress.TryEnterUiLock("画面の移動") Then Exit Sub
+    On Error GoTo Done
+    Dim anchorName As String
+    anchorName = StepAnchor(gShownStep)
+    GotoSection anchorName
+    modUINavDraw.MoveFocusFrame anchorName
+    modUIToast.ShowToast "いまやることの区画へ動きました。黄色い枠の中をご覧ください。", "info"
+Done:
+    modUIProgress.ExitUiLock
+End Sub
+
+' 1つ上の区画のアンカー名(いちばん上なら区画①のまま)。
+Private Function PrevAnchor() As String
+    Select Case StepAnchor(gShownStep)
+    Case "nv_sec4"
+        PrevAnchor = "nv_sec3"
+    Case "nv_sec3"
+        PrevAnchor = "nv_sec2"
+    Case "nv_sec2"
+        PrevAnchor = "nv_sec1"
+    Case Else
+        PrevAnchor = "nv_sec1"
+    End Select
+End Function
+
+' 区画へ画面を動かす(Hyperlinks.Add は使わない。11章§7.1)。
+Private Sub GotoSection(ByVal anchorName As String)
+    On Error Resume Next
+    Dim cell As Object
+    Set cell = modUISheet.NamedCell(anchorName)
+    If cell Is Nothing Then Exit Sub
+    modUISheet.ShowSheet UN_SHEET
+    Application.Goto cell, True
+End Sub
+
+' [下書きを見る] 下書き4枚をまとめて可視にし、①へ移る(11章§0.2・§3.4)。
+Public Sub ShowDrafts()
+    If Not modUIProgress.TryEnterUiLock("下書きの表示") Then Exit Sub
+    On Error GoTo Done
+
+    Dim names() As String
+    names = Split(DraftSheets(), vbLf)
+
+    Dim i As Long
+    For i = LBound(names) To UBound(names)
+        Dim ws As Object
+        Set ws = modUISheet.SheetOf(names(i))
+        If Not ws Is Nothing Then
+            ws.Visible = -1                      ' xlSheetVisible
+            modUISheet.EnsureBackButton ws
+        End If
+    Next i
+
+    modUISheet.ShowSheet names(LBound(names))
+    modUIToast.ShowToast "下書きのタブを4枚出しました。" & _
+                         "「AIの下書き①」から順に読んでください。", "info"
+Done:
+    modUIProgress.ExitUiLock
+End Sub
+
+' 下書き4枚のシート名(改名は第3弾。いまは旧名のまま)。
+Private Function DraftSheets() As String
+    DraftSheets = "S1_企業プロファイル" & vbLf & "S2_リスク仮説" & vbLf & _
+                  "S3_提案" & vbLf & "S4_骨子"
+End Function
+
+' [ナビへ戻る] 可視にしたシートの1行目に置くボタン(11章§3.4)。行き止まりを作らない。
+Public Sub BackToNav()
+    If Not modUIProgress.TryEnterUiLock("ナビへ戻る") Then Exit Sub
+    On Error GoTo Done
+    modUISheet.ShowSheet UN_SHEET
+    ' 描き直しは ExitUiLock が必ず通す(2度描かない)。
+    modUIToast.ShowToast "ナビへ戻りました。", "info"
+Done:
+    modUIProgress.ExitUiLock
+End Sub

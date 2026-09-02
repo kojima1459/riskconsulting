@@ -25,7 +25,7 @@ Option Explicit
 ' ============================================================================
 
 Private Const UP_SRC As String = "modUIProgress"
-Private Const UP_HOME As String = "HOME"
+Private Const UP_HOME As String = "ナビ"
 
 ' 13章§2.10 の名前付きレンジ(進捗ブロックの4行)。
 Private Const UP_NAME_STEP As String = "hm_progress_step"
@@ -46,25 +46,58 @@ Private Const UP_WAIT_DEFAULT As Long = 1200
 Private gLockStep As String
 Private gLockAt As Double
 
+' 11章§4.2(1): ステータスバーの元の設定を退避しておく箱。**永続でない画面制御の
+'   状態**であり、14章§6の「状態保持の例外」への登録は要らない。退避と復帰は
+'   ExitUiLock と同じ場所に置き、失敗経路でも必ず通す。
+Private gBarWas As Boolean
+Private gBarSaved As Boolean
+
 ' ============================================================================
 ' SetStage - LLM呼出の**前**に進捗4行を確定表示する(16章E-50(a)・14章§6)。
 '   maxWaitSec は config `llm_wait_sec`(呼び出し側が渡す)。0以下は既定1200秒。
 ' ============================================================================
-Public Sub SetStage(ByVal stepName As String, ByVal maxWaitSec As Long)
+Public Sub SetStage(ByVal stepName As String, ByVal maxWaitSec As Long, _
+                    Optional ByVal stageNo As Long = 1, _
+                    Optional ByVal stageCount As Long = 4)
     On Error Resume Next
 
     Dim waitSec As Long
     waitSec = maxWaitSec
     If waitSec <= 0 Then waitSec = UP_WAIT_DEFAULT
 
+    Dim startedAt As String
+    startedAt = Format$(Now, "hh:nn:ss")
+
     modUISheet.WriteNamed UP_NAME_STEP, stepName
-    modUISheet.WriteNamed UP_NAME_STARTED, Format$(Now, "hh:nn:ss")
+    modUISheet.WriteNamed UP_NAME_STARTED, startedAt
     modUISheet.WriteNamed UP_NAME_MAXWAIT, MaxWaitText(waitSec)
     modUISheet.WriteNamed UP_NAME_NOTE, UP_NOTE_TEXT
+
+    ' 11章§4.2(1): ステータスバー。会社の端末では非表示に設定されていることが
+    '   あり、そこへ書いた文字は誰にも届かないので**必ず True を立てる**。
+    '   元の値は退避し、ExitUiLock で必ず戻す(他人の設定を書き換えたままにしない)。
+    If Not gBarSaved Then
+        gBarWas = Application.DisplayStatusBar
+        gBarSaved = True
+    End If
+    Application.DisplayStatusBar = True
+    Application.StatusBar = "考え中… " & stepName & "（開始 " & _
+        Format$(Now, "hh:nn") & "・" & MaxWaitText(waitSec) & "）"
+
+    ' 11章§4.2(2): 事前描画カード。**呼出の前に描き切る**。DrawWaitCard の中で
+    '   ScreenUpdating = True を明示してから DoEvents を1回入れている
+    '   (ここを飛ばすと、描いたつもりのカードが1度も表示されないまま固まる)。
+    modUINavDraw.DrawWaitCard stepName, startedAt, MaxWaitText(waitSec), _
+                              stageNo, stageCount
 
     ' 呼出中は描画できないので、ここで描画を確定させる(E-50(a)(c))。
     DoEvents
 End Sub
+
+' IsUiLocked - いま実行中か(11章§3.1.1 の優先順位2行目が読む)。
+Public Function IsUiLocked() As Boolean
+    IsUiLocked = (LenB(gLockStep) > 0)
+End Function
 
 ' 「最大20分（1Stepあたり llm_wait_sec 秒）」相当の文言(11章のワイヤー)。
 '   秒を分へ換算し、端数は切り上げる(短く見せない)。
@@ -144,6 +177,22 @@ Public Sub ExitUiLock()
     ' 実行が終わったので「実行中のStep」は空へ戻す(古い表示を残さない)。
     ' 開始時刻・最大待ち時間・案内文は直前の実行の記録として残す。
     modUISheet.WriteNamed UP_NAME_STEP, vbNullString
+
+    ' 11章§4.2: 事前描画カードを消し、ステータスバーを Excel へ返す。
+    '   **成功・失敗のどちらでも必ず通る**ようにここへ置く(E-50(d)と同じ場所)。
+    '   空文字ではなく False を代入する(空のバーが残らない)。
+    modUINavDraw.HideWaitCard
+    Application.StatusBar = False
+    If gBarSaved Then
+        Application.DisplayStatusBar = gBarWas
+        gBarSaved = False
+    End If
+
+    ' 11章§3.1.1: STEPの決定は「実行中か」を上から2番目に見る。ハンドラは
+    '   ロックを持ったまま画面を描き直すので、**解除したあとにもう一度描く**まで
+    '   コーチ帯が「いま作っています」のまま残る。ここで描き直して、画面と状態が
+    '   食い違ったままにしない(DrawNav は ExitUiLock を呼ばないので再帰しない)。
+    modUINav.DrawNav
 
     ' 16章E-50(d): ScreenUpdating の True 復帰はここに一元化する
     ' (個々のハンドラでの復帰漏れを構造的に無効化する)。

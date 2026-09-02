@@ -2,13 +2,13 @@ Attribute VB_Name = "modUIGuide"
 Option Explicit
 
 ' ============================================================================
-' modUIGuide - 初回ガイドツアーと操作ガイドのボタン(ui層・裁定書14 裁定6)
+' modUIGuide - 初回ガイドツアーと使い方タブのボタン(ui層・裁定書14 裁定6)
 ' ----------------------------------------------------------------------------
 ' 役割:
 '   はじめてブックを開いた人に「①調べる→②貼る→③まとめて作る→④⑤出す」の3枚の
 '   カードを順番に見せる。完了・スキップは config `guide_tour_done`="1" として
-'   残し、以後は出さない。操作ガイドシートの[ツアーをもう一度見る]から何度でも
-'   見直せる。あわせて操作ガイドシートの2つの図形ボタン([テストを実行]・
+'   残し、以後は出さない。使い方シートの[ツアーをもう一度見る]から何度でも
+'   見直せる。あわせて使い方シートの図形ボタン([テストを実行]・[記録を見る]・
 '   [ツアーをもう一度見る])を生やす(gd_ アンカーの上に置く)。
 '
 ' 防衛設計(PoC「マイ本棚AI」modTour の流儀をそのまま採る):
@@ -27,18 +27,26 @@ Option Explicit
 '   すべて「まだ見ていない」と解釈して表示側へ倒す(見せ損なうより出す)。
 ' ============================================================================
 
-Private Const UG_SHEET As String = "HOME"
-Private Const UG_GUIDE_SHEET As String = "操作ガイド"
+Private Const UG_SHEET As String = "ナビ"
+Private Const UG_GUIDE_SHEET As String = "使い方"
 Private Const UG_PREFIX As String = "gt_"
 Private Const UG_FLAG As String = "guide_tour_done"
-Private Const UG_STEPS As Long = 3
+Private Const UG_STEPS As Long = 4
 Private Const UG_LOCK_NAME As String = "はじめの案内"
 
 ' 13章§2.10 の名前付きレンジ(カードの位置の基準。セル番地は書かない)。
-Private Const UG_ANCHOR As String = "hm_case_id"
-' 操作ガイドのボタンアンカー(13章§2.18)。
+Private Const UG_ANCHOR As String = "nv_sec1"
+' 使い方タブのボタンアンカー(13章§2.18)。
 Private Const UG_BTN_TEST As String = "gd_btn_test"
 Private Const UG_BTN_TOUR As String = "gd_btn_tour"
+' v3.2(11章§3.6): ⑤困ったときの[記録を見る]と⑦上級の[表示する]5本。
+Private Const UG_BTN_LOGS As String = "gd_btn_logs"
+Private Const UG_BTN_ADV As String = "gd_btn_adv"
+' 記録3枚(13章§2.9)。まとめて可視にし err_log へ移る。
+Private Const UG_LOG_SHEETS As String = "err_log" & vbLf & "run_log" & vbLf & "usage_log"
+' 上級5枚(11章§3.6⑦)。押した1枚だけを可視にする。並び順は使い方タブと同じ。
+Private Const UG_ADV_SHEETS As String = "壁打ち" & vbLf & "受信箱" & vbLf & _
+    "フィードバック" & vbLf & "判断台帳" & vbLf & "案件一覧"
 
 ' Excel組み込み定数の数値(modUISheet と同じ流儀で名前を書かない)。
 Private Const UG_SHAPE_ROUNDED As Long = 5      ' msoShapeRoundedRectangle
@@ -81,7 +89,7 @@ Public Sub StartTourIfFirstRun()
 End Sub
 
 ' ============================================================================
-' RestartTour - 操作ガイドの[ツアーをもう一度見る]の OnAction。
+' RestartTour - 使い方タブの[ツアーをもう一度見る]の OnAction。
 ' ============================================================================
 Public Sub RestartTour()
     On Error Resume Next
@@ -123,7 +131,7 @@ Public Sub OnTourSkip()
 End Sub
 
 ' ============================================================================
-' EnsureGuideButtons - 操作ガイドシートの図形ボタン(modUIHome.EnsureScreens から
+' EnsureGuideButtons - 使い方シートの図形ボタン(modUIHome.EnsureScreens から
 '   他の Ensure*Buttons と同じ並びで呼ぶ)。アンカーが無ければ何もしない。
 ' ============================================================================
 Public Sub EnsureGuideButtons()
@@ -149,6 +157,131 @@ Public Sub EnsureGuideButtons()
         modUISheet.EnsureButtonEx ws, "btn_gd_tour", "ツアーをもう一度見る", r, c, 168#, _
                                   "modUIGuide.RestartTour", "plain"
     End If
+
+    ' ⑤困ったときの[記録を見る](11章§4.4・13章§2.9)。
+    r = modUISheet.BlockRow(UG_BTN_LOGS)
+    c = modUISheet.BlockCol(UG_BTN_LOGS)
+    If r > 0 And c > 0 Then
+        modUISheet.EnsureButtonEx ws, "btn_gd_logs", "記録を見る", r, c, 132#, _
+                                  "modUIGuide.ShowLogs", "plain"
+    End If
+
+    ' ⑦上級の[表示する]5本。config `ui_advanced` が FALSE のときは**作らない**
+    '   (描いて隠すのではない。11章§7.2(c)。孤児図形と誤クリックの両方を消す)。
+    If Not modConfig.GetBool("ui_advanced", True) Then Exit Sub
+    r = modUISheet.BlockRow(UG_BTN_ADV)
+    c = modUISheet.BlockCol(UG_BTN_ADV)
+    If r <= 0 Or c <= 0 Then Exit Sub
+
+    Dim names() As String
+    names = Split(UG_ADV_SHEETS, vbLf)
+    Dim i As Long
+    For i = LBound(names) To UBound(names)
+        modUISheet.EnsureButtonEx ws, "btn_gd_adv" & CStr(i + 1), "表示する", _
+                                  r + i, c, 100#, _
+                                  "modUIGuide.ShowAdvanced" & CStr(i + 1), "plain"
+    Next i
+End Sub
+
+' ============================================================================
+' OpenGuide - ナビの帯の[使い方を開く](13章§2.10(f))。
+' ============================================================================
+Public Sub OpenGuide()
+    If Not modUIProgress.TryEnterUiLock("使い方を開く") Then Exit Sub
+    On Error GoTo Done
+    modUISheet.ShowSheet UG_GUIDE_SHEET
+    modUIToast.ShowToast "「使い方」を開きました。上の目次から、知りたいところへ飛べます。", "info"
+Done:
+    modUIProgress.ExitUiLock
+End Sub
+
+' ============================================================================
+' ShowLogs - 使い方タブ⑤の[記録を見る](13章§2.9)。3枚まとめて可視にし
+'   err_log へ移る。**一度出したシートは、そのブックでは出したままにする**。
+' ============================================================================
+Public Sub ShowLogs()
+    If Not modUIProgress.TryEnterUiLock("記録の表示") Then Exit Sub
+    On Error GoTo Done
+
+    Dim names() As String
+    names = Split(UG_LOG_SHEETS, vbLf)
+    Dim i As Long
+    For i = LBound(names) To UBound(names)
+        Dim ws As Object
+        Set ws = modUISheet.SheetOf(names(i))
+        If Not ws Is Nothing Then
+            ws.Visible = -1                       ' xlSheetVisible
+            modUISheet.EnsureBackButton ws
+        End If
+    Next i
+
+    modUISheet.ShowSheet names(LBound(names))
+    modUIToast.ShowToast "記録のタブを3枚出しました。err_log のいちばん下の行を" & _
+                         "コピーして、開発担当へ送ってください。", "info"
+Done:
+    modUIProgress.ExitUiLock
+End Sub
+
+' ============================================================================
+' ShowAdvanced - 使い方タブ⑦の[表示する](11章§3.6⑦)。押した**1枚だけ**を
+'   可視にする。上級側の公開Subは flag に関係なく動く(flag は導線の有無だけ)。
+' ============================================================================
+Public Sub ShowAdvanced(ByVal sheetKey As String)
+    On Error GoTo Failed
+
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(sheetKey)
+    If ws Is Nothing Then
+        modUIToast.ShowToast "そのタブを出せませんでした。使い方タブの[記録を見る]を" & _
+                             "押して、いちばん下の行を開発担当へ送ってください。", "error"
+        Exit Sub
+    End If
+    ws.Visible = -1                               ' xlSheetVisible
+    modUISheet.EnsureBackButton ws
+    modUISheet.ShowSheet sheetKey
+    modUIToast.ShowToast "「" & sheetKey & "」を出しました。" & _
+                         "ナビへ戻るときは1行目の[ナビへ戻る]を押してください。", "info"
+    Exit Sub
+Failed:
+    modLog.LogError "E0603", "modUIGuide.ShowAdvanced", "show_failed:" & sheetKey, Err.Number
+End Sub
+
+' 上級の[表示する]5本(OnAction の口。実体は共通の ShowAdvanced)。
+Private Function AdvSheetOf(ByVal n As Long) As String
+    Dim names() As String
+    names = Split(UG_ADV_SHEETS, vbLf)
+    If n < 1 Or n > UBound(names) - LBound(names) + 1 Then Exit Function
+    AdvSheetOf = names(LBound(names) + n - 1)
+End Function
+
+Public Sub ShowAdvanced1()
+    If Not modUIProgress.TryEnterUiLock("上級タブの表示") Then Exit Sub
+    ShowAdvanced AdvSheetOf(1)
+    modUIProgress.ExitUiLock
+End Sub
+
+Public Sub ShowAdvanced2()
+    If Not modUIProgress.TryEnterUiLock("上級タブの表示") Then Exit Sub
+    ShowAdvanced AdvSheetOf(2)
+    modUIProgress.ExitUiLock
+End Sub
+
+Public Sub ShowAdvanced3()
+    If Not modUIProgress.TryEnterUiLock("上級タブの表示") Then Exit Sub
+    ShowAdvanced AdvSheetOf(3)
+    modUIProgress.ExitUiLock
+End Sub
+
+Public Sub ShowAdvanced4()
+    If Not modUIProgress.TryEnterUiLock("上級タブの表示") Then Exit Sub
+    ShowAdvanced AdvSheetOf(4)
+    modUIProgress.ExitUiLock
+End Sub
+
+Public Sub ShowAdvanced5()
+    If Not modUIProgress.TryEnterUiLock("上級タブの表示") Then Exit Sub
+    ShowAdvanced AdvSheetOf(5)
+    modUIProgress.ExitUiLock
 End Sub
 
 ' ============================================================================
@@ -275,29 +408,28 @@ End Function
 Private Function TitleOf(ByVal n As Long) As String
     Select Case n
     Case 1
-        TitleOf = "① 調べる → ② 貼る"
+        TitleOf = "① 会社のこと"
     Case 2
-        TitleOf = "③ まとめて作る"
+        TitleOf = "② 貼る"
+    Case 3
+        TitleOf = "③ 作る"
     Case Else
-        TitleOf = "④⑤ 出す"
+        TitleOf = "④ 出す"
     End Select
 End Function
 
 Private Function BodyOf(ByVal n As Long) As String
+    ' 11章§3.6 末尾: 文面はナビのコーチ帯の6文から STEP 1・3・4・6 を流用し、
+    ' **1字も別の文を作らない**(値源は modUINav.StepText の1本だけ)。
     Select Case n
     Case 1
-        BodyOf = _
-            "[① 調べる指示文を出す]の文を1本ずつ投げ、返答を貼ります。" & vbLf & _
-            "1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ。"
+        BodyOf = modUINav.StepText(1)
     Case 2
-        BodyOf = _
-            "③ まとめて作る を押して待ちます。画面が白くなっても処理は続いています。" & vbLf & _
-            "終わるとS1～S4に下書きが入ります。読んで直すのが人の仕事。"
+        BodyOf = modUINav.StepText(3)
+    Case 3
+        BodyOf = modUINav.StepText(4)
     Case Else
-        BodyOf = _
-            "[④ レポートを出す]でお客様に見せるレポートが出ます。" & vbLf & _
-            "[⑤ ヒアリングシートを出す]で聞くことが紙1枚で出ます。" & vbLf & _
-            "困ったときは「操作ガイド」タブへ。"
+        BodyOf = modUINav.StepText(6)
     End Select
 End Function
 

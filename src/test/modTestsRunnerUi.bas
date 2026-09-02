@@ -18,7 +18,7 @@ Option Explicit
 ' 実行順(modTestsExcel.RunAllExcelTests は ResetTests を呼ばない設計であり、
 '   純層の**後**に呼んで結果を積み増す前提で書かれている。この順序を守る):
 '   SetExpectedCount -> RunAllPureTests -> 純層の実行本数を控える
-'   -> RunAllExcelTests -> 4条件を判定 -> 操作ガイドへ書込 -> MsgBoxで1行
+'   -> RunAllExcelTests -> 4条件を判定 -> 使い方タブへ書込 -> MsgBoxで1行
 '
 ' fail-closed(裁定書14 裁定5):
 '   期待本数(vba_src!E2)が空・非数値なら**テストを実行せず**NGで終える。
@@ -42,7 +42,7 @@ Private Const TR_NO_EXPECTED As String = _
     "期待本数が読めませんでした。開発担当へご連絡ください。"
 
 ' ============================================================================
-' RunAllTestsFromBook - 操作ガイドの[テストを実行]の OnAction。
+' RunAllTestsFromBook - 使い方タブの[テストを実行]の OnAction。
 '   引数なしなので Alt+F8(マクロ一覧)からも実行できる。
 ' ============================================================================
 Public Sub RunAllTestsFromBook()
@@ -139,7 +139,7 @@ Failed:
 End Function
 
 ' ============================================================================
-' 結果の書込(操作ガイドの gd_test_result・縦20行)。
+' 結果の書込(使い方タブの gd_test_result・縦20行)。
 '   1行目 = 合否サマリ。2行目以降 = ReportText の先頭から。
 '   FAILがあるときは FAIL行(先頭が "NG: ")を先に並べる(20行で切れても
 '   落ちた検査が読める)。あふれた分は最終行を「(以下省略・残りN行)」にする。

@@ -2,16 +2,13 @@
   "_comment": "本体ブック(リスク提案ナビ.xlsm)のシート台帳。build/build_rpn.py はこのファイルだけを見てシートを作り、tools/sheet_check.py が 13章§2 のMarkdown表を直接パースして本ファイルと成果物ブックの両方を照合する。**正は13章。本ファイルは従**であり、ずれたら本ファイルを直す(13章は直さない)。role の意味: guard=マクロ無効ガード(先頭・アクティブ・visibleで配布。13章§2.9)、form=帳票型(1行目ヘッダを持たず名前付きレンジで読み書き。13章§2.9)、table=テーブル型(1行目=物理名ヘッダ。複数ブロックを縦に並べる場合はブロック名の名前付きレンジをアンカーにする)、config=name/value/説明の3列、vba_src=ビルドスクリプトがモジュールソースを焼き込む配布用シート(仕様外のビルド機構)。",
   "app_version": "2.0.0",
   "guard_sheet": "はじめにお読みください",
-
   "protection_policy": {
     "worksheet_protect": false,
     "enable_selection": "xlUnlockedCells",
     "_note": "11章§5: Worksheet.Protect は使わない(全面Protectは図形・表の再描画のたびにUnprotect/Protectが要り、描画失敗で保護状態が壊れるため)。代わりに 入力対象外セルの Locked=True ＋ ws.EnableSelection=xlUnlockedCells ＋ ParkFocus で構成する。ビルドは Locked 属性だけをブックへ焼く。EnableSelection は .xlsm に永続化されない実行時プロパティなので、本台帳を正として modBoot が起動時に適用する(W2 T-16)。"
   },
-
   "text_number_format": "@",
   "_text_number_format_note": "16章 E-46/NFR-S7の二重化。type=String の列・入力セルはExcelのテキスト書式へ固定し、先頭 = + - @ が格納型数式として評価されるのを配布テンプレート段階で封じる(実行時の SetCellSafe と二重化)。type=Long の列には掛けない(数値が文字列化するため)。",
-
   "input_rule_omissions": [
     {
       "sheet": "case_data",
@@ -21,76 +18,337 @@
     }
   ],
   "_input_rule_omissions_note": "17章 T-46/裁定書4 項目17: ビルドが入力規則(データの入力規則)を255字上限で省略した列の宣言台帳。tools/sheet_check.py [7] が成果物ブックの実測(dv指定列のうち入力規則が実際に付いていないもの)とこの宣言を突き合わせ、一致しなければ落とす。将来W3で省略が解消したら本配列を空にしないと落ちる=対応漏れが機械検出される。",
-
   "enums": {
     "_note": "入力規則(データの入力規則リスト)の値集合。**正は19章§3**。13章§2.13-§2.17 で「日本語表示」「日本語enum」と明記された列には *_ja(日本語ラベル)を、機械値のまま持つ列には機械値の一覧を割り当てる。11章§5の最終形は『起動時にナレッジブック/19章レジストリからコピーした隠しレンジ』を源泉にする方式だが、その実装はW3(T-31/T-32)であり、W0では静的リストを焼く。Excelのインライン入力規則リストは255字上限があるため、超える集合(data_key 28値等)はビルド時に省略され、その事実が標準出力へ出る。",
-
-    "case_type": ["new", "renewal"],
-    "dossier_tier": ["t1_quick", "t2_full", "t3_sparring"],
-    "channel": ["wholesale", "retail"],
-    "kanji": ["lead", "non_lead", "coins"],
-    "bid": ["yes", "no"],
-    "reins": ["none", "reins", "captive"],
-    "case_status": ["draft", "s1_done", "s2_done", "s3_done", "s4_done", "exported", "feedback_done", "error"],
-    "s4_variant": ["proposal", "alliance"],
-    "failed_step": ["s1", "s2", "s3", "s4", "s2c", "s3c"],
+    "case_type": [
+      "new",
+      "renewal"
+    ],
+    "dossier_tier": [
+      "t1_quick",
+      "t2_full",
+      "t3_sparring"
+    ],
+    "channel": [
+      "wholesale",
+      "retail"
+    ],
+    "kanji": [
+      "lead",
+      "non_lead",
+      "coins"
+    ],
+    "bid": [
+      "yes",
+      "no"
+    ],
+    "reins": [
+      "none",
+      "reins",
+      "captive"
+    ],
+    "case_status": [
+      "draft",
+      "s1_done",
+      "s2_done",
+      "s3_done",
+      "s4_done",
+      "exported",
+      "feedback_done",
+      "error"
+    ],
+    "s4_variant": [
+      "proposal",
+      "alliance"
+    ],
+    "failed_step": [
+      "s1",
+      "s2",
+      "s3",
+      "s4",
+      "s2c",
+      "s3c"
+    ],
     "data_key": [
-      "input_hp", "input_yuho", "input_memo", "input_contract", "input_prev_renewal",
-      "input_dossier", "input_field_notes", "input_coverage_note", "input_hearing_answers",
-      "s1_json", "s2_json", "s3_json", "s4_json", "s2c_json", "s3c_json",
-      "s2r_json", "s3r_json", "s2_prev_json",
-      "s1_edited", "s2_edited", "s3_edited", "s4_edited",
-      "s1_json_failed", "s2_json_failed", "s3_json_failed", "s4_json_failed",
-      "sparring_u", "sparring_a"
+      "input_hp",
+      "input_yuho",
+      "input_memo",
+      "input_contract",
+      "input_prev_renewal",
+      "input_dossier",
+      "input_field_notes",
+      "input_coverage_note",
+      "input_hearing_answers",
+      "s1_json",
+      "s2_json",
+      "s3_json",
+      "s4_json",
+      "s2c_json",
+      "s3c_json",
+      "s2r_json",
+      "s3r_json",
+      "s2_prev_json",
+      "s1_edited",
+      "s2_edited",
+      "s3_edited",
+      "s4_edited",
+      "s1_json_failed",
+      "s2_json_failed",
+      "s3_json_failed",
+      "s4_json_failed",
+      "sparring_u",
+      "sparring_a"
     ],
-    "run_step": ["s1", "s2", "s3", "s4", "pf", "sp", "wt", "fg", "s2c", "s3c", "s2r", "s3r"],
-    "play": ["PL-01", "PL-02", "PL-03", "PL-04", "PL-05", "PL-06", "PL-07", "PL-08"],
-    "transport": ["ribbon", "direct", "mock"],
-    "validate_result": ["ok", "repaired", "failed"],
-    "fb_event": ["next_appt", "quote_req", "won", "lost", "renewed", "claim", "no_meeting_yet"],
-    "inbox_status": ["undiagnosed", "diagnosed", "adopted", "conditional_hold", "rejected", "merged"],
-    "judge_to_ja": ["採択", "条件付き保留", "却下"],
-    "source_kind_ja": ["部内投稿", "現場の声", "ウォッチ"],
-    "pf_survival": ["high", "mid", "low"],
-    "drop_type": ["T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"],
-    "revive_tag": ["tech", "regulation", "partner", "data", "market"],
-    "judge_decision_ja": ["増率", "クローズ", "縮小・限定", "条件維持", "ロス改善伴走"],
-    "judge_result_ja": ["成約", "失注", "未確定"],
-    "boolean": ["TRUE", "FALSE"],
-
-    "case_type_ja": ["新規開拓", "更新"],
-    "dossier_tier_ja": ["かんたん調査", "しっかり調査", "壁打ち"],
-    "channel_ja": ["ホール", "リテール"],
-    "kanji_ja": ["幹事", "非幹事", "共保"],
-    "bid_ja": ["あり", "なし"],
-    "reins_ja": ["なし", "再保険", "キャプティブ"],
-    "case_status_ja": ["下書き", "S1完了", "S2完了", "S3完了", "S4完了", "出力済", "記録済", "エラー"],
-    "s4_variant_ja": ["保険提案書", "協業提案書"],
-    "quality_mode_ja": ["標準", "入念（批判→改訂つき）"],
-    "location_type_ja": ["工場", "本社", "店舗", "倉庫", "その他"],
-    "field_insight_tag_ja": ["リスクの手がかり", "決裁・人間関係", "競合・他社", "制約・NG", "商機", "その他"],
+    "run_step": [
+      "s1",
+      "s2",
+      "s3",
+      "s4",
+      "pf",
+      "sp",
+      "wt",
+      "fg",
+      "s2c",
+      "s3c",
+      "s2r",
+      "s3r"
+    ],
+    "play": [
+      "PL-01",
+      "PL-02",
+      "PL-03",
+      "PL-04",
+      "PL-05",
+      "PL-06",
+      "PL-07",
+      "PL-08"
+    ],
+    "transport": [
+      "ribbon",
+      "direct",
+      "mock"
+    ],
+    "validate_result": [
+      "ok",
+      "repaired",
+      "failed"
+    ],
+    "fb_event": [
+      "next_appt",
+      "quote_req",
+      "won",
+      "lost",
+      "renewed",
+      "claim",
+      "no_meeting_yet"
+    ],
+    "inbox_status": [
+      "undiagnosed",
+      "diagnosed",
+      "adopted",
+      "conditional_hold",
+      "rejected",
+      "merged"
+    ],
+    "judge_to_ja": [
+      "採択",
+      "条件付き保留",
+      "却下"
+    ],
+    "source_kind_ja": [
+      "部内投稿",
+      "現場の声",
+      "ウォッチ"
+    ],
+    "pf_survival": [
+      "high",
+      "mid",
+      "low"
+    ],
+    "drop_type": [
+      "T0",
+      "T1",
+      "T2",
+      "T3",
+      "T4",
+      "T5",
+      "T6",
+      "T7",
+      "T8",
+      "T9",
+      "T10"
+    ],
+    "revive_tag": [
+      "tech",
+      "regulation",
+      "partner",
+      "data",
+      "market"
+    ],
+    "judge_decision_ja": [
+      "増率",
+      "クローズ",
+      "縮小・限定",
+      "条件維持",
+      "ロス改善伴走"
+    ],
+    "judge_result_ja": [
+      "成約",
+      "失注",
+      "未確定"
+    ],
+    "boolean": [
+      "TRUE",
+      "FALSE"
+    ],
+    "case_type_ja": [
+      "新規開拓",
+      "更新"
+    ],
+    "dossier_tier_ja": [
+      "かんたん調査",
+      "しっかり調査",
+      "壁打ち"
+    ],
+    "channel_ja": [
+      "ホール",
+      "リテール"
+    ],
+    "kanji_ja": [
+      "幹事",
+      "非幹事",
+      "共保"
+    ],
+    "bid_ja": [
+      "あり",
+      "なし"
+    ],
+    "reins_ja": [
+      "なし",
+      "再保険",
+      "キャプティブ"
+    ],
+    "case_status_ja": [
+      "下書き",
+      "S1完了",
+      "S2完了",
+      "S3完了",
+      "S4完了",
+      "出力済",
+      "記録済",
+      "エラー"
+    ],
+    "s4_variant_ja": [
+      "保険提案書",
+      "協業提案書"
+    ],
+    "quality_mode_ja": [
+      "標準",
+      "入念（批判→改訂つき）"
+    ],
+    "location_type_ja": [
+      "工場",
+      "本社",
+      "店舗",
+      "倉庫",
+      "その他"
+    ],
+    "field_insight_tag_ja": [
+      "リスクの手がかり",
+      "決裁・人間関係",
+      "競合・他社",
+      "制約・NG",
+      "商機",
+      "その他"
+    ],
     "input_quality_aspect_ja": [
-      "会社概要", "事業・製品", "拠点・設備", "沿革", "直近の動き", "採用・人員",
-      "有報・財務リスク", "営業情報", "SNS評判", "競合・業界事故", "市況・マクロ",
-      "財務状態", "付保・提案の経緯", "拠点ハザード"
+      "会社概要",
+      "事業・製品",
+      "拠点・設備",
+      "沿革",
+      "直近の動き",
+      "採用・人員",
+      "有報・財務リスク",
+      "営業情報",
+      "SNS評判",
+      "競合・業界事故",
+      "市況・マクロ",
+      "財務状態",
+      "付保・提案の経緯",
+      "拠点ハザード"
     ],
-    "input_quality_status_ja": ["十分", "断片的", "無い"],
-    "input_quality_overall_ja": ["高", "中", "低"],
+    "input_quality_status_ja": [
+      "十分",
+      "断片的",
+      "無い"
+    ],
+    "input_quality_overall_ja": [
+      "高",
+      "中",
+      "低"
+    ],
     "risk_category_ja": [
-      "戦略・市場", "調達・供給網", "製造・品質", "販売・顧客", "施設・自然災害・BCP",
-      "人材・労務", "デジタル・情報", "法務・規制", "財務・取引先", "ブランド・社会"
+      "戦略・市場",
+      "調達・供給網",
+      "製造・品質",
+      "販売・顧客",
+      "施設・自然災害・BCP",
+      "人材・労務",
+      "デジタル・情報",
+      "法務・規制",
+      "財務・取引先",
+      "ブランド・社会"
     ],
-    "risk_status_ja": ["仮説", "確認済み", "棄却（記録保持）", "新規発見"],
-    "horizon_ja": ["既に顕在化", "1～3年", "3年超"],
-    "frequency_ja": ["高", "中", "低"],
-    "impact_ja": ["大", "中", "小"],
-    "evidence_source_ja": ["HP", "有報", "営業メモ", "現契約", "前回更新メモ", "社内ナレッジ", "推定"],
-    "transferability_ja": ["比較的移転しやすい", "条件付き・部分的", "保険化困難"],
-    "gap_type_ja": ["無保険", "過小", "重複"],
-    "proposal_kind_ja": ["補償拡大", "新種目提案", "座組提案"],
-    "sparring_role_ja": ["自分", "AI"]
+    "risk_status_ja": [
+      "仮説",
+      "確認済み",
+      "棄却（記録保持）",
+      "新規発見"
+    ],
+    "horizon_ja": [
+      "既に顕在化",
+      "1～3年",
+      "3年超"
+    ],
+    "frequency_ja": [
+      "高",
+      "中",
+      "低"
+    ],
+    "impact_ja": [
+      "大",
+      "中",
+      "小"
+    ],
+    "evidence_source_ja": [
+      "HP",
+      "有報",
+      "営業メモ",
+      "現契約",
+      "前回更新メモ",
+      "社内ナレッジ",
+      "推定"
+    ],
+    "transferability_ja": [
+      "比較的移転しやすい",
+      "条件付き・部分的",
+      "保険化困難"
+    ],
+    "gap_type_ja": [
+      "無保険",
+      "過小",
+      "重複"
+    ],
+    "proposal_kind_ja": [
+      "補償拡大",
+      "新種目提案",
+      "座組提案"
+    ],
+    "sparring_role_ja": [
+      "自分",
+      "AI"
+    ]
   },
-
   "sheets": [
     {
       "name": "はじめにお読みください",
@@ -123,185 +381,710 @@
         "使い方は、開いたあとに「操作ガイド」タブ(緑色のタブ)を見てください。"
       ]
     },
-
     {
-      "name": "HOME",
+      "name": "ナビ",
       "role": "form",
       "state": "visible",
       "spec_ref": "13章§2.10",
       "tab_color": "006C4F",
-      "label_width": 24,
-      "value_width": 62,
-      "note_width": 52,
+      "label_width": 26,
+      "value_width": 78,
+      "note_width": 50,
+      "freeze_panes": "A9",
       "sections": [
         {
-          "title": "案件",
+          "title": "コーチ帯（ここから上はスクロールしても動きません）",
           "fields": [
-            {"range": "hm_case_id", "label": "対象案件ID", "type": "String", "input": true, "note": "一覧から案件を選びます。空のときは案件が選ばれていません"},
-            {"range": "hm_case_label", "label": "対象案件(表示)", "type": "String", "input": false, "note": "いま選ばれている案件の表示名です。自動で書かれます"},
-            {"range": "hm_status", "label": "状態", "type": "String", "input": false, "note": "案件がどこまで進んだかを表します。自動で書かれます"},
-            {"range": "hm_round_no", "label": "ラウンド", "type": "Long", "input": false, "note": "何巡目かを表します。自動で書かれます"},
-            {"range": "hm_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "空のままなら調査の深さに合わせて自動で決まります。この案件だけ変えたいときに選びます"}
+            {
+              "range": "nv_step_no",
+              "label": "STEP",
+              "type": "String",
+              "input": false,
+              "note": "いま6段のうちのどこかを表します。自動で書かれます"
+            },
+            {
+              "range": "nv_step_dots",
+              "label": "進み具合",
+              "type": "String",
+              "input": false,
+              "note": "進み具合を丸で表します。自動で書かれます"
+            },
+            {
+              "range": "hm_case_id",
+              "label": "対象の案件",
+              "type": "String",
+              "input": true,
+              "note": "一覧から案件を選びます。空のときは案件が選ばれていません"
+            },
+            {
+              "range": "hm_case_label",
+              "label": "対象の案件（表示）",
+              "type": "String",
+              "input": false,
+              "note": "いま選ばれている案件の表示名です。自動で書かれます"
+            },
+            {
+              "range": "hm_next_action",
+              "label": "いま何をするか",
+              "type": "String",
+              "input": false,
+              "note": "次にすることを1文で出します。自動で書かれます"
+            }
           ]
         },
         {
-          "title": "進捗",
-          "_note": "この4行は modUIProgress.SetStage がリボン呼出の前に書き切る(16章 E-50a)。",
+          "title": "① 会社のこと",
+          "anchor": "nv_sec1",
           "fields": [
-            {"range": "hm_progress_step", "label": "実行中の段", "type": "String", "input": false, "note": "いま動いている段の名前です。自動で書かれます"},
-            {"range": "hm_progress_started_at", "label": "開始時刻", "type": "String", "input": false, "note": "処理を始めた時刻です。自動で書かれます"},
-            {"range": "hm_progress_max_wait", "label": "最大待ち時間", "type": "String", "input": false, "note": "これ以上かかったら中断する時間の目安です"},
-            {"range": "hm_progress_note", "label": "案内", "type": "String", "input": false, "note": "「画面が白くなっても処理は続いています」の固定案内文"}
+            {
+              "text": "入れるのは4つだけです。入れると、社内のディープリサーチに貼る文がすぐ下に出ます。"
+            },
+            {
+              "range": "ci_case_type",
+              "label": "種別",
+              "type": "String",
+              "input": true,
+              "dv": "case_type_ja",
+              "note": "新しく取りにいく案件か、更新の案件かを選びます。「更新」を選ぶと②に「いまの契約」の欄が出ます"
+            },
+            {
+              "range": "ci_company",
+              "label": "会社名（必須）",
+              "type": "String",
+              "input": true,
+              "note": "お客様の会社名です。空のままでは保存できません"
+            },
+            {
+              "range": "ci_industry_name",
+              "label": "業種名（必須）",
+              "type": "String",
+              "input": true,
+              "note": "一覧から選びます。一覧が出ないときは手で入力しても先へ進めます"
+            },
+            {
+              "range": "ci_industry_code",
+              "label": "業種コード",
+              "type": "String",
+              "input": true,
+              "note": "業種名と同じ一覧から選びます。手で入力しても先へ進めます"
+            },
+            {
+              "range": "dr_address",
+              "label": "本社の場所（必須）",
+              "type": "String",
+              "input": true,
+              "note": "同じような社名の別の会社が混ざらないように、本社のある市区町村まで入れてください"
+            },
+            {
+              "text": "── 社内のディープリサーチに貼る文（上から1本ずつ・各10分） ──",
+              "head": true
+            },
+            {
+              "text": "1本ずつしか投げられません。返ってきてから次を投げてください。",
+              "gray": true
+            },
+            {
+              "range": "dr_body_01",
+              "label": "1本目 会社の基本",
+              "type": "String",
+              "input": false,
+              "note": "右の[コピー]で写して、社内のディープリサーチに貼ってください。自動で書かれます"
+            },
+            {
+              "range": "dr_body_02",
+              "label": "2本目 リスクの兆候",
+              "type": "String",
+              "input": false,
+              "note": "1本目が返ってから投げてください。自動で書かれます"
+            },
+            {
+              "range": "dr_body_03",
+              "label": "3本目 調達・仕入れの構造",
+              "type": "String",
+              "input": false,
+              "note": "2本目が返ってから投げてください。自動で書かれます"
+            },
+            {
+              "range": "dr_copied_seq",
+              "label": "つぎに押す枠",
+              "type": "String",
+              "input": false,
+              "note": "直前に[コピー]した枠の番号です。ブックを閉じると消えます"
+            },
+            {
+              "text": "── ここから下は[＋ もっと調べる（あと5本）]を押すと出ます ──",
+              "head": true
+            },
+            {
+              "range": "dr_sec_code",
+              "label": "証券コード",
+              "type": "String",
+              "input": true,
+              "note": "上場している会社のときだけ入れます。空のままでも先へ進めます"
+            },
+            {
+              "range": "dr_sites",
+              "label": "調べたい拠点",
+              "type": "String",
+              "input": true,
+              "note": "拠点の名前と住所を書きます。空のままでも先へ進めます"
+            },
+            {
+              "range": "dr_body_04",
+              "label": "業界と競合",
+              "type": "String",
+              "input": false,
+              "note": "右の[コピー]で写します。自動で書かれます"
+            },
+            {
+              "range": "dr_body_05",
+              "label": "世の中の動きとの関係",
+              "type": "String",
+              "input": false,
+              "note": "右の[コピー]で写します。自動で書かれます"
+            },
+            {
+              "range": "dr_body_06",
+              "label": "前回の更新からの変化",
+              "type": "String",
+              "input": false,
+              "note": "右の[コピー]で写します。自動で書かれます"
+            },
+            {
+              "range": "dr_body_07",
+              "label": "拠点の災害リスク",
+              "type": "String",
+              "input": false,
+              "note": "右の[コピー]で写します。自動で書かれます"
+            },
+            {
+              "range": "dr_body_08",
+              "label": "決算のハイライト",
+              "type": "String",
+              "input": false,
+              "note": "右の[コピー]で写します。自動で書かれます"
+            }
+          ],
+          "anchor_table": {
+            "range": "ci_research_anchor",
+            "headers": [
+              "purpose",
+              "prompt_text"
+            ],
+            "reserve_rows": 10,
+            "note": "実行すると、追加で調べるとよいことと、そのまま使える調査の文が並びます。各行の[コピー]で写せます"
+          }
+        },
+        {
+          "title": "② 貼る",
+          "anchor": "nv_sec2",
+          "fields": [
+            {
+              "range": "ci_case_id",
+              "label": "案件ID",
+              "type": "String",
+              "input": false,
+              "note": "どの案件の画面かを表します。新しい案件では「(新規)」と出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_count_total",
+              "label": "全部で何字",
+              "type": "String",
+              "input": false,
+              "note": "貼った文章の合計字数と目安です。自動で書かれます"
+            },
+            {
+              "text": "[ここに貼る]を押すと、どんなに長くても入ります。Ctrl+V で直接貼ってもかまいませんが、長いと入りきらないことがあります。",
+              "gray": true
+            },
+            {
+              "text": "お名前などは、AIへ渡す前に自動で伏せ字にしています。",
+              "gray": true
+            },
+            {
+              "text": "── 1 調べた結果 ──　[ここに貼る] [中身を見る] [消す]",
+              "head": true
+            },
+            {
+              "text": "社内のディープリサーチから返ってきた文章を、まるごと貼ってください。"
+            },
+            {
+              "text": "例: 「株式会社◯◯の主要拠点の自然災害リスクについて…」",
+              "gray": true
+            },
+            {
+              "text": "3本ぶんを続けて貼れます。長さも表も、そのままで大丈夫です。",
+              "gray": true
+            },
+            {
+              "range": "ci_count_dossier",
+              "label": "いまの状態",
+              "type": "String",
+              "input": false,
+              "note": "貼り付け済みの字数と、貼った時刻が出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_prev_dossier",
+              "label": "先頭だけお見せします",
+              "type": "String",
+              "input": false,
+              "block_rows": 5,
+              "note": "保存された文章の先頭5行です。読むだけの欄で、ここを直しても保存に反映されません"
+            },
+            {
+              "range": "ci_raw_dossier",
+              "label": "Ctrl+V で貼る欄（300行）",
+              "type": "String",
+              "input": true,
+              "block_rows": 300,
+              "note": "[ここに貼る]を使わずに Ctrl+V で直接貼るときの欄です。[貼ったものを保存する]で取り込み、この欄は空に戻ります"
+            },
+            {
+              "range": "ci_sent_dossier",
+              "label": "（見張り行）",
+              "type": "String",
+              "input": false,
+              "note": "枠に入りきらなかったことを知らせるための行です。空のままにしてください"
+            },
+            {
+              "text": "── 2 会社のホームページ ──　[ここに貼る] [中身を見る] [消す]",
+              "head": true
+            },
+            {
+              "text": "会社のホームページの、会社概要・事業内容・沿革のページを貼ってください。"
+            },
+            {
+              "text": "例: 「当社は1952年の創業以来、静岡県浜松市を拠点に…」",
+              "gray": true
+            },
+            {
+              "text": "ページを1枚ずつ貼っても、全部まとめて貼っても大丈夫です。",
+              "gray": true
+            },
+            {
+              "range": "ci_count_hp",
+              "label": "いまの状態",
+              "type": "String",
+              "input": false,
+              "note": "貼り付け済みの字数と、貼った時刻が出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_prev_hp",
+              "label": "先頭だけお見せします",
+              "type": "String",
+              "input": false,
+              "block_rows": 5,
+              "note": "保存された文章の先頭5行です。読むだけの欄で、ここを直しても保存に反映されません"
+            },
+            {
+              "range": "ci_raw_hp",
+              "label": "Ctrl+V で貼る欄（300行）",
+              "type": "String",
+              "input": true,
+              "block_rows": 300,
+              "note": "[ここに貼る]を使わずに Ctrl+V で直接貼るときの欄です。[貼ったものを保存する]で取り込み、この欄は空に戻ります"
+            },
+            {
+              "range": "ci_sent_hp",
+              "label": "（見張り行）",
+              "type": "String",
+              "input": false,
+              "note": "枠に入りきらなかったことを知らせるための行です。空のままにしてください"
+            },
+            {
+              "text": "── 3 有価証券報告書のリスクの章 ──　[ここに貼る] [中身を見る] [消す]",
+              "head": true
+            },
+            {
+              "text": "上場している会社なら、有価証券報告書の「事業等のリスク」の章を貼ってください。"
+            },
+            {
+              "text": "例: 「当社グループの事業展開その他に関しリスク要因となる可能性が…」",
+              "gray": true
+            },
+            {
+              "text": "上場していない会社なら、空のままで結構です。",
+              "gray": true
+            },
+            {
+              "range": "ci_count_yuho",
+              "label": "いまの状態",
+              "type": "String",
+              "input": false,
+              "note": "貼り付け済みの字数と、貼った時刻が出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_prev_yuho",
+              "label": "先頭だけお見せします",
+              "type": "String",
+              "input": false,
+              "block_rows": 5,
+              "note": "保存された文章の先頭5行です。読むだけの欄で、ここを直しても保存に反映されません"
+            },
+            {
+              "range": "ci_raw_yuho",
+              "label": "Ctrl+V で貼る欄（300行）",
+              "type": "String",
+              "input": true,
+              "block_rows": 300,
+              "note": "[ここに貼る]を使わずに Ctrl+V で直接貼るときの欄です。[貼ったものを保存する]で取り込み、この欄は空に戻ります"
+            },
+            {
+              "range": "ci_sent_yuho",
+              "label": "（見張り行）",
+              "type": "String",
+              "input": false,
+              "note": "枠に入りきらなかったことを知らせるための行です。空のままにしてください"
+            },
+            {
+              "text": "── 4 現場メモ（手で書く欄） ──　[ここに貼る] [中身を見る] [消す]",
+              "head": true
+            },
+            {
+              "text": "見出しの下に、思い出した順で書いてください。全部埋めなくて大丈夫です。"
+            },
+            {
+              "text": "書き始めると、その見出しの例文は次に画面を描いたときに消えます。",
+              "gray": true
+            },
+            {
+              "text": "「例: 」で始まる行は保存しません。",
+              "gray": true
+            },
+            {
+              "range": "ci_count_field_notes",
+              "label": "いまの状態",
+              "type": "String",
+              "input": false,
+              "note": "貼り付け済みの字数と、貼った時刻が出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_area_field_notes",
+              "label": "書く欄（60行）",
+              "type": "String",
+              "input": true,
+              "block_rows": 60,
+              "note": "見出しの下に手で書きます。この欄だけは実際に文字を入れる枠です"
+            },
+            {
+              "range": "ci_sent_field_notes",
+              "label": "（見張り行）",
+              "type": "String",
+              "input": false,
+              "note": "枠に入りきらなかったことを知らせるための行です。空のままにしてください"
+            },
+            {
+              "text": "── 5 いまの契約 ──　[ここに貼る] [中身を見る] [消す]",
+              "head": true
+            },
+            {
+              "text": "いま入っている保険の一覧を貼ってください。証券や更新案内の文章のままで結構です。"
+            },
+            {
+              "text": "例: 「火災保険　保険金額 5億円　◯◯損保　満期 2027年3月」",
+              "gray": true
+            },
+            {
+              "text": "種目と保険金額と保険会社が分かれば十分です。",
+              "gray": true
+            },
+            {
+              "range": "ci_count_contract",
+              "label": "いまの状態",
+              "type": "String",
+              "input": false,
+              "note": "貼り付け済みの字数と、貼った時刻が出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_prev_contract",
+              "label": "先頭だけお見せします",
+              "type": "String",
+              "input": false,
+              "block_rows": 5,
+              "note": "保存された文章の先頭5行です。読むだけの欄で、ここを直しても保存に反映されません"
+            },
+            {
+              "range": "ci_raw_contract",
+              "label": "Ctrl+V で貼る欄（300行）",
+              "type": "String",
+              "input": true,
+              "block_rows": 300,
+              "note": "[ここに貼る]を使わずに Ctrl+V で直接貼るときの欄です。[貼ったものを保存する]で取り込み、この欄は空に戻ります"
+            },
+            {
+              "range": "ci_sent_contract",
+              "label": "（見張り行）",
+              "type": "String",
+              "input": false,
+              "note": "枠に入りきらなかったことを知らせるための行です。空のままにしてください"
+            },
+            {
+              "text": "── 6 ヒアリング回答 ──　[ここに貼る] [中身を見る] [消す]",
+              "head": true
+            },
+            {
+              "text": "訪問して聞いてきたことを貼ってください。ヒアリングシートに手書きした内容をそのまま打ってもかまいません。"
+            },
+            {
+              "text": "例: 「工場見学は年60万人。主力ラインは2024年に更新済みで予備機あり。」",
+              "gray": true
+            },
+            {
+              "text": "答えが得られなかった質問は、書かなくて大丈夫です。",
+              "gray": true
+            },
+            {
+              "range": "ci_count_hearing_answers",
+              "label": "いまの状態",
+              "type": "String",
+              "input": false,
+              "note": "貼り付け済みの字数と、貼った時刻が出ます。自動で書かれます"
+            },
+            {
+              "range": "ci_prev_hearing_answers",
+              "label": "先頭だけお見せします",
+              "type": "String",
+              "input": false,
+              "block_rows": 5,
+              "note": "保存された文章の先頭5行です。読むだけの欄で、ここを直しても保存に反映されません"
+            },
+            {
+              "range": "ci_raw_hearing_answers",
+              "label": "Ctrl+V で貼る欄（300行）",
+              "type": "String",
+              "input": true,
+              "block_rows": 300,
+              "note": "[ここに貼る]を使わずに Ctrl+V で直接貼るときの欄です。[貼ったものを保存する]で取り込み、この欄は空に戻ります"
+            },
+            {
+              "range": "ci_sent_hearing_answers",
+              "label": "（見張り行）",
+              "type": "String",
+              "input": false,
+              "note": "枠に入りきらなかったことを知らせるための行です。空のままにしてください"
+            }
           ]
         },
         {
-          "title": "状態表示",
+          "title": "③ 作る",
+          "anchor": "nv_sec3",
           "fields": [
-            {"range": "hm_kb_status", "label": "ナレッジ読込状態", "type": "String", "input": false, "note": "社内ナレッジを読めているかを表します。読めていないときは管理者へ連絡してください"},
-            {"range": "hm_transport_banner", "label": "経路の警告帯", "type": "String", "input": false, "note": "お試し用の経路で動いているときに赤い文が出ます。その出力はお客様に見せないでください"},
-            {"range": "hm_warning", "label": "直近の警告", "type": "String", "input": false, "note": "直前の実行で気をつけることがあれば出ます。何も無いときは空です"}
+            {
+              "text": "貼り終えたら[まとめて作る]を押すだけです。10〜20分かかります。画面が白くなっても動いています。"
+            },
+            {
+              "range": "hm_progress_step",
+              "label": "いま動いている段",
+              "type": "String",
+              "input": false,
+              "note": "いま動いている段の名前です。自動で書かれます"
+            },
+            {
+              "range": "hm_progress_started_at",
+              "label": "始めた時刻",
+              "type": "String",
+              "input": false,
+              "note": "処理を始めた時刻です。自動で書かれます"
+            },
+            {
+              "range": "hm_progress_max_wait",
+              "label": "最大の待ち時間",
+              "type": "String",
+              "input": false,
+              "note": "これ以上かかったら中断する時間の目安です"
+            },
+            {
+              "range": "hm_progress_note",
+              "label": "案内",
+              "type": "String",
+              "input": false,
+              "note": "「画面が白くなっても処理は続いています」の固定案内文"
+            }
           ]
         },
         {
-          "title": "受信箱",
+          "title": "④ 出す",
+          "anchor": "nv_sec4",
           "fields": [
-            {"range": "hm_inbox_undiagnosed", "label": "未診断", "type": "Long", "input": false, "note": "受信箱にたまっている、まだ診断していない件数です。自動で書かれます"},
-            {"range": "hm_inbox_diagnosed", "label": "診断済", "type": "Long", "input": false, "note": "受信箱で診断が済んだ件数です。自動で書かれます"},
-            {"range": "hm_inbox_hold", "label": "条件付き保留", "type": "Long", "input": false, "note": "受信箱で「条件付き保留」になっている件数です。自動で書かれます"}
+            {
+              "text": "3つのボタンを押すだけです。"
+            },
+            {
+              "range": "hm_status",
+              "label": "どこまで進んだか",
+              "type": "String",
+              "input": false,
+              "note": "案件がどこまで進んだかを表します。自動で書かれます"
+            },
+            {
+              "range": "hm_round_no",
+              "label": "何巡目",
+              "type": "Long",
+              "input": false,
+              "note": "何巡目かを表します。自動で書かれます"
+            },
+            {
+              "range": "ci_dossier_tier",
+              "label": "調べる深さ",
+              "type": "String",
+              "input": false,
+              "note": "貼った内容から自動で決まります。選ぶ必要はありません"
+            },
+            {
+              "range": "hm_kb_status",
+              "label": "社内ナレッジ",
+              "type": "String",
+              "input": false,
+              "note": "社内ナレッジを読めているかを表します"
+            },
+            {
+              "range": "hm_warning",
+              "label": "お知らせ",
+              "type": "String",
+              "input": false,
+              "note": "直前の実行で気をつけることがあれば出ます。何も無いときは空です"
+            },
+            {
+              "range": "hm_transport_banner",
+              "label": "経路の警告帯",
+              "type": "String",
+              "input": false,
+              "note": "お試し用の経路で動いているときに赤い文が出ます。その出力はお客様に見せないでください"
+            }
           ]
         }
       ]
     },
-
     {
-      "name": "操作ガイド",
+      "name": "使い方",
       "role": "form",
       "guide": true,
       "state": "visible",
       "spec_ref": "13章§2.18",
       "tab_color": "00B050",
       "test_result_rows": 20,
-      "_note": "ビルドが本文セルを全部書き切る案内専用シート(裁定書14 裁定3)。build_rpn.py の _make_guide が章立て・目次・シート内リンクを生成する。台帳が持つのは『どこに何という名前付きレンジを置くか』だけで、本文は _make_guide が唯一の値源(実装の文字列から引き、推測で書かない)。",
+      "_note": "ビルドが本文セルを全部書き切る案内専用シート(裁定書14 裁定3・11章§3.6 v3.2の7章立て)。build_rpn.py の _make_guide が章立て・目次・シート内リンクを生成する。台帳が持つのは『どこに何という名前付きレンジを置くか』だけで、本文は _make_guide が唯一の値源(実装の文字列から引き、推測で書かない)。",
       "sections": [
         {
-          "title": "自己テスト",
+          "title": "名前付きレンジ(13章§2.18)",
           "fields": [
-            {"range": "gd_btn_test", "label": "テストの実行", "type": "String", "input": false, "note": "[テストを実行]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
-            {"range": "gd_btn_tour", "label": "はじめの案内", "type": "String", "input": false, "note": "[ツアーをもう一度見る]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
-            {"range": "gd_ch7_head", "label": "調べる指示文の章", "type": "String", "input": false, "note": "⑦「AIに調べさせる指示文」の章見出し行のアンカーセル。HOMEの[① 調べる指示文を出す]がここへ飛ぶ"},
-            {"range": "gd_test_result", "label": "テストの結果", "type": "String", "input": false, "note": "結果全文の書込先(縦20行×1列)。実行のたびに上書きされる"}
+            {
+              "range": "gd_btn_test",
+              "label": "テストの実行",
+              "type": "String",
+              "input": false,
+              "note": "⑥自己テストの[テストを実行]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"
+            },
+            {
+              "range": "gd_btn_tour",
+              "label": "はじめの案内",
+              "type": "String",
+              "input": false,
+              "note": "①会社のことの[ツアーをもう一度見る]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"
+            },
+            {
+              "range": "gd_btn_logs",
+              "label": "記録を見る",
+              "type": "String",
+              "input": false,
+              "note": "⑤困ったときの[記録を見る]ボタンを置くアンカーセル。押すと err_log / run_log / usage_log の3枚が可視になる"
+            },
+            {
+              "range": "gd_btn_adv",
+              "label": "上級のタブを出す",
+              "type": "String",
+              "input": false,
+              "note": "⑦上級の[表示する]ボタン5本を置くアンカーセル(縦5行×1列)。押した1枚だけが可視になる"
+            },
+            {
+              "range": "gd_ch7_head",
+              "label": "上級の章",
+              "type": "String",
+              "input": false,
+              "note": "⑦「上級」の章見出し行のアンカーセル。Application.Goto の飛び先"
+            },
+            {
+              "range": "gd_test_result",
+              "label": "テストの結果",
+              "type": "String",
+              "input": false,
+              "note": "結果全文の書込先(縦20行×1列)。実行のたびに上書きされる"
+            },
+            {
+              "range": "gd_prompt_01",
+              "label": "調べる文の雛形1",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_02",
+              "label": "調べる文の雛形2",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_03",
+              "label": "調べる文の雛形3",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_04",
+              "label": "調べる文の雛形4",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_05",
+              "label": "調べる文の雛形5",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_06",
+              "label": "調べる文の雛形6",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_07",
+              "label": "調べる文の雛形7",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            },
+            {
+              "range": "gd_prompt_08",
+              "label": "調べる文の雛形8",
+              "type": "String",
+              "input": false,
+              "note": "調べる文8本の雛形本文(非表示行)。ナビの区画①が読む唯一の値源"
+            }
           ]
         }
       ]
     },
-
-    {
-      "name": "案件入力",
-      "role": "form",
-      "state": "visible",
-      "spec_ref": "13章§2.11",
-      "tab_color": "0070C0",
-      "label_width": 26,
-      "value_width": 70,
-      "note_width": 54,
-      "sections": [
-        {
-          "title": "この案件のこと",
-          "fields": [
-            {"range": "ci_case_id", "label": "案件ID", "type": "String", "input": false, "note": "自動で付く番号です。新しい案件では「(新規)」と表示され、[保存して戻る]を押したときに番号が決まります"},
-            {"range": "ci_case_type", "label": "種別", "type": "String", "input": true, "dv": "case_type_ja", "note": "新しく取りにいく案件か、更新の案件かを選びます"},
-            {"range": "ci_company", "label": "企業名(必須)", "type": "String", "input": true, "note": "お客様の会社名です。空のままでは保存できません"},
-            {"range": "ci_industry_code", "label": "業種コード", "type": "String", "input": true, "note": "一覧から選びます。一覧が出ないときは社内ナレッジを読めていないので、そのまま手で入力しても続けられます"},
-            {"range": "ci_industry_name", "label": "業種名", "type": "String", "input": true, "note": "業種コードと同じ一覧から選びます。一覧が出ないときは手で入力しても続けられます"},
-            {"range": "ci_dossier_tier", "label": "調査の深さ", "type": "String", "input": true, "dv": "dossier_tier_ja", "note": "はじめは「かんたん調査」です。貼れる文章の上限もこの選択で変わります"},
-            {"range": "ci_channel", "label": "取引", "type": "String", "input": true, "dv": "channel_ja", "note": "取引の形を選びます"},
-            {"range": "ci_kanji", "label": "幹事", "type": "String", "input": true, "dv": "kanji_ja", "note": "幹事・非幹事・共保のどれかを選びます"},
-            {"range": "ci_bid", "label": "BID", "type": "String", "input": true, "dv": "bid_ja", "note": "入札の案件かどうかを選びます"},
-            {"range": "ci_reins", "label": "再保・キャプティブ", "type": "String", "input": true, "dv": "reins_ja", "note": "再保険やキャプティブを使う案件かを選びます"},
-            {"range": "ci_other_insurers", "label": "他社付保メモ", "type": "String", "input": true, "note": "他社の付保状況で分かっていることを自由に書きます"},
-            {"range": "ci_s4_variant", "label": "提案書の種類", "type": "String", "input": true, "dv": "s4_variant_ja", "note": "最後に作る提案書の種類を選びます"},
-            {"range": "ci_quality_mode", "label": "品質", "type": "String", "input": true, "dv": "quality_mode_ja", "note": "空のままなら調査の深さに合わせて自動で決まります"},
-            {"range": "ci_anonymize", "label": "匿名化", "type": "String", "input": true, "dv": "boolean", "note": "TRUEにすると、人の名前などをAIへ渡す前に伏せ字にします"}
-          ]
-        },
-        {
-          "title": "調べたことを貼る(上から順に貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ)",
-          "tall": true,
-          "fields": [
-            {"range": "ci_paste_hp_1", "label": "1 HPテキスト(必須)", "type": "String", "input": true, "note": "会社のホームページから写した文章を貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
-            {"range": "ci_paste_hp_2", "label": "1 HPテキスト 続き1", "type": "String", "input": true, "note": "1 HPテキストの続きを貼ります"},
-            {"range": "ci_paste_hp_3", "label": "1 HPテキスト 続き2", "type": "String", "input": true, "note": "1 HPテキストの続きを貼ります"},
-            {"range": "ci_paste_yuho_1", "label": "2 有報リスク章(任意)", "type": "String", "input": true, "note": "有価証券報告書の事業等のリスクの章を貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
-            {"range": "ci_paste_yuho_2", "label": "2 有報リスク章 続き1", "type": "String", "input": true, "note": "2 有報リスク章の続きを貼ります"},
-            {"range": "ci_paste_yuho_3", "label": "2 有報リスク章 続き2", "type": "String", "input": true, "note": "2 有報リスク章の続きを貼ります"},
-            {"range": "ci_paste_memo_1", "label": "3 営業メモ(任意)", "type": "String", "input": true, "note": "自分の営業メモを貼ります。続き欄はありません"},
-            {"range": "ci_paste_contract_1", "label": "4 現契約サマリ(更新時必須)", "type": "String", "input": true, "note": "いまの契約の内容をまとめた文章を貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
-            {"range": "ci_paste_contract_2", "label": "4 現契約サマリ 続き1", "type": "String", "input": true, "note": "4 現契約サマリの続きを貼ります"},
-            {"range": "ci_paste_contract_3", "label": "4 現契約サマリ 続き2", "type": "String", "input": true, "note": "4 現契約サマリの続きを貼ります"},
-            {"range": "ci_paste_prev_renewal_1", "label": "5 前回更新メモ(任意)", "type": "String", "input": true, "note": "前回の更新のときのメモを貼ります。続き欄はありません"},
-            {"range": "ci_paste_dossier_1", "label": "6 追加調査の結果", "type": "String", "input": true, "note": "AIに追加で調べさせた結果を貼ります。「しっかり調査」で使います。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
-            {"range": "ci_paste_dossier_2", "label": "6 追加調査の結果 続き1", "type": "String", "input": true, "note": "6 追加調査の結果の続きを貼ります"},
-            {"range": "ci_paste_dossier_3", "label": "6 追加調査の結果 続き2", "type": "String", "input": true, "note": "6 追加調査の結果の続きを貼ります"},
-            {"range": "ci_paste_field_notes_1", "label": "7 現場メモ(何でも欄)", "type": "String", "input": true, "note": "現場で見聞きしたことを何でも書きます。続き欄はありません"},
-            {"range": "ci_paste_coverage_note_1", "label": "8 付保の見立て", "type": "String", "input": true, "note": "付保についての自分の見立てを書きます。続き欄はありません"},
-            {"range": "ci_paste_hearing_answers_1", "label": "9 ヒアリング回答(第2ラウンド用)", "type": "String", "input": true, "note": "訪問して聞いてきた答えを貼ります。続き欄はありません"}
-          ]
-        },
-        {
-          "title": "貼った文字の数(自動で数えます)",
-          "fields": [
-            {"range": "ci_count_hp", "label": "1 HPテキスト", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
-            {"range": "ci_count_yuho", "label": "2 有報リスク章", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
-            {"range": "ci_count_memo", "label": "3 営業メモ", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_contract", "label": "4 現契約サマリ", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
-            {"range": "ci_count_prev_renewal", "label": "5 前回更新メモ", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_dossier", "label": "6 追加調査の結果", "type": "Long", "input": false, "note": "本欄+続き欄の合計字数"},
-            {"range": "ci_count_field_notes", "label": "7 現場メモ", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_coverage_note", "label": "8 付保の見立て", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_hearing_answers", "label": "9 ヒアリング回答", "type": "Long", "input": false, "note": "合計字数"},
-            {"range": "ci_count_total", "label": "合計", "type": "Long", "input": false, "note": "9欄の合計字数。調査の深さごとの上限を超えると色で知らせます"}
-          ]
-        },
-        {
-          "title": "調べる項目の確認リスト(自分用のチェック。空でも保存できます)",
-          "fields": [
-            {"range": "ci_recipe_01", "label": "01 会社概要", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_02", "label": "02 事業・製品", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_03", "label": "03 拠点・設備", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_04", "label": "04 沿革", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_05", "label": "05 直近の動き", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_06", "label": "06 採用・人員", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_07", "label": "07 有報・財務リスク", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_08", "label": "08 営業情報", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_09", "label": "09 SNS評判(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_10", "label": "10 競合・業界事故(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_11", "label": "11 市況・マクロ(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_12", "label": "12 財務状態(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_13", "label": "13 付保・提案の経緯(しっかり調査)", "type": "String", "input": true, "dv": "boolean"},
-            {"range": "ci_recipe_14", "label": "14 拠点ハザード(しっかり調査)", "type": "String", "input": true, "dv": "boolean"}
-          ]
-        },
-        {
-          "title": "もっと調べるとよいこと(実行すると出ます)",
-          "anchor_table": {
-            "range": "ci_research_anchor",
-            "headers": ["purpose", "prompt_text"],
-            "reserve_rows": 10,
-            "note": "実行すると、追加で調べるとよいことと、そのまま使える調査の文が並びます。各行の[コピー]で写せます"
-          }
-        }
-      ]
-    },
-
     {
       "name": "S1_企業プロファイル",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.12",
       "tab_color": "6B7280",
       "header_title": "S1_企業プロファイル",
       "header_fields": [
-        {"range": "s1_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
+        {
+          "range": "s1_case_id",
+          "label": "対象案件ID",
+          "type": "String",
+          "input": false,
+          "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"
+        }
       ],
       "blocks": [
         {
@@ -309,21 +1092,89 @@
           "title": "基本 s1_basic (データ1行)",
           "reserve_rows": 1,
           "columns": [
-            {"name": "company_name", "type": "String", "width": 26},
-            {"name": "business_summary", "type": "String", "width": 46, "header_note": "200字以内が目安(超過は警告のみ)"},
-            {"name": "main_products", "type": "String", "width": 34, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "processes", "type": "String", "width": 34, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "supply_chain_key_materials", "type": "String", "width": 34, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "supply_chain_notes", "type": "String", "width": 34},
-            {"name": "customers_segments", "type": "String", "width": 30, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "customers_channels", "type": "String", "width": 30, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "workforce_notes", "type": "String", "width": 30},
-            {"name": "management_notes", "type": "String", "width": 30},
-            {"name": "mvv", "type": "String", "width": 30},
-            {"name": "aspirations", "type": "String", "width": 30, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "market_context", "type": "String", "width": 30},
-            {"name": "input_quality_overall", "type": "String", "width": 14, "dv": "input_quality_overall_ja"},
-            {"name": "input_quality_advice", "type": "String", "width": 40}
+            {
+              "name": "company_name",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "business_summary",
+              "type": "String",
+              "width": 46,
+              "header_note": "200字以内が目安(超過は警告のみ)"
+            },
+            {
+              "name": "main_products",
+              "type": "String",
+              "width": 34,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "processes",
+              "type": "String",
+              "width": 34,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "supply_chain_key_materials",
+              "type": "String",
+              "width": 34,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "supply_chain_notes",
+              "type": "String",
+              "width": 34
+            },
+            {
+              "name": "customers_segments",
+              "type": "String",
+              "width": 30,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "customers_channels",
+              "type": "String",
+              "width": 30,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "workforce_notes",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "management_notes",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "mvv",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "aspirations",
+              "type": "String",
+              "width": 30,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "market_context",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "input_quality_overall",
+              "type": "String",
+              "width": 14,
+              "dv": "input_quality_overall_ja"
+            },
+            {
+              "name": "input_quality_advice",
+              "type": "String",
+              "width": 40
+            }
           ]
         },
         {
@@ -331,12 +1182,40 @@
           "title": "拠点 s1_locations",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "name", "type": "String", "width": 24},
-            {"name": "type", "type": "String", "width": 12, "dv": "location_type_ja"},
-            {"name": "address", "type": "String", "width": 34, "header_note": "不明時は 不明"},
-            {"name": "hazard_note", "type": "String", "width": 30, "header_note": "不明時は 不明"},
-            {"name": "notes", "type": "String", "width": 30, "header_note": "不明時は 不明"}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "width": 24
+            },
+            {
+              "name": "type",
+              "type": "String",
+              "width": 12,
+              "dv": "location_type_ja"
+            },
+            {
+              "name": "address",
+              "type": "String",
+              "width": 34,
+              "header_note": "不明時は 不明"
+            },
+            {
+              "name": "hazard_note",
+              "type": "String",
+              "width": 30,
+              "header_note": "不明時は 不明"
+            },
+            {
+              "name": "notes",
+              "type": "String",
+              "width": 30,
+              "header_note": "不明時は 不明"
+            }
           ]
         },
         {
@@ -344,11 +1223,31 @@
           "title": "現契約 s1_current_coverage (new案件では0行=ヘッダのみ)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "line_name", "type": "String", "width": 24},
-            {"name": "coverage_summary", "type": "String", "width": 34},
-            {"name": "limit_note", "type": "String", "width": 24},
-            {"name": "special_note", "type": "String", "width": 30}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "line_name",
+              "type": "String",
+              "width": 24
+            },
+            {
+              "name": "coverage_summary",
+              "type": "String",
+              "width": 34
+            },
+            {
+              "name": "limit_note",
+              "type": "String",
+              "width": 24
+            },
+            {
+              "name": "special_note",
+              "type": "String",
+              "width": 30
+            }
           ]
         },
         {
@@ -356,9 +1255,23 @@
           "title": "現場の気づき s1_field_insights",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "note", "type": "String", "width": 52, "header_note": "現場メモの原文。要約・言い換え禁止(15章ルール6)"},
-            {"name": "tag", "type": "String", "width": 18, "dv": "field_insight_tag_ja"}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "note",
+              "type": "String",
+              "width": 52,
+              "header_note": "現場メモの原文。要約・言い換え禁止(15章ルール6)"
+            },
+            {
+              "name": "tag",
+              "type": "String",
+              "width": 18,
+              "dv": "field_insight_tag_ja"
+            }
           ]
         },
         {
@@ -366,19 +1279,58 @@
           "title": "足りない情報 s1_missing_info",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "item", "type": "String", "width": 30},
-            {"name": "why_needed", "type": "String", "width": 46}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "item",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "why_needed",
+              "type": "String",
+              "width": 46
+            }
           ]
         },
         {
           "name": "s1_input_quality",
           "title": "入力の充足度(14項目・行の順番は決まっています)",
           "reserve_rows": 14,
-          "prefill": {"aspect": ["会社概要", "事業・製品", "拠点・設備", "沿革", "直近の動き", "採用・人員", "有報・財務リスク", "営業情報", "SNS評判", "競合・業界事故", "市況・マクロ", "財務状態", "付保・提案の経緯", "拠点ハザード"]},
+          "prefill": {
+            "aspect": [
+              "会社概要",
+              "事業・製品",
+              "拠点・設備",
+              "沿革",
+              "直近の動き",
+              "採用・人員",
+              "有報・財務リスク",
+              "営業情報",
+              "SNS評判",
+              "競合・業界事故",
+              "市況・マクロ",
+              "財務状態",
+              "付保・提案の経緯",
+              "拠点ハザード"
+            ]
+          },
           "columns": [
-            {"name": "aspect", "type": "String", "width": 22, "dv": "input_quality_aspect_ja"},
-            {"name": "status", "type": "String", "width": 12, "dv": "input_quality_status_ja"}
+            {
+              "name": "aspect",
+              "type": "String",
+              "width": 22,
+              "dv": "input_quality_aspect_ja"
+            },
+            {
+              "name": "status",
+              "type": "String",
+              "width": 12,
+              "dv": "input_quality_status_ja"
+            }
           ]
         },
         {
@@ -386,23 +1338,41 @@
           "title": "追加収集 s1_research_requests (全観点okなら0行)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "purpose", "type": "String", "width": 30},
-            {"name": "prompt_text", "type": "String", "width": 60, "header_note": "1,800字以内(15章ルール5b。超過は警告)"}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "purpose",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "prompt_text",
+              "type": "String",
+              "width": 60,
+              "header_note": "1,800字以内(15章ルール5b。超過は警告)"
+            }
           ]
         }
       ]
     },
-
     {
       "name": "S2_リスク仮説",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.13",
       "tab_color": "6B7280",
       "header_title": "S2_リスク仮説",
       "header_fields": [
-        {"range": "s2_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
+        {
+          "range": "s2_case_id",
+          "label": "対象案件ID",
+          "type": "String",
+          "input": false,
+          "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"
+        }
       ],
       "blocks": [
         {
@@ -410,12 +1380,37 @@
           "title": "付保ギャップ s2_gaps (new案件では0行)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "gap_no", "type": "Long", "width": 7},
-            {"name": "gap_type", "type": "String", "width": 10, "dv": "gap_type_ja"},
-            {"name": "target", "type": "String", "width": 22},
-            {"name": "description", "type": "String", "width": 44},
-            {"name": "risk_evidence", "type": "String", "width": 34},
-            {"name": "coverage_evidence", "type": "String", "width": 34}
+            {
+              "name": "gap_no",
+              "type": "Long",
+              "width": 7
+            },
+            {
+              "name": "gap_type",
+              "type": "String",
+              "width": 10,
+              "dv": "gap_type_ja"
+            },
+            {
+              "name": "target",
+              "type": "String",
+              "width": 22
+            },
+            {
+              "name": "description",
+              "type": "String",
+              "width": 44
+            },
+            {
+              "name": "risk_evidence",
+              "type": "String",
+              "width": 34
+            },
+            {
+              "name": "coverage_evidence",
+              "type": "String",
+              "width": 34
+            }
           ]
         },
         {
@@ -423,23 +1418,103 @@
           "title": "リスク仮説 s2_risks (5-20行)",
           "reserve_rows": 20,
           "columns": [
-            {"name": "risk_no", "type": "Long", "width": 7},
-            {"name": "category", "type": "String", "width": 20, "dv": "risk_category_ja"},
-            {"name": "risk_name", "type": "String", "width": 26},
-            {"name": "scenario", "type": "String", "width": 50, "header_note": "セル内改行可"},
-            {"name": "status", "type": "String", "width": 14, "dv": "risk_status_ja"},
-            {"name": "frequency", "type": "String", "width": 8, "dv": "frequency_ja"},
-            {"name": "impact", "type": "String", "width": 8, "dv": "impact_ja"},
-            {"name": "frequency_score", "type": "Long", "width": 10, "header_note": "1-5。frequency と整合(low=1,2 / mid=3 / high=4,5)"},
-            {"name": "impact_score", "type": "Long", "width": 10, "header_note": "1-5。impact と整合(small=1,2 / mid=3 / large=4,5)"},
-            {"name": "evidence_quote", "type": "String", "width": 40, "header_note": "非空(CheckS2)"},
-            {"name": "evidence_source", "type": "String", "width": 16, "dv": "evidence_source_ja"},
-            {"name": "transferability", "type": "String", "width": 20, "dv": "transferability_ja"},
-            {"name": "line_note", "type": "String", "width": 26},
-            {"name": "control_note", "type": "String", "width": 26},
-            {"name": "loss_scale_note", "type": "String", "width": 26},
-            {"name": "check_points", "type": "String", "width": 34, "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"},
-            {"name": "preventions", "type": "String", "width": 44, "header_note": "1-3要素。measure(related_menu_id) を「; 」区切り。本文中の ; は ， に置換されます"}
+            {
+              "name": "risk_no",
+              "type": "Long",
+              "width": 7
+            },
+            {
+              "name": "category",
+              "type": "String",
+              "width": 20,
+              "dv": "risk_category_ja"
+            },
+            {
+              "name": "risk_name",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "scenario",
+              "type": "String",
+              "width": 50,
+              "header_note": "セル内改行可"
+            },
+            {
+              "name": "status",
+              "type": "String",
+              "width": 14,
+              "dv": "risk_status_ja"
+            },
+            {
+              "name": "frequency",
+              "type": "String",
+              "width": 8,
+              "dv": "frequency_ja"
+            },
+            {
+              "name": "impact",
+              "type": "String",
+              "width": 8,
+              "dv": "impact_ja"
+            },
+            {
+              "name": "frequency_score",
+              "type": "Long",
+              "width": 10,
+              "header_note": "1-5。frequency と整合(low=1,2 / mid=3 / high=4,5)"
+            },
+            {
+              "name": "impact_score",
+              "type": "Long",
+              "width": 10,
+              "header_note": "1-5。impact と整合(small=1,2 / mid=3 / large=4,5)"
+            },
+            {
+              "name": "evidence_quote",
+              "type": "String",
+              "width": 40,
+              "header_note": "非空(CheckS2)"
+            },
+            {
+              "name": "evidence_source",
+              "type": "String",
+              "width": 16,
+              "dv": "evidence_source_ja"
+            },
+            {
+              "name": "transferability",
+              "type": "String",
+              "width": 20,
+              "dv": "transferability_ja"
+            },
+            {
+              "name": "line_note",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "control_note",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "loss_scale_note",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "check_points",
+              "type": "String",
+              "width": 34,
+              "header_note": "「; 」区切り配列。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "preventions",
+              "type": "String",
+              "width": 44,
+              "header_note": "1-3要素。measure(related_menu_id) を「; 」区切り。本文中の ; は ， に置換されます"
+            }
           ]
         },
         {
@@ -447,8 +1522,16 @@
           "title": "確認したい論点 s2_open_questions",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "question", "type": "String", "width": 60}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "question",
+              "type": "String",
+              "width": 60
+            }
           ]
         },
         {
@@ -456,28 +1539,70 @@
           "title": "ニューリスク(新種・新興) s2_emerging (0-3行。0行が正常でありうる)",
           "reserve_rows": 5,
           "columns": [
-            {"name": "emg_no", "type": "Long", "width": 7},
-            {"name": "risk_name", "type": "String", "width": 26},
-            {"name": "category", "type": "String", "width": 20, "dv": "risk_category_ja"},
-            {"name": "horizon", "type": "String", "width": 14, "dv": "horizon_ja"},
-            {"name": "scenario", "type": "String", "width": 50, "header_note": "セル内改行可"},
-            {"name": "evidence_quote", "type": "String", "width": 40},
-            {"name": "evidence_source", "type": "String", "width": 16, "dv": "evidence_source_ja"},
-            {"name": "proposal_hint", "type": "String", "width": 34, "header_note": "提案への接続メモ。無ければ空"}
+            {
+              "name": "emg_no",
+              "type": "Long",
+              "width": 7
+            },
+            {
+              "name": "risk_name",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "category",
+              "type": "String",
+              "width": 20,
+              "dv": "risk_category_ja"
+            },
+            {
+              "name": "horizon",
+              "type": "String",
+              "width": 14,
+              "dv": "horizon_ja"
+            },
+            {
+              "name": "scenario",
+              "type": "String",
+              "width": 50,
+              "header_note": "セル内改行可"
+            },
+            {
+              "name": "evidence_quote",
+              "type": "String",
+              "width": 40
+            },
+            {
+              "name": "evidence_source",
+              "type": "String",
+              "width": 16,
+              "dv": "evidence_source_ja"
+            },
+            {
+              "name": "proposal_hint",
+              "type": "String",
+              "width": 34,
+              "header_note": "提案への接続メモ。無ければ空"
+            }
           ]
         }
       ]
     },
-
     {
       "name": "S3_提案",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.14",
       "tab_color": "6B7280",
       "header_title": "S3_提案",
       "header_fields": [
-        {"range": "s3_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
+        {
+          "range": "s3_case_id",
+          "label": "対象案件ID",
+          "type": "String",
+          "input": false,
+          "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"
+        }
       ],
       "blocks": [
         {
@@ -485,19 +1610,79 @@
           "title": "提案ストーリー s3_stories (ちょうど3行)",
           "reserve_rows": 3,
           "columns": [
-            {"name": "story_no", "type": "Long", "width": 8},
-            {"name": "proposal_kind", "type": "String", "width": 14, "dv": "proposal_kind_ja"},
-            {"name": "headline", "type": "String", "width": 34},
-            {"name": "hook_question", "type": "String", "width": 34},
-            {"name": "target_risk_nos", "type": "String", "width": 16, "header_note": "「; 」区切り整数配列。s2_risks の risk_no に実在"},
-            {"name": "target_gap_nos", "type": "String", "width": 16, "header_note": "「; 」区切り整数配列。new案件は空セル"},
-            {"name": "menu_ids", "type": "String", "width": 20, "header_note": "「; 」区切り。全要素がメニュー一覧に実在(16章 E-07)"},
-            {"name": "line_ids", "type": "String", "width": 16, "header_note": "「; 」区切り。全要素が種目マスタに実在"},
-            {"name": "scheme_id", "type": "String", "width": 12, "header_note": "空 or 型ライブラリに実在"},
-            {"name": "pitch", "type": "String", "width": 50, "header_note": "セル内改行可"},
-            {"name": "similar_case_id", "type": "String", "width": 14, "header_note": "空 or 成功事例に実在"},
-            {"name": "expected_objection", "type": "String", "width": 34},
-            {"name": "objection_response", "type": "String", "width": 34}
+            {
+              "name": "story_no",
+              "type": "Long",
+              "width": 8
+            },
+            {
+              "name": "proposal_kind",
+              "type": "String",
+              "width": 14,
+              "dv": "proposal_kind_ja"
+            },
+            {
+              "name": "headline",
+              "type": "String",
+              "width": 34
+            },
+            {
+              "name": "hook_question",
+              "type": "String",
+              "width": 34
+            },
+            {
+              "name": "target_risk_nos",
+              "type": "String",
+              "width": 16,
+              "header_note": "「; 」区切り整数配列。s2_risks の risk_no に実在"
+            },
+            {
+              "name": "target_gap_nos",
+              "type": "String",
+              "width": 16,
+              "header_note": "「; 」区切り整数配列。new案件は空セル"
+            },
+            {
+              "name": "menu_ids",
+              "type": "String",
+              "width": 20,
+              "header_note": "「; 」区切り。全要素がメニュー一覧に実在(16章 E-07)"
+            },
+            {
+              "name": "line_ids",
+              "type": "String",
+              "width": 16,
+              "header_note": "「; 」区切り。全要素が種目マスタに実在"
+            },
+            {
+              "name": "scheme_id",
+              "type": "String",
+              "width": 12,
+              "header_note": "空 or 型ライブラリに実在"
+            },
+            {
+              "name": "pitch",
+              "type": "String",
+              "width": 50,
+              "header_note": "セル内改行可"
+            },
+            {
+              "name": "similar_case_id",
+              "type": "String",
+              "width": 14,
+              "header_note": "空 or 成功事例に実在"
+            },
+            {
+              "name": "expected_objection",
+              "type": "String",
+              "width": 34
+            },
+            {
+              "name": "objection_response",
+              "type": "String",
+              "width": 34
+            }
           ]
         },
         {
@@ -505,9 +1690,22 @@
           "title": "該当メニュー・型なし s3_unmatched_risks (新サービス候補への追記元)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "risk_no", "type": "Long", "width": 8, "header_note": "s2_risks に実在"},
-            {"name": "risk_name", "type": "String", "width": 26},
-            {"name": "why_unmatched", "type": "String", "width": 50}
+            {
+              "name": "risk_no",
+              "type": "Long",
+              "width": 8,
+              "header_note": "s2_risks に実在"
+            },
+            {
+              "name": "risk_name",
+              "type": "String",
+              "width": 26
+            },
+            {
+              "name": "why_unmatched",
+              "type": "String",
+              "width": 50
+            }
           ]
         },
         {
@@ -515,23 +1713,41 @@
           "title": "提案を控える s3_do_not_propose",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "topic", "type": "String", "width": 30, "header_note": "s3_stories の headline と重複しないこと(CheckS3)"},
-            {"name": "reason", "type": "String", "width": 50}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "topic",
+              "type": "String",
+              "width": 30,
+              "header_note": "s3_stories の headline と重複しないこと(CheckS3)"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "width": 50
+            }
           ]
         }
       ]
     },
-
     {
       "name": "S4_骨子",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.15",
       "tab_color": "6B7280",
       "header_title": "S4_骨子",
       "header_fields": [
-        {"range": "s4_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"}
+        {
+          "range": "s4_case_id",
+          "label": "対象案件ID",
+          "type": "String",
+          "input": false,
+          "note": "この画面がどの案件のものかを示す欄です。自動で書かれます(手で書き換えないでください)。ここが別の案件のままだと、この画面の編集は保存されません"
+        }
       ],
       "blocks": [
         {
@@ -539,7 +1755,11 @@
           "title": "メタ s4_meta (データ1行)",
           "reserve_rows": 1,
           "columns": [
-            {"name": "file_title", "type": "String", "width": 50}
+            {
+              "name": "file_title",
+              "type": "String",
+              "width": 50
+            }
           ]
         },
         {
@@ -547,10 +1767,28 @@
           "title": "スライド構成 s4_slides (T1=ちょうど5行 / T2=5行以上 ppt_max_slides_t2 行以下)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "slide_no", "type": "Long", "width": 8},
-            {"name": "title", "type": "String", "width": 30},
-            {"name": "bullets", "type": "String", "width": 56, "header_note": "1-8要素の「; 」区切り配列。1点40字以内が目安。本文中の ; は ， に置換されます"},
-            {"name": "notes", "type": "String", "width": 44, "header_note": "トークメモ。セル内改行可"}
+            {
+              "name": "slide_no",
+              "type": "Long",
+              "width": 8
+            },
+            {
+              "name": "title",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "bullets",
+              "type": "String",
+              "width": 56,
+              "header_note": "1-8要素の「; 」区切り配列。1点40字以内が目安。本文中の ; は ， に置換されます"
+            },
+            {
+              "name": "notes",
+              "type": "String",
+              "width": 44,
+              "header_note": "トークメモ。セル内改行可"
+            }
           ]
         },
         {
@@ -558,26 +1796,69 @@
           "title": "ヒアリング質問 s4_hearing_questions (1-10行・重要度順)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6},
-            {"name": "question", "type": "String", "width": 50, "header_note": "丁寧語の質問文"},
-            {"name": "purpose", "type": "String", "width": 34, "header_note": "何を確かめる質問か(1文)"}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "question",
+              "type": "String",
+              "width": 50,
+              "header_note": "丁寧語の質問文"
+            },
+            {
+              "name": "purpose",
+              "type": "String",
+              "width": 34,
+              "header_note": "何を確かめる質問か(1文)"
+            }
           ]
         }
       ]
     },
-
     {
       "name": "ヒアリングシート",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.16",
       "header_title": "ヒアリングシート(A4縦印刷用)",
       "header_fields": [
-        {"range": "hs_case_id", "label": "案件ID", "type": "String", "input": false, "note": "案件一覧からの複写"},
-        {"range": "hs_company", "label": "会社名", "type": "String", "input": false, "note": "案件一覧からの複写"},
-        {"range": "hs_industry_name", "label": "業種", "type": "String", "input": false, "note": "案件一覧からの複写"},
-        {"range": "hs_visit_date", "label": "訪問予定日", "type": "String", "input": true, "note": "手入力・空可"},
-        {"range": "hs_printed_at", "label": "生成日時", "type": "String", "input": false, "note": "書込専用"}
+        {
+          "range": "hs_case_id",
+          "label": "案件ID",
+          "type": "String",
+          "input": false,
+          "note": "案件一覧からの複写"
+        },
+        {
+          "range": "hs_company",
+          "label": "会社名",
+          "type": "String",
+          "input": false,
+          "note": "案件一覧からの複写"
+        },
+        {
+          "range": "hs_industry_name",
+          "label": "業種",
+          "type": "String",
+          "input": false,
+          "note": "案件一覧からの複写"
+        },
+        {
+          "range": "hs_visit_date",
+          "label": "訪問予定日",
+          "type": "String",
+          "input": true,
+          "note": "手入力・空可"
+        },
+        {
+          "range": "hs_printed_at",
+          "label": "生成日時",
+          "type": "String",
+          "input": false,
+          "note": "書込専用"
+        }
       ],
       "blocks": [
         {
@@ -585,25 +1866,62 @@
           "title": "ご質問(modExportHearing.BuildHearingSheet が S4 から整形生成。LLMを呼ばない)",
           "reserve_rows": 10,
           "columns": [
-            {"name": "q_no", "type": "Long", "width": 6, "header_note": "1..N(Nは最大10)。s4_hearing_questions の seq を引き継ぐ"},
-            {"name": "question", "type": "String", "width": 56},
-            {"name": "purpose", "type": "String", "width": 34, "header_note": "印刷時は小さめの補助文として下段に置く"},
-            {"name": "answer_memo", "type": "String", "width": 60, "input": true, "header_note": "訪問時の記入欄。生成直後は必ず空"}
+            {
+              "name": "q_no",
+              "type": "Long",
+              "width": 6,
+              "header_note": "1..N(Nは最大10)。s4_hearing_questions の seq を引き継ぐ"
+            },
+            {
+              "name": "question",
+              "type": "String",
+              "width": 56
+            },
+            {
+              "name": "purpose",
+              "type": "String",
+              "width": 34,
+              "header_note": "印刷時は小さめの補助文として下段に置く"
+            },
+            {
+              "name": "answer_memo",
+              "type": "String",
+              "width": 60,
+              "input": true,
+              "header_note": "訪問時の記入欄。生成直後は必ず空"
+            }
           ]
         }
       ]
     },
-
     {
       "name": "壁打ち",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.17",
       "header_title": "壁打ち(PL-04)",
       "header_fields": [
-        {"range": "sp_case_id", "label": "対象案件ID", "type": "String", "input": false, "note": "壁打ちを始めると、この案件の「調査の深さ」は自動で「壁打ち」になります"},
-        {"range": "sp_context_note", "label": "コンテキスト", "type": "String", "input": false, "note": "注入済みコンテキストの表示。書込専用"},
-        {"range": "sp_input", "label": "発話入力", "type": "String", "input": true, "note": "送信後にクリア"}
+        {
+          "range": "sp_case_id",
+          "label": "対象案件ID",
+          "type": "String",
+          "input": false,
+          "note": "壁打ちを始めると、この案件の「調査の深さ」は自動で「壁打ち」になります"
+        },
+        {
+          "range": "sp_context_note",
+          "label": "コンテキスト",
+          "type": "String",
+          "input": false,
+          "note": "注入済みコンテキストの表示。書込専用"
+        },
+        {
+          "range": "sp_input",
+          "label": "発話入力",
+          "type": "String",
+          "input": true,
+          "note": "送信後にクリア"
+        }
       ],
       "blocks": [
         {
@@ -611,113 +1929,426 @@
           "title": "履歴 sparring_log (seq昇順の追記型。行の反転・並べ替えをしない)",
           "reserve_rows": 30,
           "columns": [
-            {"name": "seq", "type": "Long", "width": 6, "header_note": "1始まり連番・重複なし。1発話=1行"},
-            {"name": "role", "type": "String", "width": 8, "dv": "sparring_role_ja"},
-            {"name": "utterance", "type": "String", "width": 80, "header_note": "発話本文。セル内改行可。32,000字超は表示が先頭2,000字"},
-            {"name": "spoke_at", "type": "String", "width": 20, "header_note": "yyyy/mm/dd hh:mm:ss"},
-            {"name": "inbox_id", "type": "String", "width": 16, "header_note": "受信箱へ送信済みのID。未送信は空"}
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6,
+              "header_note": "1始まり連番・重複なし。1発話=1行"
+            },
+            {
+              "name": "role",
+              "type": "String",
+              "width": 8,
+              "dv": "sparring_role_ja"
+            },
+            {
+              "name": "utterance",
+              "type": "String",
+              "width": 80,
+              "header_note": "発話本文。セル内改行可。32,000字超は表示が先頭2,000字"
+            },
+            {
+              "name": "spoke_at",
+              "type": "String",
+              "width": 20,
+              "header_note": "yyyy/mm/dd hh:mm:ss"
+            },
+            {
+              "name": "inbox_id",
+              "type": "String",
+              "width": 16,
+              "header_note": "受信箱へ送信済みのID。未送信は空"
+            }
           ]
         }
       ]
     },
-
     {
       "name": "フィードバック",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.5",
       "sheet_note": "事実のみを記録する。解釈列は持たない。customer_quote は顧客の実際の発言をそのまま引用し、解釈を書かない。",
       "columns": [
-        {"name": "case_id", "type": "String", "width": 20},
-        {"name": "visited_at", "type": "String", "width": 20},
-        {"name": "event", "type": "String", "width": 16, "dv": "fb_event"},
-        {"name": "used_proposals", "type": "String", "width": 26, "header_note": "商談投入した提案ID(;区切り)"},
-        {"name": "customer_quote", "type": "String", "width": 50, "header_note": "顧客の実際の発言をそのまま引用。解釈禁止"},
-        {"name": "terms_summary", "type": "String", "width": 34},
-        {"name": "loss_note", "type": "String", "width": 34},
-        {"name": "recorded_by", "type": "String", "width": 18},
-        {"name": "recorded_at", "type": "String", "width": 20}
+        {
+          "name": "case_id",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "visited_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "event",
+          "type": "String",
+          "width": 16,
+          "dv": "fb_event"
+        },
+        {
+          "name": "used_proposals",
+          "type": "String",
+          "width": 26,
+          "header_note": "商談投入した提案ID(;区切り)"
+        },
+        {
+          "name": "customer_quote",
+          "type": "String",
+          "width": 50,
+          "header_note": "顧客の実際の発言をそのまま引用。解釈禁止"
+        },
+        {
+          "name": "terms_summary",
+          "type": "String",
+          "width": 34
+        },
+        {
+          "name": "loss_note",
+          "type": "String",
+          "width": 34
+        },
+        {
+          "name": "recorded_by",
+          "type": "String",
+          "width": 18
+        },
+        {
+          "name": "recorded_at",
+          "type": "String",
+          "width": 20
+        }
       ]
     },
-
     {
       "name": "受信箱",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.6",
       "columns": [
-        {"name": "inbox_id", "type": "String", "width": 16, "header_note": "I-YYYYMM-NNN。先頭データ行(ヘッダ直下)は投函下書き行でありid列に固定マーカー「(下書き)」が入る(13章§2.6・裁定書10 C1)。走査・判定・集計の対象外"},
-        {"name": "posted_at", "type": "String", "width": 20},
-        {"name": "posted_by_group", "type": "String", "width": 22, "header_note": "個人名は持たない(グループ名まで)"},
-        {"name": "source_kind", "type": "String", "width": 16, "dv": "source_kind_ja", "header_note": "投函下書き行の入力列(13章§2.6・裁定書11 Q4・裁定書12 V4)。judge_to と同作法で日本語ラベル(部内投稿/現場の声/ウォッチ)から選ぶ。ui層が機械値へ戻してから投函するため、データ行は機械値のまま"},
-        {"name": "theme", "type": "String", "width": 30},
-        {"name": "body", "type": "String", "width": 60, "header_note": "最大32,000字。超過は1セル上限で打切り+警告"},
-        {"name": "pf_json", "type": "String", "width": 40, "header_note": "プリフライト診断の生JSON"},
-        {"name": "pf_survival", "type": "String", "width": 12, "dv": "pf_survival"},
-        {"name": "pf_pred_types", "type": "String", "width": 18, "header_note": "予測棄却類型(;区切り T1..T10)"},
-        {"name": "status", "type": "String", "width": 18, "header_note": "この列は自動で更新されます。判定は judge_to 列で選んでください(13章§2.6・裁定書9 B2/N5)"},
-        {"name": "drop_type", "type": "String", "width": 12, "dv": "drop_type", "header_note": "rejected時必須"},
-        {"name": "revive_tag", "type": "String", "width": 14, "dv": "revive_tag", "header_note": "conditional_hold時必須"},
-        {"name": "revive_due", "type": "String", "width": 16, "header_note": "conditional_hold時必須"},
-        {"name": "merged_into", "type": "String", "width": 16, "header_note": "merged時必須(統合先inbox_id)"},
-        {"name": "judged_by_group", "type": "String", "width": 22},
-        {"name": "judged_at", "type": "String", "width": 20},
-        {"name": "judge_to", "type": "String", "width": 16, "dv": "judge_to_ja", "header_note": "判定の入力列(13章§2.6・裁定書9 B2/N5・裁定書10 M7)。日本語ラベル(採択/条件付き保留/却下)から判定先を選び[判定を保存]を押す。成功すると status へ反映され本列は空に戻る"}
+        {
+          "name": "inbox_id",
+          "type": "String",
+          "width": 16,
+          "header_note": "I-YYYYMM-NNN。先頭データ行(ヘッダ直下)は投函下書き行でありid列に固定マーカー「(下書き)」が入る(13章§2.6・裁定書10 C1)。走査・判定・集計の対象外"
+        },
+        {
+          "name": "posted_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "posted_by_group",
+          "type": "String",
+          "width": 22,
+          "header_note": "個人名は持たない(グループ名まで)"
+        },
+        {
+          "name": "source_kind",
+          "type": "String",
+          "width": 16,
+          "dv": "source_kind_ja",
+          "header_note": "投函下書き行の入力列(13章§2.6・裁定書11 Q4・裁定書12 V4)。judge_to と同作法で日本語ラベル(部内投稿/現場の声/ウォッチ)から選ぶ。ui層が機械値へ戻してから投函するため、データ行は機械値のまま"
+        },
+        {
+          "name": "theme",
+          "type": "String",
+          "width": 30
+        },
+        {
+          "name": "body",
+          "type": "String",
+          "width": 60,
+          "header_note": "最大32,000字。超過は1セル上限で打切り+警告"
+        },
+        {
+          "name": "pf_json",
+          "type": "String",
+          "width": 40,
+          "header_note": "プリフライト診断の生JSON"
+        },
+        {
+          "name": "pf_survival",
+          "type": "String",
+          "width": 12,
+          "dv": "pf_survival"
+        },
+        {
+          "name": "pf_pred_types",
+          "type": "String",
+          "width": 18,
+          "header_note": "予測棄却類型(;区切り T1..T10)"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "width": 18,
+          "header_note": "この列は自動で更新されます。判定は judge_to 列で選んでください(13章§2.6・裁定書9 B2/N5)"
+        },
+        {
+          "name": "drop_type",
+          "type": "String",
+          "width": 12,
+          "dv": "drop_type",
+          "header_note": "rejected時必須"
+        },
+        {
+          "name": "revive_tag",
+          "type": "String",
+          "width": 14,
+          "dv": "revive_tag",
+          "header_note": "conditional_hold時必須"
+        },
+        {
+          "name": "revive_due",
+          "type": "String",
+          "width": 16,
+          "header_note": "conditional_hold時必須"
+        },
+        {
+          "name": "merged_into",
+          "type": "String",
+          "width": 16,
+          "header_note": "merged時必須(統合先inbox_id)"
+        },
+        {
+          "name": "judged_by_group",
+          "type": "String",
+          "width": 22
+        },
+        {
+          "name": "judged_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "judge_to",
+          "type": "String",
+          "width": 16,
+          "dv": "judge_to_ja",
+          "header_note": "判定の入力列(13章§2.6・裁定書9 B2/N5・裁定書10 M7)。日本語ラベル(採択/条件付き保留/却下)から判定先を選び[判定を保存]を押す。成功すると status へ反映され本列は空に戻る"
+        }
       ]
     },
-
     {
       "name": "判断台帳",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.7",
       "columns": [
-        {"name": "judge_id", "type": "String", "width": 16, "header_note": "J-YYYYMM-NNN"},
-        {"name": "judged_at", "type": "String", "width": 20},
-        {"name": "line_id", "type": "String", "width": 12, "header_note": "種目マスタ実在"},
-        {"name": "recorded_by", "type": "String", "width": 18},
-        {"name": "case_ref", "type": "String", "width": 22, "header_note": "案件ID or 社内案件番号(自由)"},
-        {"name": "situation", "type": "String", "width": 46, "header_note": "状況要約(200字以内)"},
-        {"name": "decision", "type": "String", "width": 14, "dv": "judge_decision_ja", "header_note": "起票の入力列(13章§2.7・裁定書12 V7)。受信箱の judge_to と同作法で日本語ラベル(増率/クローズ/縮小・限定/条件維持/ロス改善伴走)から選び、ui層が機械値へ戻して起票する"},
-        {"name": "factor_note", "type": "String", "width": 30, "header_note": "適用係数・安全率のメモ"},
-        {"name": "key_reason", "type": "String", "width": 40, "header_note": "決め手(1行。唯一の自由記述必須項目)"},
-        {"name": "result", "type": "String", "width": 12, "dv": "judge_result_ja", "header_note": "事後結果の入力列(13章§2.7・FR-22・裁定書12 V7)。日本語ラベル(成約/失注/未確定)から選び[結果を記録]を押す。ui層が機械値へ戻して記録する"},
-        {"name": "post_loss", "type": "String", "width": 30, "header_note": "事後ロスのメモ"}
+        {
+          "name": "judge_id",
+          "type": "String",
+          "width": 16,
+          "header_note": "J-YYYYMM-NNN"
+        },
+        {
+          "name": "judged_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "line_id",
+          "type": "String",
+          "width": 12,
+          "header_note": "種目マスタ実在"
+        },
+        {
+          "name": "recorded_by",
+          "type": "String",
+          "width": 18
+        },
+        {
+          "name": "case_ref",
+          "type": "String",
+          "width": 22,
+          "header_note": "案件ID or 社内案件番号(自由)"
+        },
+        {
+          "name": "situation",
+          "type": "String",
+          "width": 46,
+          "header_note": "状況要約(200字以内)"
+        },
+        {
+          "name": "decision",
+          "type": "String",
+          "width": 14,
+          "dv": "judge_decision_ja",
+          "header_note": "起票の入力列(13章§2.7・裁定書12 V7)。受信箱の judge_to と同作法で日本語ラベル(増率/クローズ/縮小・限定/条件維持/ロス改善伴走)から選び、ui層が機械値へ戻して起票する"
+        },
+        {
+          "name": "factor_note",
+          "type": "String",
+          "width": 30,
+          "header_note": "適用係数・安全率のメモ"
+        },
+        {
+          "name": "key_reason",
+          "type": "String",
+          "width": 40,
+          "header_note": "決め手(1行。唯一の自由記述必須項目)"
+        },
+        {
+          "name": "result",
+          "type": "String",
+          "width": 12,
+          "dv": "judge_result_ja",
+          "header_note": "事後結果の入力列(13章§2.7・FR-22・裁定書12 V7)。日本語ラベル(成約/失注/未確定)から選び[結果を記録]を押す。ui層が機械値へ戻して記録する"
+        },
+        {
+          "name": "post_loss",
+          "type": "String",
+          "width": 30,
+          "header_note": "事後ロスのメモ"
+        }
       ]
     },
-
     {
       "name": "案件一覧",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.1",
       "columns": [
-        {"name": "case_id", "type": "String", "width": 22, "header_note": "主キー C-YYYYMMDD-NNN"},
-        {"name": "case_type", "type": "String", "width": 12, "dv": "case_type"},
-        {"name": "dossier_tier", "type": "String", "width": 14, "dv": "dossier_tier", "header_note": "既定 t1_quick"},
-        {"name": "parent_case_id", "type": "String", "width": 22, "header_note": "Phase 1では未使用(列だけ確保)"},
-        {"name": "company", "type": "String", "width": 28},
-        {"name": "industry_code", "type": "String", "width": 12, "header_note": "業種マスタ実在チェック"},
-        {"name": "industry_name", "type": "String", "width": 22, "header_note": "業種マスタ実在チェック"},
-        {"name": "channel", "type": "String", "width": 12, "dv": "channel"},
-        {"name": "kanji", "type": "String", "width": 12, "dv": "kanji"},
-        {"name": "bid", "type": "String", "width": 8, "dv": "bid"},
-        {"name": "reins", "type": "String", "width": 12, "dv": "reins"},
-        {"name": "other_insurers", "type": "String", "width": 30, "header_note": "他社付保メモ(自由記述)"},
-        {"name": "status", "type": "String", "width": 16, "dv": "case_status"},
-        {"name": "created_at", "type": "String", "width": 20},
-        {"name": "updated_at", "type": "String", "width": 20},
-        {"name": "owner", "type": "String", "width": 18, "header_note": "Application.UserName"},
-        {"name": "ppt_path", "type": "String", "width": 40, "header_note": "SanitizeFileName 規則で生成(13章§2.8)"},
-        {"name": "report_path", "type": "String", "width": 40, "header_note": "SanitizeFileName 規則で生成(13章§2.8)"},
-        {"name": "note", "type": "String", "width": 30},
-        {"name": "s4_variant", "type": "String", "width": 14, "dv": "s4_variant", "header_note": "既定 proposal"},
-        {"name": "round_no", "type": "Long", "width": 10, "header_note": "現ラウンド番号。既定 1"},
-        {"name": "last_ok_step", "type": "Long", "width": 12, "header_note": "検証に合格済みの最大Step番号。0-4。既定 0"},
-        {"name": "failed_step", "type": "String", "width": 12, "dv": "failed_step", "header_note": "空 or s1/s2/s3/s4/s2c/s3c。RepairStates は書き換えない"}
+        {
+          "name": "case_id",
+          "type": "String",
+          "width": 22,
+          "header_note": "主キー C-YYYYMMDD-NNN"
+        },
+        {
+          "name": "case_type",
+          "type": "String",
+          "width": 12,
+          "dv": "case_type"
+        },
+        {
+          "name": "dossier_tier",
+          "type": "String",
+          "width": 14,
+          "dv": "dossier_tier",
+          "header_note": "既定 t1_quick"
+        },
+        {
+          "name": "parent_case_id",
+          "type": "String",
+          "width": 22,
+          "header_note": "Phase 1では未使用(列だけ確保)"
+        },
+        {
+          "name": "company",
+          "type": "String",
+          "width": 28
+        },
+        {
+          "name": "industry_code",
+          "type": "String",
+          "width": 12,
+          "header_note": "業種マスタ実在チェック"
+        },
+        {
+          "name": "industry_name",
+          "type": "String",
+          "width": 22,
+          "header_note": "業種マスタ実在チェック"
+        },
+        {
+          "name": "channel",
+          "type": "String",
+          "width": 12,
+          "dv": "channel"
+        },
+        {
+          "name": "kanji",
+          "type": "String",
+          "width": 12,
+          "dv": "kanji"
+        },
+        {
+          "name": "bid",
+          "type": "String",
+          "width": 8,
+          "dv": "bid"
+        },
+        {
+          "name": "reins",
+          "type": "String",
+          "width": 12,
+          "dv": "reins"
+        },
+        {
+          "name": "other_insurers",
+          "type": "String",
+          "width": 30,
+          "header_note": "他社付保メモ(自由記述)"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "width": 16,
+          "dv": "case_status"
+        },
+        {
+          "name": "created_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "updated_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "owner",
+          "type": "String",
+          "width": 18,
+          "header_note": "Application.UserName"
+        },
+        {
+          "name": "ppt_path",
+          "type": "String",
+          "width": 40,
+          "header_note": "SanitizeFileName 規則で生成(13章§2.8)"
+        },
+        {
+          "name": "report_path",
+          "type": "String",
+          "width": 40,
+          "header_note": "SanitizeFileName 規則で生成(13章§2.8)"
+        },
+        {
+          "name": "note",
+          "type": "String",
+          "width": 30
+        },
+        {
+          "name": "s4_variant",
+          "type": "String",
+          "width": 14,
+          "dv": "s4_variant",
+          "header_note": "既定 proposal"
+        },
+        {
+          "name": "round_no",
+          "type": "Long",
+          "width": 10,
+          "header_note": "現ラウンド番号。既定 1"
+        },
+        {
+          "name": "last_ok_step",
+          "type": "Long",
+          "width": 12,
+          "header_note": "検証に合格済みの最大Step番号。0-4。既定 0"
+        },
+        {
+          "name": "failed_step",
+          "type": "String",
+          "width": 12,
+          "dv": "failed_step",
+          "header_note": "空 or s1/s2/s3/s4/s2c/s3c。RepairStates は書き換えない"
+        }
       ]
     },
-
     {
       "name": "case_data",
       "role": "table",
@@ -725,123 +2356,431 @@
       "spec_ref": "13章§2.2",
       "data_locked": true,
       "columns": [
-        {"name": "case_id", "type": "String", "width": 22, "header_note": "FK"},
-        {"name": "data_key", "type": "String", "width": 24, "dv": "data_key", "header_note": "enum 全28値(19章§3と完全一致)"},
-        {"name": "seq", "type": "Long", "width": 8, "header_note": "分割連番"},
-        {"name": "content", "type": "String", "width": 80, "header_note": "最大32,000字。結合は modCaseStore が透過処理"},
-        {"name": "saved_at", "type": "String", "width": 20}
+        {
+          "name": "case_id",
+          "type": "String",
+          "width": 22,
+          "header_note": "FK"
+        },
+        {
+          "name": "data_key",
+          "type": "String",
+          "width": 24,
+          "dv": "data_key",
+          "header_note": "enum 全28値(19章§3と完全一致)"
+        },
+        {
+          "name": "seq",
+          "type": "Long",
+          "width": 8,
+          "header_note": "分割連番"
+        },
+        {
+          "name": "content",
+          "type": "String",
+          "width": 80,
+          "header_note": "最大32,000字。結合は modCaseStore が透過処理"
+        },
+        {
+          "name": "saved_at",
+          "type": "String",
+          "width": 20
+        }
       ]
     },
-
     {
       "name": "config",
       "role": "config",
       "state": "hidden",
       "spec_ref": "13章§2.3",
       "data_locked": true,
-      "headers": ["name", "value", "説明"],
-      "widths": [28, 44, 88],
+      "headers": [
+        "name",
+        "value",
+        "説明"
+      ],
+      "widths": [
+        28,
+        44,
+        88
+      ],
       "defaults": [
-        {"name": "app_version", "value": "2.0.0", "note": "版番号(12章§5。HOMEに表示する)"},
-        {"name": "llm_transport", "value": "ribbon", "note": "enum: ribbon/direct/mock(mock_llm=TRUEが最優先)"},
-        {"name": "mock_llm", "value": false, "note": "PoC互換の強制mock。--dev ビルドでTRUE / --prod ビルドでFALSE"},
-        {"name": "recommended_model", "value": "gpt-5.5", "note": "ribbon用(ハードコード禁止・四半期更新追随)"},
-        {"name": "direct_model", "value": "gpt-4.1", "note": "direct用"},
-        {"name": "direct_api_base", "value": "https://api.openai.com/v1", "note": "direct用"},
-        {"name": "direct_key_path", "value": "%APPDATA%\\RPN\\api_key.txt", "note": "direct用。ブックにキーを入れない(16章 NFR-S2)"},
-        {"name": "llm_wait_sec", "value": 1200, "note": "リボン応答の最大待ち秒"},
-        {"name": "direct_http_timeout_ms", "value": 120000, "note": "direct経路のHTTPタイムアウト"},
-        {"name": "reasoning_effort", "value": "medium", "note": "GPT-5系。Step別上書きキー s2_effort 等があれば優先"},
-        {"name": "reasoning_verbosity", "value": "low", "note": "GPT-5系。Step別上書きキー s2_verbosity 等があれば優先"},
-        {"name": "temperature", "value": 0.3, "note": "非GPT-5系用"},
-        {"name": "reasoning_tuning", "value": true, "note": "推論調整(reasoning_effort / reasoning_verbosity)の送出を有効にするか。direct経路の推論調整エスケープハッチ(14章§2)。FALSEで両パラメータを送らない"},
-        {"name": "llm_max_tokens", "value": 0, "note": "LLMへ渡す最大出力トークン。0=リボン側の既定に従う。Step別上書きキー s1_max_tokens 等があれば優先"},
-        {"name": "app_tool_prefix", "value": "リスク提案ナビ:", "note": "リボン呼び出しの toolN 接頭辞(core層に製品名を焼かないための注入口。14章§2)"},
-        {"name": "max_context_chars", "value": 40000, "note": "入力打切り上限(dossier_tier=t1_quick のとき。16章 E-03)"},
-        {"name": "t2_max_context_chars", "value": 100000, "note": "入力打切り上限(dossier_tier=t2_full / t3_sparring のとき。16章 E-03)"},
-        {"name": "sparring_max_turns", "value": 12, "note": "壁打ちでリボンへ渡す履歴の最大往復数(超過は古い順に切捨て。全履歴はcase_data保存)"},
-        {"name": "quality_mode", "value": "", "note": "enum: standard / deep。空=ティア連動(t1=standard / t2=deep)。案件単位で上書き可"},
-        {"name": "deep_transport", "value": "", "note": "空=通常経路でdeep実行。direct指定でdeepの批判・改訂呼び出しのみdirect経路へ"},
-        {"name": "ppt_max_slides_t2", "value": 10, "note": "T2のスライド上限(T1は5枚固定)"},
-        {"name": "kb_path", "value": "\\\\...\\ナレッジブック.xlsx", "note": "ナレッジブックのパス(配置時に管理者が書き換える)"},
-        {"name": "kb_risk_rows", "value": 20, "note": "リスクライブラリの注入上限行数"},
-        {"name": "kb_menu_rows", "value": 60, "note": "メニュー一覧の注入上限行数"},
-        {"name": "kb_case_rows", "value": 5, "note": "成功事例の注入上限行数"},
-        {"name": "kb_scheme_rows", "value": 10, "note": "型ライブラリの注入上限行数"},
-        {"name": "kb_mech_rows", "value": 40, "note": "機構ライブラリの注入上限行数"},
-        {"name": "json_repair_retry", "value": 1, "note": "JSON修復リトライ回数"},
-        {"name": "ppt_out_dir", "value": "%USERPROFILE%\\Documents\\RPN出力", "note": "PPTの出力先"},
-        {"name": "ppt_template_path", "value": "", "note": "空=白紙生成"},
-        {"name": "html_out_dir", "value": "%USERPROFILE%\\Documents\\RPN出力", "note": "HTMLリスクレポートの出力先(10章FR-37・18章)。不存在時は16章 E-21"},
-        {"name": "html_theme", "value": "standard", "note": "HTMLレポートの配色・体裁テーマ(18章の定数モジュールが持つテーマ名)"},
-        {"name": "mock_fault", "value": "", "note": "mock時の障害注入(15章§8)。enum: (空)/broken_json/broken_json_once/enum_violation/ghost_id/count_violation/empty/limit/fake_err"},
-        {"name": "keep_window_alive", "value": true, "note": "長時間呼び出し中の画面ゴースト化抑止(16章 E-50)。FALSEでオプトアウト"},
-        {"name": "ribbon_addin_name", "value": "リボンちゃん", "note": "リボンアドインの表示名"},
-        {"name": "limit_check", "value": true, "note": "リボン利用上限の検査を行うか"},
-        {"name": "log_max_rows", "value": 2000, "note": "err/usage/run共通ローテ閾値"},
-        {"name": "anonymize_default", "value": true, "note": "案件入力の匿名化ボタン既定(16章 E-31/OQ-6)"},
-        {"name": "feature_inbox", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"},
-        {"name": "feature_judgelog", "value": true, "note": "機能フラグ(プレイ単位で無効化可能に)"},
-        {"name": "operator", "value": "", "note": "判定・実行の記録に残す実施者。個人名ではなく部署・グループ名まで"},
-        {"name": "guide_tour_done", "value": "0", "note": "初回ガイドツアーを見終えたか(1=済)。1以外は未完了として扱う"}
+        {
+          "name": "app_version",
+          "value": "2.0.0",
+          "note": "版番号(12章§5。HOMEに表示する)"
+        },
+        {
+          "name": "llm_transport",
+          "value": "ribbon",
+          "note": "enum: ribbon/direct/mock(mock_llm=TRUEが最優先)"
+        },
+        {
+          "name": "mock_llm",
+          "value": false,
+          "note": "PoC互換の強制mock。--dev ビルドでTRUE / --prod ビルドでFALSE"
+        },
+        {
+          "name": "recommended_model",
+          "value": "gpt-5.5",
+          "note": "ribbon用(ハードコード禁止・四半期更新追随)"
+        },
+        {
+          "name": "direct_model",
+          "value": "gpt-4.1",
+          "note": "direct用"
+        },
+        {
+          "name": "direct_api_base",
+          "value": "https://api.openai.com/v1",
+          "note": "direct用"
+        },
+        {
+          "name": "direct_key_path",
+          "value": "%APPDATA%\\RPN\\api_key.txt",
+          "note": "direct用。ブックにキーを入れない(16章 NFR-S2)"
+        },
+        {
+          "name": "llm_wait_sec",
+          "value": 1200,
+          "note": "リボン応答の最大待ち秒"
+        },
+        {
+          "name": "direct_http_timeout_ms",
+          "value": 120000,
+          "note": "direct経路のHTTPタイムアウト"
+        },
+        {
+          "name": "reasoning_effort",
+          "value": "medium",
+          "note": "GPT-5系。Step別上書きキー s2_effort 等があれば優先"
+        },
+        {
+          "name": "reasoning_verbosity",
+          "value": "low",
+          "note": "GPT-5系。Step別上書きキー s2_verbosity 等があれば優先"
+        },
+        {
+          "name": "temperature",
+          "value": 0.3,
+          "note": "非GPT-5系用"
+        },
+        {
+          "name": "reasoning_tuning",
+          "value": true,
+          "note": "推論調整(reasoning_effort / reasoning_verbosity)の送出を有効にするか。direct経路の推論調整エスケープハッチ(14章§2)。FALSEで両パラメータを送らない"
+        },
+        {
+          "name": "llm_max_tokens",
+          "value": 0,
+          "note": "LLMへ渡す最大出力トークン。0=リボン側の既定に従う。Step別上書きキー s1_max_tokens 等があれば優先"
+        },
+        {
+          "name": "app_tool_prefix",
+          "value": "リスク提案ナビ:",
+          "note": "リボン呼び出しの toolN 接頭辞(core層に製品名を焼かないための注入口。14章§2)"
+        },
+        {
+          "name": "max_context_chars",
+          "value": 40000,
+          "note": "入力打切り上限(dossier_tier=t1_quick のとき。16章 E-03)"
+        },
+        {
+          "name": "t2_max_context_chars",
+          "value": 100000,
+          "note": "入力打切り上限(dossier_tier=t2_full / t3_sparring のとき。16章 E-03)"
+        },
+        {
+          "name": "sparring_max_turns",
+          "value": 12,
+          "note": "壁打ちでリボンへ渡す履歴の最大往復数(超過は古い順に切捨て。全履歴はcase_data保存)"
+        },
+        {
+          "name": "quality_mode",
+          "value": "",
+          "note": "enum: standard / deep。空=ティア連動(t1=standard / t2=deep)。案件単位で上書き可"
+        },
+        {
+          "name": "deep_transport",
+          "value": "",
+          "note": "空=通常経路でdeep実行。direct指定でdeepの批判・改訂呼び出しのみdirect経路へ"
+        },
+        {
+          "name": "ppt_max_slides_t2",
+          "value": 10,
+          "note": "T2のスライド上限(T1は5枚固定)"
+        },
+        {
+          "name": "kb_path",
+          "value": "\\\\...\\ナレッジブック.xlsx",
+          "note": "ナレッジブックのパス(配置時に管理者が書き換える)"
+        },
+        {
+          "name": "kb_risk_rows",
+          "value": 20,
+          "note": "リスクライブラリの注入上限行数"
+        },
+        {
+          "name": "kb_menu_rows",
+          "value": 60,
+          "note": "メニュー一覧の注入上限行数"
+        },
+        {
+          "name": "kb_case_rows",
+          "value": 5,
+          "note": "成功事例の注入上限行数"
+        },
+        {
+          "name": "kb_scheme_rows",
+          "value": 10,
+          "note": "型ライブラリの注入上限行数"
+        },
+        {
+          "name": "kb_mech_rows",
+          "value": 40,
+          "note": "機構ライブラリの注入上限行数"
+        },
+        {
+          "name": "json_repair_retry",
+          "value": 1,
+          "note": "JSON修復リトライ回数"
+        },
+        {
+          "name": "ppt_out_dir",
+          "value": "%USERPROFILE%\\Documents\\RPN出力",
+          "note": "PPTの出力先"
+        },
+        {
+          "name": "ppt_template_path",
+          "value": "",
+          "note": "空=白紙生成"
+        },
+        {
+          "name": "html_out_dir",
+          "value": "%USERPROFILE%\\Documents\\RPN出力",
+          "note": "HTMLリスクレポートの出力先(10章FR-37・18章)。不存在時は16章 E-21"
+        },
+        {
+          "name": "html_theme",
+          "value": "standard",
+          "note": "HTMLレポートの配色・体裁テーマ(18章の定数モジュールが持つテーマ名)"
+        },
+        {
+          "name": "mock_fault",
+          "value": "",
+          "note": "mock時の障害注入(15章§8)。enum: (空)/broken_json/broken_json_once/enum_violation/ghost_id/count_violation/empty/limit/fake_err"
+        },
+        {
+          "name": "keep_window_alive",
+          "value": true,
+          "note": "長時間呼び出し中の画面ゴースト化抑止(16章 E-50)。FALSEでオプトアウト"
+        },
+        {
+          "name": "ribbon_addin_name",
+          "value": "リボンちゃん",
+          "note": "リボンアドインの表示名"
+        },
+        {
+          "name": "limit_check",
+          "value": true,
+          "note": "リボン利用上限の検査を行うか"
+        },
+        {
+          "name": "log_max_rows",
+          "value": 2000,
+          "note": "err/usage/run共通ローテ閾値"
+        },
+        {
+          "name": "anonymize_default",
+          "value": true,
+          "note": "案件入力の匿名化ボタン既定(16章 E-31/OQ-6)"
+        },
+        {
+          "name": "feature_inbox",
+          "value": true,
+          "note": "機能フラグ(プレイ単位で無効化可能に)"
+        },
+        {
+          "name": "feature_judgelog",
+          "value": true,
+          "note": "機能フラグ(プレイ単位で無効化可能に)"
+        },
+        {
+          "name": "operator",
+          "value": "",
+          "note": "判定・実行の記録に残す実施者。個人名ではなく部署・グループ名まで"
+        },
+        {
+          "name": "guide_tour_done",
+          "value": "0",
+          "note": "初回ガイドツアーを見終えたか(1=済)。1以外は未完了として扱う"
+        },
+        {
+          "name": "ui_advanced",
+          "value": true,
+          "note": "使い方タブ⑦「上級」の5行を出すか。FALSEのとき上級の図形を生成しない(導線の有無だけを制御する)"
+        }
       ]
     },
-
     {
       "name": "err_log",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.4",
       "data_locked": true,
       "columns": [
-        {"name": "logged_at", "type": "String", "width": 20},
-        {"name": "err_code", "type": "String", "width": 12, "header_note": "E01xx入力/E02xx LLM/E03xx検証/E04xxナレッジ/E05xx出力/E06xx環境/E07xx受信箱・ウォッチ"},
-        {"name": "source", "type": "String", "width": 24},
-        {"name": "detail", "type": "String", "width": 60, "header_note": "最大400字・本文非記録"},
-        {"name": "err_number", "type": "Long", "width": 12},
-        {"name": "http_status", "type": "Long", "width": 12}
+        {
+          "name": "logged_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "err_code",
+          "type": "String",
+          "width": 12,
+          "header_note": "E01xx入力/E02xx LLM/E03xx検証/E04xxナレッジ/E05xx出力/E06xx環境/E07xx受信箱・ウォッチ"
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "width": 24
+        },
+        {
+          "name": "detail",
+          "type": "String",
+          "width": 60,
+          "header_note": "最大400字・本文非記録"
+        },
+        {
+          "name": "err_number",
+          "type": "Long",
+          "width": 12
+        },
+        {
+          "name": "http_status",
+          "type": "Long",
+          "width": 12
+        }
       ]
     },
-
     {
       "name": "usage_log",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.4",
       "data_locked": true,
       "columns": [
-        {"name": "logged_at", "type": "String", "width": 20},
-        {"name": "event", "type": "String", "width": 24},
-        {"name": "case_id", "type": "String", "width": 22},
-        {"name": "detail", "type": "String", "width": 60}
+        {
+          "name": "logged_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "event",
+          "type": "String",
+          "width": 24
+        },
+        {
+          "name": "case_id",
+          "type": "String",
+          "width": 22
+        },
+        {
+          "name": "detail",
+          "type": "String",
+          "width": 60
+        }
       ]
     },
-
     {
       "name": "run_log",
       "role": "table",
-      "state": "visible",
+      "state": "hidden",
       "spec_ref": "13章§2.4",
       "data_locked": true,
       "sheet_note": "1行=1 LLM呼び出し。JSON本文は保持しない。",
       "columns": [
-        {"name": "run_at", "type": "String", "width": 20},
-        {"name": "case_id", "type": "String", "width": 22, "header_note": "案件ID または inbox_id"},
-        {"name": "round_no", "type": "Long", "width": 10, "header_note": "案件一覧の現在値を複写(受信箱起点のpf/wt/fgでは空)"},
-        {"name": "step", "type": "String", "width": 8, "dv": "run_step", "header_note": "全12値(19章§4と完全一致)"},
-        {"name": "play", "type": "String", "width": 8, "dv": "play"},
-        {"name": "transport", "type": "String", "width": 10, "dv": "transport"},
-        {"name": "model", "type": "String", "width": 18},
-        {"name": "latency_ms", "type": "Long", "width": 12},
-        {"name": "input_chars", "type": "Long", "width": 12},
-        {"name": "output_chars", "type": "Long", "width": 12},
-        {"name": "injected_kb_ids", "type": "String", "width": 44, "header_note": ";区切り"},
-        {"name": "validate_result", "type": "String", "width": 14, "dv": "validate_result"},
-        {"name": "detail", "type": "String", "width": 60, "header_note": "最大400字・本文非記録"},
-        {"name": "operator", "type": "String", "width": 18}
+        {
+          "name": "run_at",
+          "type": "String",
+          "width": 20
+        },
+        {
+          "name": "case_id",
+          "type": "String",
+          "width": 22,
+          "header_note": "案件ID または inbox_id"
+        },
+        {
+          "name": "round_no",
+          "type": "Long",
+          "width": 10,
+          "header_note": "案件一覧の現在値を複写(受信箱起点のpf/wt/fgでは空)"
+        },
+        {
+          "name": "step",
+          "type": "String",
+          "width": 8,
+          "dv": "run_step",
+          "header_note": "全12値(19章§4と完全一致)"
+        },
+        {
+          "name": "play",
+          "type": "String",
+          "width": 8,
+          "dv": "play"
+        },
+        {
+          "name": "transport",
+          "type": "String",
+          "width": 10,
+          "dv": "transport"
+        },
+        {
+          "name": "model",
+          "type": "String",
+          "width": 18
+        },
+        {
+          "name": "latency_ms",
+          "type": "Long",
+          "width": 12
+        },
+        {
+          "name": "input_chars",
+          "type": "Long",
+          "width": 12
+        },
+        {
+          "name": "output_chars",
+          "type": "Long",
+          "width": 12
+        },
+        {
+          "name": "injected_kb_ids",
+          "type": "String",
+          "width": 44,
+          "header_note": ";区切り"
+        },
+        {
+          "name": "validate_result",
+          "type": "String",
+          "width": 14,
+          "dv": "validate_result"
+        },
+        {
+          "name": "detail",
+          "type": "String",
+          "width": 60,
+          "header_note": "最大400字・本文非記録"
+        },
+        {
+          "name": "operator",
+          "type": "String",
+          "width": 18
+        }
       ]
     },
-
     {
       "name": "vba_src",
       "role": "vba_src",

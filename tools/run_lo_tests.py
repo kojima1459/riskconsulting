@@ -170,6 +170,10 @@ PURE_ALLOWLIST = [
     #   modUICase : EnumPairsCsv(変換表の唯一の値源)/ EnumJa / EnumEn
     # (技術メモ4。モジュールの他の関数はシートに触れるが実行に到達しない)。
     "modUICase",
+    # W6第1弾(T-49)。どちらも core の純関数だけで構成され Excel を1つも触らない。
+    #   modUIGeom  : 帯・ボタンの並びとカードの高さ・表示時間の算数
+    #   modNavText : StripDrFooter / PreviewLines / SplitFieldNotes / JoinFieldNotes
+    "modUIGeom", "modNavText",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",
@@ -195,6 +199,11 @@ PURE_ALLOWLIST = [
     # 叩くのは modUtil / modUtilText / modUICase / modInboxStore / modPipeline2 の
     # 純関数だけ。modTestsPure11.RunAll の末尾から呼ぶ。
     "modTestsPure12",
+    # modTestsPure13: W6第1弾(1画面ナビ・T-49)の純層18本。11章v3.2 の
+    # §3.3.2 / §3.3.5 / §3.3.6 だけを根拠に modNavText.StripDrFooter(7本)/
+    # PreviewLines(4本)/ SplitFieldNotes・JoinFieldNotes(7本)を叩く。
+    # modTestsPure12.RunAll の末尾から呼ぶ。
+    "modTestsPure13",
     "modMockLlm", "modMockLlm2",
 ]
 

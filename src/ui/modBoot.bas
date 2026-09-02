@@ -188,8 +188,12 @@ Private Sub BootStep(ByVal stepNo As Long)
         '  EnableSelectionのみを毎起動適用する)
         ApplyProtectionPolicy
     Case 10
-        ' 画面の用意(図形ボタン+OnAction の配線とHOMEの初期表示。11章§5・T-30)
+        ' 画面の用意(図形ボタン+OnAction の配線とナビの初期表示。11章§5・T-30)。
+        ' EnsureScreens の末尾が RefreshHome -> modUINav.DrawNav まで通す。
         modUIHome.EnsureScreens
+        ' [中身を見る]が %TEMP% へ書いた一時ファイルの後始末(11章§3.3.4(2))。
+        ' 7日より古いものだけを消す(開いている最中のものは消せないため)。
+        modUICase6.SweepTempViews
     Case 11
         ' フォーカス退避(16章E-51(c))。実装は ui層 modUIProgress が唯一持つ。
         modUIProgress.ParkFocus
@@ -523,7 +527,7 @@ Private Function FieldPos(ByVal flds As Variant, ByVal wanted As String) As Long
 End Function
 
 ' ----------------------------------------------------------------------------
-' (7) 利用上限がTrueのときのHOME案内(14章§2・12章§2.1手順(7))。
+' (7) 利用上限がTrueのときのナビ区画④の「お知らせ」案内(14章§2・12章§2.1手順(7))。
 '     hm_warning が無い(未着手のui構築段階)場合は無音でスキップする。
 ' ----------------------------------------------------------------------------
 Private Sub NoticeLimitReached()

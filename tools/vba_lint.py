@@ -108,6 +108,12 @@ MODULE_REGISTRY = {
     #                 OnActionハンドラ群(画面は modUIHome・動作は modUIHome2)。
     "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICase5",
     "modUICaseFmt", "modUIGuide", "modUIToast", "modUIHome2",
+    # W6第1弾(1画面ナビ・17章 T-49)で新設。12章§2のモジュール一覧に追記済み。
+    #   modUINav     = ナビの状態(STEPの自動決定)とOnActionハンドラ(11章§3.1.1)。
+    #   modUINavDraw = ナビの描画(コーチ帯・区画パネル・強調枠・待ちカード)。
+    #   modUIResearch= 区画①の調べる文8本の組み立てと[コピー](11章§3.2)。
+    #   modUICase6   = 区画②の保管+プレビュー貼付(11章§3.3・§7.2(a))。
+    "modUINav", "modUINavDraw", "modUIResearch", "modUICase6",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -131,6 +137,12 @@ MODULE_REGISTRY = {
     # ---- core 層 ----
     "modGatewayRPN", "modGatewayDirect", "modJsonLite", "modConfig", "modLog",
     "modUtil", "modUtilText", "modTypes",
+    # W6第1弾(1画面ナビ・17章 T-49)で新設。12章§2のモジュール一覧に追記済み。
+    #   modUIGeom  = 画面の幾何(帯・ボタンの並び・カードの高さ・表示時間)の純関数。
+    #                Excelを1つも触らないので層(a)からテストできる(11章§8.6の流用表)。
+    #   modNavText = 貼付テキストの純変換(StripDrFooter / PreviewLines /
+    #                SplitFieldNotes / JoinFieldNotes。11章§7.2(a))。
+    "modUIGeom", "modNavText",
     # ---- test 層 ----
     # modTestsRunnerUi = ブック内テスト実行(17章 T-48・裁定書14 裁定5)。
     #   ターミナルの使えない社内PC向けに ps1 と同じ4条件をブック内で回す。
@@ -189,6 +201,42 @@ CONTRACT: dict[str, dict] = {
     # 定義していない(型モジュール)ため required は空。CONTRACT に載せるのは完全性
     # 自己検査(MODULE_REGISTRY⇔CONTRACT)を満たすため。closed=False で追加 Public は許容。
     "modTypes": {"closed": False, "required": []},
+    # W6第1弾(T-49)。14章§6へ登記した公開名。closed=False(内部の追加Publicは許す)。
+    # W6第1弾(T-49)。ui層の新設4本。14章§6へ登記した公開名。
+    "modUINav": {
+        "closed": False,
+        "required": ["DrawNav", "NavPrev", "NavNext", "ShowDrafts", "BackToNav",
+                     "CurrentStep", "StepText", "StepAnchor", "FieldNotesWritten"],
+    },
+    "modUINavDraw": {
+        "closed": False,
+        "required": ["DrawCoachBar", "DrawSections", "MoveFocusFrame",
+                     "DrawWaitCard", "HideWaitCard", "RefreshAreas", "RefreshArea",
+                     "EnsureAreaButtons", "ApplyAreaVisibility", "ShowMoreRows",
+                     "DropNavShapes", "ResetForNewCase", "FieldNotesTemplate",
+                     "LoadFieldNotesFor"],
+    },
+    "modUIResearch": {
+        "closed": False,
+        "required": ["BuildPrompts", "EnsureCopyButtons", "ToggleMore",
+                     "CopyPrompt1", "CopyPrompt8"],
+    },
+    "modUICase6": {
+        "closed": False,
+        "required": ["StoreArea", "LoadArea", "ReadDirectPaste", "SentinelCheck",
+                     "MergedOrShapeCheck", "PasteIntoArea", "ShowArea", "ClearArea",
+                     "SaveNav", "AreaKeys", "AreaField", "AreaBody"],
+    },
+    "modUIGeom": {
+        "closed": False,
+        "required": ["SumSpan", "FlowLeft", "TextSpan", "ClipToWidth", "ClipToChars",
+                     "PillWidth", "StepDots", "CardHeightFor", "CardWaitMsFor"],
+    },
+    "modNavText": {
+        "closed": False,
+        "required": ["StripDrFooter", "PreviewLines", "SplitFieldNotes",
+                     "JoinFieldNotes", "NormalizeEol"],
+    },
     # ---- app 層 ----
     "modValidate": {
         "closed": False,

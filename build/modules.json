@@ -23,6 +23,20 @@
       "wave": "T-10"
     },
     {
+      "name": "modNavText",
+      "path": "src/core/modNavText.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-49"
+    },
+    {
+      "name": "modUIGeom",
+      "path": "src/core/modUIGeom.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-49"
+    },
+    {
       "name": "modJsonLite",
       "path": "src/core/modJsonLite.bas",
       "role": "core",
@@ -380,6 +394,34 @@
       "wave": "T-30"
     },
     {
+      "name": "modUINav",
+      "path": "src/ui/modUINav.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-49"
+    },
+    {
+      "name": "modUINavDraw",
+      "path": "src/ui/modUINavDraw.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-49"
+    },
+    {
+      "name": "modUIResearch",
+      "path": "src/ui/modUIResearch.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-49"
+    },
+    {
+      "name": "modUICase6",
+      "path": "src/ui/modUICase6.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-49"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",
@@ -469,6 +511,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-42"
+    },
+    {
+      "name": "modTestsPure13",
+      "path": "src/test/modTestsPure13.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-49"
     },
     {
       "name": "modTestsExcel",

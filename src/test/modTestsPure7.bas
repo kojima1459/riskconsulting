@@ -50,7 +50,7 @@ Private Const TXT_CLEAN As String = _
     "増設費は3,200万円の見込みで、稟議は総務部で回覧中です。"
 
 ' 走査箇所の申告(ScanReport の whereNote。13章§2.2の欄名を想定)。
-Private Const WHERE_NOTE As String = "案件入力:営業メモ"
+Private Const WHERE_NOTE As String = "ナビ:現場メモ"
 
 ' ----------------------------
 ' G60 の素材(15章§0 原則10の書式で書いた検証エラー行)

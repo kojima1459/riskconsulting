@@ -36,7 +36,7 @@ Private Const UT_CARD As String = "ts_card"
 
 ' HOMEの[① 調べる指示文を出す]の飛び先(13章§2.18・司令塔追補)。見出しの文字列を
 ' 探さず、名前付きレンジ1点をアンカーにする(章立てが動いても壊れない)。
-Private Const UT_GUIDE_SHEET As String = "操作ガイド"
+Private Const UT_GUIDE_SHEET As String = "使い方"
 Private Const UT_CH7_ANCHOR As String = "gd_ch7_head"
 Private Const UT_LOCK_NAME As String = "調べる指示文"
 Private Const UT_MSG_RESEARCH As String = _
@@ -206,15 +206,16 @@ End Function
 ' 内部
 ' ============================================================================
 
-' 次の一手の文言(1ボタン=1行)。既存の警告文と矛盾しない言い方にする。
+' 次の一手の文言(1ボタン=1行)。11章§2/§3.1.1 の逐語に合わせる(v3.2:
+'   ボタン名から番号を外し、区画の番号で呼ぶ)。
 Private Function NextTextOf(ByVal stepNo As Long) As String
     Select Case stepNo
     Case 1
-        NextTextOf = "会社の情報を貼って[保存して戻る]を押してください"
+        NextTextOf = "会社のことを②の枠へ貼って、[貼ったものを保存する]を押してください"
     Case 2
-        NextTextOf = "できました。[④ レポートを出す]を押してください"
+        NextTextOf = "できました。④の[レポートを出す]を押してください"
     Case 3
-        NextTextOf = "レポートを出力しました。次は[⑤ ヒアリングシートを出す]です"
+        NextTextOf = "レポートを出しました。次は④の[ヒアリングシートを出す]です"
     Case 4
         NextTextOf = "ヒアリングシートができました。Ctrl+Pで印刷できます"
     End Select

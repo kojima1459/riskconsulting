@@ -49,6 +49,9 @@ Private Const US_BTN_ROUND As Double = 0.35         ' 角丸の深さ(Adjustment
 Private Const US_BTN_ROW_PAD As Double = 4#         ' アンカー行に足す余白
 
 Private Const US_BTN_HEIGHT As Double = 26#
+' 小さめの副ボタン(EnsureButtonSm)。[コピー]8本・[ここに貼る]等で使う。
+Private Const US_BTN_HEIGHT_SM As Double = 20#
+Private Const US_BTN_FONT_SIZE_SM As Double = 8.5
 ' 主要動線(kind="primary")だけ高さを30ptにする(裁定書17 H3(a): HOMEの2列×3行(主要動線5本)配置)。
 Private Const US_BTN_HEIGHT_PRIMARY As Double = 30#
 Private Const US_LABEL_HEIGHT As Double = 16#
@@ -493,6 +496,98 @@ Private Sub GrowRowForButton(ByVal ws As Object, ByVal anchorRow As Long, _
     If ws.Rows(anchorRow).RowHeight < needed Then ws.Rows(anchorRow).RowHeight = needed
 End Sub
 
+' ============================================================================
+' 影とグラデーション(11章§8.6 の流用表。notebook modSkin.bas:123 ApplyLightShadow /
+'   :161 ApplySoftShadow を **On Error Resume Next で包む形のまま** 移植した)
+' ----------------------------------------------------------------------------
+' 影は「見た目が素っ気なくなる」以上の失敗をしてはならないので、失敗しても
+' 業務を止めない(11章§8.6 禁忌6)。数値リテラルの横には定数名をコメントで残す。
+' ============================================================================
+Public Sub ApplyLightShadow(ByVal shp As Object)
+    On Error Resume Next
+    shp.Shadow.Visible = -1                  ' msoTrue
+    shp.Shadow.Style = 1                     ' msoShadowStyleOuterShadow
+    shp.Shadow.Blur = 4
+    shp.Shadow.OffsetX = 0
+    shp.Shadow.OffsetY = 1.5
+    shp.Shadow.Transparency = 0.9
+End Sub
+
+Public Sub ApplySoftShadow(ByVal shp As Object)
+    On Error Resume Next
+    shp.Shadow.Visible = -1                  ' msoTrue
+    shp.Shadow.Style = 1                     ' msoShadowStyleOuterShadow
+    shp.Shadow.Blur = 8
+    shp.Shadow.OffsetX = 0
+    shp.Shadow.OffsetY = 2
+    shp.Shadow.Transparency = 0.86
+End Sub
+
+' 2色の帯グラデーション(notebook modSkin.bas:89 ApplyHeaderDepth の改変移植)。
+'   色は本製品の主色を呼び出し側が渡す(notebook の濃緑をそのまま持ち込まない)。
+Public Sub ApplyBandGradient(ByVal shp As Object, ByVal colorFrom As Long, _
+                             ByVal colorTo As Long)
+    On Error Resume Next
+    shp.Fill.TwoColorGradient 1, 1           ' msoGradientHorizontal, バリアント1
+    shp.Fill.ForeColor.RGB = colorFrom
+    shp.Fill.BackColor.RGB = colorTo
+End Sub
+
+' ============================================================================
+' EnsureButtonSm - 小さめの副ボタン(11章§8.6: notebook modKnowledgeBar.bas:524
+'   ToolButton の改変移植)。高さ20pt・文字8.5pt・幅は呼び出し側が決める。
+'   説明は AlternativeText へ入れる(Hyperlinks.Add は使わない。禁忌1)。
+' ============================================================================
+Public Function EnsureButtonSm(ByVal ws As Object, ByVal shapeKey As String, _
+                               ByVal caption As String, ByVal anchorRow As Long, _
+                               ByVal anchorCol As Long, ByVal widthPt As Double, _
+                               ByVal onActionName As String, _
+                               ByVal helpText As String) As Boolean
+    On Error GoTo Failed
+    If ws Is Nothing Then Exit Function
+
+    DropShape ws, shapeKey
+
+    Dim anchor As Object
+    Set anchor = ws.Cells(anchorRow, anchorCol)
+
+    Dim shp As Object
+    Set shp = ws.Shapes.AddShape(US_SHAPE_ROUNDED, anchor.Left, anchor.Top, _
+                                 widthPt, US_BTN_HEIGHT_SM)
+    If shp Is Nothing Then Exit Function
+
+    shp.Name = shapeKey
+    shp.Placement = US_PLACEMENT_FREE
+    On Error Resume Next
+    shp.Adjustments(1) = US_BTN_ROUND
+    shp.AlternativeText = helpText
+    On Error GoTo Failed
+
+    shp.Fill.ForeColor.RGB = US_COLOR_BTN
+    shp.Line.Visible = True
+    shp.Line.ForeColor.RGB = US_COLOR_BTN_LINE
+    shp.TextFrame.Characters.Text = caption
+    shp.TextFrame.HorizontalAlignment = US_ALIGN_CENTER
+    shp.TextFrame.Characters.Font.Name = US_BTN_FONT
+    shp.TextFrame.Characters.Font.Size = US_BTN_FONT_SIZE_SM
+    shp.TextFrame.Characters.Font.Color = US_COLOR_BTN_TEXT
+    shp.OnAction = onActionName
+    EnsureButtonSm = True
+    Exit Function
+Failed:
+    EnsureButtonSm = False
+End Function
+
+' ============================================================================
+' EnsureBackButton - 可視にしたシートの1行目へ置く[ナビへ戻る](11章§3.4)。
+'   (notebook modHelp.bas:602 DrawManualBackButton をそのまま移植)。
+'   下書き4枚・上級5枚・ヒアリングシートの計10枚で使う。行き止まりを作らない。
+' ============================================================================
+Public Function EnsureBackButton(ByVal ws As Object) As Boolean
+    EnsureBackButton = EnsureButtonEx(ws, "btn_back_nav", "ナビへ戻る", 1, 1, 100#, _
+                                      "modUINav.BackToNav", "plain")
+End Function
+
 ' ボタンの左端(pt)。幾何計算を呼び出し側で組み立てるための読み取り口。
 '   取れないときは -1(呼び出し側は配置をあきらめて既定の列アンカーへ落とす)。
 Public Function CellLeft(ByVal ws As Object, ByVal rowNo As Long, ByVal colNo As Long) As Double
@@ -570,6 +665,33 @@ End Sub
 ' 使う(GUIDによる New: 生成。参照設定なしで動く定番手)。失敗したら戻り値
 ' False を返し、呼び出し側が「セルを選ぶのでCtrl+Cしてください」へ落とす。
 ' ============================================================================
+Public Function PasteFromClipboard(ByRef okFlag As Boolean) As String
+    okFlag = False
+    On Error GoTo Failed
+    Dim dobj As Object
+    Set dobj = GetObject("New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
+    If dobj Is Nothing Then Exit Function
+    dobj.GetFromClipboard
+    Dim s As String
+    s = dobj.GetText(1)                     ' 1 = テキスト形式だけを読む
+    If LenB(s) = 0 Then Exit Function
+    okFlag = True
+    PasteFromClipboard = s
+    Exit Function
+Failed:
+    okFlag = False
+    PasteFromClipboard = vbNullString
+End Function
+
+' 名前付きレンジが指す範囲の行数・先頭行・列。取れないときは0(呼び出し側が諦める)。
+Public Function NamedRows(ByVal rangeName As String) As Long
+    On Error GoTo NoRows
+    NamedRows = ThisWorkbook.Names(rangeName).RefersToRange.Rows.count
+    Exit Function
+NoRows:
+    NamedRows = 0
+End Function
+
 Public Function CopyToClipboard(ByVal payloadText As String) As Boolean
     On Error GoTo Failed
     If LenB(payloadText) = 0 Then Exit Function

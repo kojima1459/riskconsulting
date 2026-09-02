@@ -25,7 +25,7 @@ Option Explicit
 ' ============================================================================
 
 Private Const U3_SRC As String = "modUICase3"
-Private Const U3_SHEET As String = "案件入力"
+Private Const U3_SHEET As String = "ナビ"
 Private Const U3_CASES As String = "案件一覧"
 Private Const U3_SCAN_COLS As Long = 32
 ' 13章§2.11(裁定書10 M3): 続き欄への分割幅。JoinField が**区切り文字なし**で
@@ -459,7 +459,7 @@ Public Sub CaseSave()
         ' 裁定書12 V3: 成功時と同じHOME遷移で戻し、hm_warning の警告文で
         ' 「保存できなかった」ことが判るようにする(MsgBoxは使わない)。
         modLog.LogError "E0302", U3_SRC & ".CaseSave", "case_id_blank"
-        modUISheet.ShowSheet "HOME"
+        modUISheet.ShowSheet "ナビ"
         modUIHome.RefreshHome
         modUISheet.WriteNamed "hm_warning", U3_MSG_MISMATCH
         GoTo Done
@@ -467,7 +467,7 @@ Public Sub CaseSave()
 
     If SaveCaseInput(caseId) Then
         If isNew Then modUISheet.WriteNamed "hm_case_id", caseId
-        modUISheet.ShowSheet "HOME"
+        modUISheet.ShowSheet "ナビ"
         modUIHome.RefreshHome
     End If
 

@@ -16,12 +16,13 @@ sheet_check.py - 13章(データ設計)と、シート台帳/ビルド済みブ�
                   state・ブックの sheet_state が一致するか。本体の全シートが
                   表に載っていることも確かめる(裁定書17 H4で err_log /
                   usage_log / run_log を可視へ変えたときの取りこぼし防止)。
-  2. シート型     13章§2.9の型表(帳票型=HOME/案件入力・テーブル型=6枚)と
+  2. シート型     13章§2.9の型表(帳票型=ナビ/使い方・テーブル型=6枚)と
                   JSONの role が一致するか。
   3. 列物理名     テーブル型シートの列名と物理順。1シート1テーブルのシートは
                   ブックの1行目、ブロック縦積みのシートは**ブロック名の名前付き
                   レンジ(アンカー)から特定したヘッダ行**を読む(13章§2.9)。
-  4. 名前付きレンジ 帳票型2シート(hm_ / ci_)と、ヒアリングシート・壁打ちの
+  4. 名前付きレンジ 帳票型2シート(ナビ=hm_/ci_/dr_/nv_ の4接頭辞・使い方=gd_)と、
+                  ヒアリングシート・壁打ちの
                   見出し用(hs_ / sp_ の計8本)を名前付きレンジ側で突合する。
   5. configキー   13章§2.3の name 列と、その順序。機械比較できる行は既定値も。
 
@@ -72,7 +73,7 @@ KB_MOCK_ROW_IDS = {
     "機構ライブラリ": "MC-0107",
 }
 
-NAME_PREFIXES = ("hm_", "ci_", "hs_", "sp_", "gd_")
+NAME_PREFIXES = ("hm_", "ci_", "dr_", "nv_", "hs_", "sp_", "gd_")
 
 
 # ------------------------------------------------------------------------------
@@ -143,7 +144,9 @@ class Ch13:
         self.visibility: dict[str, str] = {}      # シート -> 初期可視状態(13章§2.9)
         self.form_sheets: list[str] = []
         self.table_sheets: list[str] = []
-        self.prefix_of: dict[str, str] = {}      # シート -> 名前付きレンジ接頭辞
+        # シート -> 名前付きレンジ接頭辞の**リスト**。13章§2.9(v3.2)で `ナビ` が
+        # hm_/ci_/dr_/nv_ の4接頭辞を持つため、1対1の辞書では取りこぼす。
+        self.prefix_of: dict[str, list[str]] = {}
         self._parse()
 
     # -- 節の切り出し -----------------------------------------------------------
@@ -186,9 +189,9 @@ class Ch13:
         # 拾う接頭辞は13章§2.9の命名規約表から引く。節をまたぐ相互参照
         # (§2.16の本文が案件入力の ci_paste_hearing_answers_1 に触れる等)を
         # そのシートの持ち物と誤認しないため、自シートの接頭辞だけを拾う。
-        prefix = self.prefix_of.get(sheet)
-        if prefix:
-            names = self._scan_named_ranges("\n".join(body), prefix)
+        prefixes = self.prefix_of.get(sheet)
+        if prefixes:
+            names = self._scan_named_ranges("\n".join(body), tuple(prefixes))
             if names:
                 self.named_ranges[sheet] = names
 
@@ -218,16 +221,16 @@ class Ch13:
         if found_blocks:
             self.blocks[sheet] = found_blocks
 
-    def _scan_named_ranges(self, text: str, prefix: str) -> list[str]:
+    def _scan_named_ranges(self, text: str, prefixes: tuple[str, ...]) -> list[str]:
         found: list[str] = []
         for m in re.finditer(r"\b([a-z]{2}_[a-z0-9_]+)\b", text):
             nm = m.group(1)
-            if nm.startswith(prefix) and nm not in found:
+            if nm.startswith(prefixes) and nm not in found:
                 found.append(nm)
         # 「ci_recipe_01 - ci_recipe_14」形式の範囲を展開する。
         for m in re.finditer(r"\b([a-z][a-z0-9_]*_)(\d{2})\s*-\s*\1(\d{2})\b", text):
             stem, lo, hi = m.group(1), int(m.group(2)), int(m.group(3))
-            if not stem.startswith(prefix):
+            if not stem.startswith(prefixes):
                 continue
             for n in range(lo, hi + 1):
                 nm = f"{stem}{n:02d}"
@@ -264,7 +267,10 @@ class Ch13:
         blob = "\n".join(body)
         # 命名規約: 「`hm_`（HOME）/ `ci_`（案件入力）」「`hs_`（`ヒアリングシート`。§2.16）」
         for m in re.finditer(r"`([a-z]{2}_)`（`?([^）`。]+)`?", blob):
-            self.prefix_of[_strip_marks(m.group(2))] = m.group(1)
+            sheet = _strip_marks(m.group(2))
+            self.prefix_of.setdefault(sheet, [])
+            if m.group(1) not in self.prefix_of[sheet]:
+                self.prefix_of[sheet].append(m.group(1))
         m = re.search(r"\*\*ガードシート\s+`([^`]+)`\*\*", blob)
         if m:
             self.guard_sheet = m.group(1)
@@ -506,7 +512,12 @@ class Ledger:
         s = self.by_name.get(name) or {}
         out = []
         for sec in s.get("sections") or []:
-            out += [f["range"] for f in sec.get("fields") or []]
+            # 区画の見出し行そのものを指すアンカー(13章§2.10 nv_sec1-4。v3.2)。
+            if sec.get("anchor"):
+                out.append(sec["anchor"])
+            # "range" を持たない要素は説明1行・例文などの案内文の行であり、
+            # 名前付きレンジではない(11章§3.3.3。ビルド側 _make_form と同じ判定)。
+            out += [f["range"] for f in sec.get("fields") or [] if f.get("range")]
             if sec.get("anchor_table"):
                 out.append(sec["anchor_table"]["range"])
         out += [f["range"] for f in s.get("header_fields") or []]
@@ -811,7 +822,7 @@ def run(book_path: Path | None, rep: Report) -> None:
                     rep.eq_seq(f"[ブック] {sheet}/{bname} のヘッダ行", cols, bgot)
 
     # --- 4. 名前付きレンジ ----------------------------------------------------
-    print("\n[4] 名前付きレンジ(帳票型 hm_/ci_/gd_ と 見出し用 hs_/sp_)")
+    print("\n[4] 名前付きレンジ(帳票型 hm_/ci_/dr_/nv_/gd_ と 見出し用 hs_/sp_)")
     total_hs_sp = 0
     for sheet, want in ch13.named_ranges.items():
         got = led.named_ranges(sheet)
