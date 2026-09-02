@@ -209,8 +209,25 @@ End Function
 '   13章§2.2「表に無いラベルは検証不合格」を守るため、**推測で近いものを返さ
 '   ない**。呼び出し側(逆シリアライズ)は "" を受け取ったら原文をそのまま
 '   JSONへ載せ、modValidate に不合格として弾かせる(黙って直さない)。
+'
+'   唯一の例外(裁定書22 D13): **表示専用の欄に付ける丸括弧の補足**だけは落として
+'   もう一度引く。`ci_dossier_tier` は「しっかり調査（貼った内容から自動で決まり
+'   ます）」と表示する欄になり、ラベルそのものは変わっていないためである。
+'   完全一致で引けたときは**この経路を1度も通らない**ので、既存の変換結果は
+'   1つも変わらない(近いものを返す推測にはならない)。
 ' ============================================================================
 Public Function EnumEn(ByVal groupName As String, ByVal labelText As String) As String
+    EnumEn = EnumEnExact(groupName, labelText)
+    If LenB(EnumEn) > 0 Then Exit Function
+
+    Dim pos As Long
+    pos = InStr(1, labelText, "（", vbBinaryCompare)
+    If pos <= 1 Then Exit Function
+    EnumEn = EnumEnExact(groupName, Left$(labelText, pos - 1))
+End Function
+
+' 完全一致だけの引き(上の唯一の値源)。
+Private Function EnumEnExact(ByVal groupName As String, ByVal labelText As String) As String
     Dim t As String
     Dim pre As String
     Dim wanted As String
@@ -237,7 +254,7 @@ Public Function EnumEn(ByVal groupName As String, ByVal labelText As String) As 
         If c1 > 0 Then c2 = InStr(c1 + 1, lineText, ",", vbBinaryCompare)
         If c1 > 0 And c2 > c1 Then
             If Mid$(lineText, c2 + 1) = wanted Then
-                EnumEn = Mid$(lineText, c1 + 1, c2 - c1 - 1)
+                EnumEnExact = Mid$(lineText, c1 + 1, c2 - c1 - 1)
                 Exit Function
             End If
         End If

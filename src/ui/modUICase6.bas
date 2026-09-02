@@ -22,7 +22,9 @@ Option Explicit
 Private Const U6_SRC As String = "modUICase6"
 Private Const U6_SHEET As String = "ナビ"
 Private Const U6_PREVIEW_LINES As Long = 5
-Private Const U6_PREVIEW_HEAD As String = "ここから下は先頭だけお見せしています"
+' 裁定書22 i1: プレビューの見出し「┈┈┈ 先頭だけお見せします ┈┈┈」の値源は
+'   build/sheets_main.json の ci_prev_* の label だけである(ビルドがセルへ焼く)。
+'   VBA側の定数は使われないまま二重の値源になっていたので撤去した。
 Private Const U6_LOCK_PASTE As String = "貼り付け"
 Private Const U6_LOCK_SHOW As String = "中身の表示"
 Private Const U6_LOCK_CLEAR As String = "貼ったものの取り消し"
@@ -49,6 +51,15 @@ Private Const U6_MSG_NOTEPAD_NG As String = _
     "中身を開けませんでした。貼った文章はちゃんと保存されていますので、そのまま先へ進んでください。"
 Private Const U6_MSG_FOOTER As String = "（末尾のシステムの表示は取り除きました）"
 Private Const U6_MSG_NOT_YET As String = "まだ貼っていません"
+' 11章§3.3.7(裁定書22 m3): 画面を描き切れていないときの2文。ナビは1画面なので
+'   「HOMEへ戻って」ではなく帯の[ナレッジを読み直す]か開き直しへ誘導する。
+Private Const U6_MSG_NO_DRAW As String = _
+    "画面を正しく開けませんでした。いちばん上の帯の[ナレッジを読み直す]を押すか、" & _
+    "ブックを開き直してください。"
+' 11章§3.3.7(裁定書22 M2): 現場メモが60行に入りきらないときの2文。
+Private Const U6_MSG_MEMO_ROWS As String = _
+    "現場メモが枠に入りきりませんでした。いちばん下の余った行を切り取って、" & _
+    "別の見出しの下へ貼ってください。"
 Private Const U6_MSG_SAVE_NG As String = "保存できませんでした"
 
 ' 一時ファイル(11章§3.3.4(2))。7日より古いものは起動時に消す。
@@ -232,27 +243,22 @@ Public Function SentinelCheck(ByVal areaKey As String) As Boolean
     SentinelCheck = (LenB(modUISheet.ReadNamed(sn)) > 0)
 End Function
 
-' MergedOrShapeCheck - 直貼り枠に結合セルが入っていないか。True=入っている。
-'   図形・画像はシート単位でしか数えられないので、ここでは結合セルだけを見る
-'   (11章§3.3.7。判定できないものを「無い」と言い切らない)。
+' MergedOrShapeCheck - 直貼り枠に結合セル・図形・画像が入っていないか。
+'   True=入っている。実体は modUICase7.MergedOrShapeAt(裁定書22 m2 で図形の
+'   交差検知を足したため、30,000字契約により分割先へ置いた)。
 Public Function MergedOrShapeCheck(ByVal areaKey As String) As Boolean
-    On Error GoTo Failed
-    Dim a As String, d As String, l As String, p As String
-    Dim rw As String, sn As String, ct As String
-    SplitArea AreaLineOf(areaKey), a, d, l, p, rw, sn, ct
-    If LenB(a) = 0 Then Exit Function
-
-    Dim rng As Object
-    Set rng = ThisWorkbook.Names(rw).RefersToRange
-    MergedOrShapeCheck = (rng.MergeCells <> False)
-    Exit Function
-Failed:
-    MergedOrShapeCheck = False
+    MergedOrShapeCheck = modUICase7.MergedOrShapeAt(areaKey)
 End Function
 
 ' PasteIntoArea - [ここに貼る]の本体(11章§3.3.4(1)。順序が正)。
 Public Sub PasteIntoArea(ByVal areaKey As String)
     On Error GoTo Failed
+
+    ' (0) 裁定書22 m3(B15): 描き切れていない画面から保存しない。
+    If Not modUINav.DrawOk() Then
+        modUIToast.ShowToast U6_MSG_NO_DRAW, "error"
+        Exit Sub
+    End If
 
     Dim a As String, dataKey As String, labelText As String, prevRange As String
     Dim rawRange As String, sentRange As String, countRange As String
@@ -277,7 +283,17 @@ Public Sub PasteIntoArea(ByVal areaKey As String)
     Dim footerCut As Boolean
     footerCut = (Len(body) < Len(modNavText.NormalizeEol(raw)))
 
-    ' (6を先に) 画面の案件と保存先を突き合わせる。合わなければ**1字も保存しない**。
+    ' 個人情報の検査も[ここに貼る]の中で行う(11章§3.3.7。保存まで待たない)。
+    '   裁定書22 m8: **採番より前**に行う。個人情報で弾く貼り付けのために案件を
+    '   採番すると、中身の無い幽霊案件が案件一覧へ積まれる。
+    If modPii.HasPii(body) Then
+        modLog.LogError "E0103", U6_SRC & ".PasteIntoArea", _
+                        modPii.ScanReport(body, U6_SHEET & ":" & labelText)
+        modUIToast.ShowToast U6_MSG_PII, "error"
+        Exit Sub
+    End If
+
+    ' 画面の案件と保存先を突き合わせる。合わなければ**1字も保存しない**。
     '   画面が新規モード(固定マーカー)なら、ここで採番してから保存する
     '   (13章§2.11(e) の書き手(3)。先に[貼ったものを保存する]を押させないと
     '    1本目が貼れない、という順序の罠を作らないため)。
@@ -288,17 +304,14 @@ Public Sub PasteIntoArea(ByVal areaKey As String)
         Exit Sub
     End If
 
-    ' 個人情報の検査も[ここに貼る]の中で行う(11章§3.3.7。保存まで待たない)。
-    If modPii.HasPii(body) Then
-        modLog.LogError "E0103", U6_SRC & ".PasteIntoArea", _
-                        modPii.ScanReport(body, U6_SHEET & ":" & labelText)
-        modUIToast.ShowToast U6_MSG_PII, "error"
-        Exit Sub
-    End If
-
     ' 現場メモだけは実体の入力枠なので、case_data へ直接は書かず枠へ差し込む。
+    '   60行に入りきらなければ**1行も書かず**、その欄だけをブロックする(M2)。
     If StrComp(areaKey, "field_notes", vbBinaryCompare) = 0 Then
-        AppendToFieldNotes body
+        If Not AppendToFieldNotes(body) Then
+            modUIHome.ShowWarning U6_MSG_MEMO_ROWS
+            modUIToast.ShowToast U6_MSG_MEMO_ROWS, "error"
+            Exit Sub
+        End If
         modUINavDraw.RefreshArea caseId, areaKey
         modUIToast.ShowToast "現場メモへ書き足しました。見出しの下をご確認ください。", "info"
         Exit Sub
@@ -328,7 +341,8 @@ End Sub
 
 ' 現場メモの枠へ差し込む(枠を丸ごとクリアしない。原則⑤)。
 '   いま選んでいる見出しが分からないので【そのほか】の節の末尾へ足す。
-Private Sub AppendToFieldNotes(ByVal body As String)
+'   戻り値 False = 60行に入りきらないので**1行も書かなかった**(M2)。
+Private Function AppendToFieldNotes(ByVal body As String) As Boolean
     On Error Resume Next
     Dim cur As String
     cur = ReadFieldNotesArea()
@@ -341,8 +355,8 @@ Private Sub AppendToFieldNotes(ByVal body As String)
     Else
         othersText = body
     End If
-    WriteFieldNotesArea modNavText.JoinFieldNotes(memoText, othersText)
-End Sub
+    AppendToFieldNotes = WriteFieldNotesArea(modNavText.JoinFieldNotes(memoText, othersText))
+End Function
 
 ' ShowArea - [中身を見る](11章§3.3.4(2))。読むだけ。メモ帳で開く。
 Public Sub ShowArea(ByVal areaKey As String)
@@ -453,7 +467,10 @@ Public Sub ClearArea(ByVal areaKey As String)
               vbYesNo + vbQuestion, "リスク提案ナビ") <> vbYes Then Exit Sub
 
     If StrComp(areaKey, "field_notes", vbBinaryCompare) = 0 Then
-        WriteFieldNotesArea modNavText.JoinFieldNotes(vbNullString, vbNullString)
+        If Not WriteFieldNotesArea(modNavText.JoinFieldNotes(vbNullString, vbNullString)) Then
+            modUIToast.ShowToast U6_MSG_MEMO_ROWS, "error"
+            Exit Sub
+        End If
     Else
         modCaseStore.SaveData caseId, dataKey, vbNullString
     End If
@@ -471,6 +488,13 @@ End Sub
 Public Sub SaveNav()
     If Not modUIProgress.TryEnterUiLock(U6_LOCK_SAVE) Then Exit Sub
     On Error GoTo Done
+
+    ' 裁定書22 m3(B15): 描き切れていない画面から保存しない(全欄ブロック)。
+    If Not modUINav.DrawOk() Then
+        modUIHome.ShowWarning U6_MSG_NO_DRAW
+        modUIToast.ShowToast U6_MSG_NO_DRAW, "error"
+        GoTo Done
+    End If
 
     modUIProgress.ParkFocus
 
@@ -498,7 +522,7 @@ Public Sub SaveNav()
     End If
 
     Dim blocked As String
-    blocked = ImportDirectPastes(caseId)
+    blocked = modUICase7.ImportDirectPastes(caseId)
     SaveFieldNotes caseId
     SaveAttributes caseId
     If isNew Then modUISheet.WriteNamed "hm_case_id", caseId
@@ -506,8 +530,10 @@ Public Sub SaveNav()
     ' 画面の描き直しは modUIProgress.ExitUiLock が必ず通す(2度描かない)。
     If LenB(blocked) > 0 Then
         ' 11章§3.3.7 / v2.5.1 M4: 1欄でもブロックしたら成功案内でそれを隠さない。
-        modUIHome.ShowWarning "案件 " & caseId & " を保存しました。ただし " & blocked & _
-            " は保存していません。[ここに貼る]で貼り直すと、長さを気にせず入ります。", "warn"
+        '   裁定書22 m2: 理由(はみ出し / 表の線・画像 / 個人情報)ごとの逐語文を
+        '   modUICase7 が組み立てて返す(1文にまとめない)。
+        modUIHome.ShowWarning "案件 " & caseId & " を保存しました。ただし次の欄は" & _
+            "保存していません。" & vbLf & blocked, "warn"
     Else
         modUIToast.ShowToast "案件 " & caseId & " を保存しました。" & _
                              "次は③の[まとめて作る]を押してください。", "info"
@@ -519,57 +545,8 @@ Done:
     modUIProgress.ParkFocus
 End Sub
 
-' 直貼り枠を取り込む。ブロックした欄の画面ラベルを「・」で連ねて返す。
-Private Function ImportDirectPastes(ByVal caseId As String) As String
-    Dim acc As String
-    Dim lines() As String
-    lines = Split(AreaTable(), vbLf)
-
-    Dim i As Long
-    Dim a As String, dataKey As String, labelText As String, prevRange As String
-    Dim rawRange As String, sentRange As String, countRange As String
-    For i = LBound(lines) To UBound(lines)
-        SplitArea lines(i), a, dataKey, labelText, prevRange, rawRange, sentRange, countRange
-        If LenB(a) > 0 Then
-            If StrComp(a, "field_notes", vbBinaryCompare) <> 0 Then
-                Dim overflow As Boolean
-                Dim body As String
-                body = ReadDirectPaste(rawRange, sentRange, overflow)
-                If overflow Or MergedOrShapeCheck(a) Then
-                    If LenB(acc) > 0 Then acc = acc & "・"
-                    acc = acc & labelText
-                ElseIf LenB(body) > 0 Then
-                    body = modNavText.NormalizeEol(modNavText.StripDrFooter(body))
-                    If modPii.HasPii(body) Then
-                        If LenB(acc) > 0 Then acc = acc & "・"
-                        acc = acc & labelText
-                        modLog.LogError "E0103", U6_SRC & ".ImportDirectPastes", _
-                                        modPii.ScanReport(body, U6_SHEET & ":" & labelText)
-                    ElseIf StoreArea(caseId, dataKey, _
-                                     JoinExisting(LoadArea(caseId, dataKey), body)) Then
-                        ClearDirectPaste rawRange
-                    End If
-                End If
-            End If
-        End If
-    Next i
-    ImportDirectPastes = acc
-End Function
-
-' 既存の保管と直貼りぶんを継ぐ(区切りは vbLf。既存が空ならそのまま)。
-Private Function JoinExisting(ByVal oldText As String, ByVal addText As String) As String
-    If LenB(oldText) = 0 Then
-        JoinExisting = addText
-    Else
-        JoinExisting = oldText & vbLf & addText
-    End If
-End Function
-
-' 直貼り枠を空へ戻す(取り込んだら枠は空にする。11章§7.2(a))。
-Private Sub ClearDirectPaste(ByVal rawRange As String)
-    On Error Resume Next
-    ThisWorkbook.Names(rawRange).RefersToRange.ClearContents
-End Sub
+' 直貼り枠の取り込み(ImportDirectPastes / JoinExisting / ClearDirectPaste)は
+' 30,000字契約により modUICase7 へ移設した(裁定書22 m2)。
 
 ' 現場メモを見出しで切り分けて保存する(13章§2.11(d))。
 Private Sub SaveFieldNotes(ByVal caseId As String)
@@ -609,7 +586,11 @@ Private Sub SaveAttributes(ByVal caseId As String)
         tierText = "t1_quick"
     End If
     modCaseStore.PromoteTier caseId, tierText
-    modUISheet.WriteNamed "ci_dossier_tier", modUICase.EnumJa("dossier_tier", tierText)
+    ' 裁定書22 D13: 表示は「しっかり調査（貼った内容から自動で決まります）」。
+    '   利用者が「自分で選ぶ欄」と誤解して探し回っていた(選ぶ欄ではない)。
+    '   ラベル本体は enum のまま(補足は丸括弧。modUICase.EnumEn が読み戻せる)。
+    modUISheet.WriteNamed "ci_dossier_tier", _
+        modUICase.EnumJa("dossier_tier", tierText) & "（貼った内容から自動で決まります）"
 End Sub
 
 ' 現場メモ枠の読み書き(60行の実体入力枠)。
@@ -618,15 +599,21 @@ Public Function ReadFieldNotesArea() As String
     ReadFieldNotesArea = ReadDirectPaste("ci_area_field_notes", "ci_sent_field_notes", overflow)
 End Function
 
-Public Sub WriteFieldNotesArea(ByVal body As String)
+' WriteFieldNotesArea - 現場メモ枠(60行)へ書く。**True=書いた / False=1行も
+'   書かなかった**(裁定書22 M2)。行数を超える本文を途中まで書くと、切れた行が
+'   そのまま保存されて元の文が戻せなくなる。**入らないなら1行も書かない**。
+Public Function WriteFieldNotesArea(ByVal body As String) As Boolean
     On Error Resume Next
     Dim head As Object
     Set head = modUISheet.NamedCell("ci_area_field_notes")
-    If head Is Nothing Then Exit Sub
+    If head Is Nothing Then Exit Function
 
     Dim rows As Long
     rows = modUISheet.NamedRows("ci_area_field_notes")
-    If rows <= 0 Then Exit Sub
+    If rows <= 0 Then Exit Function
+
+    ' 入りきるかを先に純関数で確かめる(層(a)で固定した判定。modNavText)。
+    If Not modNavText.FitsInRows(body, rows) Then Exit Function
 
     Dim ws As Object
     Set ws = head.Worksheet
@@ -641,7 +628,8 @@ Public Sub WriteFieldNotesArea(ByVal body As String)
         If i - 1 <= UBound(lines) Then s = lines(i - 1)
         modUISheet.PutText ws, head.row + i - 1, head.Column, s, U6_SRC & "/field_notes"
     Next i
-End Sub
+    WriteFieldNotesArea = True
+End Function
 
 ' 画面が新規モードなら採番してから案件IDを返す(13章§2.11(e) の書き手(3))。
 '   採番できなければ ""(呼び出し側が案内を出す)。

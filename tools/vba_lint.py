@@ -113,7 +113,10 @@ MODULE_REGISTRY = {
     #   modUINavDraw = ナビの描画(コーチ帯・区画パネル・強調枠・待ちカード)。
     #   modUIResearch= 区画①の調べる文8本の組み立てと[コピー](11章§3.2)。
     #   modUICase6   = 区画②の保管+プレビュー貼付(11章§3.3・§7.2(a))。
-    "modUINav", "modUINavDraw", "modUIResearch", "modUICase6",
+    #   modUICase7   = modUICase6 の分割先(30,000字契約。裁定書22 m2)。Ctrl+V
+    #                  直貼り枠の取り込みと、その失敗の理由分け(はみ出し/表の線・
+    #                  画像/個人情報)。
+    "modUINav", "modUINavDraw", "modUIResearch", "modUICase6", "modUICase7",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -206,7 +209,8 @@ CONTRACT: dict[str, dict] = {
     "modUINav": {
         "closed": False,
         "required": ["DrawNav", "NavPrev", "NavNext", "ShowDrafts", "BackToNav",
-                     "CurrentStep", "StepText", "StepAnchor", "FieldNotesWritten"],
+                     "CurrentStep", "StepText", "StepAnchor", "FieldNotesWritten",
+                     "StepFor", "StepRuleOf", "StepActionOf", "DrawOk"],
     },
     "modUINavDraw": {
         "closed": False,
@@ -214,28 +218,38 @@ CONTRACT: dict[str, dict] = {
                      "DrawWaitCard", "HideWaitCard", "RefreshAreas", "RefreshArea",
                      "EnsureAreaButtons", "ApplyAreaVisibility", "ShowMoreRows",
                      "DropNavShapes", "ResetForNewCase", "FieldNotesTemplate",
-                     "LoadFieldNotesFor"],
+                     "LoadFieldNotesFor", "StyleFieldNotesHeads"],
     },
     "modUIResearch": {
         "closed": False,
         "required": ["BuildPrompts", "EnsureCopyButtons", "ToggleMore",
-                     "CopyPrompt1", "CopyPrompt8"],
+                     "CopyPrompt1", "CopyPrompt8", "FillTemplate",
+                     "PlaceholderTable", "PlaceholderKeys"],
     },
     "modUICase6": {
         "closed": False,
         "required": ["StoreArea", "LoadArea", "ReadDirectPaste", "SentinelCheck",
                      "MergedOrShapeCheck", "PasteIntoArea", "ShowArea", "ClearArea",
-                     "SaveNav", "AreaKeys", "AreaField", "AreaBody"],
+                     "SaveNav", "AreaKeys", "AreaField", "AreaBody",
+                     "AreaTable", "HandlerName", "WriteFieldNotesArea"],
+    },
+    # modUICase7: 30,000字契約による modUICase6 の分割先(裁定書22 m2)。SaveNav の
+    # 結線先そのものであり、直貼り枠の取り込みと失敗の理由分けを持つ。
+    "modUICase7": {
+        "closed": False,
+        "required": ["ImportDirectPastes", "MergedOrShapeAt", "BlockedText",
+                     "ShapeHitCount", "JoinExisting"],
     },
     "modUIGeom": {
         "closed": False,
         "required": ["SumSpan", "FlowLeft", "TextSpan", "ClipToWidth", "ClipToChars",
-                     "PillWidth", "StepDots", "CardHeightFor", "CardWaitMsFor"],
+                     "PillWidth", "StepDots", "CardHeightFor", "CardWaitMsFor",
+                     "ToastSecondsFor"],
     },
     "modNavText": {
         "closed": False,
         "required": ["StripDrFooter", "PreviewLines", "SplitFieldNotes",
-                     "JoinFieldNotes", "NormalizeEol"],
+                     "JoinFieldNotes", "NormalizeEol", "FitsInRows"],
     },
     # ---- app 層 ----
     "modValidate": {
@@ -484,7 +498,8 @@ CONTRACT: dict[str, dict] = {
     #  Private化はその場で結線が切れる)。
     "modUIGuide": {
         "closed": False,
-        "required": ["StartTourIfFirstRun", "RestartTour", "EnsureGuideButtons"],
+        "required": ["StartTourIfFirstRun", "RestartTour", "EnsureGuideButtons",
+                     "AdvActionRow"],
     },
     # modUIToast: 裁定書17 H2/H4。modUIHome の ShowWarning と主要4ボタンの
     # 成功経路が呼ぶ結線先そのものであり、改名・Private化はその場で案内が
@@ -492,8 +507,9 @@ CONTRACT: dict[str, dict] = {
     # コールバックなので Public 必須)。
     "modUIToast": {
         "closed": False,
+        # ShowResearchPrompts は裁定書22 で**廃止**(14章§6に「廃止」として残す)。
         "required": ["ShowToast", "ShowNext", "HideToast", "CancelToast",
-                     "WarnLine", "ShowResearchPrompts"],
+                     "WarnLine"],
     },
     "modUIHome": {"closed": False, "required": []},
     # modUIHome2: 30,000字契約による modUIHome の分割先(17章§7 Z-13)。HOMEと

@@ -429,6 +429,13 @@
       "wave": "T-49"
     },
     {
+      "name": "modUICase7",
+      "path": "src/ui/modUICase7.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "W6.1"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",

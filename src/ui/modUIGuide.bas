@@ -42,6 +42,15 @@ Private Const UG_BTN_TOUR As String = "gd_btn_tour"
 ' v3.2(11章§3.6): ⑤困ったときの[記録を見る]と⑦上級の[表示する]5本。
 Private Const UG_BTN_LOGS As String = "gd_btn_logs"
 Private Const UG_BTN_ADV As String = "gd_btn_adv"
+' 裁定書22: ⑦上級の**動作**ボタン3本のアンカー(13章§2.18)。1件 =
+'   "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。並びは build_rpn.py の
+'   GUIDE_ADVANCED_ACTIONS と同順であり、tools/caption_check.py が逐語照合する。
+Private Const UG_BTN_ADV_ACT As String = "gd_btn_adv_act"
+Private Const UG_ROW_ADV_ACT As String = _
+    "btn_gd_round2;第2ラウンドを始める;modUIHome2.HomeFreezeRound;180" & vbLf & _
+    "btn_gd_cfsave;企業ファイルへ保存;modUIHome2.HomeCompanySave;180" & vbLf & _
+    "btn_gd_cfopen;企業ファイルを開く;modUIHome2.HomeCompanyOpen;180"
+
 ' 記録3枚(13章§2.9)。まとめて可視にし err_log へ移る。
 Private Const UG_LOG_SHEETS As String = "err_log" & vbLf & "run_log" & vbLf & "usage_log"
 ' 上級5枚(11章§3.6⑦)。押した1枚だけを可視にする。並び順は使い方タブと同じ。
@@ -77,6 +86,11 @@ Private gStep As Long
 ' ============================================================================
 ' StartTourIfFirstRun - 起動時の唯一のエントリ(modBoot から1行で呼ぶ)。
 '   すでに見た人には何もしない。まだの人には1枚目を描く。
+' 上級の動作ボタン3本の配置表の読み出し口(caption_check の値源)。
+Public Function AdvActionRow() As String
+    AdvActionRow = UG_ROW_ADV_ACT
+End Function
+
 ' ============================================================================
 Public Sub StartTourIfFirstRun()
     On Error Resume Next
@@ -181,6 +195,23 @@ Public Sub EnsureGuideButtons()
                                   r + i, c, 100#, _
                                   "modUIGuide.ShowAdvanced" & CStr(i + 1), "plain"
     Next i
+
+    ' ⑦上級の動作ボタン3本(裁定書22)。ui_advanced が FALSE のときは上で
+    '   Exit Sub 済みなので、ここも作られない(導線をまとめて消す)。
+    r = modUISheet.BlockRow(UG_BTN_ADV_ACT)
+    c = modUISheet.BlockCol(UG_BTN_ADV_ACT)
+    If r <= 0 Or c <= 0 Then Exit Sub
+
+    Dim specs() As String
+    specs = Split(UG_ROW_ADV_ACT, vbLf)
+    Dim k As Long
+    For k = LBound(specs) To UBound(specs)
+        Dim f() As String
+        f = Split(specs(k), ";")
+        If UBound(f) - LBound(f) >= 3 Then
+            modUISheet.EnsureButtonEx ws, f(0), f(1), r + k, c, Val(f(3)), f(2), "plain"
+        End If
+    Next k
 End Sub
 
 ' ============================================================================

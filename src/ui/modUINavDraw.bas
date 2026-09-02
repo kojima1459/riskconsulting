@@ -57,6 +57,8 @@ Private Const UD_COLOR_PANEL_LN As Long = 14939616& ' RGB(224,231,227)
 Private Const UD_COLOR_TEXT As Long = 2562065&      ' RGB(17,24,39)
 Private Const UD_COLOR_WHITE As Long = 16777215&
 Private Const UD_COLOR_FOCUS As Long = 47359&       ' RGB(255,184,0) 橙(強調枠)
+' 現場メモの見出し行の地色(11章§3.3.3(b) の「灰色地」。RGB(235,235,235))。
+Private Const UD_COLOR_HEAD_BG As Long = 15461355&
 Private Const UD_FONT As String = "Yu Gothic UI"
 
 ' 強調枠(11章§3.1.1)。枠線のみ・塗りなし・線幅2.25pt・**点滅させない**。
@@ -450,14 +452,48 @@ Public Function RefreshArea(ByVal caseId As String, ByVal areaKey As String) As 
     If LenB(body) = 0 Then
         modUISheet.WriteNamed countRange, UD_MSG_NOT_YET
     Else
-        modUISheet.WriteNamed countRange, "貼り付け済み　" & Format$(Len(body), "#,##0") & _
-            "字　（" & Format$(Now, "hh:nn") & " 現在）"
+        modUISheet.WriteNamed countRange, _
+            PastedLine(Len(body), modUISheet.ReadNamed(countRange))
     End If
 
     Dim prevRange As String
     prevRange = modUICase6.AreaField(areaKey, 3)
     If LenB(prevRange) > 0 Then WritePreview prevRange, body
     RefreshArea = Len(body)
+End Function
+
+' ============================================================================
+' PastedLine - 状態行の1行(11章§3.3.2 の逐語「貼り付け済み　9,812字　
+'   （14:03 に貼りました）」)。
+' ----------------------------------------------------------------------------
+' 裁定書22 m1: **字数が変わらない描き直しでは時刻を書き換えない**。以前は
+'   描き直すたびに Now を入れていたため、3日前に貼った欄が「たったいま貼った」
+'   ように見えていた(貼った時刻は貼った事実の記録であって描画時刻ではない)。
+'   前の状態行から字数と時刻を読み、字数が同じならその時刻を持ち越す。
+' ============================================================================
+Private Function PastedLine(ByVal charCount As Long, ByVal prevLine As String) As String
+    Dim timeText As String
+    timeText = KeptTime(charCount, prevLine)
+    If LenB(timeText) = 0 Then timeText = Format$(Now, "hh:nn")
+    PastedLine = "貼り付け済み　" & Format$(charCount, "#,##0") & _
+                 "字　（" & timeText & " に貼りました）"
+End Function
+
+' 前の状態行が同じ字数を示していれば、その時刻(hh:nn)を返す。違えば ""。
+Private Function KeptTime(ByVal charCount As Long, ByVal prevLine As String) As String
+    On Error Resume Next
+    If LenB(prevLine) = 0 Then Exit Function
+
+    Dim wantHead As String
+    wantHead = "貼り付け済み　" & Format$(charCount, "#,##0") & "字　（"
+    If InStr(1, prevLine, wantHead, vbBinaryCompare) <> 1 Then Exit Function
+
+    Dim tail As String
+    tail = Mid$(prevLine, Len(wantHead) + 1)
+    Dim pos As Long
+    pos = InStr(1, tail, " ", vbBinaryCompare)
+    If pos <= 1 Then Exit Function
+    KeptTime = Left$(tail, pos - 1)
 End Function
 
 ' プレビュー5行を書く(6行目以降は書かない。足りない行は空にする)。
@@ -505,8 +541,16 @@ Public Sub EnsureAreaButtons(ByVal caseId As String)
             Dim rowNo As Long
             rowNo = modUISheet.BlockRow(modUICase6.AreaField(keys(i), 6))
             If rowNo > 0 Then
-                PlaceAreaRow ws, rowNo, keys(i), _
-                             (LenB(modUICase6.AreaBody(caseId, keys(i))) > 0)
+                ' 裁定書22 m5: 現場メモは枠に見出しと例文が先置きされているので
+                '   字数で見ると常に「入っている」になり、まだ書いていない欄に
+                '   [消す]が出ていた。判定は FieldNotesWritten() に一本化する。
+                Dim hasBody As Boolean
+                If StrComp(keys(i), "field_notes", vbBinaryCompare) = 0 Then
+                    hasBody = modUINav.FieldNotesWritten()
+                Else
+                    hasBody = (LenB(modUICase6.AreaBody(caseId, keys(i))) > 0)
+                End If
+                PlaceAreaRow ws, rowNo, keys(i), hasBody
             End If
         End If
     Next i
@@ -608,6 +652,7 @@ Public Sub LoadFieldNotesFor(ByVal caseId As String)
 
     If LenB(caseId) = 0 Then
         modUICase6.WriteFieldNotesArea FieldNotesTemplate()
+        StyleFieldNotesHeads
         Exit Sub
     End If
 
@@ -618,10 +663,55 @@ Public Sub LoadFieldNotesFor(ByVal caseId As String)
 
     If LenB(memoText) = 0 And LenB(othersText) = 0 Then
         modUICase6.WriteFieldNotesArea FieldNotesTemplate()
+        StyleFieldNotesHeads
         Exit Sub
     End If
     modUICase6.WriteFieldNotesArea modNavText.JoinFieldNotes(memoText, othersText)
+    StyleFieldNotesHeads
 End Sub
+
+' ============================================================================
+' StyleFieldNotesHeads - 現場メモ枠の見出し行(【…】)を灰色地・Locked=True に
+'   する(11章§3.3.3(b)・裁定書22 D10)。利用者が見出しを消せないようにし、
+'   「どこに書けばよいか」を地色で示す。見出し以外の行は書ける状態へ戻す
+'   (前回の描画で見出しだった行が本文になったときに固まらないようにする)。
+' ============================================================================
+Public Sub StyleFieldNotesHeads()
+    On Error Resume Next
+
+    Dim head As Object
+    Set head = modUISheet.NamedCell("ci_area_field_notes")
+    If head Is Nothing Then Exit Sub
+
+    Dim rows As Long
+    rows = modUISheet.NamedRows("ci_area_field_notes")
+    If rows <= 0 Then Exit Sub
+
+    Dim ws As Object
+    Set ws = head.Worksheet
+
+    Dim i As Long
+    For i = 1 To rows
+        Dim cell As Object
+        Set cell = ws.Cells(head.row + i - 1, head.Column)
+        If IsHeadLine(CStr(cell.Value)) Then
+            cell.Interior.Color = UD_COLOR_HEAD_BG
+            cell.Locked = True
+        Else
+            cell.Interior.ColorIndex = -4142        ' xlColorIndexNone
+            cell.Locked = False
+        End If
+    Next i
+End Sub
+
+' 【…】だけの行か(前後の空白を除いた完全一致の形)。
+Private Function IsHeadLine(ByVal lineText As String) As Boolean
+    Dim s As String
+    s = Trim$(lineText)
+    If Len(s) < 3 Then Exit Function
+    If StrComp(Left$(s, 1), "【", vbBinaryCompare) <> 0 Then Exit Function
+    IsHeadLine = (StrComp(Right$(s, 1), "】", vbBinaryCompare) = 0)
+End Function
 
 ' ShowMoreRows - 区画①の補助5本([＋ もっと調べる])の行を出す/隠す(11章§3.2)。
 '   閉じている間は行ごと非表示にし、図形は作らない。
