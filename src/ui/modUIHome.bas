@@ -59,14 +59,17 @@ Private Const UH_BTN_COL_FIRST As Long = 4
 Private Const UH_BTN_COL_LAST As Long = 60
 
 ' 1行ぶんの並び。1件 = "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。
-' 主要動線は2×2(1段目①②・2段目③④・幅200pt。高さ30ptは kind="primary" が
-' modUISheet 側で決める)。横一列の4本は実機で④が画面外へ出た(裁定書17 H3(a))。
+' 主要動線は**5本**を2列×3行(1段目①②・2段目③④・3段目⑤は左)で置く。幅200pt・
+' 高さ30pt(高さは kind="primary" が modUISheet 側で決める)。横一列の4本は実機で
+' 見切れた(裁定書17 H3(a)＋司令塔追補: W6のボタン名を先取りし2度変えない)。
 Private Const UH_ROW_MAIN1 As String = _
-    "btn_hm_newcase;① 案件を作る;modUIHome.HomeNewCase;200" & vbLf & _
-    "btn_hm_runall;② 一括実行;modUIHome.HomeRunAll;200"
+    "btn_hm_step1;① 調べる指示文を出す;modUIToast.ShowResearchPrompts;200" & vbLf & _
+    "btn_hm_step2;② 案件を作って貼る;modUIHome.HomeNewCase;200"
 Private Const UH_ROW_MAIN2 As String = _
-    "btn_hm_html;③ レポートを出す;modUIHome.HomeExportHtml;200" & vbLf & _
-    "btn_hm_hearing;④ ヒアリングシート;modUIHome.HomeBuildHearing;200"
+    "btn_hm_step3;③ まとめて作る;modUIHome.HomeRunAll;200" & vbLf & _
+    "btn_hm_step4;④ レポートを出す;modUIHome.HomeExportHtml;200"
+Private Const UH_ROW_MAIN3 As String = _
+    "btn_hm_step5;⑤ ヒアリングシートを出す;modUIHome.HomeBuildHearing;200"
 Private Const UH_ROW_SUB1 As String = _
     "btn_hm_caseinput;案件入力を開く;modUIHome.HomeOpenCaseInput;112" & vbLf & _
     "btn_hm_cfopen;企業ファイルを開く;modUIHome.HomeCompanyOpen;124" & vbLf & _
@@ -108,9 +111,10 @@ End Sub
 ' ============================================================================
 ' HOMEの図形ボタン(裁定書14 裁定7＋追補1・裁定書17 H3(a): 番号つき動線)
 ' ----------------------------------------------------------------------------
-' 上段に主要動線4本(①案件を作る/②一括実行/③レポートを出す/④ヒアリングシート)を
-' **2×2**(1段目①②・2段目③④)で置き、残り14本は「くわしい操作」区画へ縦に並べる。
-' 横一列の4本は実機で④が画面外へ出た(見切れ)ため2段へ折り返す(裁定書17 H3(a))。
+' 上段に主要動線**5本**(①調べる指示文を出す/②案件を作って貼る/③まとめて作る/
+' ④レポートを出す/⑤ヒアリングシートを出す)を**2列×3行**で置き、残り14本は
+' 「くわしい操作」区画へ縦に並べる。横一列の4本は実機で右端が画面外へ出た
+' (見切れ)ため折り返す(裁定書17 H3(a)＋司令塔追補)。
 '
 ' 重なりを構造的に起こさない置き方(実機でボタンが重なった件=追補1):
 '   縦 = 1行に置くのは1段ぶんだけにし、行高は modUISheet.EnsureButtonEx が
@@ -128,11 +132,16 @@ Private Sub EnsureHomeButtons()
     Set ws = modUISheet.SheetOf(UH_SHEET)
     If ws Is Nothing Then Exit Sub
 
-    ' 上段: 主要動線4本(①→④の順に押す)を2×2で置く。
+    ' 旧版の図形名(btn_hm_newcase 等)が残っていても消えるように、置き直す前に
+    ' btn_hm_ の図形をまとめて落とす(この後で全部作り直す)。
+    modUISheet.DropShapesByPrefix ws, "btn_hm_"
+
+    ' 上段: 主要動線5本(①→⑤の順に押す)を2列×3行で置く。
     Dim mainRow As Long
     mainRow = RowOfNamed(UH_CASE_ID)
     PlaceButtonRow ws, mainRow, UH_ROW_MAIN1, "primary"
     PlaceButtonRow ws, mainRow + 1, UH_ROW_MAIN2, "primary"
+    PlaceButtonRow ws, mainRow + 2, UH_ROW_MAIN3, "primary"
 
     ' 下段: くわしい操作。受信箱の件数欄の下を起点に1行ずつ下へ並べる。
     Dim r As Long

@@ -34,6 +34,14 @@ Option Explicit
 Private Const UT_PREFIX As String = "ts_"
 Private Const UT_CARD As String = "ts_card"
 
+' HOMEの[① 調べる指示文を出す]の飛び先(13章§2.18・司令塔追補)。見出しの文字列を
+' 探さず、名前付きレンジ1点をアンカーにする(章立てが動いても壊れない)。
+Private Const UT_GUIDE_SHEET As String = "操作ガイド"
+Private Const UT_CH7_ANCHOR As String = "gd_ch7_head"
+Private Const UT_LOCK_NAME As String = "調べる指示文"
+Private Const UT_MSG_RESEARCH As String = _
+    "調べる指示文の章を開きました。上から順に1本ずつ、社内のディープリサーチへ貼って投げてください。"
+
 ' 見た目。Yu Gothic UI 11pt・角丸カード・右上に固定幅。
 Private Const UT_FONT As String = "Yu Gothic UI"
 Private Const UT_FONT_SIZE As Double = 11#
@@ -135,6 +143,26 @@ Public Sub ShowNext(ByVal stepNo As Long)
 End Sub
 
 ' ============================================================================
+' ShowResearchPrompts - HOMEの[① 調べる指示文を出す]の OnAction。
+'   操作ガイドの⑦章「AIに調べさせる指示文」の見出しへ飛ばし、次の一手を出す
+'   (司令塔追補。指示文はアプリの中にあり、docs/08 を配らなくても届く)。
+'   置き場所が modUIToast なのは modUIHome に残量が無いため(30,000字契約)。
+' ============================================================================
+Public Sub ShowResearchPrompts()
+    On Error Resume Next
+    If Not modUIProgress.TryEnterUiLock(UT_LOCK_NAME) Then Exit Sub
+
+    modUISheet.ShowSheet UT_GUIDE_SHEET
+
+    Dim anchor As Object
+    Set anchor = modUISheet.NamedCell(UT_CH7_ANCHOR)
+    If Not anchor Is Nothing Then Application.Goto anchor, True
+
+    ShowToast UT_MSG_RESEARCH, "info"
+    modUIProgress.ExitUiLock
+End Sub
+
+' ============================================================================
 ' HideToast - OnTime のコールバック本体(Public必須)。**消すものが無ければ
 '   何もしない**(ブックを閉じたあとに残った予約が発火しても無害にする)。
 ' ============================================================================
@@ -184,9 +212,9 @@ Private Function NextTextOf(ByVal stepNo As Long) As String
     Case 1
         NextTextOf = "会社の情報を貼って[保存して戻る]を押してください"
     Case 2
-        NextTextOf = "できました。[③ レポートを出す]を押してください"
+        NextTextOf = "できました。[④ レポートを出す]を押してください"
     Case 3
-        NextTextOf = "レポートを出力しました。次は[④ ヒアリングシート]です"
+        NextTextOf = "レポートを出力しました。次は[⑤ ヒアリングシートを出す]です"
     Case 4
         NextTextOf = "ヒアリングシートができました。Ctrl+Pで印刷できます"
     End Select

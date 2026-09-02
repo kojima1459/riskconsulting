@@ -275,11 +275,11 @@ End Function
 Private Function TitleOf(ByVal n As Long) As String
     Select Case n
     Case 1
-        TitleOf = "① 案件を作る"
+        TitleOf = "① 調べる → ② 貼る"
     Case 2
-        TitleOf = "② 一括実行"
+        TitleOf = "③ まとめて作る"
     Case Else
-        TitleOf = "③④ 出す"
+        TitleOf = "④⑤ 出す"
     End Select
 End Function
 
@@ -287,17 +287,17 @@ Private Function BodyOf(ByVal n As Long) As String
     Select Case n
     Case 1
         BodyOf = _
-            "[① 案件を作る]を押し、会社の情報を貼って[保存して戻る]。" & vbLf & _
+            "[① 調べる指示文を出す]の文を1本ずつ投げ、返答を貼ります。" & vbLf & _
             "1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ。"
     Case 2
         BodyOf = _
-            "② 一括実行 を押して待ちます。画面が白くなっても処理は続いています。" & vbLf & _
-            "終わるとS1～S4に下書きが入ります。読んで直すのが人の仕事です。"
+            "③ まとめて作る を押して待ちます。画面が白くなっても処理は続いています。" & vbLf & _
+            "終わるとS1～S4に下書きが入ります。読んで直すのが人の仕事。"
     Case Else
         BodyOf = _
-            "[③ レポートを出す]でお客様に見せるレポートが出ます。" & vbLf & _
-            "[④ ヒアリングシート]で訪問時に聞くことが紙1枚で出ます。" & vbLf & _
-            "困ったときは「操作ガイド」のタブを開いてください。"
+            "[④ レポートを出す]でお客様に見せるレポートが出ます。" & vbLf & _
+            "[⑤ ヒアリングシートを出す]で聞くことが紙1枚で出ます。" & vbLf & _
+            "困ったときは「操作ガイド」タブへ。"
     End Select
 End Function
 

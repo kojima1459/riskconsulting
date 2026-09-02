@@ -419,7 +419,7 @@ CONTRACT: dict[str, dict] = {
     "modUIToast": {
         "closed": False,
         "required": ["ShowToast", "ShowNext", "HideToast", "CancelToast",
-                     "WarnLine"],
+                     "WarnLine", "ShowResearchPrompts"],
     },
     "modUIHome": {"closed": False, "required": []},
     "modUICase2": {"closed": False, "required": []},

@@ -188,6 +188,7 @@
           "fields": [
             {"range": "gd_btn_test", "label": "テストの実行", "type": "String", "input": false, "note": "[テストを実行]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
             {"range": "gd_btn_tour", "label": "はじめの案内", "type": "String", "input": false, "note": "[ツアーをもう一度見る]ボタンを置くアンカーセル。ボタンは起動時に実行時側が生やす"},
+            {"range": "gd_ch7_head", "label": "調べる指示文の章", "type": "String", "input": false, "note": "⑦「AIに調べさせる指示文」の章見出し行のアンカーセル。HOMEの[① 調べる指示文を出す]がここへ飛ぶ"},
             {"range": "gd_test_result", "label": "テストの結果", "type": "String", "input": false, "note": "結果全文の書込先(縦20行×1列)。実行のたびに上書きされる"}
           ]
         }
