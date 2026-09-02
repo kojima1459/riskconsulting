@@ -53,9 +53,15 @@ Private Const UG_COLOR_ACCENT As Long = 5990145&     ' 濃緑(RGB 1,103,91)
 Private Const UG_COLOR_TEXT As Long = 2562065&       ' 文字(RGB 17,24,39)
 Private Const UG_FONT As String = "Yu Gothic UI"
 
-' カードの大きさ(実機で1枚目と2枚目が動くと目線が迷子になるため3枚とも同寸・同位置)。
+' カードの大きさ(実機で1枚目と2枚目が動くと目線が迷子になるため3枚とも同位置)。
+' 高さは本文の実測(TextFrame2.AutoSize)で確定させ、UG_CARD_H を下限にする
+' (文言を短くしても間延びせず、伸ばしても見切れない。裁定書17 H3(b))。
 Private Const UG_CARD_W As Double = 540#
-Private Const UG_CARD_H As Double = 236#
+Private Const UG_CARD_H As Double = 150#
+Private Const UG_BODY_TOP As Double = 52#
+Private Const UG_BODY_PAD As Double = 62#
+Private Const UG_AUTOSIZE_ON As Long = 1        ' msoAutoSizeShapeToFitText
+Private Const UG_WRAP_ON As Long = -1           ' msoTrue
 
 ' 現在の段(1..3)。永続しない画面制御変数(14章§6の状態保持の例外に当たらない)。
 Private gStep As Long
@@ -216,15 +222,23 @@ Private Sub DrawCard(ByVal n As Long)
     card.Adjustments(1) = 0.08
 
     PutText ws, UG_PREFIX & "step", CStr(n) & " / " & CStr(UG_STEPS), _
-            cardL + UG_CARD_W - 80#, cardT + 14#, 60#, 18#, 9#, False, UG_ALIGN_CENTER
+            cardL + UG_CARD_W - 80#, cardT + 14#, 60#, 18#, 9#, False, UG_ALIGN_CENTER, False
     PutText ws, UG_PREFIX & "title", TitleOf(n), _
-            cardL + 20#, cardT + 16#, UG_CARD_W - 110#, 26#, 13#, True, UG_ALIGN_LEFT
+            cardL + 20#, cardT + 16#, UG_CARD_W - 110#, 26#, 13#, True, UG_ALIGN_LEFT, False
+    ' 本文だけ AutoSize=1 で伸ばし、その実測でカードの高さを決める(見切れ根絶)。
     PutText ws, UG_PREFIX & "body", BodyOf(n), _
-            cardL + 20#, cardT + 52#, UG_CARD_W - 40#, 130#, 11#, False, UG_ALIGN_LEFT
+            cardL + 20#, cardT + UG_BODY_TOP, UG_CARD_W - 40#, 40#, 11#, False, _
+            UG_ALIGN_LEFT, True
 
-    ' ボタン2つ(左=スキップ・右=次へ/はじめる)。Hyperlinks.Add は使わない。
+    Dim cardH As Double
+    cardH = UG_BODY_TOP + ShapeHeight(ws, UG_PREFIX & "body") + UG_BODY_PAD
+    If cardH < UG_CARD_H Then cardH = UG_CARD_H
+    card.Height = cardH
+
+    ' ボタン2つ(左=スキップ・右=次へ/はじめる)。**カード確定後の下端**を基準に
+    ' 置く(本文が伸びてもボタンがカードから外れない)。Hyperlinks.Add は使わない。
     Dim btnT As Double
-    btnT = cardT + UG_CARD_H - 46#
+    btnT = cardT + cardH - 46#
     PutButton ws, UG_PREFIX & "skip", "スキップ", cardL + 20#, btnT, 108#, _
               "modUIGuide.OnTourSkip", False
     PutButton ws, UG_PREFIX & "next", NextLabelOf(n), _
@@ -255,14 +269,17 @@ Private Function CardTop(ByVal ws As Object) As Double
 End Function
 
 ' 文言(専門用語を使わず、押す場所を番号と色で示す。docs/26 のトーン)。
+' 裁定書17 H3(b): 実機でカード②の文字が見切れたため、3枚とも**元の半分以下**へ
+'   短くした(読ませる量を減らすほど見切れは起きにくい)。字数の目安は H6 の
+'   統一表現をそのまま使う。
 Private Function TitleOf(ByVal n As Long) As String
     Select Case n
     Case 1
-        TitleOf = "① 案件を作って、調べた文章を貼ります"
+        TitleOf = "① 案件を作る"
     Case 2
-        TitleOf = "② 一括実行を押して、待ちます"
+        TitleOf = "② 一括実行"
     Case Else
-        TitleOf = "③④ レポートとヒアリングシートが出ます"
+        TitleOf = "③④ 出す"
     End Select
 End Function
 
@@ -270,25 +287,17 @@ Private Function BodyOf(ByVal n As Long) As String
     Select Case n
     Case 1
         BodyOf = _
-            "この画面(HOME)の上に、濃い緑色のボタンが4つ横に並んでいます。" & vbLf & _
-            "いちばん左の[① 案件を作る]を押してください。" & vbLf & vbLf & _
-            "案件入力の画面が開きます。会社について調べた文章を、上の欄から" & vbLf & _
-            "順番に貼り付けて、[保存して戻る]を押します。" & vbLf & _
-            "長い文章は「続き1」「続き2」の欄へ分けて貼ってください。"
+            "[① 案件を作る]を押し、会社の情報を貼って[保存して戻る]。" & vbLf & _
+            "1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ。"
     Case 2
         BodyOf = _
-            "HOMEへ戻ったら[② 一括実行]を押します。" & vbLf & vbLf & _
-            "数分かかります。画面が白くなっても処理は続いていますので、" & vbLf & _
-            "そのまま待ってください。ほかのボタンは押さなくて大丈夫です。" & vbLf & vbLf & _
-            "終わると、S1からS4のシートに中身が入ります。読んで、違うところは" & vbLf & _
-            "そのまま手で直してください。ここが人の仕事です。"
+            "② 一括実行 を押して待ちます。画面が白くなっても処理は続いています。" & vbLf & _
+            "終わるとS1～S4に下書きが入ります。読んで直すのが人の仕事です。"
     Case Else
         BodyOf = _
-            "[③ レポートを出す]で、お客様に見せるリスクレポートが出ます。" & vbLf & _
-            "[④ ヒアリングシート]で、訪問のときに聞くことが紙1枚で出ます。" & vbLf & vbLf & _
-            "そのほかのボタンは、下の「くわしい操作」の区画にまとめてあります。" & vbLf & vbLf & _
-            "困ったときは「操作ガイド」のタブを開いてください。" & vbLf & _
-            "この案内は、操作ガイドの[ツアーをもう一度見る]でまた見られます。"
+            "[③ レポートを出す]でお客様に見せるレポートが出ます。" & vbLf & _
+            "[④ ヒアリングシート]で訪問時に聞くことが紙1枚で出ます。" & vbLf & _
+            "困ったときは「操作ガイド」のタブを開いてください。"
     End Select
 End Function
 
@@ -305,7 +314,7 @@ Private Sub PutText(ByVal ws As Object, ByVal shapeKey As String, ByVal bodyText
                     ByVal leftPt As Double, ByVal topPt As Double, _
                     ByVal widthPt As Double, ByVal heightPt As Double, _
                     ByVal fontSize As Double, ByVal boldText As Boolean, _
-                    ByVal alignMode As Long)
+                    ByVal alignMode As Long, ByVal autoFit As Boolean)
     On Error Resume Next
 
     Dim shp As Object
@@ -322,7 +331,20 @@ Private Sub PutText(ByVal ws As Object, ByVal shapeKey As String, ByVal bodyText
     shp.TextFrame.Characters.Font.Size = fontSize
     shp.TextFrame.Characters.Font.Bold = boldText
     shp.TextFrame.Characters.Font.Color = UG_COLOR_TEXT
+
+    ' 折返しを効かせたうえで高さだけを文字量に合わせる(幅は固定のまま)。
+    ' AutoSizeが効かない環境では初期高さのまま残る(下限として働く)。
+    If autoFit Then
+        shp.TextFrame2.WordWrap = UG_WRAP_ON
+        shp.TextFrame2.AutoSize = UG_AUTOSIZE_ON
+    End If
 End Sub
+
+' 図形の高さ(取れなければ0)。カードの高さを本文の実測で決めるための読み口。
+Private Function ShapeHeight(ByVal ws As Object, ByVal shapeKey As String) As Double
+    On Error Resume Next
+    ShapeHeight = ws.Shapes(shapeKey).Height
+End Function
 
 ' カード上のボタン(位置をpt直指定するため modUISheet.EnsureButtonEx は使わない)。
 Private Sub PutButton(ByVal ws As Object, ByVal shapeKey As String, ByVal caption As String, _

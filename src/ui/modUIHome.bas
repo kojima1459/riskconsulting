@@ -59,11 +59,14 @@ Private Const UH_BTN_COL_FIRST As Long = 4
 Private Const UH_BTN_COL_LAST As Long = 60
 
 ' 1行ぶんの並び。1件 = "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。
-Private Const UH_ROW_MAIN As String = _
-    "btn_hm_newcase;① 案件を作る;modUIHome.HomeNewCase;128" & vbLf & _
-    "btn_hm_runall;② 一括実行;modUIHome.HomeRunAll;128" & vbLf & _
-    "btn_hm_html;③ レポートを出す;modUIHome.HomeExportHtml;140" & vbLf & _
-    "btn_hm_hearing;④ ヒアリングシート;modUIHome.HomeBuildHearing;140"
+' 主要動線は2×2(1段目①②・2段目③④・幅200pt。高さ30ptは kind="primary" が
+' modUISheet 側で決める)。横一列の4本は実機で④が画面外へ出た(裁定書17 H3(a))。
+Private Const UH_ROW_MAIN1 As String = _
+    "btn_hm_newcase;① 案件を作る;modUIHome.HomeNewCase;200" & vbLf & _
+    "btn_hm_runall;② 一括実行;modUIHome.HomeRunAll;200"
+Private Const UH_ROW_MAIN2 As String = _
+    "btn_hm_html;③ レポートを出す;modUIHome.HomeExportHtml;200" & vbLf & _
+    "btn_hm_hearing;④ ヒアリングシート;modUIHome.HomeBuildHearing;200"
 Private Const UH_ROW_SUB1 As String = _
     "btn_hm_caseinput;案件入力を開く;modUIHome.HomeOpenCaseInput;112" & vbLf & _
     "btn_hm_cfopen;企業ファイルを開く;modUIHome.HomeCompanyOpen;124" & vbLf & _
@@ -103,10 +106,11 @@ Public Sub EnsureScreens()
 End Sub
 
 ' ============================================================================
-' HOMEの図形ボタン(裁定書14 裁定7＋追補1: 番号つき動線への再レイアウト)
+' HOMEの図形ボタン(裁定書14 裁定7＋追補1・裁定書17 H3(a): 番号つき動線)
 ' ----------------------------------------------------------------------------
 ' 上段に主要動線4本(①案件を作る/②一括実行/③レポートを出す/④ヒアリングシート)を
-' 横一列で置き、残り14本は「くわしい操作」区画へ縦に並べる。
+' **2×2**(1段目①②・2段目③④)で置き、残り14本は「くわしい操作」区画へ縦に並べる。
+' 横一列の4本は実機で④が画面外へ出た(見切れ)ため2段へ折り返す(裁定書17 H3(a))。
 '
 ' 重なりを構造的に起こさない置き方(実機でボタンが重なった件=追補1):
 '   縦 = 1行に置くのは1段ぶんだけにし、行高は modUISheet.EnsureButtonEx が
@@ -124,8 +128,11 @@ Private Sub EnsureHomeButtons()
     Set ws = modUISheet.SheetOf(UH_SHEET)
     If ws Is Nothing Then Exit Sub
 
-    ' 上段: 主要動線4本(①→④の順に押す)。
-    PlaceButtonRow ws, RowOfNamed(UH_CASE_ID), UH_ROW_MAIN, "primary"
+    ' 上段: 主要動線4本(①→④の順に押す)を2×2で置く。
+    Dim mainRow As Long
+    mainRow = RowOfNamed(UH_CASE_ID)
+    PlaceButtonRow ws, mainRow, UH_ROW_MAIN1, "primary"
+    PlaceButtonRow ws, mainRow + 1, UH_ROW_MAIN2, "primary"
 
     ' 下段: くわしい操作。受信箱の件数欄の下を起点に1行ずつ下へ並べる。
     Dim r As Long
@@ -276,12 +283,13 @@ Private Function KbStatusText(ByVal industryCode As String) As String
     cases1 = modPipeline.KbRowCount(modKnowledge.CasesFor(industryCode, 0))
 
     If menus + schemes + cases1 <= 0 Then
-        KbStatusText = "ナレッジが読めていません（管理者にご連絡ください）"
+        KbStatusText = "ナレッジブック.xlsx を本体と同じフォルダに置いて" & _
+                       "[ナレッジ再読込]を押してください"
         Exit Function
     End If
 
-    KbStatusText = "読込OK（メニュー" & CStr(menus) & "/型" & CStr(schemes) & _
-                   "/事例" & CStr(cases1) & "）"
+    KbStatusText = modBoot.KbAutoNote() & "読込OK（メニュー" & CStr(menus) & _
+                   "/型" & CStr(schemes) & "/事例" & CStr(cases1) & "）"
     Exit Function
 Unknown1:
     KbStatusText = "ナレッジの状態を取得できませんでした"
@@ -302,8 +310,14 @@ Private Function QualityOverride() As String
 End Function
 
 ' 警告欄への表示(13章§2.10 hm_warning)。空文字で消す。
-Private Sub ShowWarning(ByVal messageText As String)
-    modUISheet.WriteNamed UH_WARNING, messageText
+' 裁定書17 H2/H4: 同じ文言をトーストでも出し(セルは見られていなかった)、
+'   失敗系(既定 kind="error")だけ末尾に err_log の送り方を足す。文言の加工と
+'   トーストの実装は modUIToast が持つ(本モジュールに残量が無いため)。
+'   kind: "error"=失敗(既定・err_log案内あり) / "warn"=注意 / "info"=成功案内。
+Private Sub ShowWarning(ByVal messageText As String, _
+                        Optional ByVal kind As String = "error")
+    modUISheet.WriteNamed UH_WARNING, modUIToast.WarnLine(messageText, kind)
+    modUIToast.ShowToast messageText, kind
 End Sub
 
 ' 16章 E-35/E-36(裁定書9 B9・14章§6 N1): 入念モードで「審査を省略した」
@@ -322,7 +336,7 @@ Private Sub ShowDeepWarning()
     warnText = modPipeline2.DeepWarningOf(outcome)
     If LenB(warnText) = 0 Then Exit Sub
 
-    ShowWarning warnText
+    ShowWarning warnText, "warn"
 End Sub
 
 ' ============================================================================
@@ -351,6 +365,7 @@ Public Sub HomeRunAll()
     modUIProgress.SetStage "一括実行（Step1～Step4）", WaitSec()
     If modPipeline.RunAll(caseId, QualityOverride()) Then
         DrawAllSteps caseId
+        modUIToast.ShowNext 2
         ShowDeepWarning
     Else
         ShowWarning "実行が完了しませんでした。err_log をご確認ください。"
@@ -435,7 +450,7 @@ Private Sub SaveUpstreamEdits(ByVal caseId As String, ByVal stepNo As Long)
 
     If LenB(errText) = 0 Then Exit Sub
     ShowWarning "Step" & CStr(upstream) & " の編集内容が検証に通らなかったため、" & _
-                "編集前の内容のまま実行します: " & modUtil.SafeLeft(errText, 300)
+                "編集前の内容のまま実行します: " & modUtil.SafeLeft(errText, 300), "warn"
 End Sub
 
 ' 16章 E-10: 下流の成果物があるなら確認してから無効化する。
@@ -501,6 +516,7 @@ Public Sub HomeNewCase()
     modUICase4.ClearCaseInput
     modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
     modUISheet.ShowSheet "案件入力"
+    modUIToast.ShowNext 1
 
 Done:
     modUIProgress.ExitUiLock
@@ -585,7 +601,7 @@ Public Sub HomeFreezeRound()
 
     modUISheet.WriteNamed UH_ROUND, CStr(newRound)
     RefreshHome
-    ShowWarning "第" & CStr(newRound) & "ラウンドを開始しました（前ラウンドのS2を退避しました）。"
+    ShowWarning "第" & CStr(newRound) & "ラウンドを開始しました（前ラウンドのS2を退避しました）。", "info"
 
 Done:
     modUIProgress.ExitUiLock
@@ -630,7 +646,8 @@ Public Sub HomeExportHtml()
         ' case_status の exported を立てる唯一の点。SetStatus は遷移検査を
         ' 通さない(14章§6の注記)が、CS_STATUSES_ABOVE_S4 の降格抑止は効く。
         modCaseStore.SetStatus caseId, "exported"
-        ShowWarning "リスクレポートを出力しました: " & outPath
+        ShowWarning "リスクレポートを出力しました: " & outPath, "info"
+        modUIToast.ShowNext 3
     End If
     RefreshHome
 
@@ -685,13 +702,14 @@ Public Sub HomeBuildHearing()
         answer = MsgBox(memoText & vbLf & _
                         "続けますか？", vbYesNo + vbExclamation, "回答の上書き確認")
         If answer <> vbYes Then
-            ShowWarning "ヒアリングシートは作り直しませんでした（手書きの回答を残しました）。"
+            ShowWarning "ヒアリングシートは作り直しませんでした（手書きの回答を残しました）。", "warn"
             GoTo Done
         End If
     End If
 
     If modExportHearing.BuildHearingSheet(caseId) Then
         modUISheet.ShowSheet "ヒアリングシート"
+        modUIToast.ShowNext 4
     Else
         ShowWarning "ヒアリングシートを生成できませんでした（先にStep4を実行してください）。"
     End If
@@ -729,7 +747,7 @@ Public Sub HomeCompanySave()
                         "内容を確認しましたか？「はい」で書き出します。", _
                         vbYesNo + vbExclamation, "共有前の確認")
         If answer <> vbYes Then
-            ShowWarning "個人情報の確認が済んでいないため書き出しませんでした。"
+            ShowWarning "個人情報の確認が済んでいないため書き出しませんでした。", "warn"
             GoTo Done
         End If
         confirmedAt = modUtil.NowStamp()
@@ -740,7 +758,7 @@ Public Sub HomeCompanySave()
     If LenB(pathText) = 0 Then
         ShowWarning "企業ファイルへ書き出せませんでした。err_log をご確認ください。"
     Else
-        ShowWarning "企業ファイルへ保存しました: " & pathText
+        ShowWarning "企業ファイルへ保存しました: " & pathText, "info"
     End If
 
 Done:
@@ -769,7 +787,7 @@ Public Sub HomeCompanyOpen()
     If modCompanyFile.ImportCompanyFile(pathText, caseId) Then
         DrawAllSteps caseId
         RefreshHome
-        ShowWarning "企業ファイルから前ラウンドの内容を取り込みました。"
+        ShowWarning "企業ファイルから前ラウンドの内容を取り込みました。", "info"
     Else
         ShowWarning "企業ファイルを取り込めませんでした。ファイルをご確認ください。"
     End If
@@ -839,7 +857,7 @@ Public Sub HomePreflightAll()
 
     Dim n As Long
     n = modPlayOps.RunPreflightAll()
-    ShowWarning "プリフライト診断: " & CStr(n) & "件を診断しました。"
+    ShowWarning "プリフライト診断: " & CStr(n) & "件を診断しました。", "info"
 
     modUIInbox.RefreshInbox
     RefreshHome

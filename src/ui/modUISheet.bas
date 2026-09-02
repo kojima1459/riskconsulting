@@ -49,6 +49,8 @@ Private Const US_BTN_ROUND As Double = 0.35         ' 角丸の深さ(Adjustment
 Private Const US_BTN_ROW_PAD As Double = 4#         ' アンカー行に足す余白
 
 Private Const US_BTN_HEIGHT As Double = 26#
+' 主要動線(kind="primary")だけ高さを30ptにする(裁定書17 H3(a): HOMEの2×2配置)。
+Private Const US_BTN_HEIGHT_PRIMARY As Double = 30#
 Private Const US_LABEL_HEIGHT As Double = 16#
 Private Const US_SRC As String = "modUISheet"
 
@@ -422,14 +424,14 @@ Public Function EnsureButtonEx(ByVal ws As Object, ByVal shapeKey As String, _
     If ws Is Nothing Then Exit Function
 
     DropShape ws, shapeKey
-    GrowRowForButton ws, anchorRow
+    GrowRowForButton ws, anchorRow, kind
 
     Dim anchor As Object
     Set anchor = ws.Cells(anchorRow, anchorCol)
 
     Dim shp As Object
     Set shp = ws.Shapes.AddShape(US_SHAPE_ROUNDED, anchor.Left, anchor.Top, _
-                                 widthPt, US_BTN_HEIGHT)
+                                 widthPt, BtnHeightOf(kind))
     If shp Is Nothing Then Exit Function
 
     shp.Name = shapeKey
@@ -470,12 +472,24 @@ Failed:
     EnsureButtonEx = False
 End Function
 
+' ボタンの高さ(kind別)。主要動線だけ 30pt(裁定書17 H3(a))で、他は従来どおり
+'   26pt。**高さを決める場所を1本にする**(AddShape と行高の確保が食い違うと、
+'   1行に1段だけ置いても縦に重なる)。
+Private Function BtnHeightOf(ByVal kind As String) As Double
+    If StrComp(kind, "primary", vbBinaryCompare) = 0 Then
+        BtnHeightOf = US_BTN_HEIGHT_PRIMARY
+    Else
+        BtnHeightOf = US_BTN_HEIGHT
+    End If
+End Function
+
 ' アンカー行をボタンが収まる高さまで広げる(縮めはしない)。
-Private Sub GrowRowForButton(ByVal ws As Object, ByVal anchorRow As Long)
+Private Sub GrowRowForButton(ByVal ws As Object, ByVal anchorRow As Long, _
+                             ByVal kind As String)
     On Error Resume Next
     If anchorRow <= 0 Then Exit Sub
     Dim needed As Double
-    needed = US_BTN_HEIGHT + US_BTN_ROW_PAD
+    needed = BtnHeightOf(kind) + US_BTN_ROW_PAD
     If ws.Rows(anchorRow).RowHeight < needed Then ws.Rows(anchorRow).RowHeight = needed
 End Sub
 

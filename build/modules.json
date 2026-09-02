@@ -359,6 +359,13 @@
       "wave": "T-30"
     },
     {
+      "name": "modUIToast",
+      "path": "src/ui/modUIToast.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-30"
+    },
+    {
       "name": "modTestRunner",
       "path": "src/test/modTestRunner.bas",
       "role": "test",

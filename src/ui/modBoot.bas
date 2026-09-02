@@ -114,6 +114,20 @@ Private Const BOOT_DV_ERROR_MSG As String = "一覧から選んでください�
 Private Const BOOT_MSG_LIMIT_REACHED As String = _
     "リボンの利用上限の可能性があります。実行時に案内します。"
 
+' ナレッジブックの自動発見(裁定書17 H1)。config kb_path の既定値は配置前の
+' プレースホルダ(BOOT_KB_PLACEHOLDER を含む)であり、実機では「本体と同じ
+' フォルダにナレッジブックを置いたのに読めない」が起きた。空・プレースホルダ・
+' 不在のときは本体と同じフォルダの BOOT_KB_FILE を探し、あれば kb_path へ
+' 書いてから読み込みへ進む(URL形式は社内共有の正規指定なので触らない)。
+Private Const BOOT_KB_KEY As String = "kb_path"
+Private Const BOOT_KB_FILE As String = "ナレッジブック.xlsx"
+Private Const BOOT_KB_PLACEHOLDER As String = "\\...\"
+Private Const BOOT_KB_AUTO_NOTE As String = "同じフォルダのナレッジブックを読み込みました。"
+
+' 自動発見でパスを書いたか(HOMEのナレッジ欄が KbAutoNote で読む)。永続しない
+' 画面制御変数であり、14章§6「状態保持の例外」には当たらない。
+Private gKbAutoFound As Boolean
+
 ' ============================================================================
 ' Boot - 起動シーケンス本体(12章§2.1の7手順をこの順で1回ずつ実行する)。
 ' ============================================================================
@@ -155,6 +169,8 @@ Private Sub BootStep(ByVal stepNo As Long)
     Case 6
         ' (5)+(6) ナレッジ読込・スナップショット保存・新サービス候補の再送
         '         (再送はLoadKnowledge内部のFlushPendingが無音で行う。E-13)
+        '         読込の**前**に kb_path の自動発見を1回だけ挟む(裁定書17 H1)。
+        ResolveKbPath
         modKnowledge.LoadKnowledge
     Case 7
         ' 業種入力規則(13章§2.11・裁定書9 §4)。ナレッジ読込の**後**に置く
@@ -330,6 +346,49 @@ Private Sub ApplyDataKeyValidation()
     target.Validation.ErrorMessage = BOOT_DV_ERROR_MSG
     On Error GoTo 0
 End Sub
+
+' ----------------------------------------------------------------------------
+' (5の前) ナレッジブックの自動発見(裁定書17 H1)。
+'   config kb_path が (a)空 (b)プレースホルダ "\\...\" を含む (c)Dir$で不在
+'   のいずれかなら、ThisWorkbook.Path の直下に BOOT_KB_FILE があるか調べ、
+'   あれば modConfig.SetValue で kb_path へ書いてから通常の読込へ進む。
+'   **URL形式("://" を含む)は触らない**(社内共有の正規指定を上書きしない)。
+'   探索と判定はこのPrivate 1本に閉じる(modBoot以外に起動処理を置かない)。
+' ----------------------------------------------------------------------------
+Private Sub ResolveKbPath()
+    On Error Resume Next
+
+    gKbAutoFound = False
+
+    Dim pathText As String
+    pathText = Trim$(modConfig.GetStr(BOOT_KB_KEY, vbNullString))
+    If InStr(1, pathText, "://", vbBinaryCompare) > 0 Then Exit Sub
+    If LenB(pathText) > 0 Then
+        If InStr(1, pathText, BOOT_KB_PLACEHOLDER, vbBinaryCompare) = 0 Then
+            If LenB(Dir$(pathText)) > 0 Then Exit Sub
+        End If
+    End If
+
+    Dim baseDir As String
+    baseDir = ThisWorkbook.Path
+    If LenB(baseDir) = 0 Then Exit Sub
+
+    Dim candidate As String
+    candidate = baseDir & "\" & BOOT_KB_FILE
+    If LenB(Dir$(candidate)) = 0 Then Exit Sub
+
+    modConfig.SetValue BOOT_KB_KEY, candidate
+    gKbAutoFound = True
+End Sub
+
+' ----------------------------------------------------------------------------
+' KbAutoNote - 起動時の自動発見でパスを書いたときだけ、HOMEのナレッジ欄の
+'   先頭へ足す1文を返す(書かなかったときは空)。読むのは modUIHome の
+'   KbStatusText だけ(裁定書17 H1・14章§6)。
+' ----------------------------------------------------------------------------
+Public Function KbAutoNote() As String
+    If gKbAutoFound Then KbAutoNote = BOOT_KB_AUTO_NOTE
+End Function
 
 ' ----------------------------------------------------------------------------
 ' 業種入力規則(13章§2.11・裁定書9 §4。検証欠陥#1)

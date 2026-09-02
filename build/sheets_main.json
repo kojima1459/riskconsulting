@@ -224,21 +224,21 @@
           ]
         },
         {
-          "title": "調べたことを貼る(上から順に貼ります。長いときは続き欄へ)",
+          "title": "調べたことを貼る(上から順に貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ)",
           "tall": true,
           "fields": [
-            {"range": "ci_paste_hp_1", "label": "1 HPテキスト(必須)", "type": "String", "input": true, "note": "会社のホームページから写した文章を貼ります。長いときは続き欄へ分けます"},
+            {"range": "ci_paste_hp_1", "label": "1 HPテキスト(必須)", "type": "String", "input": true, "note": "会社のホームページから写した文章を貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
             {"range": "ci_paste_hp_2", "label": "1 HPテキスト 続き1", "type": "String", "input": true, "note": "1 HPテキストの続きを貼ります"},
             {"range": "ci_paste_hp_3", "label": "1 HPテキスト 続き2", "type": "String", "input": true, "note": "1 HPテキストの続きを貼ります"},
-            {"range": "ci_paste_yuho_1", "label": "2 有報リスク章(任意)", "type": "String", "input": true, "note": "有価証券報告書の事業等のリスクの章を貼ります"},
+            {"range": "ci_paste_yuho_1", "label": "2 有報リスク章(任意)", "type": "String", "input": true, "note": "有価証券報告書の事業等のリスクの章を貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
             {"range": "ci_paste_yuho_2", "label": "2 有報リスク章 続き1", "type": "String", "input": true, "note": "2 有報リスク章の続きを貼ります"},
             {"range": "ci_paste_yuho_3", "label": "2 有報リスク章 続き2", "type": "String", "input": true, "note": "2 有報リスク章の続きを貼ります"},
             {"range": "ci_paste_memo_1", "label": "3 営業メモ(任意)", "type": "String", "input": true, "note": "自分の営業メモを貼ります。続き欄はありません"},
-            {"range": "ci_paste_contract_1", "label": "4 現契約サマリ(更新時必須)", "type": "String", "input": true, "note": "いまの契約の内容をまとめた文章を貼ります"},
+            {"range": "ci_paste_contract_1", "label": "4 現契約サマリ(更新時必須)", "type": "String", "input": true, "note": "いまの契約の内容をまとめた文章を貼ります。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
             {"range": "ci_paste_contract_2", "label": "4 現契約サマリ 続き1", "type": "String", "input": true, "note": "4 現契約サマリの続きを貼ります"},
             {"range": "ci_paste_contract_3", "label": "4 現契約サマリ 続き2", "type": "String", "input": true, "note": "4 現契約サマリの続きを貼ります"},
             {"range": "ci_paste_prev_renewal_1", "label": "5 前回更新メモ(任意)", "type": "String", "input": true, "note": "前回の更新のときのメモを貼ります。続き欄はありません"},
-            {"range": "ci_paste_dossier_1", "label": "6 追加調査の結果", "type": "String", "input": true, "note": "AIに追加で調べさせた結果を貼ります。「しっかり調査」で使います"},
+            {"range": "ci_paste_dossier_1", "label": "6 追加調査の結果", "type": "String", "input": true, "note": "AIに追加で調べさせた結果を貼ります。「しっかり調査」で使います。1つの欄は約32,000字(A4で約20枚)まで。超えたら「続き1」へ"},
             {"range": "ci_paste_dossier_2", "label": "6 追加調査の結果 続き1", "type": "String", "input": true, "note": "6 追加調査の結果の続きを貼ります"},
             {"range": "ci_paste_dossier_3", "label": "6 追加調査の結果 続き2", "type": "String", "input": true, "note": "6 追加調査の結果の続きを貼ります"},
             {"range": "ci_paste_field_notes_1", "label": "7 現場メモ(何でも欄)", "type": "String", "input": true, "note": "現場で見聞きしたことを何でも書きます。続き欄はありません"},
@@ -789,7 +789,7 @@
     {
       "name": "err_log",
       "role": "table",
-      "state": "hidden",
+      "state": "visible",
       "spec_ref": "13章§2.4",
       "data_locked": true,
       "columns": [
@@ -805,7 +805,7 @@
     {
       "name": "usage_log",
       "role": "table",
-      "state": "hidden",
+      "state": "visible",
       "spec_ref": "13章§2.4",
       "data_locked": true,
       "columns": [
@@ -819,7 +819,7 @@
     {
       "name": "run_log",
       "role": "table",
-      "state": "hidden",
+      "state": "visible",
       "spec_ref": "13章§2.4",
       "data_locked": true,
       "sheet_note": "1行=1 LLM呼び出し。JSON本文は保持しない。",

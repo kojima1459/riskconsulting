@@ -918,6 +918,19 @@ GUIDE_ZEBRA_FILL = PatternFill("solid", fgColor="F4F6FB")
 GUIDE_RESULT_FILL = PatternFill("solid", fgColor="F7F9FA")
 GUIDE_THIN = Side(style="thin", color="D9E1EC")
 
+# 指示文セル(B:C結合)の実効幅。列幅28+82の合計で、全角1字を2カウントとして
+# 折返し行数を見積もる(行高が足りないと指示文が見切れる=H3と同じ事故になる)。
+GUIDE_PROMPT_COLS = 108
+
+
+def _wrapped_height(text, cols, line_pt=13.5, pad_pt=8):
+    """折返しを織り込んだ行高(pt)。全角は2桁ぶんとして数える。"""
+    lines = 0
+    for raw in text.split("\n"):
+        width = sum(2 if ord(ch) > 0x2E80 else 1 for ch in raw)
+        lines += max(1, -(-width // cols))
+    return max(24, line_pt * lines + pad_pt)
+
 # HOMEの17ボタン。**modUIHome.EnsureHomeButtons のキャプションと逐語一致**
 # させること(実装の文字列から引く。推測で書かない)。[S1][S2][S3][S4] の4つは
 # 1行にまとめて説明するため、早見表の行数は実装のボタン本数と一致しない。
@@ -948,11 +961,82 @@ GUIDE_TROUBLES = [
     ("「本日のAI利用枠の上限です」と出た", "きょうの利用枠を使い切りました。翌日に続きの段から押し直してください。"),
     ("「画面の案件と保存先が一致しません。再描画してください」と出た",
      "別の案件の画面が残っています。HOMEで対象案件を選び直し、その段のシートを開き直してください。"),
-    ("「ナレッジが読めていません」と出た", "社内ナレッジにつながっていません。管理者へ連絡してください(そのまま使うと提案の質が落ちます)。"),
+    ("「ナレッジブック.xlsx を本体と同じフォルダに置いて[ナレッジ再読込]を押してください」と出た",
+     "社内ナレッジにつながっていません。ナレッジブック.xlsx を本体ブックと同じフォルダに置き、"
+     "[ナレッジ再読込]を押してください(起動時は自動でも探します)。それでも直らなければ管理者へ連絡してください。"),
     ("ボタンを押しても何も起きない", "ほかの処理が動いています。終わるまで待ってください。"),
     ("英語で Trust... というメッセージが出た", "VBAの信頼設定がまだ終わっていません。①の手順3と4をやり直してください。"),
     ("出力の内容が明らかにおかしい", "AIの答えがずれています。シートを直して、その段から作り直してください。直らなければ管理者へ連絡してください。"),
 ]
+
+# 操作ガイド⑦「AIに調べさせる指示文」(裁定書17 H5)。
+# ------------------------------------------------------------------------------
+# 実機フィードバック第2報: 指示文集(docs/08)は利用者へ届いていなかった。
+# **プロンプトはアプリの中に無ければならない**ので、docs/08 のコードフェンスを
+# **逐語で**この章へ焼き込む。値源を二重に持たない(コピーを本ファイルへ書き写す
+# と必ず腐る)ため、ビルド時に docs/08 を読んで取り出す。
+DOSSIER_DOC_PATH = os.path.join("docs", "08_ドシエ収集プロンプト集.md")
+
+# 標準3本(まずこの3本)と補助5本(必要なときだけ)。表示名は利用者の言葉にする
+# (docs/08 の見出しは開発側の呼び方なのでそのままにしない)。
+GUIDE_PROMPTS_STD = [
+    ("D-1", "D-1 会社の基礎調査"),
+    ("D-3", "D-3 リスクの兆候さがし"),
+    ("D-9", "D-9 調達・仕入れの調べ"),
+]
+GUIDE_PROMPTS_OPT = [
+    ("D-2", "D-2 業界・競合"),
+    ("D-4", "D-4 世の中の動き(為替・人手・サイバー)"),
+    ("D-6", "D-6 更新案件の変化さがし"),
+    ("D-7", "D-7 拠点の地域概況(ハザード)"),
+    ("D-8", "D-8 決算ハイライト(上場企業)"),
+]
+# 冒頭の運用ルール(直列運用。docs/08 1x の実測とdocs/26【1-5】に合わせる)。
+GUIDE_PROMPT_RULES = [
+    ("投げ方",
+     "社内ディープリサーチは1本ずつしか動きません。1本ずつ順に投げ、各10分ほど待ちます。"),
+    ("企業名の書き方",
+     "企業名には必ず本社所在地か証券コードを添えてください(似た名前の別会社の情報が混ざった実例があります)。"),
+    ("長さの上限",
+     "指示文は2,000字以内です(下の指示文は全部収まっています)。"),
+]
+
+
+def read_dossier_prompts(root):
+    """docs/08 の `## D-N. ...` 見出し直下の最初のコードフェンスを逐語で返す。
+
+    操作ガイド⑦(裁定書17 H5)が1本1セルへそのまま入れる。欠落・空はビルドを
+    止める(指示文の入っていないブックを配ると、利用者はどこにも辿り着けない)。
+    """
+    path = os.path.join(root, DOSSIER_DOC_PATH)
+    if not os.path.exists(path):
+        raise BuildError(
+            f"{DOSSIER_DOC_PATH} が見つかりません({path})。"
+            "操作ガイド⑦へ指示文を逐語転載できないためビルドを中止します。")
+    with open(path, encoding="utf-8") as fp:
+        text = fp.read()
+
+    found = {}
+    heads = list(re.finditer(r"^##\s+(D-\d)\.", text, re.M))
+    for i, m in enumerate(heads):
+        tail = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+        fence = re.search(r"^```[^\n]*\n(.*?)\n```", text[m.end():tail], re.S | re.M)
+        if fence:
+            found[m.group(1)] = fence.group(1)
+
+    wanted = [k for k, _ in GUIDE_PROMPTS_STD] + [k for k, _ in GUIDE_PROMPTS_OPT]
+    missing = [k for k in wanted if not (found.get(k) or "").strip()]
+    if missing:
+        raise BuildError(
+            f"{DOSSIER_DOC_PATH} から指示文を取り出せませんでした: {missing}"
+            "(`## D-N. ...` の直後のコードフェンスが値源です)")
+    over = [k for k in wanted if len(found[k]) > 2000]
+    if over:
+        raise BuildError(
+            f"指示文が2,000字を超えています: {over}"
+            "(社内ディープリサーチの入力上限。docs/08 1x の実測)")
+    return {k: found[k] for k in wanted}
+
 
 GUIDE_GLOSSARY = [
     ("かんたん調査", "いちばん軽い調べ方。ホームページと営業メモくらいで進めます。"),
@@ -968,6 +1052,7 @@ GUIDE_GLOSSARY = [
 
 def _make_guide(wb, spec, ctx):
     """操作ガイド: ブックの中だけで操作を学べる案内シート(セルのみ・図形なし)。"""
+    prompts = read_dossier_prompts(ctx.root)
     ws = wb.create_sheet(spec["name"])
     ws.protection.sheet = False
     ws.sheet_view.showGridLines = False
@@ -1043,8 +1128,26 @@ def _make_guide(wb, spec, ctx):
         ws.row_dimensions[r].height = max(18, 14 * (text.count("\n") + 1) + 5)
         row[0] = r + 2
 
+    def prompt(title, body):
+        """指示文1本(見出し1行＋全文1セル)。全文は B:C 結合・折返しで、
+        セルを1つ選んで Ctrl+C すればそのまま投げられる形にする(裁定書17 H5)。"""
+        r = row[0]
+        ck = ws.cell(row=r, column=2, value=_clean(title))
+        ck.font = GUIDE_KEY_FONT
+        ck.alignment = Alignment(vertical="center", indent=1)
+        ws.row_dimensions[r].height = 20
+        r += 1
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+        cv = ws.cell(row=r, column=2, value=_clean(body))
+        cv.font = GUIDE_BODY_FONT
+        cv.fill = GUIDE_RESULT_FILL
+        cv.number_format = ctx.text_fmt
+        cv.alignment = Alignment(vertical="top", wrap_text=True, indent=1)
+        ws.row_dimensions[r].height = _wrapped_height(body, GUIDE_PROMPT_COLS)
+        row[0] = r + 2
+
     # ---- 目次(行だけ予約しておき、全章を書き終えてから書き戻す) ----------
-    toc_n = 6
+    toc_n = 7
     toc_header_row = row[0]
     row[0] = toc_header_row + 2
     toc_first_row = row[0]
@@ -1152,6 +1255,25 @@ def _make_guide(wb, spec, ctx):
         kv(word, mean, i)
     back_to_toc(toc_header_row)
 
+    # ==== ⑦ AIに調べさせる指示文 ===========================================
+    ch7 = section("⑦ AIに調べさせる指示文(社内ディープリサーチ用)")
+    note("社内のディープリサーチ(外部を検索できるほう)へ、そのままコピーして貼る文です。\n"
+         "{{ }} の中だけを自分で書き換えてから投げてください。")
+    for i, (key, body) in enumerate(GUIDE_PROMPT_RULES):
+        kv(key, body, i)
+
+    section("まずこの3本(しっかり調査のとき)", BRAND_MID)
+    for key, title in GUIDE_PROMPTS_STD:
+        prompt(title, prompts[key])
+    note("この3本を1本ずつ順に投げ、返ってきた文章を『案件入力』の「6 追加調査の結果」へ貼ります。")
+
+    section("必要なときだけ", BRAND_MID)
+    for key, title in GUIDE_PROMPTS_OPT:
+        prompt(title, prompts[key])
+    note("有価証券報告書の中身は取りに行かせないでください(読めずに作り話が混ざります)。\n"
+         "「事業等のリスク」の章は EDINET をブラウザで開いて自分でコピーします。")
+    back_to_toc(toc_header_row)
+
     # ---- 目次の書き戻し ---------------------------------------------------
     hc = ws.cell(row=toc_header_row, column=1, value="目次(クリックすると各章へ移動します)")
     hc.font = GUIDE_HEAD_FONT
@@ -1167,6 +1289,7 @@ def _make_guide(wb, spec, ctx):
         (ch4, "④ 困ったとき"),
         (ch5, "⑤ 自己テスト"),
         (ch6, "⑥ 用語のミニ辞書"),
+        (ch7, "⑦ AIに調べさせる指示文(社内ディープリサーチ用)"),
     ]
     if len(toc_entries) != toc_n:
         raise BuildError(

@@ -91,8 +91,11 @@ MODULE_REGISTRY = {
     #                 modKnowledgeFmt が15章の整形規約を持つのと同じ切り口。
     #   modUIGuide  = 初回ガイドツアーと操作ガイドの図形ボタン(裁定書14 裁定6)。
     #                 起動からの結線は modBoot の1行(StartTourIfFirstRun)のみ。
+    #   modUIToast  = トースト(図形カード+Application.OnTimeの自動消去。接頭辞
+    #                 ts_)と hm_warning の1行組み立て(裁定書17 H2/H4)。文言の
+    #                 値源をここへ寄せ、満杯の modUIHome へ文字を足さない。
     "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICase5",
-    "modUICaseFmt", "modUIGuide",
+    "modUICaseFmt", "modUIGuide", "modUIToast",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -408,6 +411,15 @@ CONTRACT: dict[str, dict] = {
     "modUIGuide": {
         "closed": False,
         "required": ["StartTourIfFirstRun", "RestartTour", "EnsureGuideButtons"],
+    },
+    # modUIToast: 裁定書17 H2/H4。modUIHome の ShowWarning と主要4ボタンの
+    # 成功経路が呼ぶ結線先そのものであり、改名・Private化はその場で案内が
+    # 消えるため required で固定する(HideToast は Application.OnTime の
+    # コールバックなので Public 必須)。
+    "modUIToast": {
+        "closed": False,
+        "required": ["ShowToast", "ShowNext", "HideToast", "CancelToast",
+                     "WarnLine"],
     },
     "modUIHome": {"closed": False, "required": []},
     "modUICase2": {"closed": False, "required": []},
