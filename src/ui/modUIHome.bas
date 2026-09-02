@@ -293,7 +293,10 @@ Private Function KbStatusText(ByVal industryCode As String) As String
 
     If menus + schemes + cases1 <= 0 Then
         KbStatusText = "ナレッジブック.xlsx を本体と同じフォルダに置いて" & _
-                       "[ナレッジ再読込]を押してください"
+                       "[ナレッジ再読込]を押してください（探した場所: " & _
+                       modConfig.GetStr("kb_path", vbNullString) & "）。" & _
+                       "置いてあるのに読めないときは、そのファイルを右クリック→" & _
+                       "プロパティ→[許可する]にチェックを入れて開き直してください。"
         Exit Function
     End If
 

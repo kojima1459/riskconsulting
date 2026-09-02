@@ -80,6 +80,11 @@ KB_DEFAULT_RESERVE_ROWS = 30
 APP_TITLE = "リスク提案ナビ"
 EXCEL_CELL_LIMIT = 32000        # Excelの技術上限(セル1個あたりの文字数)
 MODULE_CONTRACT_LIMIT = 30000   # 12章§2 の契約上限(1モジュールあたり)
+# 1物理行のCP932バイト長上限(W5.3 H7 / 裁定書19)。VBEの1物理行上限1,023は
+# 文字数ではなくCP932エンコード後のバイト数で数える。超えるとVBEが注入時に行を
+# 分断し、実機で「SubまたはFunctionが定義されていません」になる。tools/vba_lint.py
+# の MAX_LINE_CP932_BYTES と同値の二重化検問(裁定書19 H9の代替措置)。
+MAX_LINE_CP932_BYTES = 1000     # 焼き込み前に超過を BuildError で止める
 
 VALID_ROLES = ("core", "app", "ui", "test")
 
@@ -536,6 +541,19 @@ def _vba_src_text(root, m):
         raise BuildError(
             f"{m['name']}.bas: 整形後ソースの先頭行が空白のみです"
             "(先頭空行は期待/実測の行数計算が非対称になるため禁止)")
+
+    # 1物理行のCP932バイト長検問(裁定書19 H7(4)/H9代替)。vba_src へ焼く前に止める。
+    # tools/vba_lint.py と同じ基準をビルド側にも置いて二重化する(lint を通さずに
+    # ビルドだけ回しても、行分断で壊れる配布物は出荷できない)。
+    for i, line in enumerate(cleaned.split("\n"), 1):
+        nbytes = len(line.encode("cp932", errors="replace"))
+        if nbytes > MAX_LINE_CP932_BYTES:
+            raise BuildError(
+                f"{m['name']}.bas:{i} の1物理行が{nbytes}バイト(CP932)で上限"
+                f"{MAX_LINE_CP932_BYTES}バイトを超過しています(文字数は{len(line)}字)。"
+                "VBEの1行上限1,023は文字数ではなくバイト数です。VBEが行を分断し、"
+                "実機で「SubまたはFunctionが定義されていません」になります。"
+                "文字列リテラルの境界で複数行へ分けてください")
     return cleaned
 
 
@@ -2181,6 +2199,7 @@ def main():
     print(f"  出力: {out_path} ({os.path.getsize(out_path):,} bytes)")
     print("自己検証 OK: シート集合と順序・可視性 / ガードシートが先頭かつアクティブ / "
           "vba_srcモジュール集合一致 / 各ソース<=30,000字かつ<32,000字 / "
+          "各物理行<=1,000バイト(CP932) / "
           "vba_src本文がsrc/と完全一致 / vba_src D列(期待行数)がsrc由来の計算値と一致 / "
           "configキー列(順序含む)と全キーの説明・mock_llm・app_version / "
           "名前付きレンジの本数と参照先 / 1行目ヘッダとブロックアンカー先ヘッダ行 / "
