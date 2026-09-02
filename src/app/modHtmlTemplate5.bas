@@ -89,10 +89,14 @@ Public Function SecHearingJs() As String
     s = s & "if(add('リスクの確認点',ps[n],'No.'+S(rk[m].risk_no)+' '+S(rk[m].risk_name)))" & vbLf
     s = s & "{cp++;}}}" & vbLf
     s = s & "if(!items.length){return;}" & vbLf
-    s = s & "var ol=T(el,'ol','qlist');" & vbLf
-    s = s & "for(var p=0;p<items.length&&p<20;p++){var li=T(ol,'li');" & vbLf
-    s = s & "T(li,'span','qcat',items[p].c);T(li,'span',null,items[p].q);" & vbLf
-    s = s & "if(NB(items[p].w)){T(li,'div','qwhy',items[p].w);}}" & vbLf
+    ' 見本の2段組カード(.questions の columns:2)。通し番号は Q{n}. で振る
+    ' (18章§3.4 の順序と件数の規則は不変)。
+    s = s & "var box=T(el,'div','questions');" & vbLf
+    s = s & "for(var p=0;p<items.length&&p<20;p++){var q=T(box,'div','q');" & vbLf
+    s = s & "T(q,'b',null,'Q'+(p+1)+'. ');" & vbLf
+    s = s & "T(q,'span',null,items[p].q);" & vbLf
+    s = s & "T(q,'span','qcat',items[p].c);" & vbLf
+    s = s & "if(NB(items[p].w)){T(q,'div','qwhy',items[p].w);}}" & vbLf
     s = s & "if(items.length>20){" & vbLf
     ' 18章§3.4 の超過1行は逐語(括弧も全角)。
     s = s & "T(el,'p','muted','ほか'+(items.length-20)+'問（ヒアリングシートを参照）');}}" & vbLf

@@ -45,6 +45,11 @@ Private Const VPF_PRINCIPLE_N As Long = 5
 Private Const VPF_GRAMMAR_N As Long = 4
 Private Const VPF_REWORK_MAX As Long = 3
 Private Const VS3C_REACTION_N As Long = 3
+' 15章§4 growth_ideas(攻めの保険活用。V-S3-14/15/17)の閾値。
+Private Const VS3_GROWTH_MIN As Long = 4
+Private Const VS3_GROWTH_MAX As Long = 8
+Private Const VS3_TITLE_MAX As Long = 30
+Private Const VE_DIFFICULTY As String = "|low|mid|high|"
 
 ' --- 正規化エンジンの再帰上限(壊れた入力で暴走させない) ---
 Private Const V_MAX_DEPTH As Long = 40
@@ -383,6 +388,74 @@ Public Function CheckS3CCore(ByVal json As String) As String
     Next it
 
     CheckS3CCore = r
+End Function
+
+' ============================================================================
+' CheckS3GrowthCore - S3の growth_ideas(攻めの保険活用)の検証
+'   15章§4 CheckS3 検証ルール表の V-S3-14 ～ V-S3-18(5件)。既存の
+'   V-S3-01 ～ V-S3-13(stories / unmatched_risks / do_not_propose)には
+'   一切触れない。本体を modValidate2 側へ置くのは modValidate が30,000字
+'   契約(12章§2)の上限に近いためで、呼び口は modValidate.CheckS3 のまま
+'   (15章§11の照合は modValidate*.bas 全体を1つの実装として見る)。
+'   引数は S3 の JSON 1本。stories[].headline との重複(V-S3-18)を見るため、
+'   growth_ideas と stories を同じ JSON から読む。
+' ============================================================================
+Public Function CheckS3GrowthCore(ByVal json As String) As String
+    Dim r As String
+    Dim ideaCol As Collection
+    Dim it As Variant
+    Dim sj As String
+    Dim sVal As String
+    Dim titleText As String
+    Dim seenTitles As String
+    Dim headSet As String
+    Dim nIdea As Long
+
+    Set ideaCol = modJsonLite.GetArrayItems(json, "growth_ideas")
+    nIdea = ideaCol.Count
+
+    ' --- V-S3-14: 件数は4～8 ---
+    If nIdea < VS3_GROWTH_MIN Or nIdea > VS3_GROWTH_MAX Then
+        Ap r, "[V-S3-14] growth_ideas が" & nIdea & "件です(4～8件)"
+    End If
+
+    headSet = "|"
+    For Each it In modJsonLite.GetArrayItems(json, "stories")
+        headSet = headSet & Trim$(modJsonLite.GetStr(CStr(it), "headline")) & "|"
+    Next it
+
+    seenTitles = "|"
+    For Each it In ideaCol
+        sj = CStr(it)
+
+        ' --- V-S3-15: effect は 1..5 の整数 ---
+        sVal = Trim$(modJsonLite.GetStr(sj, "effect"))
+        If InStr("|1|2|3|4|5|", "|" & sVal & "|") = 0 Then
+            Ap r, "[V-S3-15] growth_ideas の effect が1～5ではありません: " & sVal
+        End If
+
+        ' --- V-S3-16: difficulty の enum(low/mid/high) ---
+        sVal = Trim$(modJsonLite.GetStr(sj, "difficulty"))
+        If Not InEnum(sVal, VE_DIFFICULTY) Then
+            Ap r, "[V-S3-16] growth_ideas の difficulty が不正です: " & sVal
+        End If
+
+        ' --- V-S3-17: title は30字以内・重複なし ---
+        titleText = Trim$(modJsonLite.GetStr(sj, "title"))
+        If Len(titleText) > VS3_TITLE_MAX Or InStr(seenTitles, "|" & titleText & "|") > 0 Then
+            Ap r, "[V-S3-17] growth_ideas の title が30字超か重複です: " & titleText
+        End If
+        seenTitles = seenTitles & titleText & "|"
+
+        ' --- V-S3-18: stories[].headline と同じ文言にしない ---
+        If LenB(titleText) > 0 Then
+            If InStr(headSet, "|" & titleText & "|") > 0 Then
+                Ap r, "[V-S3-18] growth_ideas の title が stories の headline と重複です: " & titleText
+            End If
+        End If
+    Next it
+
+    CheckS3GrowthCore = r
 End Function
 
 ' ============================================================================

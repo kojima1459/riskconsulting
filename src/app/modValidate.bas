@@ -504,6 +504,11 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
         Ap r, "[V-S3-13] 更新案件ですが upsell/cross_sell が0本です"
     End If
 
+    ' --- V-S3-14 ～ V-S3-18: growth_ideas(攻めの保険活用) ---
+    '     本体は modValidate2.CheckS3GrowthCore(30,000字契約により分離)。
+    sVal = modValidate2.CheckS3GrowthCore(json)
+    If LenB(sVal) > 0 Then Ap r, sVal
+
     CheckS3 = r
 End Function
 

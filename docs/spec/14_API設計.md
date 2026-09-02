@@ -378,6 +378,10 @@ Public Function CheckS4Core(ByVal json As String, ByVal dossierTier As String, _
 Public Function CheckPFCore(ByVal json As String, ByVal refIdsText As String) As String
 Public Function CheckS2CCore(ByVal json As String, ByVal s2Json As String) As String
 Public Function CheckS3CCore(ByVal json As String) As String
+' CheckS3GrowthCore（v2.5・裁定書21）: S3 の growth_ideas[]（攻めの保険活用）だけを見る
+'   検証本体（15章§4 V-S3-14〜V-S3-18）。入口は `modValidate.CheckS3` のままで、引数は
+'   S3 の JSON 1本（stories[].headline との重複＝V-S3-18 を見るため同じ JSON から読む）
+Public Function CheckS3GrowthCore(ByVal json As String) As String
 
 ' === app: modKnowledge ===
 ' 各注入関数の `Optional ByVal maxRows As Long = 0` は**15章§0.7の段階的な半減を外から

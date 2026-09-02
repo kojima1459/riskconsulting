@@ -5,27 +5,29 @@ Option Explicit
 ' modHtmlTemplate2 - SEC-01 cover / SEC-02 exec / SEC-03 profile /
 '                    SEC-04 sufficiency の描画スクリプト
 ' ------------------------------------------------
-' 正は18章§3(セクションIDと読むJSONパス)・§3.1(エグゼクティブサマリの構成)・
-' §4.4(分割規約の既定割り当て)。各関数は `function renderXxx(DATA,el){...}` を
-' 1本返すだけで、CSSも登録行も持たない(CSSは modHtmlTemplate1.HeadHtml へ一元化・
-' 登録は modHtmlTemplate1.SectionsJs へ一元化。18章§4.3の「変更は2箇所で完結」)。
+' 正は18章§3(セクションIDと読むJSONパス)・§3.0(見本の10節との対応)・
+' §3.1(エグゼクティブサマリの構成)・§4.4(分割規約の既定割り当て)。各関数は
+' `function renderXxx(DATA,el){...}` を1本返すだけで、CSSも登録行も持たない
+' (CSSは modHtmlTemplate1.HeadHtml へ一元化・登録は modHtmlTemplate1.SectionsJs
+' へ一元化。18章§4.3の「変更は2箇所で完結」)。
 '
 ' 描画は createElement / textContent / setAttribute だけで行う(18章§4.1)。
-' 共通ヘルパ(E/T/AT/S/NB/AR/LB/CLIP/PARA/BDG/CHIP/TBL/DLIST/JOIN/RANKED/RNAME
-' /GNAME)と enum変換表(LCAT/LTR/LIQ 等)は modHtmlTemplate1.RuntimeJs にある。
+' 共通ヘルパ(E/T/AT/S/NB/AR/LB/CLIP/PARA/BDG/CHIP/CLR/TBL/FILL/DLIST/JOIN/
+' RANKED/RNAME/GNAME)と enum変換表・キッカー表(LCAT/LTR/LIQ/KICK 等)は
+' modHtmlTemplate1.RuntimeJs にある。
 '
 ' R4準拠: Excelトークン・Application.Run・案件データ参照を持たない純文字列。
 ' CP932準拠: 本文・注釈ともに CP932 内の文字だけで書く(絵文字不可)。
 ' ==========================================================
 
-' SEC-01 cover。表紙の会社名・案件ID・生成日時は静的HTML側(BodyShellHtml)に
+' SEC-01 cover。表紙の会社名・案件ID・生成日時はヒーロー(BodyShellHtml)側に
 '   あるので、ここは meta のチップ列だけを足す(18章§3の「見出し+チップ列」)。
 Public Function SecCoverJs() As String
     Dim s As String
     s = s & "function renderCover(D,el){var m=D.meta||{};" & vbLf
     s = s & "var c=T(el,'div','chips');" & vbLf
     s = s & "if(NB(m.industry_name)){CHIP(c,'業種 '+S(m.industry_name));}" & vbLf
-    s = s & "if(NB(m.case_type)){CHIP(c,LB(LCT,m.case_type),'chip-ai');}" & vbLf
+    s = s & "if(NB(m.case_type)){CHIP(c,LB(LCT,m.case_type),'chip-brand');}" & vbLf
     s = s & "if(NB(m.dossier_tier)){CHIP(c,'ドシエ '+LB(LTIER,m.dossier_tier));}" & vbLf
     s = s & "if(NB(m.quality_mode)){CHIP(c,'モード '+LB(LQM,m.quality_mode));}" & vbLf
     s = s & "if(m.round_no){CHIP(c,'第'+S(m.round_no)+'ラウンド');}" & vbLf
@@ -35,8 +37,9 @@ Public Function SecCoverJs() As String
     SecCoverJs = s
 End Function
 
-' SEC-02 exec(18章§3.1)。リード -> 最重要リスク3件 -> 3テーマ の順に、
-'   A4 1枚相当の文字中心で構成する(印刷時の break-after は共通CSSの .sec-exec)。
+' SEC-02 exec(18章§3.1)。リード -> 最重要リスク3件 -> 3テーマ の順。3テーマは
+'   見本の3カラムカード(.story)で描く(11章§3.8.1)。読むJSONパスは不変。
+'   印刷時の break-after は共通CSSの .sec-exec。
 Public Function SecExecJs() As String
     Dim s As String
     s = s & "function renderExec(D,el){var s1=D.s1||{};var s3=D.s3;" & vbLf
@@ -55,23 +58,31 @@ Public Function SecExecJs() As String
     s = s & "T(el,'p','muted','提案ストーリーは未生成です。');return;}" & vbLf
     s = s & "var st=AR(s3.stories).slice(0);" & vbLf
     s = s & "st.sort(function(a,b){return (a.story_no||0)-(b.story_no||0);});" & vbLf
+    s = s & "var g=T(el,'div','story');" & vbLf
     s = s & "for(var j=0;j<st.length&&j<3;j++){var y=st[j];" & vbLf
-    s = s & "var card=T(el,'div','card');" & vbLf
-    s = s & "T(card,'h3',null,S(y.headline));" & vbLf
+    s = s & "var col=T(g,'div',null);" & vbLf
+    s = s & "T(col,'div','num','THEME '+S(y.story_no)+' / '+LB(LPK,y.proposal_kind));" & vbLf
+    s = s & "T(col,'h3',null,S(y.headline));" & vbLf
     s = s & "var names=[];var tn=AR(y.target_risk_nos);" & vbLf
     s = s & "for(var k=0;k<tn.length;k++){names.push(RNAME(D,tn[k]));}" & vbLf
-    s = s & "if(names.length){T(card,'p','muted','対象リスク: '+names.join('・'));}" & vbLf
-    s = s & "T(card,'p',null,CLIP(y.pitch,200));}}" & vbLf
+    s = s & "if(names.length){T(col,'p',null,'対象リスク: '+names.join('・'));}" & vbLf
+    s = s & "T(col,'p',null,CLIP(y.pitch,200));}}" & vbLf
     SecExecJs = s
 End Function
 
-' SEC-03 profile。定義リスト + 拠点表(18章§3の図表種別)。
+' SEC-03 profile。見本の2カラム(.company-map)。左=公開情報から確認できる事実
+'   (fact)、右=提案設計上の推定(infer)と要確認(verify)。拠点表はその下。
+'   読むJSONパスは18章§3の表のまま(11章§3.8.1「統合は描画のまとまり」)。
 Public Function SecProfileJs() As String
     Dim s As String
     s = s & "function renderProfile(D,el){var s1=D.s1||{};" & vbLf
     s = s & "var sc=s1.supply_chain||{};var cu=s1.customers||{};" & vbLf
     s = s & "var so=s1.strategy_outlook||{};" & vbLf
-    s = s & "DLIST(el,[['事業概要',S(s1.business_summary)]," & vbLf
+    s = s & "var map=T(el,'div','company-map');" & vbLf
+    s = s & "var lf=T(map,'div','card');" & vbLf
+    s = s & "T(T(lf,'div',null),'span','tag fact','Public facts');" & vbLf
+    s = s & "T(lf,'h3',null,'公開情報から確認できる事実');" & vbLf
+    s = s & "DLIST(lf,[['事業概要',S(s1.business_summary)]," & vbLf
     s = s & "['主要製品',JOIN(s1.main_products,'／')]," & vbLf
     s = s & "['主な工程',JOIN(s1.processes,'／')]," & vbLf
     s = s & "['主要な調達品',JOIN(sc.key_materials,'／')]," & vbLf
@@ -79,13 +90,24 @@ Public Function SecProfileJs() As String
     s = s & "['顧客セグメント',JOIN(cu.segments,'／')]," & vbLf
     s = s & "['販売チャネル',JOIN(cu.channels,'／')]," & vbLf
     s = s & "['人員・労務',S(s1.workforce_notes)]," & vbLf
-    s = s & "['経営の動き',S(s1.management_notes)]," & vbLf
-    s = s & "['理念(MVV)',S(so.mvv)]," & vbLf
+    s = s & "['経営の動き',S(s1.management_notes)]]);" & vbLf
+    s = s & "var rt=T(map,'div','card');" & vbLf
+    s = s & "T(T(rt,'div',null),'span','tag infer','Risk implications');" & vbLf
+    s = s & "T(rt,'h3',null,'リスクを生む構造の見立て');" & vbLf
+    s = s & "DLIST(rt,[['理念(MVV)',S(so.mvv)]," & vbLf
     s = s & "['目指す姿',JOIN(so.aspirations,'／')]," & vbLf
     s = s & "['市況・外部環境',S(so.market_context)]]);" & vbLf
+    s = s & "var fi=AR(s1.field_insights);" & vbLf
+    s = s & "for(var i=0;i<fi.length;i++){var p=T(rt,'p',null);" & vbLf
+    s = s & "T(p,'span','tag infer',LB(LFIT,fi[i].tag));" & vbLf
+    s = s & "T(p,'span',null,S(fi[i].note));}" & vbLf
+    s = s & "var mi=AR(s1.missing_info);" & vbLf
+    s = s & "for(var j=0;j<mi.length&&j<4;j++){var q=T(rt,'p',null);" & vbLf
+    s = s & "T(q,'span','tag verify','要確認');" & vbLf
+    s = s & "T(q,'span',null,S(mi[j].item));}" & vbLf
     s = s & "var lo=AR(s1.locations);if(!lo.length){return;}" & vbLf
     s = s & "T(el,'h3',null,'拠点と所在地');var rows=[];" & vbLf
-    s = s & "for(var i=0;i<lo.length;i++){var x=lo[i];" & vbLf
+    s = s & "for(var k=0;k<lo.length;k++){var x=lo[k];" & vbLf
     s = s & "rows.push([S(x.name),S(x.type),S(x.address),S(x.hazard_note),S(x.notes)]);}" & vbLf
     s = s & "TBL(el,['拠点','区分','所在地','ハザード','備考'],rows);}" & vbLf
     SecProfileJs = s

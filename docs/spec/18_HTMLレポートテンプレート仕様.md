@@ -1,4 +1,6 @@
-# 18. HTMLレポートテンプレート仕様 v1.1.1
+# 18. HTMLレポートテンプレート仕様 v1.2
+
+v1.2（裁定書21・11章v3.2 §3.8「HTMLレポートの体裁」）: 体裁の正を `docs/design/出力見本_春華堂統合提案_v0.1.html`（以下「見本」）へ移し、次の6点を改訂した。**(1)** §3のセクション表へ **SEC-17 growth（攻めの保険活用）** を新設し（読むJSONパスは `s3.growth_ideas[]`。15章§4 v2.5）、描き方を§3.7へ逐語で定めた。**(2)** §3の並びを見本の10節の流れへ**並べ替え**た（IDの改番はしていない。§4.3「並べ替えは登録配列の行順の入れ替えだけ」）。どのセクションが見本のどの節に集まるかは**§3.0の対応表**が持つ。**(3)** §3.6 の目次を**上部ナビ（`position:sticky` のアンカー帯）**へ差し替え、印刷時は帯を消して本文先頭に目次を出す形にした。**(4)** §5.1 のCSS変数の閉じた一覧を **28個→39個**へ拡張した（`--brand` / `--brand2` / `--accent` / `--navy` / `--bg` / `--shadow` / `--soft-*` 6色を追加し、旧 `--ai` は `--brand` へ改称）。**(5)** テーマを3本（`standard`＝見本の臙脂 / `mono`＝白黒印刷 / `ds`＝DS版の白地＋青帯）にした。**(6)** §4.4 の分割表へ `modHtmlTemplate7`（SEC-17 と部品CSS）を足した。§4.1「描画はJSが行う」「innerHTML系を使わない」・§5.3のエスケープ・§6の印刷規約は**変えていない**。
 
 v1.1.1（裁定書10: W4.2 収束ウェーブ・仕様側v2.5.1と同時改訂）: 充足度（`input_quality.overall`）の日本語ラベルを19章§3の改訂（「充足度 高」→「高」。裁定書9 A-6・裁定書10 m4）へ追随させ、SEC-04 のラベル辞書（実装 `modHtmlTemplate6` の LIQO）も **高／中／低** を用いることを§3の規約へ明記した（同一enumのラベルが画面側と2系統に分岐しない。実装側の LIQO は実装班が同時更新する）。
 
@@ -72,7 +74,27 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 
 ## 3. セクションID一覧と読むJSONパス
 
-**セクションIDは `SEC-01` から `SEC-16`。既存IDの改番・再利用を禁止する。追加は `SEC-17` 以降を使う。** `slug` はHTMLの `id` 属性とJSの登録キーであり、IDと1対1で対応する（`<section id="sec-cover">`）。並び順は本表の上から下（10章FR-37の紙面順）。
+**セクションIDは `SEC-01` から `SEC-17`。既存IDの改番・再利用を禁止する。追加は `SEC-18` 以降を使う。** `slug` はHTMLの `id` 属性とJSの登録キーであり、IDと1対1で対応する（`<section id="sec-cover">`）。並び順は本表の上から下（v1.2で見本の10節の流れへ並べ替えた。§3.0の対応表がどの節にどのセクションが集まるかを持つ）。
+
+### 3.0 見本の10節 ⇔ セクションの対応（描画のまとまり。11章§3.8.1が正）
+
+体裁の正である見本は**10節構成**（上部ナビのアンカーと1対1）である。本章のセクションはその10節へ次のように集まる。**「集まる」は描画上のまとまりであって、登録表からIDを消すことではない**（例: SEC-11 は SEC-07 と同じ節に並ぶが、登録行も「空のときの挙動」もそのまま残る）。キッカー（`01 / Executive Summary` のような節番号＋英字ラベル）は**節の先頭セクションにだけ**付ける。
+
+| 見本の節（アンカー / キッカー） | 集まるセクション | キッカーを持つセクション |
+|---|---|---|
+| （ヒーロー・上部ナビ） | SEC-01 cover | ― |
+| `#sec-exec` / `01 / Executive Summary` | SEC-02 exec | SEC-02 |
+| `#sec-profile` / `02 / Business Understanding` | SEC-03 profile ＋ SEC-04 sufficiency | SEC-03 |
+| `#sec-riskuniv` / `03 / MECE Risk Universe` | SEC-05 riskuniv | SEC-05 |
+| `#sec-riskmap` / `04 / Risk Map` | SEC-06 riskmap（＋ SEC-16 round-update を直後に置く） | SEC-06 |
+| `#sec-risks` / `05 / Insurance Coverage Matrix` | SEC-07 risks ＋ SEC-08 coverage ＋ SEC-11 prevent ＋ SEC-12 limit | SEC-07 |
+| `#sec-newrisk` / `06 / New Risk Radar` | SEC-09 newrisk | SEC-09 |
+| `#sec-growth` / `07 / Insurance-enabled Growth` | SEC-17 growth | SEC-17 |
+| `#sec-story` / `08 / Executive Proposal Story` | SEC-10 story | SEC-10 |
+| `#sec-hearing` / `09 / Discovery Questions` | SEC-13 hearing | SEC-13 |
+| `#sec-source` / `10 / Sources and Methodology` | SEC-14 source ＋ SEC-15 disclaimer | SEC-14 |
+
+キッカーの文字列は `modHtmlTemplate6.LabelJs` の `KICK`（セクションID -> キッカー）が持つ（登録表の7キーを増やさないため。§4.2）。
 
 | ID | slug | 見出し（既定） | 読むJSONパス（15章のプロパティ名） | 空のときの挙動 | 図表種別 |
 |---|---|---|---|---|---|
@@ -82,13 +104,14 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 | SEC-04 | sufficiency | 入力の充足度と要確認事項 | `s1.input_quality.coverage[]`（`aspect` `status`） / `s1.input_quality.overall` / `s1.input_quality.advice` / `s1.missing_info[]`（`item` `why_needed`） | `s1` が null なら非表示 | 14観点バッジ＋表 |
 | SEC-05 | riskuniv | リスクユニバース10分類 | `s2.risks[].category`（19章§3の日本語ラベルへ変換） / `s2.risks[].risk_no` | `s2` が null なら非表示 | 10分類の件数バー（§3.2） |
 | SEC-06 | riskmap | 2軸リスクマップ（影響×頻度 5×5） | `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score` `insurability.transferability`） | `s2` が null なら非表示。`risks` が0件なら「該当なし」の空マップを描く | 5×5マトリクス（§3.3） |
+| SEC-16 | round-update | 訪問で分かったこと（ラウンド更新） | `meta.round_no` ／ `s2.risks[]` のうち `status` が `new`（新たに浮上した仮説）／ `confirmed`（裏が取れたリスク）／ `rejected`（否定された仮説）のもの（`risk_no` `risk_name` `scenario` `category` `status`）。**スキーマ変更はなく `status` によるフィルタのみ** | `meta.round_no` が2未満（初回ラウンド）、または3つの `status` がいずれも0件なら**セクションごと非表示**（目次からも落とす） | 3ブロック（新たに浮上した仮説／裏が取れたリスク／否定された仮説。rejected は見出しに取り消し表現を付し、`scenario` 末尾に追記された否定の理由をそのまま残す） |
 | SEC-07 | risks | リスク一覧 | `s2.risks[]` の全項目（`risk_no` `category` `risk_name` `scenario` `status` `frequency` `impact` `frequency_score` `impact_score` `evidence.quote` `evidence.source` `insurability.transferability` `insurability.line_note` `insurability.control_note` `loss_scale_note` `check_points[]` `preventions[].measure` `preventions[].related_menu_id`） | `s2` が null なら非表示 | 表（横スクロール可） |
 | SEC-08 | coverage | 保険カバレッジ表 | `s1.current_coverage[]`（`line_name` `coverage_summary` `limit_note` `special_note`） / `s2.gaps[]`（`gap_no` `gap_type` `target` `description` `risk_evidence` `coverage_evidence`） / `s2.risks[].insurability.transferability` `line_note` `control_note` | `current_coverage` が0件（新規案件）なら「新規案件のため現契約なし。以下は必要補償の見立て」の注記を出して `gaps` 側の表のみ描く。両方0件なら非表示 | 2枚組の表 |
-| SEC-09 | newrisk | ニューリスク（新種・新興リスク） | `s2.emerging_risks[]`（`risk_name` `category` `horizon` `scenario` `evidence_quote` `evidence_source` `proposal_hint`）。`category` と `horizon` は19章§3の日本語ラベルへ変換する | 0件（空配列）のときは「現時点で特筆すべきニューリスクは検出されていません」の1行を出す（**非表示にしない**。「見ていない」のではなく「見たうえで該当が無い」ことを読み手に示すため） | カード |
-| SEC-16 | round-update | 訪問で分かったこと（ラウンド更新） | `meta.round_no` ／ `s2.risks[]` のうち `status` が `new`（新たに浮上した仮説）／ `confirmed`（裏が取れたリスク）／ `rejected`（否定された仮説）のもの（`risk_no` `risk_name` `scenario` `category` `status`）。**スキーマ変更はなく `status` によるフィルタのみ** | `meta.round_no` が2未満（初回ラウンド）、または3つの `status` がいずれも0件なら**セクションごと非表示**（目次からも落とす） | 3ブロック（新たに浮上した仮説／裏が取れたリスク／否定された仮説。rejected は見出しに取り消し表現を付し、`scenario` 末尾に追記された否定の理由をそのまま残す） |
-| SEC-10 | story | 提案ストーリー（当社にできること） | `s3.stories[]` の全項目（`story_no` `proposal_kind` `headline` `hook_question` `target_risk_nos[]` `target_gap_nos[]` `menu_ids[]` `line_ids[]` `scheme_id` `pitch` `similar_case_id` `expected_objection` `objection_response`）。`target_risk_nos` は `s2.risks[].risk_no` を、`target_gap_nos` は `s2.gaps[].gap_no` を引いて名称に解決する | `s3` が null なら非表示 | カード3枚 |
 | SEC-11 | prevent | 未然防止メニュー | `s2.risks[]`（`risk_no` `risk_name` `preventions[].measure` `preventions[].related_menu_id`） | `preventions` が全リスクで0件なら非表示 | 表 |
 | SEC-12 | limit | 当社にできないこと・提案を控えること | ①`s2.risks[]` のうち `insurability.transferability` が `hard`（`risk_no` `risk_name` `insurability.control_note`） ②`s3.unmatched_risks[]`（`risk_no` `risk_name` `why_unmatched`） ③`s3.do_not_propose[]`（`topic` `reason`） | 3ブロックとも0件なら「該当なし」の1行を出す（**非表示にしない**。10章FR-37「できないことを正直に書く」がこのセクションの存在理由であるため） | 3ブロック |
+| SEC-09 | newrisk | ニューリスク（新種・新興リスク） | `s2.emerging_risks[]`（`risk_name` `category` `horizon` `scenario` `evidence_quote` `evidence_source` `proposal_hint`）。`category` と `horizon` は19章§3の日本語ラベルへ変換する | 0件（空配列）のときは「現時点で特筆すべきニューリスクは検出されていません」の1行を出す（**非表示にしない**。「見ていない」のではなく「見たうえで該当が無い」ことを読み手に示すため） | カード |
+| SEC-17 | growth | 攻めの保険活用 | `s3.growth_ideas[]`（`title` `what` `why` `insurance_fit` `effect` `difficulty`）。`difficulty` は19章§3の日本語ラベル（低／中／高）へ変換する | `s3` が null、または `growth_ideas` が0件なら**セクションごと非表示**（目次からも落とす）。**「該当なし」の1行は出さない**（SEC-09・SEC-12 と扱いが違う。発想が出なければ出さないだけの節であるため） | 順位バッジ＋★5段階＋難度ピル（§3.7） |
+| SEC-10 | story | 提案ストーリー（当社にできること） | `s3.stories[]` の全項目（`story_no` `proposal_kind` `headline` `hook_question` `target_risk_nos[]` `target_gap_nos[]` `menu_ids[]` `line_ids[]` `scheme_id` `pitch` `similar_case_id` `expected_objection` `objection_response`）。`target_risk_nos` は `s2.risks[].risk_no` を、`target_gap_nos` は `s2.gaps[].gap_no` を引いて名称に解決する | `s3` が null なら非表示 | カード3枚 |
 | SEC-13 | hearing | ヒアリング事項 | `s3.stories[].hook_question` / `s2.open_questions[]` / `s1.missing_info[]`（`item` `why_needed`） / `s2.risks[].check_points[]` | 4系統すべて0件なら非表示 | 番号付きリスト（§3.4） |
 | SEC-14 | source | 出典と根拠 | `s2.risks[]`（`risk_no` `evidence.quote` `evidence.source`） | `s2` が null なら非表示 | 表 |
 | SEC-15 | disclaimer | 免責とご確認事項 | `meta.company` / `meta.generated_at` / `meta.app_version` / `meta.case_id` ＋ §3.5の固定文 | **常に表示（非表示にできない唯一のセクション）** | フッタ |
@@ -137,9 +160,34 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 3. `保険料の試算は本資料の対象外です（要見積）。`（10章FR-43）
 4. `{meta.company} 御中 / 案件ID {meta.case_id} / 作成 {meta.generated_at} / リスク提案ナビ v{meta.app_version}`
 
-### 3.6 目次
+### 3.6 上部ナビと目次（v1.2で改訂）
 
-SEC-01 の直後に、表示対象となったセクションの見出しをページ内リンク（`#sec-<slug>`）で並べる。目次は登録表から自動生成し、手で並びを持たない。印刷時は目次を出す（紙でも構成が追えるようにする）。
+表示対象となったセクションの見出しをページ内リンク（`#sec-<slug>`）で並べる。並びは登録表から自動生成し、手で持たない。出し先は次の2つで、**中身は同じ1本の一覧から作る**（2箇所に並びを持たない）。
+
+| 出し先 | id | 見え方 | 印刷 |
+|---|---|---|---|
+| 上部ナビ | `toc` | ページ最上部に `position:sticky; top:0` で貼り付く帯（見本の `.topbar`）。ヒーローより前に置く | **消す**（`@media print{.topbar{display:none}}`） |
+| 本文先頭の目次 | `tocprint` | 画面では非表示（`.print-only`） | **出す**（紙でも構成が追えるようにする。ページ番号は付けない） |
+
+**見出しが空（SEC-01 cover）のセクションは、どちらにも並べない。** 「空のときの挙動」が「非表示」で落ちたセクションも同時に落とす。
+
+### 3.7 SEC-17 攻めの保険活用の描き方（v1.2で新設。11章§3.8.2b が正）
+
+`s3.growth_ideas[]`（15章§4 Schema-S3。4〜8件）を描く。**`s3.stories[]` と同じカードで描かない・同じ節に置かない**（`stories` は目の前のリスクへの打ち手、`growth_ideas` は事業機会。混ぜると「提案3本」の意味が壊れる。11章§9-9）。
+
+| 項目 | 規約 |
+|---|---|
+| 並び | `effect` の降順 → 同点は `difficulty` の易しい順（`low` → `mid` → `high`） → なお同点は配列順 |
+| 順位 | 並べたあとの順位（1から）を44px角の `.rank` バッジに出す |
+| `effect` | **★を5つ並べて塗り分ける**（`effect` 個を `--accent`、残りを `--line`）。★の数だけでなく `効きめ {n}/5` の文字も併記する（色と記号だけで意味を運ばない。§6③） |
+| `difficulty` | 19章§3の日本語ラベル（低／中／高）のピル。`low`=`--matsu` / `mid`=`--kaki` / `high`=`--tr-hard` |
+| `insurance_fit` | 右側の補足カラム（`.idea-side`）に `保険との接点` の見出しを添えて置く |
+| 0件 | **セクションごと非表示**（目次からも落とす）。「該当なし」の1行は出さない |
+| 免責 | 節の先頭に次の1文を**逐語で**置く（見本と同一。`.note` で囲む） |
+
+1. `実現可否は保険業法、約款設計、募集スキーム、料率、データ取得可否、対象顧客の同意等の検討が必要です。ここではアイデア発散を優先しています。`
+
+`menu_ids` / `line_ids` は**持たない**（15章§4。実在しないメニューIDを引く経路を作らない）ため、本節にID列は無い。
 
 ---
 
@@ -170,6 +218,7 @@ s = s & " {id:'SEC-02',slug:'exec',     title:'エグゼクティブサマリ',n
 s = s & " {id:'SEC-06',slug:'riskmap',  title:'2軸リスクマップ（影響×頻度 5×5）',need:['s2'],empty:'hide',render:renderRiskMap}," & vbLf
 s = s & " {id:'SEC-09',slug:'newrisk',  title:'ニューリスク（新種・新興リスク）',need:['s2'],empty:'note',note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
 s = s & " {id:'SEC-16',slug:'round-update',title:'訪問で分かったこと（ラウンド更新）',need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
+s = s & " {id:'SEC-17',slug:'growth',   title:'攻めの保険活用',      need:['s3'],   empty:'hide', render:renderGrowth},"    & vbLf
 s = s & "];" & vbLf
 ```
 
@@ -185,6 +234,8 @@ s = s & "];" & vbLf
 | `note` | 文字列 | `empty:'note'` のときのみ | 0件時に出す1行の本文 |
 | `render` | 関数名 | ○ | (a)の連結行で取り込んだ描画関数。引数は `(DATA, sectionEl)` の2つに固定し、戻り値を持たない |
 
+キッカー（§3.0）は登録行のキーにしない。`modHtmlTemplate6.LabelJs` の `KICK` がセクションIDから引く（**7キーを増やさない**という本節の規約を守るため）。
+
 `empty` の値は§3の表の「空のときの挙動」列と、`title` の値は同表の「見出し（既定）」列と1対1で対応させる（本表・コード例と§3が食い違ったら§3が正）。目次（§3.6）は登録表の `title` をそのまま並べるため、この一致が崩れると本文と目次の両方が同時に漂流する。
 
 ### 4.3 図表テンプレートを1つ追加する手順（変更は2箇所で完結する）
@@ -193,7 +244,7 @@ s = s & "];" & vbLf
 
 1. **テンプレ関数を1本追加する（1箇所目）**: 空きのあるテンプレモジュール（§4.4の分割規約に従い、超過していれば新しい `modHtmlTemplateN`）に `Public Function SecHazardJs() As String` を追加し、`function renderHazard(DATA, el){...}` を返す。既存の描画関数・CSS・他セクションには一切触らない。
 2. **登録表に2行足す（2箇所目）**: `modHtmlTemplate1.SectionsJs()` に、(a) `s = s & modHtmlTemplateN.SecHazardJs()` の連結行と (b) `{id:'SEC-17',slug:'hazard',title:'拠点ハザード',need:['s1'],empty:'hide',render:renderHazard},` の登録行を、出したい位置に挿入する。
-3. **§3の表に1行足す**（本章の更新）。IDは次の空き番（現在は `SEC-17`）。既存IDは動かさない。
+3. **§3の表に1行足す**（本章の更新）。IDは次の空き番（現在は `SEC-18`）。既存IDは動かさない。§3.0の対応表にも、その節のどこへ入るかを1行足す。
 
 `modExportHtml`・`modHtmlTheme`・他のテンプレ関数・CSSは変更しない。**新しい配色が必要な場合でも新しいCSS変数を足さず、§5.1の閉じた一覧から選ぶ**（一覧を増やすとテーマ側の全定義に追随が必要になり、テーマ差替が1モジュールで閉じなくなるため）。一覧の拡張が本当に必要なときは本章§5.1の改訂として扱い、`modHtmlTheme` の全テーマを同時に更新する。
 
@@ -213,49 +264,66 @@ s = s & "];" & vbLf
 | `modHtmlTemplate4` | SEC-09 newrisk ／ SEC-16 round-update ／ SEC-10 story |
 | `modHtmlTemplate5` | SEC-11 prevent ／ SEC-12 limit ／ SEC-13 hearing ／ SEC-14 source ／ SEC-15 disclaimer |
 | `modHtmlTemplate6` | `LabelJs`（19章§3・15章§0のenum変換表を返す。`RuntimeJs` から呼ぶ下請け。19章の改訂でしか動かない表を、編集が最も多い `SectionsJs` と同じモジュールに置かないための切り出し） |
+| `modHtmlTemplate7` | SEC-17 growth（§3.7）／`PartsCss`（見本の部品CSS＝ヒーロー・上部ナビ・カード・表・ユニバース・ヒートマップ・レーダー・アイデア・提案ブロック・設問カード。`HeadHtml` が `CommonCss` の直後に連結する。v1.2で `modHtmlTemplate1` が25,000字を超える見込みになったため分けた。§4.4の「共通CSSは HeadHtml に一元化」は**呼び口が1本であること**を意味しており、字数規約で切り出した下請けは同じ一元化の中にある） |
 
 - 上の表は**現時点の実態**であり、25,000字規約に従って切り出した結果はここへ反映する（表と実装がずれたまま放置しない）。セクションの担当モジュールは§4.3の手順1が「空きのあるテンプレモジュール」と定めるとおり流動的で、正は登録表(§4.2)の(a)連結行である。
 
-- 共通CSSは `modHtmlTemplate1.HeadHtml` に一元化し、セクション別のテンプレ関数に `<style>` を書かない（CSSが散ると見た目のフィードバックを1箇所で吸収できなくなる）。セクション固有のスタイルはクラス名を `sec-<slug>-*` の接頭辞で共通CSSに置く。
+- 共通CSSは `modHtmlTemplate1.HeadHtml` に一元化し（実体は `CommonCss` ＋ `modHtmlTemplate7.PartsCss` の2本を `HeadHtml` が連結する。25,000字規約による分割であって、CSSの持ち主が増えたわけではない）、セクション別のテンプレ関数に `<style>` を書かない（CSSが散ると見た目のフィードバックを1箇所で吸収できなくなる）。セクション固有のスタイルはクラス名を `sec-<slug>-*` の接頭辞で共通CSSに置く。
 - 文字列の組み立ては15章と同じ `s = s & "..." & vbLf` 方式とする（`Const` は1論理行1,023字・行継続25本の制約に当たるため使わない。14章§7と同じ理由）。
 
 ---
 
 ## 5. テーマとCSS変数、エスケープ、文字コード
 
-### 5.1 テーマが定義してよいCSS変数の閉じた一覧（28個。これ以外を定義しない・これ以外を参照しない）
+### 5.1 テーマが定義してよいCSS変数の閉じた一覧（39個。これ以外を定義しない・これ以外を参照しない）
 
-`modHtmlTheme.ThemeCss(themeName)` が返すのは `:root{ ... }` **1ブロックだけ**であり、その中身は下表の28変数の宣言だけである。既定値はライト（白地）印刷前提であり、`docs/demo/確認用v2/` および `docs/presentation/` の既存HTMLの `:root` を出発点にしている。
+`modHtmlTheme.ThemeCss(themeName)` が返すのは `:root{ ... }` **1ブロックだけ**であり、その中身は下表の39変数の宣言だけである。既定値（`standard`）は**体裁の正である見本**（`docs/design/出力見本_春華堂統合提案_v0.1.html` の `:root`）を出発点にしている。v1.2で28→39へ拡張し、旧 `--ai`（青の主色）は **`--brand`（臙脂）** へ改称した（11章§3.8.2 #1・#2）。
 
 **寸法・書体（6）**
 
 | 変数 | standard の既定値 | 用途 |
 |---|---|---|
-| `--page-width` | `900px` | 本文カラムの最大幅 |
-| `--page-pad` | `24px` | 本文カラムの左右余白 |
-| `--font-sans` | `"Noto Sans JP","Yu Gothic","Hiragino Kaku Gothic ProN","Meiryo",sans-serif` | 本文。**Webフォントを読み込まない**（外部参照禁止）。端末に無い書体は後続へフォールバックし、最後は総称名で必ず解決する |
-| `--font-serif` | `"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN",serif` | 見出し（h1・h2） |
-| `--font-size` | `14.5px` | 本文の基準サイズ |
-| `--line-height` | `1.85` | 本文の行間 |
+| `--page-width` | `1180px` | 本文カラムの最大幅（見本の `max-width:1180px`） |
+| `--page-pad` | `22px` | 本文カラムの左右余白 |
+| `--font-sans` | `-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif` | 本文と見出しの両方。**Webフォントを読み込まない**（外部参照禁止）。端末に無い書体は後続へフォールバックし、最後は総称名で必ず解決する |
+| `--font-serif` | `"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN",serif` | 明朝見出しを使うテーマ用に**残すが、standard では使わない**（見本は見出しもゴシック。11章§3.8.2 #3） |
+| `--font-size` | `14px` | 本文の基準サイズ |
+| `--line-height` | `1.7` | 本文の行間 |
 
-**地色と文字（5）**
-
-| 変数 | standard の既定値 | 用途 |
-|---|---|---|
-| `--paper` | `#FFFFFF` | 紙面の地色 |
-| `--ink` | `#24303E` | 本文の文字色 |
-| `--sub` | `#5A6B7E` | 補助文・注記の文字色 |
-| `--mist` | `#EFF3F8` | 表ヘッダ・囲みの薄い面色 |
-| `--line` | `#D8E0E9` | 罫線・区切り線 |
-
-**強調（4）**
+**地色と文字（6）**
 
 | 変数 | standard の既定値 | 用途 |
 |---|---|---|
-| `--ai` | `#2B5B8F` | 主色。見出し・キッカー・ヘッダ下線 |
+| `--bg` | `#F5F6F8` | ページの外地色（カードが浮いて見える下地） |
+| `--paper` | `#FFFFFF` | カード・表の地色 |
+| `--ink` | `#1D2433` | 本文の文字色 |
+| `--sub` | `#667085` | 補助文・注記の文字色 |
+| `--mist` | `#F8F9FB` | 表ヘッダ・囲みの薄い面色 |
+| `--line` | `#E6E8EC` | 罫線・区切り線 |
+
+**主色と強調（7）**
+
+| 変数 | standard の既定値 | 用途 |
+|---|---|---|
+| `--brand` | `#A5312F` | **主色**（臙脂）。キッカー・見出しの罫・順位バッジ・リスクマップの点 |
+| `--brand2` | `#6F1E1E` | 主色の濃い側。ヒーローのグラデーションの起点 |
+| `--accent` | `#B88A44` | 金。★（`effect`）と強調の細部 |
+| `--navy` | `#27364A` | 濃紺。提案ブロックの地・絞り込みボタンの選択状態 |
 | `--kaki` | `#B4552D` | 注意・できないこと・不足の強調 |
 | `--matsu` | `#2F7A54` | 肯定・提案・充足の強調 |
-| `--deep` | `#7A5C9E` | 入念モード由来の記述・補足ボックス |
+| `--deep` | `#6F42C1` | ニューリスクの時間軸ピルなど、補足の系統色 |
+
+**面色と影（7）**
+
+| 変数 | standard の既定値 | 用途 |
+|---|---|---|
+| `--soft-brand` | `#F7EEED` | 主色系の淡い面（上部ナビのボタン・順位バッジの地） |
+| `--soft-red` | `#FFF1F0` | 否定・危険側のタグの地 |
+| `--soft-amber` | `#FFF7E8` | 推定・条件付きのタグの地 |
+| `--soft-green` | `#EDF8F2` | 事実・移転しやすいタグの地 |
+| `--soft-blue` | `#EEF4FF` | 参照・出典タグの地 |
+| `--soft-purple` | `#F5F1FF` | 時間軸ピルの地 |
+| `--shadow` | `0 12px 32px rgba(16,24,40,.07)` | カードの影（**色ではなく `box-shadow` の値**。印刷時は共通CSSが `none` へ落とす） |
 
 **注意面（2）**
 
@@ -268,11 +336,11 @@ s = s & "];" & vbLf
 
 | 変数 | standard の既定値 |
 |---|---|
-| `--heat-1` | `#E8F5EE` |
+| `--heat-1` | `#E9F5EE` |
 | `--heat-2` | `#F2F7E9` |
-| `--heat-3` | `#FFF4D6` |
-| `--heat-4` | `#FFE9D3` |
-| `--heat-5` | `#FBDCD9` |
+| `--heat-3` | `#FFF6DB` |
+| `--heat-4` | `#FFE8D3` |
+| `--heat-5` | `#FFD9D7` |
 
 **移転可能性の3値（3。`insurability.transferability` に対応）**
 
@@ -280,7 +348,7 @@ s = s & "];" & vbLf
 |---|---|---|
 | `--tr-cover` | `#2F7A54` | `cover`（比較的移転しやすい） |
 | `--tr-partial` | `#B08A2E` | `partial`（条件付き・部分的） |
-| `--tr-hard` | `#B4552D` | `hard`（保険化困難） |
+| `--tr-hard` | `#B42318` | `hard`（保険化困難） |
 
 **入力充足度の3値（3。`input_quality.coverage[].status` に対応）**
 
@@ -292,9 +360,9 @@ s = s & "];" & vbLf
 
 **規約**
 
-- 共通CSS（`modHtmlTemplate1.HeadHtml`）は**色・書体・本文幅をリテラルで書かない**。必ず `var(--xxx)` を通す。唯一の例外は、色付きバッジ・見出し帯の上に載せる文字色 `#fff` であり、これ以外の生の色指定を書かない。
+- 共通CSS（`modHtmlTemplate1.HeadHtml` と `modHtmlTemplate7.PartsCss`）は**色・書体・本文幅をリテラルで書かない**。必ず `var(--xxx)` を通す。唯一の例外は、色付きバッジ・見出し帯の上に載せる文字色 `#fff` であり、これ以外の生の16進色を書かない。**`rgba()` による半透明の重ね（白の被膜・影・枠の透過）は、下地の色を変えずに濃さだけを作るものなので例外とし、テーマ変数にしない**（テーマを増やしても半透明の度合いは変えたくないため）。
 - `@page` の余白はCSS変数で解決されないため、テーマ変数にせず共通CSSにリテラルで書く（§6）。テーマから紙面余白は変えられない、と割り切る。
-- 機械検査（17章 T-35 のDoD）: (1) `ThemeCss` の戻り値が `:root{` で始まり `}` で終わり、内側が `--` で始まる宣言のみであること (2) 全テーマが上表28変数を**過不足なく**定義していること (3) 共通CSS中に `var(--` を伴わない色指定（`#` に続く16進6桁・3桁）が `#fff` 以外に出現しないこと。
+- 機械検査（17章 T-35 のDoD）: (1) `ThemeCss` の戻り値が `:root{` で始まり `}` で終わり、内側が `--` で始まる宣言のみであること (2) 全テーマが上表39変数を**過不足なく**定義していること (3) 共通CSS中に `var(--` を伴わない16進色指定が `#fff` 以外に出現しないこと。
 
 ### 5.2 テーマ差替の単位とテンプレ5関数の署名
 
@@ -316,19 +384,19 @@ Public Function RuntimeJs() As String      ' 目次・走査・描画ヘルパ�
 - **`coverFields` の書式**: §4.1(b)の3値（会社名／案件ID／生成日時）を**タブ（`vbTab`）区切りの1本の文字列**で渡す。`[0]`=会社名 `[1]`=案件ID `[2]`=生成日時。タブが区切りとして安全なのは、外部由来テキストが `modUtilText.SanitizeInput`（16章 E-04）で制御文字を落としてから案件データに入るため。3値をJSONで渡さないのは、テンプレ側にJSONパーサを持たせない（＝純文字列モジュールに留める）ため。**この3値はテンプレ側で `HtmlSafe` を通す**（§4.1・§5.3(2)）。
 - 引数を増やすときは本節を先に改訂する（実装のコメントを根拠にしない）。
 
-- **差し替えの単位は `modHtmlTheme` の1モジュールのみ**。テーマを増やす作業は「`ThemeCss` の `Select Case` に分岐を1本足し、28変数を書く」で完結し、`modExportHtml` にも `modHtmlTemplate1..n` にも触れない。
+- **差し替えの単位は `modHtmlTheme` の1モジュールのみ**。テーマを増やす作業は「`ThemeCss` の `Select Case` に分岐を1本足し、39変数を書く」で完結し、`modExportHtml` にも `modHtmlTemplate1..n` にも触れない。
 - 契約:
 
 ```vb
 ' === app: modHtmlTheme（純文字列・R4）===
-Public Function ThemeNames() As String     ' ";"区切り。先頭が既定テーマ。例: "standard;mono"
+Public Function ThemeNames() As String     ' ";"区切り。先頭が既定テーマ。例: "standard;mono;ds"
 Public Function ThemeCss(ByVal themeName As String) As String
-' 戻り値は ":root{ ... }" の1ブロックのみ。§5.1の28変数を過不足なく宣言する。
+' 戻り値は ":root{ ... }" の1ブロックのみ。§5.1の39変数を過不足なく宣言する。
 ' 未知のテーマ名は standard へフォールバックし、run_log の detail に
 ' theme_fallback=<要求されたテーマ名> を記録する（黙って既定に戻さない）
 ```
 
-- 初期テーマは2本。`standard`（§5.1の既定値。カラー画面・カラー印刷向け）と `mono`（白黒印刷・FAX配布向け。強調4色を `--ink` と `--sub` の濃淡に、heat 5段を白から薄灰の5段に置き換える）。`mono` でも§3.3の帯番号があるため重篤度は読める。
+- テーマは3本（v1.2）。`standard`（§5.1の既定値＝見本の臙脂。カラー画面・カラー印刷向け）／`mono`（白黒印刷・FAX配布向け。主色・強調色を `--ink` と `--sub` の濃淡に、heat 5段を白から薄灰の5段に置き換える）／`ds`（DS版 `docs/design/出力見本_春華堂統合提案_DS版_v0.1.html` の白地＋青の帯。`--brand` を紺青へ振り替えたもの）。`mono` でも§3.3の帯番号と `効きめ {n}/5` の併記があるため、重篤度も効きめも色なしで読める。
 - config `html_theme`（13章§2.3・既定 `standard`）の値をそのまま `ThemeCss` に渡す。テーマ名の一覧をconfigに書かない（`ThemeNames` が唯一の一覧）。
 
 ### 5.3 エスケープと文字コード（16章 E-47・NFR-S7の③が正。本節はその適用手順）
