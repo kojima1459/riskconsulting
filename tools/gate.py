@@ -55,6 +55,8 @@ GATES = [
      r"結果: OK|ケース: 計\d+件"),
     ("enum",         [sys.executable, "tools/enum_check.py"],
      r"ペア|OK|一致"),
+    ("caption",      [sys.executable, "tools/caption_check.py"],
+     r"OK: 全\d+本"),
     ("t48",          [sys.executable, "tools/t48_check.py"],
      r"OK: 4条件"),
     ("render",       [sys.executable, "tools/render_report.py"],

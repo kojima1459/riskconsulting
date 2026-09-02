@@ -49,7 +49,7 @@ Private Const US_BTN_ROUND As Double = 0.35         ' 角丸の深さ(Adjustment
 Private Const US_BTN_ROW_PAD As Double = 4#         ' アンカー行に足す余白
 
 Private Const US_BTN_HEIGHT As Double = 26#
-' 主要動線(kind="primary")だけ高さを30ptにする(裁定書17 H3(a): HOMEの2×2配置)。
+' 主要動線(kind="primary")だけ高さを30ptにする(裁定書17 H3(a): HOMEの2列×3行(主要動線5本)配置)。
 Private Const US_BTN_HEIGHT_PRIMARY As Double = 30#
 Private Const US_LABEL_HEIGHT As Double = 16#
 Private Const US_SRC As String = "modUISheet"

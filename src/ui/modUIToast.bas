@@ -172,7 +172,7 @@ Public Sub HideToast()
     gHideAt = 0
 
     Dim ws As Object
-    For Each ws In ThisWorkbook.Worksheets
+    For Each ws In ThisWorkbook.Sheets
         modUISheet.DropShapesByPrefix ws, UT_PREFIX
     Next ws
 End Sub

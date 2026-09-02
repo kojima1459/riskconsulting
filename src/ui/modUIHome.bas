@@ -367,7 +367,7 @@ Public Sub HomeRunAll()
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
@@ -421,7 +421,7 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
@@ -431,8 +431,8 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     modUIProgress.SetStage "Step" & CStr(stepNo) & " を実行中", WaitSec()
     If modPipeline.RunStep(caseId, stepNo, QualityOverride()) Then
         modUICase2.DrawStep caseId, stepNo
-        ShowDeepWarning
         modUISheet.ShowSheet modUICase2.SheetNameOf(stepNo)
+        ShowDeepWarning
     Else
         ShowWarning "Step" & CStr(stepNo) & " が完了しませんでした。err_log をご確認ください。"
     End If
@@ -591,7 +591,7 @@ Public Sub HomeFreezeRound()
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
@@ -632,14 +632,14 @@ Public Sub HomeExportHtml()
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
     ' S1未実行ガード(18章§1.1(1))。データ未整備は障害ではないので E-code を
     ' 立てず、hm_warning で案内して生成そのものを呼ばない。
     If LenB(Trim$(modCaseStore.ResolveStepJson(caseId, 1))) = 0 Then
-        ShowWarning UH_MSG_NEED_S1
+        ShowWarning UH_MSG_NEED_S1, "warn"
         GoTo Done
     End If
 
@@ -675,7 +675,7 @@ Public Sub HomeBuildHearing()
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
@@ -741,7 +741,7 @@ Public Sub HomeCompanySave()
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
@@ -785,7 +785,7 @@ Public Sub HomeCompanyOpen()
     Dim caseId As String
     caseId = SelectedCaseId()
     If LenB(caseId) = 0 Then
-        ShowWarning UH_MSG_NO_CASE
+        ShowWarning UH_MSG_NO_CASE, "warn"
         GoTo Done
     End If
 
