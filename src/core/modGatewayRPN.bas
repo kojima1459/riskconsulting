@@ -32,15 +32,12 @@ Public Const GW_MOCK As String = "mock"
 Public Const GW_HIST_SEP As String = ";;;"
 
 ' 上限系応答の語彙(14章§2で固定。実体の供給元は15章§8.2の limit 応答1箇所)。
-' この2つは **mock専用の語彙** である(15章§8.2)。実リボンの上限は
-' GW_RB_ERR429 の側で判定する(裁定書24 A-1)。
+' この2つは **mock専用の語彙**(15章§8.2)。実リボンの上限は GW_RB_ERR429 側。
 Private Const GW_LIMIT_PREFIX As String = "#LIMIT:"
 Private Const GW_LIMIT_PHRASE As String = "利用上限に達しました"
 
-' 実リボンが失敗時に返す定型文の先頭語(裁定書24 A-1)。リボンは失敗しても
-' 空文字を返さずこれらの文字列を戻り値にする。**先頭一致のみ**で判定する
-' (本文中の出現では判定しない。約款や提案本文が同じ語を含んでも誤爆させない
-' ため。「内容で成否を決めない」原則の例外は定型文の先頭だけに限る)。
+' 実リボンが失敗時に返す定型文の先頭語(裁定書24 A-1)。**先頭一致のみ**で
+' 判定する(本文中の出現では判定しない=正当な長文への誤爆を防ぐ)。
 Private Const GW_RB_ERR429 As String = "(error:429"
 Private Const GW_RB_ERR As String = "(error:"
 Private Const GW_RB_DISCONN As String = "接続切れ"
@@ -438,10 +435,9 @@ Public Function LooksLikeLimitError(ByVal response As String) As Boolean
 End Function
 
 ' 実リボンの定型失敗文の分類(裁定書24 A-1・16章E-54/E-55/E-56)。
-' 戻り値 "" = 該当なし。Trim後の**先頭一致**だけを見る。
+' "" = 該当なし。Trim後の**先頭一致**だけを見る。
 '   "(error:429"->E0204 / "(error:"(429以外)->E0203 / "接続切れ"->E0202 /
-'   "レスポンスから当該テキストを抽出できません"->E0202 /
-'   "content_filterに該当しました"->E0207(内容フィルタ)
+'   "レスポンス〜抽出できません"->E0202 / "content_filter〜"->E0207
 Public Function RibbonFailureCode(ByVal response As String) As String
     Dim s As String
 
@@ -461,8 +457,14 @@ Public Function RibbonFailureCode(ByVal response As String) As String
     End If
 End Function
 
-' 応答判定。戻り値 "" = 正常 / "E0202" = 空応答 / "E0204" = 利用上限 /
-' "E0203" = リボンがエラーを返した / "E0207" = 内容フィルタ。
+' LimitCheck(アドインの利用期限の検査)の結果をコードへ写す(16章E-57)。
+' True=期限切れ->E0208。**日次の利用枠(E0204)とは別物**。False は ""。
+Public Function LimitCheckCode(ByVal limitReached As Boolean) As String
+    If limitReached Then LimitCheckCode = "E0208"
+End Function
+
+' 応答判定。"" = 正常 / E0202 = 空応答 / E0204 = 利用上限 /
+' E0203 = リボンがエラーを返した / E0207 = 内容フィルタ。
 ' 【重要】ここでは "#ERR:" プレフィクスを一切見ない。LLMが "#ERR:E0201:..." で
 ' 始まる本文を返しても正常応答として扱う(14章§4 mock_fault=fake_err・§6)。
 ' 本関数は DecideOk の内部分類であり、成否そのものは DecideOk が決める。
@@ -493,9 +495,8 @@ End Function
 '                       経路側のコードが入っている)。errCode は入出力で、
 '                       ok=True のときは "" にリセットする。
 '   判定順: (1)transport失敗 -> False(コードは経路側の値。空なら E0202) /
-'           (2)ClassifyResponse が非空コードを返す(空応答=E0202 / リボンの定型
-'              失敗文=E0204・E0203・E0202・E0207 / mockの上限語彙=E0204)
-'              -> False + そのコード / (3)上記以外 -> True + errCode=""
+'           (2)ClassifyResponse が非空コード -> False + そのコード /
+'           (3)上記以外 -> True + errCode=""
 '   【最重要】rawBody が "#ERR:" で始まっていても内容では判定せず(4)へ落として
 '   True にする。平文プレフィクスはLLM出力側から偽造可能で、成否に使うとエラーUIを
 '   騙った任意文面表示(フィッシング/恒久DoS)が成立する(15章§8.2 fake_err。
@@ -582,13 +583,17 @@ Public Function ErrMessageFor(ByVal errCode As String) As String
         Case "E0202"
             ErrMessageFor = "応答が空でした。時間をおいて再実行してください"
         Case "E0203"
-            ErrMessageFor = "APIが混雑しています。時間をおいて再実行してください"
+            ErrMessageFor = "社内AIがエラーを返しました。時間をおいて、" & _
+                "もう一度同じボタンを押してください。"
         Case "E0204"
             ErrMessageFor = "本日のAI利用枠の上限です"
         Case "E0205"
             ErrMessageFor = "direct経路は開発者専用です"
         Case "E0206"
             ErrMessageFor = "応答が拒否または途中終了しました"
+        Case "E0208"
+            ErrMessageFor = "社内AI(リボン)の利用期限が切れています。" & _
+                "管理者から更新版を受け取ってください。"
         Case "E0207"
             ErrMessageFor = "社内AIが内容を止めました。会社名や本文に不適切と" & _
                 "判定される語が無いか見直してください。"

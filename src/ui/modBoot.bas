@@ -111,8 +111,6 @@ Private Const BOOT_IND_NAME_NAME As String = "enum_industry_name"
 
 Private Const BOOT_DV_ERROR_TITLE As String = "入力できない値です"
 Private Const BOOT_DV_ERROR_MSG As String = "一覧から選んでください。"
-Private Const BOOT_MSG_LIMIT_REACHED As String = _
-    "リボンの利用上限の可能性があります。実行時に案内します。"
 
 ' ナレッジブックの自動発見(裁定書17 H1 / 裁定書19 H8(b) で改訂)。config
 ' kb_path の既定値は配置前のプレースホルダ(BOOT_KB_PLACEHOLDER を含む)であり、
@@ -535,7 +533,12 @@ Private Sub NoticeLimitReached()
     Dim target As Object
     Set target = ThisWorkbook.Names("hm_warning").RefersToRange
     If Not target Is Nothing Then
-        modUtilText.SetCellSafe target, BOOT_MSG_LIMIT_REACHED, "modBoot/hm_warning"
+        ' 文言の値源は modGatewayRPN.ErrMessageFor の1箇所(16章E-57・E0208。
+        ' LimitCheck=Trueは「アドインの利用期限切れ」であって日次の利用枠
+        ' (E0204)ではない。裁定書24 追補2)。
+        modUtilText.SetCellSafe target, _
+            modGatewayRPN.ErrMessageFor(modGatewayRPN.LimitCheckCode(True)), _
+            "modBoot/hm_warning"
     End If
     On Error GoTo 0
 End Sub
