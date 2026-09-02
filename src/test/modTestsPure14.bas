@@ -21,9 +21,9 @@ Option Explicit
 '                             (割り切れる / 余りあり / 複数行の合計 / 空文字と桁0)
 '   W62G MaxWaitText    3本   裁定書23追補2。秒→分の切り上げ
 '                             (割り切れる / 余りあり / 0秒)
-'   W63H RibbonFailure 22本   裁定書24 A-1。リボンの定型失敗文の分類
+'   W63H RibbonFailure 26本   裁定書24 A-1。リボンの定型失敗文の分類
 '                             (16章 E-15/E-16/E-54〜E-56・14章§2/§6・15章§8.2)
-'   計 57本
+'   計 61本
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -396,7 +396,9 @@ End Sub
 '   先頭 "content_filterに該当しました"           -> E0207
 ' 判定は **Trim後の先頭一致のみ**。本文中に同じ語が出ても分類しない(01・02の
 ' 2本がこの一線を固定する。先頭一致を部分一致へ変えるとこの2本が落ちる)。
-' 利用者向け文(E0207)は16章 E-56 の逐語。
+' 利用者向け文(E0203/E0207/E0208)は16章 E-17 / E-56 / E-57 の逐語。
+' LimitCheck=True(アドインの利用期限切れ)は E0204(本日の利用枠)ではなく
+' E0208 へ写す(16章 E-15 と E-57 の分離。裁定書24 追補2)。
 ' ============================================================================
 Private Sub T_W63H_RibbonFailure()
     Dim okFlag As Boolean
@@ -466,6 +468,22 @@ Private Sub T_W63H_RibbonFailure()
         modGatewayRPN.ErrMessageFor("E0207"), _
         "社内AIが内容を止めました。会社名や本文に不適切と判定される語が" & _
         "無いか見直してください。"
+
+    ' --- E0203 の利用者向け文の逐語(16章 E-17/E-55。裁定書24 追補1) ---
+    ChkS "Test_W63H_23_E0203の利用者向け文の逐語_16章E-17", _
+        modGatewayRPN.ErrMessageFor("E0203"), _
+        "社内AIがエラーを返しました。時間をおいて、もう一度同じボタンを" & _
+        "押してください。"
+
+    ' --- LimitCheck経路(アドインの利用期限切れ)は E0204 と分ける(16章 E-57) ---
+    ChkS "Test_W63H_24_LimitCheck真は期限切れE0208_16章E-57", _
+        modGatewayRPN.LimitCheckCode(True), "E0208"
+    ChkS "Test_W63H_25_LimitCheck偽は異常なし_16章E-57", _
+        modGatewayRPN.LimitCheckCode(False), ""
+    ChkS "Test_W63H_26_E0208の利用者向け文の逐語_16章E-57", _
+        modGatewayRPN.ErrMessageFor("E0208"), _
+        "社内AI(リボン)の利用期限が切れています。管理者から更新版を" & _
+        "受け取ってください。"
 
     ' --- mock の応答パターン(15章§8.2の3値)が同じ分類を通ること ---
     ChkS "Test_W63H_20_mockのribbon_429はE0204_15章§8.2", _

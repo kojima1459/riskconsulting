@@ -88,7 +88,7 @@ result = Application.Run("ChatGPT", _
   1. **`MaxTokens` の既定は 0**（＝キーを送らない）。台帳の「既定4096」は誤りだったので本節の記述を訂正した。
   2. **`reasoning_effort` の許容値は `minimal` / `low` / `medium` / `high`**（`minimal` は GPT-5系のみ。o系に `minimal` を渡すとリボン側が `low` へ丸める）。**`verbosity` の許容値は `low` / `medium` / `high`** で、**GPT-5系にだけ送られる**。config `reasoning_effort` / `reasoning_verbosity`（13章§2.3）はこの集合の内側に収める。
   3. **`temperature` は GPT-5系・o系・codex系には送られない**（リボンが送出をスキップする）。したがって config `temperature` が効くのは gpt-4o / gpt-4.1 系と **direct経路**だけである。
-  4. **`LimitCheck()` の意味は「アドインの利用期限切れ」**である（`log.bas` の定数 `LimitDay`＝現版 2026/9/30 を過ぎていると True を返し、リボン側がMsgBoxで更新版の入手を促す）。**日次の利用枠とは別物**であり、実行中に当たる利用上限（レート制限）は §2 のエラー分類の `(error:429` 側で捕まえる（16章 E-15）。`LimitCheck()` が True でも本製品は起動を止めない（12章§2.1 手順⑦）。
+  4. **`LimitCheck()` の意味は「アドインの利用期限切れ」**である（`log.bas` の定数 `LimitDay`＝現版 2026/9/30 を過ぎていると True を返し、リボン側がMsgBoxで更新版の入手を促す）。**日次の利用枠とは別物**であり、実行中に当たる利用上限（レート制限）は §2 のエラー分類の `(error:429` 側で捕まえる（16章 E-15）。`LimitCheck()` が True でも本製品は起動を止めない（12章§2.1 手順⑦）。**この期限切れは E0208**（16章 E-57）で扱い、`(error:429`（本日の利用枠＝E0204・16章 E-15）とは分ける（裁定書24 追補2）。
   5. **未知のモデル名は実行時エラーになる**。リボンの `ChatGPT` はモデル名の `Select Case` に `Case Else` を持たず、一覧に無い名前だとURL・キーが空のまま進んで例外になる。config `recommended_model` には**リボンが知っているモデル名だけ**を置くこと（打鍵ミスは起動時ではなく最初の呼び出しで落ちる）。
   6. **ribbon経路は社内PC専用**である。リボンは呼び出しのたびに社内ログ送信 `SaveLog` を行い、その中で `ADSystemInfo` / `LDAP://` から実行者情報を取る。**ADへ到達できない環境（社外PC・非ドメイン端末）では例外**になるため、社外環境での検証は mock 経路で行う（16章 NFR-S3 の社内ログの段落も参照）。
 - **呼出中の画面**: リボン呼出はVBAを同期ブロックするため、呼出の前に `modUIProgress.SetStage` でStep名・開始時刻・最大待ち時間・「画面が白くなっても処理は続いている」旨を確定表示し、config `keep_window_alive`（既定TRUE）で画面ゴースト化を抑止する（16章 E-50）
@@ -190,6 +190,9 @@ Public Function CallStep(ByVal stepName As String, ByVal playId As String, _
 ' ok: 成否の唯一の判定材料（帯域外シグナル・§6エラー規約）。戻り値文字列の内容では判定しない
 Public Function RibbonAvailable() As Boolean          ' リボンアドイン検出（§2。セッションキャッシュ）
 Public Function RunLimitCheck() As Boolean            ' True=続行不可（§2。起動時=12章§2.1のmodBoot手順⑦・実行時に再案内）
+Public Function LimitCheckCode(ByVal limitReached As Boolean) As String
+' LimitCheck の結果 -> エラーコードの純写像（True=アドインの利用期限切れ -> E0208 / False -> ""）。
+' **日次の利用枠（E0204）とは別物**であり同じコードに混ぜない（16章 E-15 / E-57。裁定書24 追補2）
 ' 壁打ち(PL-04)専用: リボンの会話継続引数(prevU/prevA)を使う唯一の関数。
 ' 履歴は「新しい順」に ";;;" 区切りで連結して渡す(PoC 裁定D11の実証方式)。
 ' 渡す履歴は直近 sparring_max_turns 往復まで。JSONスキーマは使わない(自由対話)。
