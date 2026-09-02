@@ -27,3 +27,4 @@
 __pycache__/
 *.py[cod]
 wintest/result_*.log
+.claude/
