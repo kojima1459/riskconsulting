@@ -11,11 +11,11 @@ Option Explicit
 '   行数上限を適用する / 注入IDを積む」まで。1行の書式・0行の既定文言・空項目の
 '   省略は modKnowledgeFmt(純文字列・Excel非依存)の責務。整形をここに閉じ込めると
 '   層(a)から検査できず、区切り記号を壊しても誰も気づかない(W2aの実害)。
-' 絞込スペック(SelectRows)は "ind^tgt^act^sts^suf^ref" の位置指定(未使用は空)。
-'   ind=業種完全一致列 / tgt=対象業種列(";"区切り・空=指定なし) / act=真偽列(偽を
-'   捨てる) / sts=型のstatus列(許可値 KB_SCHEME_STATUS) / suf=行頭名称へ "(値)" を
-'   付す列(整形は modKnowledgeFmt。ここでは注入IDとして積むためだけに見る) /
-'   ref=";"区切り参照IDも注入IDへ積む列。
+' 分割(12章§2の30,000字契約・17章§7 Z-13): **シートを触らない純関数は
+'   modKnowledge2** にある(PickAt / CellAt / CellRaw / AddIdList / ColOf /
+'   SelectRows / MissingColsOf / BadRowsOf)。本モジュールはシートに触る側
+'   (kb_pathの読込・キャッシュ・退避/復元・再送)だけを持つ。絞込スペック
+'   ("ind^tgt^act^sts^suf^ref")の規約は modKnowledge2 の冒頭が正。
 ' 注入ID: 整形テキストへ現れるIDを全て積む(行頭 [ID] に加え型行の (P2)・パターン
 '   行の 社内実績: の参照IDも)。17章 T-21「ID集合と完全一致」のため。業種コードは
 '   IDではない。切詰め後の行のIDだけを積む。
@@ -35,7 +35,6 @@ Private Const KB_I_PAT As Long = 8
 Private Const KB_I_SCHEME As Long = 9
 Private Const KB_I_MECH As Long = 10
 Private Const KB_I_RT As Long = 11
-Private Const KB_BAR As String = "|"
 Private Const KB_SHEETS As String = "業種マスタ|リスクライブラリ|メニュー一覧|種目マスタ|メニュー種目対応|成功事例|判断基準|パターンマスタ|型ライブラリ|機構ライブラリ|研究テーマ一覧"
 Private Const KB_IDCOLS As String = "industry_code|risk_lib_id|menu_id|line_id||case_lib_id|rule_id|pattern_id|scheme_id|mech_id|rt_id"
 Private Const KB_REQCOLS As String = "industry_code;industry_name|risk_lib_id;industry_code;category;risk_name;typical_scenario;typical_freq;typical_impact;check_points|menu_id;menu_name;summary;target_categories;target_industries;is_active|line_id;line_name;market_note|menu_id;line_id|case_lib_id;industry_code;customer_profile;risk_presented;proposal;why_it_worked|rule_id;rule_class;rule_text;workaround|pattern_id;pattern_name;structure;conditions;examples_public;internal_refs|scheme_id;scheme_name;pattern_id;structure;conditions;signals;status;target_industries|mech_id;mech_text;layer;target_categories|rt_id;theme_name;status;note"
@@ -45,8 +44,6 @@ Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_
 ' --- 絞込スペック(1行書式そのものは modKnowledgeFmt が持つ) ---
 Private Const KB_F_MENU As String = "^target_industries^is_active"
 Private Const KB_F_SCHEME As String = "^target_industries^^status^pattern_id"
-' 型ライブラリのS3注入対象 status(13章§3.4)。絞込キー sts の許可値。
-Private Const KB_SCHEME_STATUS As String = "proven;adopted"
 
 ' 退避シート2枚。13章§2に列挙が無いため実行時に作成して隠す(E-08/E-13。concerns)。
 Private Const KB_SHEET_SNAP As String = "kb_snapshot"
@@ -58,233 +55,13 @@ Private Const KB_SCAN_COLS As Long = 16
 ' xlUp の数値(Excel組込定数名を書かずLO側で未定義名にしない)。
 Private Const KB_DIR_UP As Long = -4162
 
-Private Const KB_SPACE As String = " "
-Private Const KB_SEMI As String = ";"
 Private Const KB_SRC As String = "modKnowledge"
-
-' リスクユニバース10分類(19章§3)。13章§3.1がLoadKnowledgeの検査項目と定める。
-Private Const KB_CATEGORIES As String = "strategy_market;supply_chain;manufacturing_quality;sales_customer;facility_bcp;hr_labor;digital_info;legal_regulatory;finance_counterparty;brand_social"
-' E0402 detail へ並べる行番号の最大件数(400字上限の手前で止める)。
-Private Const KB_MAX_ROWNOS As Long = 12
 
 ' --- キャッシュ(宣言のみ) ---
 Private gKbBlocks(1 To KB_N) As Variant
 Private gKbRows(1 To KB_N) As Long
 Private gKbLoaded As Boolean
 Private gInjectedIds As String
-
-' === 【純関数】シートを触らない。blk=Range.Value 由来の2次元配列(1行目=見出し)、
-'     lastRow=データ最終行。層(a)のテストはここを叩く ===
-
-' "a|b|c" の idx 番目(1始まり)。範囲外は ""。
-Private Function PickAt(ByVal listText As String, ByVal idx As Long) As String
-    On Error GoTo Blank0
-    Dim parts As Variant
-    parts = Split(listText, KB_BAR)
-    If idx >= 1 Then
-        If idx <= UBound(parts) + 1 Then PickAt = CStr(parts(idx - 1))
-    End If
-    Exit Function
-Blank0:
-    PickAt = vbNullString
-End Function
-
-' 1セルをテキストへ。改行・タブはスペースへ畳み(1行1件の規約)、外部由来なので
-' SanitizeInput を通す(16章 E-04・E-43)。
-Private Function CellAt(ByVal blk As Variant, ByVal r As Long, ByVal c As Long) As String
-    On Error GoTo Blank0
-    If c <= 0 Then Exit Function
-    Dim t As String
-    t = CStr(blk(r, c))
-    If LenB(t) = 0 Then Exit Function
-    t = Replace(Replace(Replace(Replace(t, vbCrLf, KB_SPACE), vbCr, KB_SPACE), vbLf, KB_SPACE), vbTab, KB_SPACE)
-    CellAt = Trim$(modUtilText.SanitizeInput(t))
-    Exit Function
-Blank0:
-    CellAt = vbNullString
-End Function
-
-' 退避用の素読み。タブは区切りに使うのでスペースへ寄せる。
-Private Function CellRaw(ByVal blk As Variant, ByVal r As Long, ByVal c As Long) As String
-    On Error GoTo Blank0
-    CellRaw = Replace(CStr(blk(r, c)), vbTab, KB_SPACE)
-    Exit Function
-Blank0:
-    CellRaw = vbNullString
-End Function
-
-Private Sub AppendPart(ByRef acc As String, ByVal sepText As String, ByVal partText As String)
-    If LenB(partText) = 0 Then Exit Sub
-    If LenB(acc) = 0 Then
-        acc = partText
-    Else
-        acc = acc & sepText & partText
-    End If
-End Sub
-
-Private Sub AddId(ByRef idsOut As String, ByVal idText As String)
-    idsOut = modUtil.AppendIdList(idsOut, idText)
-End Sub
-
-Private Sub AddIdList(ByRef idsOut As String, ByVal listText As String)
-    If LenB(listText) = 0 Then Exit Sub
-    Dim parts As Variant
-    Dim i As Long
-    parts = Split(listText, KB_SEMI)
-    For i = LBound(parts) To UBound(parts)
-        AddId idsOut, Trim$(CStr(parts(i)))
-    Next i
-End Sub
-
-' ";"区切りリストに値が含まれるか(前後空白は無視・大小文字は区別)。
-Private Function IsListed(ByVal listText As String, ByVal valueText As String) As Boolean
-    Dim v As String
-    v = Trim$(valueText)
-    If LenB(v) = 0 Then Exit Function
-    IsListed = (InStr(1, KB_SEMI & listText & KB_SEMI, KB_SEMI & v & KB_SEMI, vbBinaryCompare) > 0)
-End Function
-
-' 業種の完全一致(exact=True)または対象業種リストへの当てはまり(exact=False。
-' 空欄=指定なし=全業種)。industryCode が空なら常に True(全業種)。
-Private Function IndustryHit(ByVal cellText As String, ByVal industryCode As String, _
-                             ByVal exactMatch As Boolean) As Boolean
-    Dim code As String, t As String
-    code = Trim$(industryCode)
-    t = Trim$(cellText)
-    If exactMatch Then
-        IndustryHit = (LenB(code) = 0)
-        If Not IndustryHit Then IndustryHit = (StrComp(t, code, vbTextCompare) = 0)
-        Exit Function
-    End If
-    t = Replace(t, KB_SPACE, vbNullString)
-    If LenB(t) = 0 Or LenB(code) = 0 Then
-        IndustryHit = True
-        Exit Function
-    End If
-    IndustryHit = (InStr(1, KB_SEMI & t & KB_SEMI, KB_SEMI & code & KB_SEMI, vbTextCompare) > 0)
-End Function
-
-' 列名(空可)から列位置を引く。空・不在は0。
-Private Function ColOf(ByVal blk As Variant, ByVal colName As String) As Long
-    If LenB(Trim$(colName)) > 0 Then ColOf = modUtil.FindHeaderCol(blk, Trim$(colName))
-End Function
-
-' 絞込の純部。blk の2行目以降から条件に合う行を最大 maxRows 件選び、
-'   「見出し行 + 選ばれた行」だけの2次元配列を selOut へ返す(整形は
-'   modKnowledgeFmt の責務)。戻り=選ばれた行数。注入IDもここで積む。
-Private Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal idCol As String, _
-                            ByVal filterSpec As String, ByVal industryCode As String, _
-                            ByVal maxRows As Long, ByRef selOut As Variant, _
-                            ByRef idsOut As String) As Long
-    selOut = Empty
-    If Not IsArray(blk) Then Exit Function
-
-    Dim cId As Long, cInd As Long, cTgt As Long, cAct As Long
-    Dim cSt As Long, cSuf As Long, cRef As Long
-    Dim parts As Variant
-    cId = modUtil.FindHeaderCol(blk, idCol)
-    parts = Split(filterSpec & "^^^^^", "^")
-    cInd = ColOf(blk, CStr(parts(0)))
-    cTgt = ColOf(blk, CStr(parts(1)))
-    cAct = ColOf(blk, CStr(parts(2)))
-    cSt = ColOf(blk, CStr(parts(3)))
-    cSuf = ColOf(blk, CStr(parts(4)))
-    cRef = ColOf(blk, CStr(parts(5)))
-
-    Dim hits() As Long
-    ReDim hits(1 To lastRow + 1)
-    Dim idText As String, sufText As String
-    Dim r As Long, n As Long
-    Dim okAll As Boolean
-    For r = 2 To lastRow
-        If n >= maxRows Then Exit For
-        idText = CellAt(blk, r, cId)
-        If LenB(idText) > 0 Then
-            okAll = True
-            If cInd > 0 Then okAll = IndustryHit(CellAt(blk, r, cInd), industryCode, True)
-            If okAll And cTgt > 0 Then okAll = IndustryHit(CellAt(blk, r, cTgt), industryCode, False)
-            If okAll And cAct > 0 Then okAll = modConfig.ParseBoolText(CellAt(blk, r, cAct), True)
-            If okAll And cSt > 0 Then okAll = IsListed(KB_SCHEME_STATUS, CellAt(blk, r, cSt))
-            If okAll Then
-                If cSuf > 0 Then
-                    sufText = CellAt(blk, r, cSuf)
-                    If LenB(sufText) > 0 Then AddId idsOut, sufText
-                End If
-                AddId idsOut, idText
-                If cRef > 0 Then AddIdList idsOut, CellAt(blk, r, cRef)
-                n = n + 1
-                hits(n) = r
-            End If
-        End If
-    Next r
-    If n = 0 Then Exit Function
-
-    Dim cols As Long
-    cols = UBound(blk, 2)
-    Dim arr() As Variant
-    ReDim arr(1 To n + 1, 1 To cols)
-    Dim c As Long, k As Long
-    For c = 1 To cols
-        arr(1, c) = blk(1, c)
-    Next c
-    For k = 1 To n
-        For c = 1 To cols
-            arr(k + 1, c) = blk(hits(k), c)
-        Next c
-    Next k
-    selOut = arr
-    SelectRows = n
-End Function
-
-' 16章 E-34(純部): 必須列のうち見つからなかった列名を ";" 区切りで返す。
-Private Function MissingColsOf(ByVal blk As Variant, ByVal requiredCols As String) As String
-    If Not IsArray(blk) Then
-        MissingColsOf = requiredCols
-        Exit Function
-    End If
-    Dim parts As Variant
-    Dim i As Long
-    Dim acc As String
-    parts = Split(requiredCols, KB_SEMI)
-    For i = LBound(parts) To UBound(parts)
-        If LenB(Trim$(CStr(parts(i)))) > 0 Then
-            If modUtil.FindHeaderCol(blk, CStr(parts(i))) <= 0 Then
-                AppendPart acc, KB_SEMI, CStr(parts(i))
-            End If
-        End If
-    Next i
-    MissingColsOf = acc
-End Function
-
-' 不正行の行番号を "," 区切りで返す。checkKind: dup=ID重複 / cat=categoryが
-'   19章§3の10分類外(13章§3.1)。
-Private Function BadRowsOf(ByVal blk As Variant, ByVal lastRow As Long, _
-                           ByVal colName As String, ByVal checkKind As String) As String
-    If Not IsArray(blk) Then Exit Function
-    Dim c As Long
-    c = modUtil.FindHeaderCol(blk, colName)
-    If c <= 0 Then Exit Function
-
-    Dim seen As String, cellText As String, acc As String
-    Dim r As Long, n As Long
-    Dim isBad As Boolean
-    For r = 2 To lastRow
-        cellText = CellAt(blk, r, c)
-        If LenB(cellText) > 0 Then
-            If checkKind = "cat" Then
-                isBad = Not IsListed(KB_CATEGORIES, cellText)
-            Else
-                isBad = IsListed(seen, cellText)
-                If Not isBad Then seen = seen & KB_SEMI & cellText
-            End If
-            If isBad And n < KB_MAX_ROWNOS Then
-                AppendPart acc, ",", CStr(r)
-                n = n + 1
-            End If
-        End If
-    Next r
-    BadRowsOf = acc
-End Function
 
 ' === 公開関数(14章§6のmodKnowledge節。ここに無い名前は公開しない) ===
 
@@ -454,7 +231,7 @@ Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSp
     Dim ids As String
     Dim sel As Variant
     Dim n As Long
-    n = SelectRows(gKbBlocks(idx), gKbRows(idx), idCol, filterSpec, industryCode, _
+    n = modKnowledge2.SelectRows(gKbBlocks(idx), gKbRows(idx), idCol, filterSpec, industryCode, _
                    capRows, sel, ids)
     Inject = FormatBy(fieldName, sel)
     If n <= 0 Then
@@ -464,7 +241,7 @@ Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSp
                         "field=" & fieldName & " industry=" & industryCode
         Exit Function
     End If
-    AddIdList gInjectedIds, ids
+    modKnowledge2.AddIdList gInjectedIds, ids
 End Function
 
 ' 種類名から modKnowledgeFmt の整形関数へ振り分ける(書式の正は15章・実装は
@@ -528,14 +305,14 @@ Private Function IdExistsIn(ByVal idx As Long, ByVal colName As String, _
     Dim blk As Variant
     blk = gKbBlocks(idx)
     Dim c As Long, cAct As Long
-    c = ColOf(blk, colName)
+    c = modKnowledge2.ColOf(blk, colName)
     If c <= 0 Then Exit Function
-    If needActive Then cAct = ColOf(blk, "is_active")
+    If needActive Then cAct = modKnowledge2.ColOf(blk, "is_active")
     Dim r As Long
     For r = 2 To gKbRows(idx)
-        If StrComp(CellAt(blk, r, c), wanted, vbBinaryCompare) = 0 Then
+        If StrComp(modKnowledge2.CellAt(blk, r, c), wanted, vbBinaryCompare) = 0 Then
             IdExistsIn = (cAct <= 0)
-            If Not IdExistsIn Then IdExistsIn = modConfig.ParseBoolText(CellAt(blk, r, cAct), True)
+            If Not IdExistsIn Then IdExistsIn = modConfig.ParseBoolText(modKnowledge2.CellAt(blk, r, cAct), True)
             If IdExistsIn Then Exit Function
         End If
     Next r
@@ -621,7 +398,7 @@ Private Function ReadKbSheets(ByVal wb As Object) As Long
     Dim i As Long, n As Long, lastRow As Long
     Dim ws As Object
     For i = 1 To KB_N
-        Set ws = SheetOf(wb, PickAt(KB_SHEETS, i), False)
+        Set ws = SheetOf(wb, modKnowledge2.PickAt(KB_SHEETS, i), False)
         gKbBlocks(i) = Empty
         gKbRows(i) = 0
         If Not ws Is Nothing Then
@@ -641,13 +418,13 @@ Private Sub ValidateKb()
     Dim nameText As String
     For i = 1 To KB_N
         If gKbRows(i) >= 1 Then
-            nameText = PickAt(KB_SHEETS, i) & ":"
-            LogBad "missing_cols:" & nameText, MissingColsOf(gKbBlocks(i), PickAt(KB_REQCOLS, i))
+            nameText = modKnowledge2.PickAt(KB_SHEETS, i) & ":"
+            LogBad "missing_cols:" & nameText, modKnowledge2.MissingColsOf(gKbBlocks(i), modKnowledge2.PickAt(KB_REQCOLS, i))
             LogBad "dup_id_rows:" & nameText, _
-                   BadRowsOf(gKbBlocks(i), gKbRows(i), PickAt(KB_IDCOLS, i), "dup")
+                   modKnowledge2.BadRowsOf(gKbBlocks(i), gKbRows(i), modKnowledge2.PickAt(KB_IDCOLS, i), "dup")
         End If
     Next i
-    LogBad "bad_category_rows:", BadRowsOf(gKbBlocks(KB_I_RISK), gKbRows(KB_I_RISK), "category", "cat")
+    LogBad "bad_category_rows:", modKnowledge2.BadRowsOf(gKbBlocks(KB_I_RISK), gKbRows(KB_I_RISK), "category", "cat")
 End Sub
 
 ' 非空のときだけ E0402 を記録する(E-34)。
@@ -670,7 +447,7 @@ Private Function SaveSnapshot() As Boolean
         For r = 1 To gKbRows(i)
             acc = vbNullString
             For c = 1 To KB_SCAN_COLS
-                acc = acc & CellRaw(gKbBlocks(i), r, c) & vbTab
+                acc = acc & modKnowledge2.CellRaw(gKbBlocks(i), r, c) & vbTab
             Next c
             wr = wr + 1
             ws.Cells(wr, 1).Value = i            ' SAFE:const 内部生成のLong
@@ -706,8 +483,8 @@ Private Function RestoreSnapshot() As Long
         gKbRows(i) = 0
     Next i
     For r = 1 To lastRow
-        i = CLng(Val(CellRaw(blk, r, 1)))
-        cnt = CLng(Val(CellRaw(blk, r, 2)))
+        i = CLng(Val(modKnowledge2.CellRaw(blk, r, 1)))
+        cnt = CLng(Val(modKnowledge2.CellRaw(blk, r, 2)))
         If i <> curIdx Then
             If curIdx > 0 Then gKbBlocks(curIdx) = arr
             curIdx = 0
@@ -721,7 +498,7 @@ Private Function RestoreSnapshot() As Long
         End If
         If curIdx > 0 Then
             curRow = curRow + 1
-            parts = Split(CellRaw(blk, r, 3), vbTab)
+            parts = Split(modKnowledge2.CellRaw(blk, r, 3), vbTab)
             For c = 1 To KB_SCAN_COLS
                 If c <= UBound(parts) + 1 Then arr(curRow, c) = parts(c - 1)
             Next c
@@ -779,7 +556,7 @@ Private Sub FlushPending()
     Dim blk As Variant
     blk = ReadWsBlock(ws, lastRow, 5)
     If Not IsArray(blk) Then Exit Sub
-    If LenB(Trim$(CellRaw(blk, 1, 1))) = 0 Then Exit Sub
+    If LenB(Trim$(modKnowledge2.CellRaw(blk, 1, 1))) = 0 Then Exit Sub
 
     Dim wb As Object
     Set wb = OpenKbBook(False)
@@ -799,10 +576,10 @@ Private Sub FlushPending()
     Dim wrote As Long
     wr = LastRowOfWs(gapWs)
     For r = 1 To lastRow
-        If LenB(Trim$(CellRaw(blk, r, 1))) > 0 Then
+        If LenB(Trim$(modKnowledge2.CellRaw(blk, r, 1))) > 0 Then
             wr = wr + 1
             For c = 0 To 4
-                If PutByName(gapWs, hdr, wr, CStr(cols(c)), CellRaw(blk, r, c + 1)) Then
+                If PutByName(gapWs, hdr, wr, CStr(cols(c)), modKnowledge2.CellRaw(blk, r, c + 1)) Then
                     wrote = wrote + 1
                 End If
             Next c

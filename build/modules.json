@@ -93,6 +93,13 @@
       "wave": "T-21"
     },
     {
+      "name": "modKnowledge2",
+      "path": "src/app/modKnowledge2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-21"
+    },
+    {
       "name": "modKnowledgeFmt",
       "path": "src/app/modKnowledgeFmt.bas",
       "role": "app",
@@ -291,6 +298,13 @@
     {
       "name": "modUIHome",
       "path": "src/ui/modUIHome.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-30"
+    },
+    {
+      "name": "modUIHome2",
+      "path": "src/ui/modUIHome2.bas",
       "role": "ui",
       "type": "std",
       "wave": "T-30"

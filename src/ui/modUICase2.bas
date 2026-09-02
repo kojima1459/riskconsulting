@@ -562,7 +562,7 @@ End Sub
 ' ============================================================================
 ' S1～S4シートの図形ボタン(11章§5・11章§2の各ワイヤー)
 ' ----------------------------------------------------------------------------
-' 実行系のハンドラは modUIHome が持つ(HOMEの[S1][S2][S3][S4]と同じ動作を
+' 実行系のハンドラは modUIHome2 が持つ(HOMEの[S1][S2][S3][S4]と同じ動作を
 ' 各シートのボタンからも起こすだけなので、実装を2箇所に置かない)。
 ' ============================================================================
 Public Sub EnsureStepButtons()
@@ -571,21 +571,21 @@ Public Sub EnsureStepButtons()
     Dim ws As Object
 
     Set ws = modUISheet.SheetOf(SheetNameOf(1))
-    modUISheet.EnsureButton ws, "btn_s1_rerun", "S1から再実行", 1, 1, 84#, "modUIHome.HomeRunS1"
-    modUISheet.EnsureButton ws, "btn_s1_next", "S2へ進む", 1, 2, 84#, "modUIHome.HomeRunS2"
+    modUISheet.EnsureButton ws, "btn_s1_rerun", "S1から再実行", 1, 1, 84#, "modUIHome2.HomeRunS1"
+    modUISheet.EnsureButton ws, "btn_s1_next", "S2へ進む", 1, 2, 84#, "modUIHome2.HomeRunS2"
 
     Set ws = modUISheet.SheetOf(SheetNameOf(2))
-    modUISheet.EnsureButton ws, "btn_s2_rerun", "S2から再実行", 1, 1, 84#, "modUIHome.HomeRunS2"
-    modUISheet.EnsureButton ws, "btn_s2_next", "S3へ進む", 1, 2, 84#, "modUIHome.HomeRunS3"
+    modUISheet.EnsureButton ws, "btn_s2_rerun", "S2から再実行", 1, 1, 84#, "modUIHome2.HomeRunS2"
+    modUISheet.EnsureButton ws, "btn_s2_next", "S3へ進む", 1, 2, 84#, "modUIHome2.HomeRunS3"
 
     Set ws = modUISheet.SheetOf(SheetNameOf(3))
-    modUISheet.EnsureButton ws, "btn_s3_rerun", "S3から再実行", 1, 1, 84#, "modUIHome.HomeRunS3"
-    modUISheet.EnsureButton ws, "btn_s3_next", "S4へ進む", 1, 2, 84#, "modUIHome.HomeRunS4"
+    modUISheet.EnsureButton ws, "btn_s3_rerun", "S3から再実行", 1, 1, 84#, "modUIHome2.HomeRunS3"
+    modUISheet.EnsureButton ws, "btn_s3_next", "S4へ進む", 1, 2, 84#, "modUIHome2.HomeRunS4"
 
     Set ws = modUISheet.SheetOf(SheetNameOf(4))
-    modUISheet.EnsureButton ws, "btn_s4_rerun", "S4から再実行", 1, 1, 84#, "modUIHome.HomeRunS4"
+    modUISheet.EnsureButton ws, "btn_s4_rerun", "S4から再実行", 1, 1, 84#, "modUIHome2.HomeRunS4"
     modUISheet.EnsureButton ws, "btn_s4_hearing", "ヒアリングシート生成", 1, 2, 128#, _
-                            "modUIHome.HomeBuildHearing"
+                            "modUIHome2.HomeBuildHearing"
 End Sub
 
 ' S1の追加収集ブロックの各行に[コピー]ボタンを置く(11章。案件入力側と同じ動作)。

@@ -104,12 +104,18 @@ MODULE_REGISTRY = {
     #   modUIToast  = トースト(図形カード+Application.OnTimeの自動消去。接頭辞
     #                 ts_)と hm_warning の1行組み立て(裁定書17 H2/H4)。文言の
     #                 値源をここへ寄せ、満杯の modUIHome へ文字を足さない。
+    #   modUIHome2  = modUIHome の分割先(30,000字契約。17章§7 Z-13)。HOMEの
+    #                 OnActionハンドラ群(画面は modUIHome・動作は modUIHome2)。
     "modUISheet", "modUICase2", "modUICase3", "modUICase4", "modUICase5",
-    "modUICaseFmt", "modUIGuide", "modUIToast",
+    "modUICaseFmt", "modUIGuide", "modUIToast", "modUIHome2",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
     "modJudgeStore", "modKnowledge", "modKnowledgeFmt", "modValidate",
+    # modKnowledge2 = modKnowledge の分割先(30,000字契約。17章§7 Z-13)。
+    #   シートを触らない純関数(絞込・列引き・E-34の純部)だけを持つため
+    #   R4_EXCEL_ALLOWED_MODULES へは足さない(層(a)から直接叩ける)。
+    "modKnowledge2",
     # 分割・新設の追認は裁定書7 B-7/B-8(12章§2のモジュール一覧に追記済み)。
     #   modValidate2 / modCompanyFile2 = 30,000字契約による分割先。
     #   modCaseRead = 案件一覧の読取専用API(app層。R4許可も併せて追加)。
@@ -208,6 +214,16 @@ CONTRACT: dict[str, dict] = {
             "ResearchingText", "MechsText", "LastInjectedIds", "ResetInjectedIds",
             "MenuIdExists", "LineIdExists", "SchemeIdExists", "CaseLibIdExists",
             "PatternIdExists", "AppendServiceGap",
+        ],
+    },
+    # modKnowledge2: 30,000字契約による modKnowledge の分割先(17章§7 Z-13)。
+    # 移設した純関数8本は modKnowledge からの唯一の呼出先であり、改名・Private化
+    # はその場で読込・絞込・E-34検査が落ちるため required で固定する。
+    "modKnowledge2": {
+        "closed": False,
+        "required": [
+            "PickAt", "CellAt", "CellRaw", "AddIdList", "ColOf", "SelectRows",
+            "MissingColsOf", "BadRowsOf",
         ],
     },
     # 14章§6(裁定書6 B/C)。整形の純関数はここが唯一の実装。
@@ -432,6 +448,20 @@ CONTRACT: dict[str, dict] = {
                      "WarnLine", "ShowResearchPrompts"],
     },
     "modUIHome": {"closed": False, "required": []},
+    # modUIHome2: 30,000字契約による modUIHome の分割先(17章§7 Z-13)。HOMEと
+    # S1～S4シートの図形ボタンの OnAction 結線先そのもの(改名・Private化はその場で
+    # 結線が切れる)なので、移設した公開ハンドラを required で固定する。
+    "modUIHome2": {
+        "closed": False,
+        "required": [
+            "HomeRunAll", "HomeRunS1", "HomeRunS2", "HomeRunS3", "HomeRunS4",
+            "HomeNewCase", "HomeOpenCaseInput", "HomeOpenInbox",
+            "HomeOpenFeedback", "HomeOpenJudgeLog", "HomeOpenSparring",
+            "HomeFreezeRound", "HomeExportHtml", "HomeBuildHearing",
+            "HomeCompanySave", "HomeCompanyOpen", "HomeReloadKnowledge",
+            "HomePreflightAll",
+        ],
+    },
     "modUICase2": {"closed": False, "required": []},
     "modUICase3": {"closed": False, "required": []},
     "modUICase4": {"closed": False, "required": []},
