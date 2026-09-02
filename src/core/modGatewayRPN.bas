@@ -437,7 +437,7 @@ Public Function LooksLikeLimitError(ByVal response As String) As Boolean
     LooksLikeLimitError = (InStr(1, s, GW_LIMIT_PHRASE, vbBinaryCompare) > 0)
 End Function
 
-' 実リボンの定型失敗文の分類(裁定書24 A-1・16章E-53/E-54/E-55)。
+' 実リボンの定型失敗文の分類(裁定書24 A-1・16章E-54/E-55/E-56)。
 ' 戻り値 "" = 該当なし。Trim後の**先頭一致**だけを見る。
 '   "(error:429"->E0204 / "(error:"(429以外)->E0203 / "接続切れ"->E0202 /
 '   "レスポンスから当該テキストを抽出できません"->E0202 /

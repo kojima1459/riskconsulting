@@ -1451,10 +1451,10 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | `limit` | 呼出step（毎回） | **`#LIMIT: 本日のAIリボン利用上限に達しました(LimitCheck)`**（この1文字列に固定。14章§2の `LooksLikeLimitError` はこの実体だけを見る＝語彙を2箇所に書かない） | E-15相当。E0204 を記録し、以降のStepを実行しない。last_ok_step は直前のStepのまま |
 | `fake_err` | 呼出step（毎回） | 先頭行が `#ERR:E0201:偽装エラーです` で、続く行に**正常なJSON本文**（トランスポートは `ok=True` で返す） | 帯域外成否規約の検査。`ok=True` なので成功として扱い、**エラーUIへ昇格させない**。ExtractJsonBlock が本文JSONを抽出して通常どおり検証・保存し、err_log に E0201 が**記録されないこと** |
 | `ribbon_429` | 呼出step（毎回） | **`(error:429)Too Many Requests`**（実体は `modMockLlm2.RibbonErr429Text`） | 実リボンの上限応答（裁定書24 A-1）。`modGatewayRPN.RibbonFailureCode` の先頭一致で **E0204**。E-15と同じ扱い |
-| `ribbon_disconnect` | 呼出step（毎回） | **`接続切れ`**（実体は `modMockLlm2.RibbonDisconnectText`） | 実リボンの通信断（log.bas の `results=12031`）。先頭一致で **E0202**。E-53 |
-| `ribbon_content_filter` | 呼出step（毎回） | **`content_filterに該当しました`**（実体は `modMockLlm2.RibbonContentFilterText`） | 実リボンの内容フィルタ。先頭一致で **E0207**。E-55 |
+| `ribbon_disconnect` | 呼出step（毎回） | **`接続切れ`**（実体は `modMockLlm2.RibbonDisconnectText`） | 実リボンの通信断（log.bas の `results=12031`）。先頭一致で **E0202**。E-54 |
+| `ribbon_content_filter` | 呼出step（毎回） | **`content_filterに該当しました`**（実体は `modMockLlm2.RibbonContentFilterText`） | 実リボンの内容フィルタ。先頭一致で **E0207**。E-56 |
 
-- **`#LIMIT:` と「利用上限に達しました」は mock 専用の語彙である**（裁定書24 A-1）。**実リボン（社内AIアドイン）の上限応答は `(error:429` で始まる定型文**であり、実機の上限判定はそちらで行う（`modGatewayRPN.RibbonFailureCode`。判定は**Trim後の先頭一致のみ**で、本文中の出現では判定しない）。リボンは失敗時にも空文字を返さず、`(error:<HTTPコード>)<message>` / `接続切れ` / `レスポンスから当該テキストを抽出できません…` / `content_filterに該当しました` のいずれかを返す（16章 E-15・E-16・E-53〜E-55）。
+- **`#LIMIT:` と「利用上限に達しました」は mock 専用の語彙である**（裁定書24 A-1）。**実リボン（社内AIアドイン）の上限応答は `(error:429` で始まる定型文**であり、実機の上限判定はそちらで行う（`modGatewayRPN.RibbonFailureCode`。判定は**Trim後の先頭一致のみ**で、本文中の出現では判定しない）。リボンは失敗時にも空文字を返さず、`(error:<HTTPコード>)<message>` / `接続切れ` / `レスポンスから当該テキストを抽出できません…` / `content_filterに該当しました` のいずれかを返す（16章 E-15・E-16・E-54〜E-56）。
 - 表の11値以外（未知の値）は正常応答へフォールバックする（config の入力ミスでE2E全体を暴走させないため）。
 - `mock_fault` は mock 経路でのみ有効。`llm_transport` が ribbon / direct のときは無視する（本番設定に影響させない）。
 - 公開口は14章§6の `modMockLlm.FaultResponse(faultKind, stepName)`（状態レス。`faultKind` が空なら `""`）。`modGatewayRPN` は入口の `MockResponse(stepName, variantName, fault)` 経由でこれを呼ぶ。

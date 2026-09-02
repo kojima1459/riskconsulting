@@ -21,7 +21,9 @@ Option Explicit
 '                             (割り切れる / 余りあり / 複数行の合計 / 空文字と桁0)
 '   W62G MaxWaitText    3本   裁定書23追補2。秒→分の切り上げ
 '                             (割り切れる / 余りあり / 0秒)
-'   計 35本
+'   W63H RibbonFailure 22本   裁定書24 A-1。リボンの定型失敗文の分類
+'                             (16章 E-15/E-16/E-54〜E-56・14章§2/§6・15章§8.2)
+'   計 57本
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -48,6 +50,9 @@ WF:
 WG:
     On Error GoTo FG
     T_W62G_MaxWaitText
+WH:
+    On Error GoTo FH
+    T_W63H_RibbonFailure
 WDone:
     Exit Sub
 FA:
@@ -70,6 +75,9 @@ FF:
     Resume WG
 FG:
     GroupFail "W62G MaxWaitText"
+    Resume WH
+FH:
+    GroupFail "W63H RibbonFailure"
     Resume WDone
 End Sub
 
@@ -374,4 +382,99 @@ Private Sub ChkMins(ByVal nm As String, ByVal waitSec As Long, ByVal wantMins As
     want = "最大" & CStr(wantMins) & "分"
     modTestRunner.Check nm, (InStr(1, txt, want, vbBinaryCompare) > 0), _
         "期待=[" & want & "] を含むこと 実際=[" & txt & "]"
+End Sub
+
+' ============================================================================
+' W63H リボンの定型失敗文の分類(裁定書24 A-1)
+' ----------------------------------------------------------------------------
+' 期待値の出どころ: 16章 E-15 / E-16 / E-54 / E-55 / E-56 の表と 14章§2・§6、
+' 15章§8.2。**実装ではなく規約から手で書き写した**(17章§1)。規約の対応表:
+'   先頭 "(error:429"                            -> E0204
+'   先頭 "(error:"(429以外)                      -> E0203
+'   先頭 "接続切れ"                              -> E0202
+'   先頭 "レスポンスから当該テキストを抽出できません" -> E0202
+'   先頭 "content_filterに該当しました"           -> E0207
+' 判定は **Trim後の先頭一致のみ**。本文中に同じ語が出ても分類しない(01・02の
+' 2本がこの一線を固定する。先頭一致を部分一致へ変えるとこの2本が落ちる)。
+' 利用者向け文(E0207)は16章 E-56 の逐語。
+' ============================================================================
+Private Sub T_W63H_RibbonFailure()
+    Dim okFlag As Boolean
+    Dim code As String
+    Dim goodJson As String
+
+    goodJson = "{""company_name"":""浜松スイーツファクトリー""}"
+
+    ' --- 先頭一致で分類する5系統(16章 E-15/E-54/E-55/E-56) ---
+    ChkS "Test_W63H_03_先頭のerror429は利用上限_16章E-15", _
+        modGatewayRPN.ClassifyResponse("(error:429)Too Many Requests"), "E0204"
+    ChkS "Test_W63H_04_先頭のerror500は社内AIのエラー_16章E-55", _
+        modGatewayRPN.ClassifyResponse("(error:500)Internal Server Error"), "E0203"
+    ChkS "Test_W63H_05_先頭の接続切れは接続失敗_16章E-54", _
+        modGatewayRPN.ClassifyResponse("接続切れ"), "E0202"
+    ChkS "Test_W63H_06_抽出できませんは接続失敗_16章E-54", _
+        modGatewayRPN.ClassifyResponse("レスポンスから当該テキストを抽出でき" & _
+            "ませんChatGPTの仕様が変更となった可能性があります"), "E0202"
+    ChkS "Test_W63H_07_content_filterは内容フィルタ_16章E-56", _
+        modGatewayRPN.ClassifyResponse("content_filterに該当しました"), "E0207"
+
+    ' --- Trim後に見る(前後の空白は無視。14章§2。VBAの Trim$ が落とすのは
+    '     半角空白であって改行ではない=規約どおりの範囲だけを固定する) ---
+    ChkS "Test_W63H_08_前後の空白を無視して先頭一致_14章§2", _
+        modGatewayRPN.ClassifyResponse("   (error:429)limit   "), "E0204"
+
+    ' --- 先頭一致に限る(部分一致にすると落ちる2本) ---
+    ChkS "Test_W63H_01_本文中のerror429は分類しない_先頭一致に限る", _
+        modGatewayRPN.ClassifyResponse("{""pitch"":""再送時は(error:429)が出ます""}"), ""
+    ChkS "Test_W63H_02_本文中の接続切れは分類しない_先頭一致に限る", _
+        modGatewayRPN.ClassifyResponse("{""risk"":""通信の接続切れで工場が止まる""}"), ""
+    ChkS "Test_W63H_09_本文中のcontent_filterは分類しない_先頭一致に限る", _
+        modGatewayRPN.ClassifyResponse("説明: content_filterに該当しましたと出ます"), ""
+
+    ' --- 正常応答は素通し(既存規約の回帰) ---
+    ChkS "Test_W63H_10_正常JSONは分類しない_14章§6", _
+        modGatewayRPN.ClassifyResponse(goodJson), ""
+    ChkS "Test_W63H_11_ERRプレフィクスは内容で判定しない_15章§8.2fake_err", _
+        modGatewayRPN.ClassifyResponse("#ERR:E0201:偽装エラーです" & vbLf & goodJson), ""
+
+    ' --- RibbonFailureCode 単体(14章§6。該当なしは "") ---
+    ChkS "Test_W63H_12_RibbonFailureCode_空文字は該当なし_14章§6", _
+        modGatewayRPN.RibbonFailureCode(""), ""
+    ChkS "Test_W63H_13_RibbonFailureCode_error429_14章§6", _
+        modGatewayRPN.RibbonFailureCode("(error:429)Too Many Requests"), "E0204"
+
+    ' --- DecideOk 経由(成否は帯域外・errCodeは分類の値。14章§6) ---
+    code = ""
+    okFlag = modGatewayRPN.DecideOk(True, "接続切れ", code)
+    modTestRunner.Check "Test_W63H_14_DecideOk_接続切れはok偽_14章§6", _
+        (okFlag = False), "期待=False 実際=" & CStr(okFlag)
+    ChkS "Test_W63H_15_DecideOk_接続切れのコードはE0202_16章E-54", code, "E0202"
+
+    code = ""
+    okFlag = modGatewayRPN.DecideOk(True, "content_filterに該当しました", code)
+    modTestRunner.Check "Test_W63H_16_DecideOk_内容フィルタはok偽_14章§6", _
+        (okFlag = False), "期待=False 実際=" & CStr(okFlag)
+    ChkS "Test_W63H_17_DecideOk_内容フィルタのコードはE0207_16章E-56", code, "E0207"
+
+    code = ""
+    okFlag = modGatewayRPN.DecideOk(True, goodJson, code)
+    modTestRunner.Check "Test_W63H_18_DecideOk_正常JSONはok真_14章§6", _
+        (okFlag = True), "期待=True 実際=" & CStr(okFlag)
+
+    ' --- 利用者向け文の逐語(16章 E-56) ---
+    ChkS "Test_W63H_19_E0207の利用者向け文の逐語_16章E-56", _
+        modGatewayRPN.ErrMessageFor("E0207"), _
+        "社内AIが内容を止めました。会社名や本文に不適切と判定される語が" & _
+        "無いか見直してください。"
+
+    ' --- mock の応答パターン(15章§8.2の3値)が同じ分類を通ること ---
+    ChkS "Test_W63H_20_mockのribbon_429はE0204_15章§8.2", _
+        modGatewayRPN.ClassifyResponse( _
+            modMockLlm.FaultResponse("ribbon_429", "s1")), "E0204"
+    ChkS "Test_W63H_21_mockのribbon_disconnectはE0202_15章§8.2", _
+        modGatewayRPN.ClassifyResponse( _
+            modMockLlm.FaultResponse("ribbon_disconnect", "s1")), "E0202"
+    ChkS "Test_W63H_22_mockのribbon_content_filterはE0207_15章§8.2", _
+        modGatewayRPN.ClassifyResponse( _
+            modMockLlm.FaultResponse("ribbon_content_filter", "s1")), "E0207"
 End Sub

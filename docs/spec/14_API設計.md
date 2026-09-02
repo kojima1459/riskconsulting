@@ -70,8 +70,10 @@ result = Application.Run("ChatGPT", _
     userPrompt, systemPrompt, temp, maxTok, waitSec, model, _
     "", "", toolN, effort, verbosity)
 '  1 Text  2 roleSystem  3 Temp(Double, config temperature)
-'  4 MaxTokens(Long, 0=リボン側既定(台帳では4096)。長文Stepは config llm_max_tokens
-'    または Step別上書き s1_max_tokens 等で明示指定する)
+'  4 MaxTokens(Long, **既定0=リボンはキー自体を送らない**(モデル側の既定に従う)。
+'    長文Stepは config llm_max_tokens または Step別上書き s1_max_tokens 等で明示
+'    指定する。0より大きいときだけ max_tokens / max_completion_tokens /
+'    max_output_tokens のいずれかが送られる。o系では0より大きくても送られない)
 '  5 Wait(config llm_wait_sec)  6 model(config recommended_model)
 '  7 prevU  8 prevA(各Step独立のため常に"")
 '  9 toolN(管理側ログ識別・必須。config app_tool_prefix + stepName。製品名の直書き禁止)
@@ -82,8 +84,16 @@ result = Application.Run("ChatGPT", _
 - アドイン検出: `Application.AddIns` ループ（`ribbon_addin_name` 部分一致＋Installed、セッションキャッシュ）
 - 起動時 `LimitCheck()`（True=続行不可→案内し、実行時に再案内。config limit_check で無効化可）。起動シーケンス上の位置は12章§2.1のmodBoot手順⑦（Trueでも起動は止めない）
 - 温度・MaxTokensはGPT-5系では無視され effort/verbosity が効く（V2実運用で確認済み）。`reasoning_tuning` エスケープハッチはPoC同様に維持
+- **実ソースで確定した事実（リボンちゃん ver.202606 の `GPT.bas` / `log.bas` を読んで確認。裁定書24 A-5。以下は本製品が合わせる相手側の仕様であり、変えられない前提として扱う）**:
+  1. **`MaxTokens` の既定は 0**（＝キーを送らない）。台帳の「既定4096」は誤りだったので本節の記述を訂正した。
+  2. **`reasoning_effort` の許容値は `minimal` / `low` / `medium` / `high`**（`minimal` は GPT-5系のみ。o系に `minimal` を渡すとリボン側が `low` へ丸める）。**`verbosity` の許容値は `low` / `medium` / `high`** で、**GPT-5系にだけ送られる**。config `reasoning_effort` / `reasoning_verbosity`（13章§2.3）はこの集合の内側に収める。
+  3. **`temperature` は GPT-5系・o系・codex系には送られない**（リボンが送出をスキップする）。したがって config `temperature` が効くのは gpt-4o / gpt-4.1 系と **direct経路**だけである。
+  4. **`LimitCheck()` の意味は「アドインの利用期限切れ」**である（`log.bas` の定数 `LimitDay`＝現版 2026/9/30 を過ぎていると True を返し、リボン側がMsgBoxで更新版の入手を促す）。**日次の利用枠とは別物**であり、実行中に当たる利用上限（レート制限）は §2 のエラー分類の `(error:429` 側で捕まえる（16章 E-15）。`LimitCheck()` が True でも本製品は起動を止めない（12章§2.1 手順⑦）。
+  5. **未知のモデル名は実行時エラーになる**。リボンの `ChatGPT` はモデル名の `Select Case` に `Case Else` を持たず、一覧に無い名前だとURL・キーが空のまま進んで例外になる。config `recommended_model` には**リボンが知っているモデル名だけ**を置くこと（打鍵ミスは起動時ではなく最初の呼び出しで落ちる）。
+  6. **ribbon経路は社内PC専用**である。リボンは呼び出しのたびに社内ログ送信 `SaveLog` を行い、その中で `ADSystemInfo` / `LDAP://` から実行者情報を取る。**ADへ到達できない環境（社外PC・非ドメイン端末）では例外**になるため、社外環境での検証は mock 経路で行う（16章 NFR-S3 の社内ログの段落も参照）。
 - **呼出中の画面**: リボン呼出はVBAを同期ブロックするため、呼出の前に `modUIProgress.SetStage` でStep名・開始時刻・最大待ち時間・「画面が白くなっても処理は続いている」旨を確定表示し、config `keep_window_alive`（既定TRUE）で画面ゴースト化を抑止する（16章 E-50）
-- エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）。**ただし成否判定は§6の帯域外フラグで行い、文字列プレフィクスを判定に使わない**
+- エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。**リボンは失敗時も空文字を返さず定型の日本語文字列を返す**ため、`modGatewayRPN.RibbonFailureCode` が Trim後の**先頭一致**で分類する（`(error:429`=E0204／`(error:`（429以外）=E0203／`接続切れ`=E0202／`レスポンスから当該テキストを抽出できません`=E0202／`content_filterに該当しました`=E0207。16章 E-15・E-54〜E-56。裁定書24 A-1）。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）。**ただし成否判定は§6の帯域外フラグで行い、文字列プレフィクスを判定に使わない**
+- **社内ディープリサーチ（DR）アプリ側の制約**: 調べる文の**1回の入力2,000字上限**（docs/08・11章§3.2）と、返答末尾に付く**フッター（`役職コード:` ほか）**は、リボンではなく**DRアプリの都合**である（本製品は前者を2,000字以内の調べる文で、後者を `modNavText.StripDrFooter` で受けており、現設計と整合）。
 - **`LooksLikeLimitError` の判定を固定する**: 「**先頭が `#LIMIT:`**（前後の空白は無視）**または本文に「利用上限に達しました」を含む**」の2条件のいずれかを満たすときだけ True。語彙の供給元は15章§8.2の `limit` 応答実体1箇所であり、mock と gateway が同じ文字列を見る（語彙を2箇所に書かない）。「上限」「回数」「limit」のような**部分語での曖昧判定はしない**。約款や提案本文はこれらの語を普通に含み、長文の正当な応答が E0204 に誤爆して全Stepが止まる事故が実機で起きているため。なお `#LIMIT:` は**人間向けの表示文字列であって成否の判定材料ではない**（成否は§6の帯域外フラグ。ここでの判定は「ok=False にしたうえでどのエラーコードを載せるか」の分類にのみ使う）
 
 ## 3. direct経路（開発・検証用）
@@ -192,6 +202,11 @@ Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
 ' errCode: ok=False のときだけ E0201/E0202/E0204/E0205/E0206 を帯域外で返す。16章E-44の
 '     「往復数を減らして再開」分岐はこの値（E0204）で行う。ok=True のとき errCode は ""
 ' 呼出前に modPii を必ず走査する（外部送信の直前。16章 E-05/E-31）
+Public Function RibbonFailureCode(ByVal response As String) As String
+' リボンの定型失敗文の分類（§2・16章 E-15/E-54〜E-56。裁定書24 A-1）。該当なしは ""。
+' 判定は **Trim後の先頭一致のみ**（本文中の出現では判定しない）:
+'   "(error:429"->E0204 / "(error:"（429以外）->E0203 / "接続切れ"->E0202 /
+'   "レスポンスから当該テキストを抽出できません"->E0202 / "content_filterに該当しました"->E0207
 Public Function DecideOk(ByVal transportSucceeded As Boolean, ByVal rawBody As String, _
                          ByRef errCode As String) As Boolean
 ' **帯域外成否（ok）の唯一の判定点**。CallStep / CallChat は ok を直接代入せず必ず本関数の
@@ -199,8 +214,11 @@ Public Function DecideOk(ByVal transportSucceeded As Boolean, ByVal rawBody As S
 '   (1) transportSucceeded=False（経路側が失敗を申告）  -> False。errCode は経路側の値を保つ
 '       （空だったときだけ E0202 を補う）
 '   (2) rawBody が空（Trim後）                          -> False + errCode=E0202
-'   (3) rawBody が上限系の定型拒否文（LooksLikeLimitError）-> False + errCode=E0204
-'   (4) 上記以外                                        -> True + errCode=""
+'   (3) rawBody がリボンの定型失敗文（RibbonFailureCode の先頭一致）
+'                                                       -> False + そのコード
+'                                                          （E0204 / E0203 / E0202 / E0207）
+'   (4) rawBody が上限系の定型拒否文（LooksLikeLimitError＝mock語彙）-> False + errCode=E0204
+'   (5) 上記以外                                        -> True + errCode=""
 ' **rawBody が "#ERR:" で始まっていても内容では判定しない**（(4)へ落ちて True）。平文プレフィクスは
 ' LLM出力側から偽造可能であり、これを成否に使うとエラーUIを騙った任意文面表示が成立する（本節冒頭の
 ' エラー規約・15章§8.2 fake_err・16章 E-46 の同型欠陥）
