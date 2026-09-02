@@ -59,8 +59,9 @@ Private Const CS_FAILED_STEPS As String = "s1;s2;s3;s4;s2c;s3c"
 ' status のうち s4_done より上位(RepairStates で降格させない2値)。
 Private Const CS_STATUSES_ABOVE_S4 As String = "exported;feedback_done"
 
-' data_key の enum 全28値(13章§2.2・19章§3と完全一致)。表に無いキーは拒否。
-Private Const CS_DATA_KEYS As String = "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;input_dossier;input_field_notes;input_coverage_note;input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;s4_json_failed;sparring_u;sparring_a"
+' data_key の enum 全29値の一覧は modCaseStore3.DataKeys() が持つ(13章§2.2・
+' 19章§3と完全一致)。表に無いキーは拒否。本モジュールが30,000字契約の上限に
+' 達したため v2.6 で分割先へ移した(値も並びも1つも変えていない)。
 
 ' --- 純ロジック(Excel非依存)。シート操作側は必ずここを通す ---
 
@@ -333,7 +334,7 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
         modLog.LogError "E0101", "modCaseStore.SaveData", "empty_case_id"
         Exit Function
     End If
-    If Not IsListedValue(CS_DATA_KEYS, dataKey) Then
+    If Not IsListedValue(modCaseStore3.DataKeys(), dataKey) Then
         modLog.LogError "E0101", "modCaseStore.SaveData", "invalid_data_key:" & dataKey
         Exit Function
     End If
@@ -767,6 +768,8 @@ Public Function FreezeRound(ByVal caseId As String) As Long
 
     modCaseStore2.PutNum ws, blk, rowNo, "round_no", curRound + 1
     modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
+    ' 13章§2.1(v2.6・裁定書25 S4): 採用提案番号と深掘り種目を写す。
+    modCaseStore3.ApplyRoundFocus caseId, ResolveStepJson(caseId, 3)
     FreezeRound = curRound + 1
     Exit Function
 

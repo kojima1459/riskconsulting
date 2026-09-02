@@ -412,7 +412,7 @@ End Function
 ' 区画②の描画(状態行・プレビュー・3ボタン・出る条件)
 ' ============================================================================
 
-' RefreshAreas - 6欄すべての状態行とプレビューと合計字数を書き直す。
+' RefreshAreas - 7欄すべての状態行とプレビューと合計字数を書き直す(v2.6)。
 Public Sub RefreshAreas(ByVal caseId As String)
     On Error Resume Next
 
@@ -574,7 +574,10 @@ End Sub
 ' ApplyAreaVisibility - 出る条件が偽の欄を行ごと隠す(中身は消さない)。
 Public Sub ApplyAreaVisibility()
     On Error Resume Next
+    ' v2.6(裁定書25 S1): 「いまの契約」は常時表示になった。旧版で隠れたままの
+    '   行を出し直すため、False を渡して明示的に表示へ戻す(呼び続ける)。
     HideAreaRows "contract", modUICase6.AreaHidden("contract")
+    HideAreaRows "finance", modUICase6.AreaHidden("finance")
     HideAreaRows "hearing_answers", modUICase6.AreaHidden("hearing_answers")
 End Sub
 

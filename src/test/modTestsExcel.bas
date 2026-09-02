@@ -57,7 +57,9 @@ Private Const TE_BAND_SEQ As Long = 100001
 '  書き換えたため 50 -> 45。内訳 = 本モジュール34本 + modTestsExcel2 11本。
 '  Q1(overflowの永続ガード)は v3.2 で**事象そのものが消えた**ため書き換え先を
 '  持たない(跡地の理由は modTestsExcel2 の「跡地」節が持つ))
-Private Const TE_EXPECTED As Long = 45
+' (裁定書25 S3 / T-56: 7欄目 input_finance の往復1本を modTestsExcel2 へ
+'  追加し 45 -> 46。内訳 = 本モジュール34本 + modTestsExcel2 12本)
+Private Const TE_EXPECTED As Long = 46
 
 Private mRun As Long    ' ECheck が数える実行本数
 

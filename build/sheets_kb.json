@@ -13,6 +13,8 @@
     "boolean": ["TRUE", "FALSE"],
     "scheme_status": ["proven", "adopted", "candidate", "external"],
     "_scheme_status_note": "19章§3 scheme.status。",
+    "case_outcome": ["won", "lost"],
+    "_case_outcome_note": "19章§3 case.outcome(成功事例シートの成否。won=刺さった / lost=刺さらなかった)。",
     "mech_layer": ["detect", "prevent", "entry", "benefit", "underwrite"],
     "_mech_layer_note": "19章§3 mech.layer。",
     "watch_source_kind": ["own_pr", "competitor_pr", "media", "regulation"],
@@ -115,11 +117,13 @@
       "columns": [
         {"name": "line_id", "type": "String", "width": 10, "header_note": "L-NN(13章§1)"},
         {"name": "line_name", "type": "String", "width": 30},
-        {"name": "market_note", "type": "String", "width": 44, "header_note": "市場環境メモ(引受の硬軟・相場観)。四半期更新しS3へ注入する。空欄の行はLinesText整形で省略される(13章§3.1・15章§4)"}
+        {"name": "market_note", "type": "String", "width": 44, "header_note": "市場環境メモ(引受の硬軟・相場観)。四半期更新しS3へ注入する。空欄の行はLinesText整形で省略される(13章§3.1・15章§4)"},
+        {"name": "deep_dive_points", "type": "String", "width": 44, "header_note": "第2ラウンドでこの種目を深掘りするときの論点(;区切り)。回収先は種目ナレッジ確認シート。未回収は空欄(13章§3.1・v2.6)"},
+        {"name": "uw_info_needs", "type": "String", "width": 44, "header_note": "見積・引受のために顧客から集める必要のある情報(;区切り)。未回収は空欄(13章§3.1・v2.6)"}
       ],
       "reserve_rows": 20,
       "seed_rows": [
-        ["L-03", "生産物賠償責任保険(PL保険)", "再保険料率の上昇で限度額に慎重"]
+        ["L-03", "生産物賠償責任保険(PL保険)", "再保険料率の上昇で限度額に慎重", "対物・対人の限度額の置き方;リコール費用特約の要否;海外売上の担保地域", "直近3期の売上と輸出比率;製品分類ごとの出荷数量;過去のクレーム・回収履歴"]
       ],
       "seed_note": "L-03は15章§4・§8.1のmock必須行(17章T-14前提)。"
     },
@@ -149,12 +153,14 @@
         {"name": "proposal", "type": "String", "width": 36},
         {"name": "why_it_worked", "type": "String", "width": 36},
         {"name": "quote", "type": "String", "width": 36, "header_note": "顧客の実際の発言をそのまま引用"},
+        {"name": "outcome", "type": "String", "width": 12, "dv": "case_outcome", "header_note": "won=刺さった / lost=刺さらなかった。失敗事例も同じシートに置き、シートを分けない(13章§3.1・v2.6)"},
+        {"name": "why_it_failed", "type": "String", "width": 36, "header_note": "outcome=lost のときの「刺さらなかった理由」。won の行では空欄(解釈欄はナレッジ編集長が書く)"},
         {"name": "registered_by", "type": "String", "width": 16},
         {"name": "registered_at", "type": "String", "width": 18}
       ],
       "reserve_rows": 20,
       "seed_rows": [
-        ["K-0003", "09", "浜松地区の中堅菓子製造業。EC直販比率が拡大中で工場は2拠点", "食品表示・アレルゲン混入によるリコールリスクを有報にも記載していなかった", "生産物賠償責任保険(PL保険。L-03)の増額と食品工場リスク診断サービス(M-0012)のセット提案", "診断で見つかった具体的な管理体制の弱点を先に示した上でPL増額を提案したため経営層が即座に納得した", "うちの管理体制の弱点をここまで具体的に指摘されたのは初めてです", "管理者", "2026-08-29"]
+        ["K-0003", "09", "浜松地区の中堅菓子製造業。EC直販比率が拡大中で工場は2拠点", "食品表示・アレルゲン混入によるリコールリスクを有報にも記載していなかった", "生産物賠償責任保険(PL保険。L-03)の増額と食品工場リスク診断サービス(M-0012)のセット提案", "診断で見つかった具体的な管理体制の弱点を先に示した上でPL増額を提案したため経営層が即座に納得した", "うちの管理体制の弱点をここまで具体的に指摘されたのは初めてです", "won", "", "管理者", "2026-08-29"]
       ],
       "seed_note": "K-0003は15章§4・§8.1のmock必須行(17章T-14前提)。業種09(食品製造)の事例として作成。"
     },
@@ -318,6 +324,28 @@
       ],
       "reserve_rows": 20,
       "seed_note": "初期データは投稿ボックス分析テーマ研究161件を代表テーマ約20行に集約してT-90で投入(13章§3.10)。W0では雛形のみ。"
+    },
+
+    {
+      "name": "事故事例",
+      "spec_ref": "13章§3.11",
+      "columns": [
+        {"name": "inc_id", "type": "String", "width": 14, "header_note": "IC-<業種コード>-NNN(13章§1)"},
+        {"name": "industry_code", "type": "String", "width": 12, "header_note": "業種マスタ実在。業種横断の事例は代表業種に置きlessonへその旨を書く"},
+        {"name": "category", "type": "String", "width": 22, "dv": "category", "header_note": "リスクユニバース10分類。S2出力のcategoryと同一語彙(LoadKnowledgeのE-34検査対象)"},
+        {"name": "headline", "type": "String", "width": 40, "header_note": "事故の見出し(1行・60字以内)"},
+        {"name": "cause", "type": "String", "width": 50, "header_note": "何がどうなって事故に至ったか(原因・経過)"},
+        {"name": "loss_scale", "type": "String", "width": 22, "header_note": "損害規模(公表値・概算。不明なら空欄)"},
+        {"name": "lesson", "type": "String", "width": 50, "header_note": "教訓・確認点(S2のcheck_pointsの材料)。人が書く欄でAIに埋めさせない"},
+        {"name": "source", "type": "String", "width": 26, "header_note": "出所(公表記事・社内支払経験・報道等)。顧客名・個人名は書かない(匿名化して登録する)"}
+      ],
+      "reserve_rows": 30,
+      "seed_rows": [
+        ["IC-09-001", "09", "manufacturing_quality", "菓子工場でのアレルゲン表示誤りによる自主回収", "包装資材の切替時に旧版の表示フィルムが混在し、乳成分の表示が欠落したまま約3万個を出荷した", "回収・廃棄と代替出荷で約8,000万円", "包装資材の切替は現物照合を2名で行う。表示チェックの記録を出荷ロットと紐づけて残す", "公表回収告知(2024年)"],
+        ["IC-09-002", "09", "facility_bcp", "台風による浸水で製造ラインが3週間停止", "河川氾濫で1階の受変電設備が冠水し、電源復旧と設備乾燥に時間を要して主力ラインが停止した", "休業損失を含め約3億円", "受変電設備の設置階と止水板の有無を確認する。代替生産の委託先を事前に決めておく", "業界紙報道(2023年)"],
+        ["IC-09-003", "09", "digital_info", "受注システムへの不正アクセスで出荷が5日間停止", "取引先向けEDIサーバの脆弱性を突かれ、暗号化により受注データが利用不能になった", "復旧費用と機会損失で約6,000万円", "停止時に手作業へ切り替える手順があるかを確認する。バックアップの隔離保管を見る", "社内支払経験(匿名化)"]
+      ],
+      "seed_note": "IC-09-001は15章§3の整形例(mock)に対応する行(業種09)。lessonは人が書く欄であり、AIに埋めさせない(13章§3.11)。"
     }
   ]
 }

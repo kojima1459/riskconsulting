@@ -93,6 +93,13 @@
       "wave": "T-20"
     },
     {
+      "name": "modCaseStore3",
+      "path": "src/app/modCaseStore3.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-56"
+    },
+    {
       "name": "modCaseRead",
       "path": "src/app/modCaseRead.bas",
       "role": "app",
@@ -280,6 +287,13 @@
       "role": "app",
       "type": "std",
       "wave": "T-35"
+    },
+    {
+      "name": "modHtmlTemplate8",
+      "path": "src/app/modHtmlTemplate8.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-56"
     },
     {
       "name": "modExportHtml",
@@ -539,6 +553,13 @@
       "role": "test",
       "type": "std",
       "wave": "W6.1"
+    },
+    {
+      "name": "modTestsPure15",
+      "path": "src/test/modTestsPure15.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-56"
     },
     {
       "name": "modTestsExcel",

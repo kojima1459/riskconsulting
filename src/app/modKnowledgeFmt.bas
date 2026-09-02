@@ -28,6 +28,7 @@ Option Explicit
 ' --- 1行書式(15章§3/§4/§6.1)。"ラベル=列名;..." 形式のスペック ---
 '     ラベルが空なら値だけを出す。値が空の項目は項目ごと省略する。
 Private Const FM_SP_RISK As String = "カテゴリ=category;リスク=risk_name;典型シナリオ=typical_scenario;典型頻度=typical_freq;典型影響=typical_impact;確認点=check_points"
+Private Const FM_SP_INC As String = "カテゴリ=category;見出し=headline;原因=cause;損害規模=loss_scale;教訓=lesson;出所=source"
 Private Const FM_SP_CASE As String = "業種=industry_code;顧客像=customer_profile;提示リスク=risk_presented;提案=proposal;決め手=why_it_worked"
 Private Const FM_SP_RULE As String = "class=rule_class;基準=rule_text"
 Private Const FM_SP_RT As String = "=theme_name;status=status"
@@ -49,6 +50,8 @@ Private Const FM_PP_MECH As String = "適用リスク=target_categories"
 Private Const FM_NONE As String = "(登録なし)"
 Private Const FM_NONE_RISK As String = "(この業種の登録知識はまだありません)"
 Private Const FM_NONE_S3 As String = "なし"
+' 15章§3 {{incidentsText}} の0行時の文言(13章§3.11)。
+Private Const FM_NONE_INC As String = "(この業種の登録事例はまだありません)"
 
 Private Const FM_PIPE As String = " | "
 Private Const FM_SPACE As String = " "
@@ -115,6 +118,12 @@ End Function
 ' FmtMechs - 15章§6.1 mechs(機構ライブラリ抜粋)。Phase1は常に0行=「(登録なし)」。
 Public Function FmtMechs(ByVal rows As Variant) As String
     FmtMechs = RowsText(rows, "mech_id", vbNullString, FM_SP_MECH, FM_PP_MECH, FM_NONE)
+End Function
+
+' FmtIncidents - 15章§3 incidentsText(事故事例。13章§3.11)。空欄の項目は
+'   その部分ごと省略する(market_note と同じ作法)。0行は業種専用の文言。
+Public Function FmtIncidents(ByVal rows As Variant) As String
+    FmtIncidents = RowsText(rows, "inc_id", vbNullString, FM_SP_INC, vbNullString, FM_NONE_INC)
 End Function
 
 ' ============================================================================

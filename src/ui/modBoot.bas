@@ -84,13 +84,13 @@ Private Const BOOT_DV_TYPE_LIST As Long = 3        ' xlValidateList
 Private Const BOOT_DV_ALERT_STOP As Long = 1       ' xlValidAlertStop
 Private Const BOOT_ENABLE_SELECTION_UNLOCKED As Long = 1   ' xlUnlockedCells
 
-' 19章§3レジストリ(data_key・全28値・13章§2.2と完全一致)の内蔵定数複製。
-' modCaseStore の同値の私有定数(CS_DATA_KEYS)とは別に、本モジュール単体で
+' 19章§3レジストリ(data_key・全29値・13章§2.2と完全一致)の内蔵定数複製。
+' modCaseStore3.DataKeys() と同値だが、本モジュール単体で
 ' 起動できるよう独立して保持する(値は19章§3/sheets_main.json enums.data_key
 ' と完全一致させること)。
 Private Const BOOT_DATA_KEYS As String = _
     "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;" & _
-    "input_dossier;input_field_notes;input_coverage_note;" & _
+    "input_dossier;input_field_notes;input_coverage_note;input_finance;" & _
     "input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;" & _
     "s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;" & _
     "s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;" & _

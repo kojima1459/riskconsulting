@@ -127,6 +127,12 @@ Private Function SerializeS3() As String
     modUICaseFmt.AddFrag s, "stories", BlockArrJson("s3_stories", modUICaseFmt.ColsS3Stories())
     modUICaseFmt.AddFrag s, "unmatched_risks", BlockArrJson("s3_unmatched_risks", modUICaseFmt.ColsS3Unmatched())
     modUICaseFmt.AddFrag s, "do_not_propose", BlockArrJson("s3_do_not_propose", modUICaseFmt.ColsS3DoNot())
+    ' 13章§2.14 v2.6: 15章 SchemaS3 は全プロパティ required なので、この2本を
+    ' 落とすと sN_edited が CheckS3(V-S3-14 / V-S3-19)で必ず不合格になる。
+    modUICaseFmt.AddFrag s, "growth_ideas", _
+            BlockArrJson("s3_growth_ideas", modUICaseFmt.ColsS3Growth())
+    modUICaseFmt.AddFrag s, "talk_script", _
+            BlockObjJson("s3_talk_script", modUICaseFmt.ColsS3Talk())
     SerializeS3 = "{" & s & "}"
 End Function
 
@@ -141,6 +147,19 @@ Private Function SerializeS4() As String
     modUICaseFmt.AddFrag s, "slides", BlockArrJson("s4_slides", modUICaseFmt.ColsS4Slides())
     modUICaseFmt.AddFrag s, "hearing_questions", BlockArrJson("s4_hearing_questions", modUICaseFmt.ColsS4Hearing())
     SerializeS4 = "{" & s & "}"
+End Function
+
+' 単一行ブロック(s3_talk_script)を1つのJSONオブジェクトにする(13章§2.14)。
+'   行が読めなければ空のオブジェクト "{}" を返す(キーごと落とすと 15章 SchemaS3
+'   の required を割るため、器だけは必ず出す)。
+Private Function BlockObjJson(ByVal anchorName As String, ByVal colSpec As String) As String
+    BlockObjJson = "{}"
+
+    Dim vals As Variant
+    vals = ReadSingleRow(anchorName, colSpec)
+    If IsEmpty(vals) Then Exit Function
+
+    BlockObjJson = "{" & modUICaseFmt.RowObjJson(colSpec, vals) & "}"
 End Function
 
 ' 単一行ブロック(s1_basic / s4_meta)の1行を読む。読めなければ Empty。

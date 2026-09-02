@@ -392,6 +392,10 @@ Private Sub DrawS3(ByVal jsonText As String)
     DrawArrBlock "s3_stories", modUICaseFmt.ColsS3Stories(), jsonText, "stories"
     DrawArrBlock "s3_unmatched_risks", modUICaseFmt.ColsS3Unmatched(), jsonText, "unmatched_risks"
     DrawArrBlock "s3_do_not_propose", modUICaseFmt.ColsS3DoNot(), jsonText, "do_not_propose"
+    ' 13章§2.14 v2.6: 攻めの保険活用(配列)と経営層への話し方(単数オブジェクト)。
+    DrawArrBlock "s3_growth_ideas", modUICaseFmt.ColsS3Growth(), jsonText, "growth_ideas"
+    DrawSingleRow "s3_talk_script", modUICaseFmt.ColsS3Talk(), _
+                  modUICaseFmt.SubJson(jsonText, "talk_script")
 End Sub
 
 Private Sub DrawS4(ByVal jsonText As String)

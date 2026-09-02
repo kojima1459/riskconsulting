@@ -24,6 +24,7 @@ Option Explicit
 '   W63H RibbonFailure 26本   裁定書24 A-1。リボンの定型失敗文の分類
 '                             (16章 E-15/E-16/E-54〜E-56・14章§2/§6・15章§8.2)
 '   計 61本
+' 末尾から modTestsPure15.RunAll(W7・裁定書25 の16本)を呼ぶ。
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -53,6 +54,9 @@ WG:
 WH:
     On Error GoTo FH
     T_W63H_RibbonFailure
+WI:
+    On Error GoTo FI
+    modTestsPure15.RunAll
 WDone:
     Exit Sub
 FA:
@@ -78,6 +82,9 @@ FG:
     Resume WH
 FH:
     GroupFail "W63H RibbonFailure"
+    Resume WI
+FI:
+    GroupFail "modTestsPure15.RunAll"
     Resume WDone
 End Sub
 
@@ -209,18 +216,26 @@ Private Sub T_W61B_AreaTable()
     ChkS "Test_W61B_02_HandlerNameは2語以上でも各語の頭を大文字にする_13章2.11", _
         modUICase6.HandlerName("ShowArea", "hearing_answers"), "ShowAreaHearingAnswers"
 
-    ' 表の分解: 6欄・並び順・data_key・現場メモはプレビューを持たない。
+    ' 表の分解: 7欄(v2.6・裁定書25 S3 で6→7)・並び順・data_key・現場メモは
+    ' プレビューを持たない。決算・財務は「いまの契約」の次(表示順6番目)。
     Dim keys() As String
     keys = Split(modUICase6.AreaKeys(), vbLf)
     Dim okTable As Boolean
-    okTable = ((UBound(keys) - LBound(keys) + 1) = 6)
+    okTable = ((UBound(keys) - LBound(keys) + 1) = 7)
     okTable = okTable And (keys(LBound(keys)) = "dossier")
     okTable = okTable And (keys(LBound(keys) + 3) = "field_notes")
+    okTable = okTable And (keys(LBound(keys) + 5) = "finance")
+    okTable = okTable And (keys(LBound(keys) + 6) = "hearing_answers")
     okTable = okTable And (modUICase6.AreaField("dossier", 1) = "input_dossier")
     okTable = okTable And (modUICase6.AreaField("dossier", 3) = "ci_prev_dossier")
+    okTable = okTable And (modUICase6.AreaField("finance", 1) = "input_finance")
+    okTable = okTable And (modUICase6.AreaField("finance", 3) = "ci_prev_finance")
+    okTable = okTable And (modUICase6.AreaField("finance", 4) = "ci_raw_finance")
+    okTable = okTable And (modUICase6.AreaField("finance", 5) = "ci_sent_finance")
+    okTable = okTable And (modUICase6.AreaField("finance", 6) = "ci_count_finance")
     okTable = okTable And (LenB(modUICase6.AreaField("field_notes", 3)) = 0)
     okTable = okTable And (modUICase6.AreaField("field_notes", 4) = "ci_area_field_notes")
-    modTestRunner.Check "Test_W61B_03_AreaTableは6欄に分解できる_13章2.11", _
+    modTestRunner.Check "Test_W61B_03_AreaTableは7欄に分解できる_13章2.11", _
         okTable, "keys=[" & modUICase6.AreaKeys() & "]"
 End Sub
 

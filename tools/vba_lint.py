@@ -136,7 +136,10 @@ MODULE_REGISTRY = {
     #   modPipeline2  = 入念モードの批判・改訂パイプ(T-28)。R4許可は与えない
     #                   (modPipeline と同じくシートに触れない)。
     #   modCaseStore2 = 案件2枚の下位シートI/O(R4許可も併せて追加)。
-    "modPipeline2", "modCaseStore2",
+    #   modCaseStore3 = 同じ切り口の3本目(30,000字契約。17章§3の分割バックログ2番。
+    #                   T-56)。data_key の一覧(DataKeys)とラウンド確定の付帯処理
+    #                   (ApplyRoundFocus。13章§2.1 adopted_story_nos/focus_line_ids)。
+    "modPipeline2", "modCaseStore2", "modCaseStore3",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
     "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
     "modHtmlTheme",
@@ -410,6 +413,8 @@ CONTRACT: dict[str, dict] = {
     #   I/O)。modCompanyFile2 と同じく14章§6の公開契約面には載せないため
     #   required は空(closed=False で追加 Public を許容する)。
     "modCaseStore2": {"closed": False, "required": []},
+    # modCaseStore3: 同上(T-56。data_key 一覧とラウンド確定の付帯処理)。
+    "modCaseStore3": {"closed": False, "required": []},
     # modInboxStore: 受信箱シートの唯一の口(T-25)。実行制御2本に加え、14章§6が
     #   宣言した純ロジック7本を required に載せる(裁定書9-3)。InterestSummaryOf
     #   は FR-17 の集計規約(件数集計・降順・2件以上・上限件数)の唯一の値源で、
@@ -581,7 +586,7 @@ R4_EXCEL_ALLOWED_MODULES = {
     "modLog",
     # 以下 store 系。案件・受信箱・判断台帳・ナレッジブックのシートI/Oが責務
     # (12章§2 の R4 但し書き「store系モジュール内は自身の責務範囲で可」)。
-    "modCaseStore", "modInboxStore", "modJudgeStore", "modKnowledge",
+    "modCaseStore", "modCaseStore3", "modInboxStore", "modJudgeStore", "modKnowledge",
     # modCaseStore2: 上と同一責務の分割先(裁定書8 A-2。案件一覧 と case_data の
     #   下位シートI/Oだけを切り出したもの)。許可の幅は modCaseStore と同じ
     #   「本体ブックの案件2枚」で広がっていない。

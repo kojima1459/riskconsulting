@@ -41,7 +41,14 @@ Public Function ColsS1Basic() As String
     s = s & "aspirations:a@strategy_outlook.aspirations;"
     s = s & "market_context:s@strategy_outlook.market_context;"
     s = s & "input_quality_overall:e:input_quality_overall@input_quality.overall;"
-    s = s & "input_quality_advice:s@input_quality.advice"
+    s = s & "input_quality_advice:s@input_quality.advice;"
+    ' v2.6(裁定書25 S3): financials の6項目を fin_ 接頭辞で本ブロックへ収める。
+    s = s & "fin_fiscal_year:s@financials.fiscal_year;"
+    s = s & "fin_net_assets:s@financials.net_assets;"
+    s = s & "fin_sales:s@financials.sales;"
+    s = s & "fin_operating_profit:s@financials.operating_profit;"
+    s = s & "fin_source:e:financials_source@financials.source;"
+    s = s & "fin_note:s@financials.note"
     ColsS1Basic = s
 End Function
 
@@ -51,7 +58,8 @@ Public Function ColsS1Locations() As String
 End Function
 
 Public Function ColsS1Coverage() As String
-    ColsS1Coverage = "seq:o;line_name:s;coverage_summary:s;limit_note:s;special_note:s"
+    ColsS1Coverage = "seq:o;line_name:s;coverage_summary:s;limit_note:s;" & _
+                     "special_note:s;certainty:e:certainty"
 End Function
 
 Public Function ColsS1Insights() As String
@@ -84,6 +92,7 @@ Public Function ColsS2Risks() As String
     s = s & "evidence_source:e:evidence_source@evidence.source;"
     s = s & "transferability:e:transferability@insurability.transferability;"
     s = s & "line_note:s@insurability.line_note;"
+    s = s & "gap_note:s@insurability.gap_note;"
     s = s & "control_note:s@insurability.control_note;"
     s = s & "loss_scale_note:s;check_points:a;preventions:p"
     ColsS2Risks = s
@@ -114,6 +123,17 @@ Public Function ColsS3DoNot() As String
     ColsS3DoNot = "seq:o;topic:s;reason:s"
 End Function
 
+' 13章§2.14 v2.6 追補: 攻めの保険活用(15章 SchemaS3 の growth_ideas)。
+Public Function ColsS3Growth() As String
+    ColsS3Growth = "title:s;what:s;why:s;insurance_fit:s;effect:n;" & _
+                   "difficulty:e:growth_difficulty"
+End Function
+
+' 13章§2.14 v2.6: 経営層向けトークスクリプト(データ1行のみ)。
+Public Function ColsS3Talk() As String
+    ColsS3Talk = "opening:s;flow:a;closing:s;taboo:a"
+End Function
+
 Public Function ColsS4Meta() As String
     ColsS4Meta = "file_title:s"
 End Function
@@ -135,7 +155,8 @@ Public Function AnchorsOf(ByVal stepNo As Long) As String
     Case 2
         AnchorsOf = "s2_gaps;s2_risks;s2_open_questions;s2_emerging"
     Case 3
-        AnchorsOf = "s3_stories;s3_unmatched_risks;s3_do_not_propose"
+        AnchorsOf = "s3_stories;s3_unmatched_risks;s3_do_not_propose;" & _
+                    "s3_growth_ideas;s3_talk_script"
     Case 4
         AnchorsOf = "s4_meta;s4_slides;s4_hearing_questions"
     End Select
