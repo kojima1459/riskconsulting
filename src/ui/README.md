@@ -9,7 +9,8 @@
 | `modBoot` | 起動シーケンス(12章§2.1の7手順)・ガードシート制御 | T-16 |
 | `modUISheet` | ui層のシート操作プリミティブ(名前付きレンジ・ブロックアンカー・図形ボタン＋OnAction配線・クリップボード) | T-30 |
 | `modUIProgress` | `SetStage` / `TryEnterUiLock` / `ExitUiLock` / `ParkFocus`(14章§6・16章 E-11/E-50/E-51) | T-30 |
-| `modUIHome` | HOMEの描画・プレイ起動・赤帯・出力・企業ファイル・画面遷移 | T-30 |
+| `modUIHome` | HOMEの描画・状態表示・図形ボタンの配置表・赤帯 | T-30 |
+| `modUIHome2` | 上の分割先（30,000字契約・17章§7 Z-13）。HOMEとS1～S4のOnActionハンドラ群（プレイ起動・出力・企業ファイル・画面遷移） | T-30 |
 | `modUICase` | enum変換表(19章§3と一致必須)・入力規則の隠しレンジ・匿名化(E-31)の置換/復元・S1～S4の入口 | T-31 |
 | `modUICaseFmt` | 13章§2.2 セル格納規約の変換(セル⇔JSON値)と 13章§2.12-§2.15 の列定義。純関数 | T-31 |
 | `modUICase2` | S1～S4シートの描画と逆シリアライズ(`SerializeSheet` の本体) | T-31 |

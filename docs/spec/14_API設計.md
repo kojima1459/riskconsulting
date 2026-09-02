@@ -716,7 +716,7 @@ Public Function LastDeepOutcome() As String
 ' 直近の実行が回した入念パイプの結末（裁定書9 N1・B9。契約はv2.5.1・裁定書10 M1で改訂）。
 '   値は `DeepOutcomeOf` の4値のうち**警告を伴う2値**（`critique_skipped` / `revision_discarded`）
 '   と、警告が要らない場合の `""` の3通り。**`RunStep` は本値をリセットしない**。リセットは
-'   下の `ResetDeepOutcome`（N9）のみが行い、ui層（`modUIHome.RunStepUi` / `HomeRunAll`）が
+'   下の `ResetDeepOutcome`（N9）のみが行い、ui層（`modUIHome2.RunStepUi` / `HomeRunAll`）が
 '   **実行開始前に1回**呼ぶ。したがって本関数は「その実行で最後に立った非空 outcome」を返す
 '   （一括実行では Step2/3 で立った outcome が Step4 の実行後も残る＝E-35/E-36 警告が
 '   `RunAll` でも消えない。旧契約の「RunStep 開始時リセット」は一括実行で警告を握り潰すため廃止）。
@@ -727,7 +727,7 @@ Public Function LastDeepOutcome() As String
 '   2例目。理由: `RunStep` の Boolean 戻り値の契約を変えずに E-35/E-36 を ui へ渡す口が他に無い）
 Public Sub ResetDeepOutcome()
 ' deep outcome の**明示リセット口**（v2.5.1・裁定書10 N9/M1）。`LastDeepOutcome` の内部状態を
-'   "" へ戻す。呼ぶのは ui層（`modUIHome.RunStepUi` / `HomeRunAll`）の**実行開始前に1回**だけ。
+'   "" へ戻す。呼ぶのは ui層（`modUIHome2.RunStepUi` / `HomeRunAll`）の**実行開始前に1回**だけ。
 '   `RunStep` / `RunAll` 自身は呼ばない（実行の途中で立った警告を実行自身が消さない）
 
 ' === app: modSparring（PL-04 壁打ち。T-27。裁定書8 B-9）===
@@ -880,7 +880,7 @@ Public Function SetStatus(ByVal caseId As String, ByVal status As String) As Boo
 '   弾かれる。本関数が課すのは enum 検査だけであり、**遷移の整合は `RepairStates` が担う**
 '   （`CanTransition` は11章§4の遷移表の宣言であり、修復の期待値を層(a)で検査するための純核）。
 '   `exported` / `feedback_done` の書込点は次の2つに固定する（裁定書9 B16(b)）:
-'     `exported`      = `modUIHome.HomeExportHtml` の**成功分岐**（HTMLレポートの生成成功時）
+'     `exported`      = `modUIHome2.HomeExportHtml` の**成功分岐**（HTMLレポートの生成成功時）
 '     `feedback_done` = `modUICase4.FeedbackSave` の**成功分岐**（フィードバック保存の成功時）
 '   これにより `CS_STATUSES_ABOVE_S4` の降格抑止（s4_done より上の状態から巻き戻さない）が
 '   到達可能になる。出力・記録の失敗は状態を動かさない（16章 E-48）
@@ -1199,8 +1199,8 @@ Public Function RunExcelTests2() As Long
   | - | `modUICase.RebindFlatValidation` | 公開関数（ui層内部ヘルパ） | 本章§6 | フラット表（f種別）の入力規則を1シートぶん張り直す口。受信箱の投函下書き行を行挿入で用意したときに ui層から呼ぶ（v2.5.2・裁定書11 Q3(a)。13章§2.6） |
   | - | `modUICase4.CopyResearchRow` | 公開関数（図形ボタンの OnAction） | 本章§6 | 追加収集の[コピー]。30,000字契約により `modUICase3` から移設（v2.5.2・裁定書11 Q1。移設前の名は `modUICase3.CopyResearchRow`。呼出は図形の OnAction 文字列のみ） |
   | - | `modTestsExcel2.RunExcelTests2` | 公開関数（test層の分割先の入口） | 本章§6 | 30,000字契約による `modTestsExcel` の分割先。呼んでよいのは `RunAllExcelTests` のみ（v2.5.2・裁定書11 Q9/Q1） |
-  | - | `modUICase4.ClearCaseInput` | 公開関数（ui層内部ヘルパ） | 本章§6・13章§2.11 | 案件入力の全クリア（属性欄11・貼付欄17・実行後表示欄）。`modUIHome.HomeNewCase` が `ci_case_id` へ `(新規)` を書く**前**に呼ぶ。呼んでよいのは modUIHome のみ。30,000字契約により `modUICase3` に置けないため `CopyResearchRow` と同じ移設先へ置く（v2.5.4・裁定書13 W1） |
-  | - | `modUICase3.U3_NEW_MARK`（値 `(新規)`） | 公開定数（モジュール間で共有する固定マーカー。`modInboxStore.IB_DRAFT_MARK` と同作法） | 本章§6・13章§2.11 | 案件入力の**新規モード**の固定マーカー。HOMEの[＋新規案件]（`modUIHome.HomeNewCase`）が `ci_case_id` へ書き、`modUICase3.CaseSave` の3値判定がこの値のときだけ採番する（v2.5.3・裁定書12 V1）。**公開関数の新設は本波では無い** |
+  | - | `modUICase4.ClearCaseInput` | 公開関数（ui層内部ヘルパ） | 本章§6・13章§2.11 | 案件入力の全クリア（属性欄11・貼付欄17・実行後表示欄）。`modUIHome2.HomeNewCase` が `ci_case_id` へ `(新規)` を書く**前**に呼ぶ。呼んでよいのは modUIHome2 のみ。30,000字契約により `modUICase3` に置けないため `CopyResearchRow` と同じ移設先へ置く（v2.5.4・裁定書13 W1） |
+  | - | `modUICase3.U3_NEW_MARK`（値 `(新規)`） | 公開定数（モジュール間で共有する固定マーカー。`modInboxStore.IB_DRAFT_MARK` と同作法） | 本章§6・13章§2.11 | 案件入力の**新規モード**の固定マーカー。HOMEの[＋新規案件]（`modUIHome2.HomeNewCase`）が `ci_case_id` へ書き、`modUICase3.CaseSave` の3値判定がこの値のときだけ採番する（v2.5.3・裁定書12 V1）。**公開関数の新設は本波では無い** |
   | - | `modUICase5` の Public 4本（`SerializeBody` / `ColIndexes` / `ColCount` / `RoomOf`） | ui層内部ヘルパ（W4.1分割裁定） | 本章§6 | 30,000字契約による `modUICase2` の分割先。呼んでよいのは modUICase2 のみ（裁定書10 §1でM2を解消） |
 
   | - | `modUIGuide`（`StartTourIfFirstRun` / `RestartTour` / `OnTourNext` / `OnTourSkip` / `ClearTour` / `EnsureGuideButtons`） | 公開関数（ui層。図形の OnAction と modBoot からの結線先） | 本章§6・13章§2.18 | 初回ガイドツアー（カード3枚）と`操作ガイド`の図形ボタン。起動シーケンスからの結線は `modBoot` の**1行**（`StartTourIfFirstRun`）だけ。`EnsureGuideButtons` は `modUIHome.EnsureScreens` が他の `Ensure*Buttons` と同じ並びで呼ぶ（v2.5.5・裁定書14 裁定6） |
@@ -1218,6 +1218,14 @@ Public Function RunExcelTests2() As Long
   | - | Shape接頭辞 `ts_` | 図形名の接頭辞（トーストのカード） | 本章§6 | `modUIToast` が置く図形はすべてこの接頭辞。削除は `modUISheet.DropShapesByPrefix` に委ねる。既存の `btn_` / `lbl_` / `btncopy_` / `gt_` と衝突しない（v2.5.6・裁定書17 H2） |
   | - | `modBoot.KbAutoNote() As String` | 公開関数（ui層。読み出し専用） | 本章§6・13章§2.3 | 起動時の**ナレッジブック自動発見**（config `kb_path` が空／プレースホルダ `\\...\`／`Dir$` で不在のとき、`ThisWorkbook.Path & "\ナレッジブック.xlsx"` を探して `kb_path` へ書く）で実際に書いたときだけ「同じフォルダのナレッジブックを読み込みました。」を返す。**探索そのものは `modBoot` の Private 1本**（`ResolveKbPath`。起動処理を modBoot 以外へ散らさない）で、読むのは `modUIHome.KbStatusText` だけ（v2.5.6・裁定書17 H1） |
   | - | `modUISheet.EnsureButtonEx` の `kind="primary"` の高さ | 図形ボタンの寸法規約 | 13章§2.10 | 主要動線だけボタン高を**30pt**にする（他は従来どおり26pt）。高さを決める場所は `modUISheet.BtnHeightOf` の1本で、`AddShape` と行高の確保が同じ値を読む。**公開シグネチャは不変**（v2.5.6・裁定書17 H3(a)） |
+
+  **登記の移設（v3.0・17章§7 Z-13の30,000字契約分割）**: 下表は**新機能ではなく移設**である。移設した公開名は移設先モジュールへ読み替える（挙動・シグネチャ・文言は1字も変えていない）。
+
+  | # | 名前 | 種別 | 正 | 内容 |
+  |---|---|---|---|---|
+  | - | `modUIHome2` の公開ハンドラ18本（`HomeRunAll` / `HomeRunS1`～`HomeRunS4` / `HomeNewCase` / `HomeOpenCaseInput` / `HomeOpenInbox` / `HomeOpenFeedback` / `HomeOpenJudgeLog` / `HomeOpenSparring` / `HomeFreezeRound` / `HomeExportHtml` / `HomeBuildHearing` / `HomeCompanySave` / `HomeCompanyOpen` / `HomeReloadKnowledge` / `HomePreflightAll`） | 公開関数（ui層。図形の OnAction 結線先） | 本章§6・11章§5・13章§2.10 | **`modUIHome` からの移設**（30,000字契約。17章§7 Z-13）。分割の軸は「画面＝`modUIHome` / 動作＝`modUIHome2`」。OnAction 文字列・`modUICase2.EnsureStepButtons` の結線先も同じ修飾名へ同期済み。全ハンドラが先頭で `modUIProgress.TryEnterUiLock` を通す規約（16章 E-11）は不変 |
+  | - | `modUIHome.SelectedCaseId()` / `ShowWarning(messageText, [kind])` / `DrawAllSteps(caseId)` / `WriteRoundNo(roundNo)` | 公開関数（ui層内部ヘルパ。呼んでよいのは `modUIHome2` のみ） | 本章§6・13章§2.10 | 分割で `modUIHome2` へ渡す**画面側の口**（Private からの可視性変更3本＋新設1本）。名前付きレンジ名の定数（`hm_case_id` / `hm_warning` / `hm_round_no`）を2モジュールに持たないための一方通行の借り口であり、`WriteRoundNo` は `HomeFreezeRound` が `hm_round_no` を書く1行を包んだだけ（値の決定は `modCaseStore.FreezeRound` が唯一持つ） |
+  | - | `modKnowledge2` の公開8本（`PickAt` / `CellAt` / `CellRaw` / `AddIdList` / `ColOf` / `SelectRows` / `MissingColsOf` / `BadRowsOf`） | 公開関数（app層の**純関数**。呼んでよいのは `modKnowledge` のみ） | 本章§6・13章§3・16章 E-34 | **`modKnowledge` からの移設**（30,000字契約。17章§7 Z-13）。分割の軸は「シートに触る側＝`modKnowledge` / **シートを触らない純関数**＝`modKnowledge2`」で、`modKnowledgeFmt` が15章の整形規約を持つのと同じ切り口。Excelトークンを持たないので R4 の許可モジュールへは足さず、層(a)から直接叩ける。絞込スペック `"ind^tgt^act^sts^suf^ref"` の規約は `modKnowledge2` 冒頭が正 |
 
   これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。
 
