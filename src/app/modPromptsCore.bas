@@ -95,7 +95,14 @@ Public Function BuildS1System() As String
     s = s & "   (調査AIアプリは取得できなかった理由を捏造することがある)。" & vbLf
     s = s & "9. 【付保の見立て】は営業の伝聞であり確度が低い。事実として断定せず、" & vbLf
     s = s & "   current_coverage や本文の値に反映する場合は値の先頭に「(見立て)」を付す。" & vbLf
-    s = s & "   ただし input_quality の insurance_ctx 観点の充足度評価には算入する。"
+    s = s & "   ただし input_quality の insurance_ctx 観点の充足度評価には算入する。" & vbLf
+    s = s & "   現契約サマリから読み取った契約は certainty=""confirmed""、【付保の見立て】等からの推定は" & vbLf
+    s = s & "   certainty=""assumed"" とする。" & vbLf
+    s = s & "10. 【決算・財務】から financials を組み立てる。読み取れない項目は文字列 ""不明"" とする。" & vbLf
+    s = s & "   決算公告は貸借対照表の要旨だけの掲載が多く、純資産と当期純利益しか読み取れないことがある。" & vbLf
+    s = s & "   その場合も残りを推測で埋めず ""不明"" とする。単位（円・千円・百万円）は原文の表記を保つ。" & vbLf
+    s = s & "   source は出所を1つ選ぶ(yuho=有価証券報告書 / kessan_kokoku=決算公告 /" & vbLf
+    s = s & "   tdb=帝国データバンク等の信用調査 / view=VIEW情報 / memo=営業メモ / unknown=不明)。"
     BuildS1System = s
 End Function
 
@@ -140,6 +147,9 @@ Public Function BuildS1User() As String
     s = s & vbLf
     s = s & "【前回訪問のヒアリング回答（第2ラウンド以降。未提供の場合は「なし」）】" & vbLf
     s = s & "{{hearingAnswersText}}" & vbLf
+    s = s & vbLf
+    s = s & "【決算・財務（決算公告・有価証券報告書・信用調査等の数値。未提供の場合は「なし」）】" & vbLf
+    s = s & "{{financeText}}" & vbLf
     s = s & "■■■企業情報ここまで■■■" & vbLf
     s = s & vbLf
     s = s & "出力するJSONの形式（この構造・キー名に厳密に従うこと）:" & vbLf
@@ -159,7 +169,12 @@ Public Function BuildS1User() As String
     s = s & "                       ""aspirations"": [""いま力を入れている事業・やろうとしていること(1項目1文)""]," & vbLf
     s = s & "                       ""market_context"": ""置かれた市場環境の要約(なければ\""不明\"")""}," & vbLf
     s = s & "  ""current_coverage"": [{""line_name"": ""種目名(現契約サマリの表記のまま)"", ""coverage_summary"": ""補償内容の要約""," & vbLf
-    s = s & "                        ""limit_note"": ""限度額・保険金額(不明なら\""不明\"")"", ""special_note"": ""主要特約・免責等(なければ\""不明\"")""}]," & vbLf
+    s = s & "                        ""limit_note"": ""限度額・保険金額(不明なら\""不明\"")"", ""special_note"": ""主要特約・免責等(なければ\""不明\"")""," & vbLf
+    s = s & "                        ""certainty"": ""confirmed/assumed""}]," & vbLf
+    s = s & "  ""financials"": {""fiscal_year"": ""決算期(例: 2025年3月期。不明なら\""不明\"")""," & vbLf
+    s = s & "                 ""net_assets"": ""純資産(原文の単位のまま。不明なら\""不明\"")""," & vbLf
+    s = s & "                 ""sales"": ""売上高(不明なら\""不明\"")"", ""operating_profit"": ""営業利益(不明なら\""不明\"")""," & vbLf
+    s = s & "                 ""source"": ""yuho/kessan_kokoku/tdb/view/memo/unknown"", ""note"": ""補足(なければ\""不明\"")""}," & vbLf
     s = s & "  ""field_insights"": [{""note"": ""現場メモの原文(要約しない)"", ""tag"": ""risk_clue/relationship/competitor/constraint/opportunity/other""}]," & vbLf
     s = s & "  ""missing_info"": [{""item"": ""知りたい情報"", ""why_needed"": ""なぜリスク分析に必要か(1文)""}]," & vbLf
     s = s & "  ""input_quality"": {" & vbLf
@@ -170,7 +185,8 @@ Public Function BuildS1User() As String
     s = s & "  ""research_requests"": [{""purpose"": ""何を埋めるための調査か(対象aspectを含め1文)""," & vbLf
     s = s & "                         ""prompt_text"": ""調査AIアプリにそのまま貼れるプロンプト全文(企業名・拠点等の固有情報を埋め込む)""}]" & vbLf
     s = s & "}" & vbLf
-    s = s & "※新規案件（現契約サマリが「なし」）の場合、current_coverage は [] とする。" & vbLf
+    s = s & "※現契約サマリが「なし」でも、【付保の見立て】から付保状態が読み取れる場合は certainty=""assumed"" として current_coverage に出す（読み取れなければ [] とする）。" & vbLf
+    s = s & "※【決算・財務】が「なし」の場合も financials は必ず出力し、全項目を ""不明""（source は ""unknown""）とする。" & vbLf
     s = s & "※input_quality.coverage は14観点(profile, business, sites, history, news, hr, finance_risk, sales_memo, sns, competitors, market, finance, insurance_ctx, hazard)を必ず各1回出力する。" & vbLf
     s = s & "※全観点が ok の場合、research_requests は [] とする。"
     BuildS1User = s
@@ -217,20 +233,22 @@ Public Function BuildS2System() As String
     s = s & "10. 各リスクに insurability(保険による移転可能性)を付ける。" & vbLf
     s = s & "   transferability: cover=既存の保険で比較的移転しやすい / partial=条件付き・部分的 /" & vbLf
     s = s & "   hard=保険化困難(価格変動・需要減・技能喪失など保険事故に当たらないもの)。" & vbLf
-    s = s & "   line_note には想定される既存種目の一般名称と主な確認点(免責・限度額・トリガー)を、" & vbLf
-    s = s & "   control_note には保険以外の管理策(回避・低減・保有)を、各50字以内で書く。" & vbLf
+    s = s & "   line_note には想定される既存種目の一般名称を、gap_note にはその補償で確認すべき点" & vbLf
+    s = s & "   (免責・限度額・トリガー・対象外になりやすい損害)を、control_note には保険以外の" & vbLf
+    s = s & "   管理策(回避・低減・保有)を、各50字以内で書く。" & vbLf
     s = s & "   hard のリスクも省略しない。「保険で解決できないが経営上重要」と示すこと自体が" & vbLf
     s = s & "   リスクコンサルティングの価値である。" & vbLf
-    s = s & "11. loss_scale_note には損害規模の目安を書く。入力に財務データ(売上・純資産等)がある場合は" & vbLf
-    s = s & "   「純資産◯億円に対し損害◯億円規模」のような財務体力との対比を書く(概算と明記)。" & vbLf
-    s = s & "   数字の材料が無い場合は空文字 """" とする。数字の創作は重大な誤りである。" & vbLf
+    s = s & "11. loss_scale_note には損害規模の目安を書く。企業プロファイルの financials.net_assets が" & vbLf
+    s = s & "   ""不明"" 以外のときは、必ず「純資産◯億円に対し損害◯億円規模(概算)」という財務体力との" & vbLf
+    s = s & "   対比の形で書く(単位は financials の表記に合わせる)。" & vbLf
+    s = s & "   財務データが無い(net_assets が ""不明"")場合は空文字 """" とする。数字の創作は重大な誤りである。" & vbLf
     s = s & "12. status は初回生成では必ず ""proposed"" とする。■■■前回ラウンドのリスク仮説とヒアリング回答■■■が" & vbLf
     s = s & "   提供されている再実行(第2ラウンド以降)では、前回の各リスクを引き継いだうえで、回答により" & vbLf
     s = s & "   裏づけられたものを ""confirmed""、否定されたものを ""rejected""(削除はしない。理由を scenario" & vbLf
     s = s & "   末尾に追記)、回答から新たに発見したリスクを ""new"" とする。提案書が訪問のたびに成長する。" & vbLf
     s = s & "   これが本製品の中核思想である。" & vbLf
     s = s & "13. リスクユニバース10分類の定番類型に加え、新種・新興のリスク(サイバー・気候変動・規制変化・" & vbLf
-    s = s & "   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0～3件" & vbLf
+    s = s & "   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0～5件" & vbLf
     s = s & "   emerging_risks に挙げる。一般論の羅列は禁止。当てはまりの根拠を書く。" & vbLf
     s = s & "   該当が薄ければ空配列とする(無理に埋めない)。"
     BuildS2System = s
@@ -244,6 +262,8 @@ Public Function BuildS2User() As String
     s = ""
     s = s & "{{BLOCK_CTX}}" & vbLf
     s = s & "{{BLOCK_RENEWAL_S2}}" & vbLf
+    s = s & "{{BLOCK_NEW_S2}}" & vbLf
+    s = s & "{{BLOCK_ROUND2_FOCUS}}" & vbLf
     s = s & vbLf
     s = s & "■■■企業プロファイル(Step1の結果・人による修正済み)ここから■■■" & vbLf
     s = s & "{{s1Json}}" & vbLf
@@ -252,6 +272,10 @@ Public Function BuildS2User() As String
     s = s & "■■■社内リスク知識(この業種の典型リスク。参考情報)ここから■■■" & vbLf
     s = s & "{{riskLibText}}" & vbLf
     s = s & "■■■社内リスク知識ここまで■■■" & vbLf
+    s = s & vbLf
+    s = s & "■■■社内の事故事例(この業種で実際に起きた事故。参考情報)ここから■■■" & vbLf
+    s = s & "{{incidentsText}}" & vbLf
+    s = s & "■■■社内の事故事例ここまで■■■" & vbLf
     s = s & vbLf
     s = s & "■■■当社メニュー一覧(要約。preventionsのrelated_menu_idはこの中からのみ)ここから■■■" & vbLf
     s = s & "{{menusText}}" & vbLf
@@ -281,7 +305,8 @@ Public Function BuildS2User() As String
     s = s & "      ""impact_score"": 4," & vbLf
     s = s & "      ""evidence"": {""quote"": ""根拠となる原文の短い引用"", ""source"": ""hp/yuho/memo/contract/prev_renewal/knowledge/inference""}," & vbLf
     s = s & "      ""insurability"": {""transferability"": ""cover/partial/hard""," & vbLf
-    s = s & "                       ""line_note"": ""想定既存種目の一般名称と主な確認点(50字以内)""," & vbLf
+    s = s & "                       ""line_note"": ""想定される既存種目の一般名称(50字以内)""," & vbLf
+    s = s & "                       ""gap_note"": ""その補償で確認すべき点=免責・限度額・トリガー等(50字以内)""," & vbLf
     s = s & "                       ""control_note"": ""保険以外の管理策=回避・低減・保有(50字以内)""}," & vbLf
     s = s & "      ""loss_scale_note"": ""損害規模の目安・財務体力との対比(概算と明記。材料が無ければ\""\"")""," & vbLf
     s = s & "      ""check_points"": [""現地・ヒアリングでの確認点""]," & vbLf
@@ -311,9 +336,9 @@ Public Function BuildS2User() As String
     s = s & "  ]," & vbLf
     s = s & "  ""open_questions"": [""リスク評価の精度向上のため顧客に確認すべき事項""]" & vbLf
     s = s & "}" & vbLf
-    s = s & "※新規案件では gaps は [] とする。" & vbLf
+    s = s & "※新規案件では gap_type は uninsured のみを使い、coverage_evidence は「該当契約なし」または【付保の見立て】からの引用とする。" & vbLf
     s = s & "※horizon は already=既に顕在化 / near=1～3年 / mid_long=3年超 とする。" & vbLf
-    s = s & "※この企業に当てはまる新種・新興リスクが無ければ emerging_risks は [] とする。"
+    s = s & "※emerging_risks は0～5件とする。この企業に当てはまる新種・新興リスクが無ければ [] とする。"
     BuildS2User = s
 End Function
 
@@ -354,7 +379,16 @@ Public Function BuildS3System() As String
     s = s & "   価格前提の提案にしない)。メモが無い種目については市況に言及しない。" & vbLf
     s = s & "11. 企業プロファイル(要約)の current_coverage は、proposal_kind の判定に使う。" & vbLf
     s = s & "   既にある契約の限度額・範囲を広げる提案は upsell、current_coverage に無い種目の提案は" & vbLf
-    s = s & "   cross_sell とする(新規案件では current_coverage が空配列なので upsell は使わない)。"
+    s = s & "   cross_sell とする(新規案件では current_coverage が空配列なので upsell は使わない)。" & vbLf
+    s = s & "12. talk_script は、経営層(社長・役員)との商談でそのまま声に出せるトークの筋書きである。" & vbLf
+    s = s & "   opening は冒頭の一言(80字以内)で、保険の話から入らず経営のアジェンダから入る。" & vbLf
+    s = s & "   flow は話す順序を3～5文で書き、各要素は1文とする。順序は" & vbLf
+    s = s & "   (1)守る対象を再定義 (2)止まり方を可視化 (3)保有と移転を最適化 (4)保険を成長に使う" & vbLf
+    s = s & "   の流れに相当させる(4文に満たない場合もこの順序を崩さない)。" & vbLf
+    s = s & "   closing は次の一歩を促す1文。" & vbLf
+    s = s & "   taboo には、企業プロファイルの field_insights のうちタグが constraint のもの" & vbLf
+    s = s & "   (避けるべき表現・提案)を、商談で触れてはいけない事項として短く言い換えて列挙する。" & vbLf
+    s = s & "   constraint が無ければ空配列とする(創作しない)。"
     BuildS3System = s
 End Function
 
@@ -366,6 +400,7 @@ Public Function BuildS3User() As String
     s = ""
     s = s & "{{BLOCK_CTX}}" & vbLf
     s = s & "{{BLOCK_RENEWAL_S3}}" & vbLf
+    s = s & "{{BLOCK_ROUND2_FOCUS}}" & vbLf
     s = s & vbLf
     s = s & "■■■企業プロファイル(要約: business_summary / strategy_outlook / current_coverage / field_insights)ここから■■■" & vbLf
     s = s & "{{s1SummaryJson}}" & vbLf
@@ -393,6 +428,7 @@ Public Function BuildS3User() As String
     s = s & vbLf
     s = s & "商談用の提案ストーリー3本を、指定のJSON形式で出力してください。" & vbLf
     s = s & "あわせて、保険を本業の拡大に使うアイデア(攻めの保険活用)を4～8件、growth_ideas に出してください。" & vbLf
+    s = s & "あわせて、経営層向けのトークスクリプトを talk_script に1本出してください。" & vbLf
     s = s & vbLf
     s = s & "出力するJSONの形式:" & vbLf
     s = s & "{" & vbLf
@@ -428,13 +464,21 @@ Public Function BuildS3User() As String
     s = s & "      ""effect"": 4," & vbLf
     s = s & "      ""difficulty"": ""low/mid/high""" & vbLf
     s = s & "    }" & vbLf
-    s = s & "  ]" & vbLf
+    s = s & "  ]," & vbLf
+    s = s & "  ""talk_script"": {" & vbLf
+    s = s & "    ""opening"": ""冒頭の一言(経営のアジェンダから入る・80字以内)""," & vbLf
+    s = s & "    ""flow"": [""話す順序を1文ずつ(3～5文)""]," & vbLf
+    s = s & "    ""closing"": ""次の一歩を促す1文""," & vbLf
+    s = s & "    ""taboo"": [""商談で触れてはいけない事項(field_insights の constraint 由来。無ければ空配列)""]" & vbLf
+    s = s & "  }" & vbLf
     s = s & "}" & vbLf
     s = s & "※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。" & vbLf
     s = s & "※do_not_propose は該当が無ければ [] とする(水増し禁止)。" & vbLf
     s = s & "※growth_ideas は目の前のリスクへの打ち手(stories)ではなく、顧客の事業機会を広げる発想である。" & vbLf
     s = s & "※growth_ideas に menu_ids / line_ids は持たせない。保険との接点は insurance_fit の自由文で書く。" & vbLf
-    s = s & "※growth_ideas の title は stories の headline と同じ文言にしない(同じ案を2箇所に出さない)。"
+    s = s & "※growth_ideas の title は stories の headline と同じ文言にしない(同じ案を2箇所に出さない)。" & vbLf
+    s = s & "※talk_script の flow は3～5要素とし、各要素は1文にする。" & vbLf
+    s = s & "※talk_script の taboo は field_insights の constraint タグに根拠を持たせる。該当が無ければ [] とする。"
     BuildS3User = s
 End Function
 
@@ -445,7 +489,7 @@ Public Function BuildS4System() As String
     Dim s As String
     s = ""
     s = s & "あなたは大手損害保険グループの提案書づくりが上手いコンサルタントです。" & vbLf
-    s = s & "分析結果を、商談用のPowerPoint骨子とヒアリング質問リストにまとめます。" & vbLf
+    s = s & "分析結果を、商談用の提案書骨子とヒアリング質問リストにまとめます。" & vbLf
     s = s & vbLf
     s = s & "必ず守るルール:" & vbLf
     s = s & "1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5～{{pptMaxSlidesT2}}枚まで拡張可。" & vbLf

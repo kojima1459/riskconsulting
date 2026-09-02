@@ -24,6 +24,7 @@ Option Explicit
 '   W63H RibbonFailure 26本   裁定書24 A-1。リボンの定型失敗文の分類
 '                             (16章 E-15/E-16/E-54〜E-56・14章§2/§6・15章§8.2)
 '   計 61本
+' 末尾から modTestsPure15.RunAll(W7・裁定書25 の12本)を呼ぶ。
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -53,6 +54,9 @@ WG:
 WH:
     On Error GoTo FH
     T_W63H_RibbonFailure
+WI:
+    On Error GoTo FI
+    modTestsPure15.RunAll
 WDone:
     Exit Sub
 FA:
@@ -78,6 +82,9 @@ FG:
     Resume WH
 FH:
     GroupFail "W63H RibbonFailure"
+    Resume WI
+FI:
+    GroupFail "modTestsPure15.RunAll"
     Resume WDone
 End Sub
 

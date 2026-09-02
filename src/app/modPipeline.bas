@@ -76,6 +76,7 @@ Private Type TChkCtx
     schemesText As String
     casesText As String
     riskLibText As String
+    s1Json As String
     s2Json As String
     prevS2Json As String
     fieldNoteProvided As Boolean
@@ -232,12 +233,12 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
                               ByRef detailAcc As String) As Boolean
     Dim limitChars As Long
     Dim pasted(0 To 8) As String
-    Dim s1Json As String, s3Json As String, hearing As String, variantNote As String
+    Dim s3Json As String, hearing As String, variantNote As String
 
     limitChars = ContextLimitOf(ctx.dossier_tier)
     If c.stepNo >= 2 Then
-        s1Json = modCaseStore.ResolveStepJson(caseId, 1)
-        If Not Upstream(s1Json, "s1") Then Exit Function
+        c.s1Json = modCaseStore.ResolveStepJson(caseId, 1)
+        If Not Upstream(c.s1Json, "s1") Then Exit Function
     End If
     If c.stepNo >= 3 Then
         c.s2Json = modCaseStore.ResolveStepJson(caseId, 2)
@@ -248,8 +249,7 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
     Case 1
         LoadPasted caseId, limitChars, pasted, detailAcc, c
         sysText = modPromptsCore.BuildS1System()
-        userText = modPromptsOps.AsmS1User(ctx, pasted(0), pasted(1), pasted(2), pasted(3), _
-                                           pasted(4), pasted(5), pasted(6), pasted(7), pasted(8))
+        userText = modPipeline3.S1UserText(ctx, caseId, pasted)
         schemaText = modSchemas.SchemaS1()
 
     Case 2
@@ -257,14 +257,14 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
         c.prevS2Json = OrNone(modCaseStore.LoadData(caseId, "s2_prev_json"))
         hearing = OrNone(Sanitized(caseId, "input_hearing_answers", detailAcc))
         sysText = modPromptsCore.BuildS2System()
-        userText = modPromptsOps.AsmS2User(ctx, s1Json, c.riskLibText, c.menusText, _
-                                           c.prevS2Json, hearing)
+        userText = modPipeline3.S2UserText(ctx, caseId, c.s1Json, c.riskLibText, _
+                                           c.menusText, c.prevS2Json, hearing)
         schemaText = modSchemas.SchemaS2()
 
     Case 3
         LoadKb ctx, c, limitChars, detailAcc
         sysText = modPromptsCore.BuildS3System()
-        userText = modPromptsOps.AsmS3User(ctx, S1SummaryOf(s1Json), c.s2Json, _
+        userText = modPipeline3.S3UserText(ctx, caseId, S1SummaryOf(c.s1Json), c.s2Json, _
                                            c.menusText, c.linesText, c.schemesText, c.casesText)
         schemaText = modSchemas.SchemaS3()
 
@@ -278,7 +278,7 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
             AddNote detailAcc, variantNote
             modLog.LogUsage "s4_variant_fallback", caseId, variantNote
         End If
-        userText = modPromptsOps.AsmS4User(ctx, s1Json, c.s2Json, s3Json)
+        userText = modPromptsOps.AsmS4User(ctx, c.s1Json, c.s2Json, s3Json)
         schemaText = modSchemas.SchemaS4()
     End Select
 
@@ -514,10 +514,11 @@ Private Function Defend(ByRef c As TChkCtx, ByVal rawText As String, _
     Case "s1"
         Defend = modValidate.CheckS1(outJson, c.caseType, c.fieldNoteProvided)
     Case "s2", "s2r"
-        Defend = modValidate.CheckS2(outJson, c.caseType, c.menusText, c.prevS2Json)
+        Defend = modValidate.CheckS2(outJson, c.caseType, c.menusText, c.prevS2Json, c.s1Json)
     Case "s3", "s3r"
         Defend = modValidate.CheckS3(outJson, c.s2Json, c.menusText, c.linesText, _
-                                     c.schemesText, c.casesText, c.caseType)
+                                     c.schemesText, c.casesText, c.caseType, _
+                                     S1SummaryOf(c.s1Json))
     Case "s4"
         Defend = modValidate.CheckS4(outJson, c.dossierTier, PptMaxSlides())
     End Select

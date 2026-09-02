@@ -2,9 +2,9 @@ Attribute VB_Name = "modPromptsBlocks"
 Option Explicit
 
 ' ============================================================================
-' modPromptsBlocks - 15章の共通ブロック(引数なしのテンプレート7本)
+' modPromptsBlocks - 15章の共通ブロック(引数なしのテンプレート9本)
 ' ----------------------------------------------------------------------------
-' 本文の正は 15章(§1.1 / §1.2 / §1.3 / §5)。**本ファイルは docs/spec/15_プロンプトとJSONスキーマ.md
+' 本文の正は 15章(§1.1 / §1.2 / §1.2b / §1.2c / §1.3 / §5)。**本ファイルは docs/spec/15_プロンプトとJSONスキーマ.md
 ' から機械生成した写しであり、ここを手で書き換えてはならない**。文言を変える
 ' ときは 15章を先に改訂し、再生成する(17章 T-23。tools/prompt_diff.py が
 ' 15章とこの戻り値の diff ゼロを受入条件にしている)。
@@ -54,7 +54,7 @@ Public Function BlockRenewalS1() As String
     s = ""
     s = s & "【更新案件の追加指示】" & vbLf
     s = s & "下の【現契約サマリ】を読み、current_coverage に契約の構造化を出力すること" & vbLf
-    s = s & "（1契約・1種目=1要素。読み取れない項目は ""不明""）。新規案件では空配列にする。"
+    s = s & "（1契約・1種目=1要素。読み取れない項目は ""不明""）。"
     BlockRenewalS1 = s
 End Function
 
@@ -68,7 +68,7 @@ Public Function BlockRenewalS2() As String
     s = s & "企業プロファイルの current_coverage とリスク仮説を突き合わせ、gaps に付保ギャップを出力すること。" & vbLf
     s = s & "gap_type の使い分け: uninsured=リスクがあるのに対応する契約がない / underinsured=契約はあるが" & vbLf
     s = s & "事業規模・リスクに対して限度額や範囲が不足の疑い / overlap=補償の重複や整理余地。" & vbLf
-    s = s & "各ギャップに根拠（リスク側と契約側の両方の引用）を付けること。新規案件では空配列にする。"
+    s = s & "各ギャップに根拠（リスク側と契約側の両方の引用）を付けること。"
     BlockRenewalS2 = s
 End Function
 
@@ -83,6 +83,35 @@ Public Function BlockRenewalS3() As String
     s = s & "（upsell=既存契約の限度額・範囲の拡大、cross_sell=未付保種目の新規提案、scheme=型ライブラリの座組適用）。" & vbLf
     s = s & "「昨年同条件・保険料は下げて」の商談を、リスクの話に引き戻す構成にする。"
     BlockRenewalS3 = s
+End Function
+
+' --------------------------------------------------------------------------
+' BlockNewS2 - 15章§1.2b 新規案件の付保ギャップ指示(S2)。case_type=new のときだけ差し込む
+' --------------------------------------------------------------------------
+Public Function BlockNewS2() As String
+    Dim s As String
+    s = ""
+    s = s & "【新規案件の追加指示】" & vbLf
+    s = s & "現契約サマリが無くても gaps を空にしないこと。企業プロファイルの current_coverage と" & vbLf
+    s = s & "【付保の見立て】から推定される付保状態に対し、未充足のリスクを gaps に立てる。" & vbLf
+    s = s & "新規案件では gap_type は uninsured のみを使う。" & vbLf
+    s = s & "coverage_evidence には「該当契約なし」または【付保の見立て】からの引用を書く。" & vbLf
+    s = s & "確度が低い推定であること（見立てに基づくこと）を description に必ず明記する。"
+    BlockNewS2 = s
+End Function
+
+' --------------------------------------------------------------------------
+' BlockRound2Focus - 15章§1.2c 第2ラウンドの深掘り。round_no>=2 のとき S2/S3 の user へ
+' --------------------------------------------------------------------------
+Public Function BlockRound2Focus() As String
+    Dim s As String
+    s = ""
+    s = s & "【第2ラウンドの深掘り指示】" & vbLf
+    s = s & "初回ラウンドで採用された提案の保険種目: {{focus_line_ids}}" & vbLf
+    s = s & "上記の種目に絞って各論を深掘りすること（補償範囲・限度額・免責・特約・引受上の確認事項を" & vbLf
+    s = s & "具体化する）。「指定なし」のときは絞り込まず全体を扱う。絞り込みは深掘りの指示であって、" & vbLf
+    s = s & "リスク仮説の網羅性（10分類の検討）を減らしてよいという意味ではない。"
+    BlockRound2Focus = s
 End Function
 
 ' --------------------------------------------------------------------------

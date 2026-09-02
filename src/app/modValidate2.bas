@@ -49,6 +49,10 @@ Private Const VS3C_REACTION_N As Long = 3
 Private Const VS3_GROWTH_MIN As Long = 4
 Private Const VS3_GROWTH_MAX As Long = 8
 Private Const VS3_TITLE_MAX As Long = 30
+' 15章§4 talk_script(v2.6・裁定書25 S2)。flow 3～5件 / opening 80字以内。
+Private Const VS3_FLOW_MIN As Long = 3
+Private Const VS3_FLOW_MAX As Long = 5
+Private Const VS3_OPENING_MAX As Long = 80
 Private Const VE_DIFFICULTY As String = "|low|mid|high|"
 
 ' --- 正規化エンジンの再帰上限(壊れた入力で暴走させない) ---
@@ -456,6 +460,111 @@ Public Function CheckS3GrowthCore(ByVal json As String) As String
     Next it
 
     CheckS3GrowthCore = r
+End Function
+
+' ============================================================================
+' CheckS2FinCore - S2の V-S2-18(15章§3 CheckS2 検証ルール表。v2.6・裁定書25 S3)
+'   企業プロファイルの financials.net_assets が "不明" 以外なのに、全リスクで
+'   loss_scale_note が空文字のとき**警告**する。s1Json 未提供(=判定材料なし)は
+'   発火させない。**全リスクが空**のときだけ出す(数字を置けないリスクで空文字を
+'   選ぶこと自体は誤りではない。15章§3 の補足)。
+' ============================================================================
+Public Function CheckS2FinCore(ByVal json As String, ByVal s1Json As String) As String
+    Dim it As Variant
+    Dim netAssets As String
+    Dim nRisk As Long
+    Dim nFilled As Long
+
+    If LenB(Trim$(s1Json)) = 0 Then Exit Function
+    netAssets = Trim$(modJsonLite.GetStr(s1Json, "net_assets"))
+    If LenB(netAssets) = 0 Or netAssets = "不明" Then Exit Function
+
+    For Each it In modJsonLite.GetArrayItems(json, "risks")
+        nRisk = nRisk + 1
+        If LenB(Trim$(modJsonLite.GetStr(CStr(it), "loss_scale_note"))) > 0 Then
+            nFilled = nFilled + 1
+        End If
+    Next it
+    If nRisk > 0 And nFilled = 0 Then
+        CheckS2FinCore = "[V-S2-18] 純資産が判明していますが loss_scale_note が全リスクで空です"
+    End If
+End Function
+
+' ============================================================================
+' CheckS3TalkCore - S3の talk_script(15章§4 CheckS3 検証ルール表の
+'   V-S3-19 / V-S3-20 / V-S3-21。v2.6・裁定書25 S2)
+'   既存の V-S3-01 ～ V-S3-18 の条件・エラー文には一切触れない。
+'   s1SummaryJson は V-S3-21(taboo の根拠= field_insights の constraint)専用で、
+'   未提供のときは V-S3-21 を判定しない(材料が無いのに警告を出さない)。
+' ============================================================================
+Public Function CheckS3TalkCore(ByVal json As String, ByVal s1SummaryJson As String) As String
+    Dim r As String
+    Dim it As Variant
+    Dim talkJson As String
+    Dim nFlow As Long
+    Dim nTaboo As Long
+    Dim nConstraint As Long
+    Dim openText As String
+
+    talkJson = TalkScriptOf(json)
+
+    ' --- V-S3-19: flow は3～5件 ---
+    nFlow = modJsonLite.GetArrayItems(talkJson, "flow").Count
+    If nFlow < VS3_FLOW_MIN Or nFlow > VS3_FLOW_MAX Then
+        Ap r, "[V-S3-19] talk_script.flow が" & nFlow & "件です(3～5件)"
+    End If
+
+    ' --- V-S3-20: opening は1～80字 ---
+    openText = modJsonLite.GetStr(talkJson, "opening")
+    If LenB(Trim$(openText)) = 0 Or Len(openText) > VS3_OPENING_MAX Then
+        Ap r, "[V-S3-20] talk_script.opening が" & Len(openText) & "字です(1～80字)"
+    End If
+
+    ' --- V-S3-21: constraint があるのに taboo が0件 ---
+    If LenB(Trim$(s1SummaryJson)) > 0 Then
+        For Each it In modJsonLite.GetArrayItems(s1SummaryJson, "field_insights")
+            If modJsonLite.GetStr(CStr(it), "tag") = "constraint" Then
+                nConstraint = nConstraint + 1
+            End If
+        Next it
+        nTaboo = modJsonLite.GetArrayItems(talkJson, "taboo").Count
+        If nConstraint > 0 And nTaboo = 0 Then
+            Ap r, "[V-S3-21] field_insights に constraint が" & nConstraint & _
+                  "件ありますが talk_script.taboo が0件です"
+        End If
+    End If
+
+    CheckS3TalkCore = r
+End Function
+
+' talk_script オブジェクトの本文を切り出す(modJsonLite は入れ子の
+'   オブジェクト値を返さないため、キー位置から対応する "}" までを取る)。
+'   見つからなければ "" を返し、V-S3-19/20 が0件・0字として発火する。
+Private Function TalkScriptOf(ByVal json As String) As String
+    Dim keyPos As Long
+    Dim openPos As Long
+    Dim i As Long
+    Dim depth As Long
+    Dim ch As String
+
+    keyPos = InStr(json, """talk_script""")
+    If keyPos = 0 Then Exit Function
+    openPos = InStr(keyPos, json, "{")
+    If openPos = 0 Then Exit Function
+
+    depth = 0
+    For i = openPos To Len(json)
+        ch = Mid$(json, i, 1)
+        If ch = "{" Then
+            depth = depth + 1
+        ElseIf ch = "}" Then
+            depth = depth - 1
+            If depth = 0 Then
+                TalkScriptOf = Mid$(json, openPos, i - openPos + 1)
+                Exit Function
+            End If
+        End If
+    Next i
 End Function
 
 ' ============================================================================

@@ -40,7 +40,7 @@ Option Explicit
 '   modKnowledge には一切触れない。
 '
 ' テスト本数: 70本(15章§11の全64ケース＋ID実在群のfail-closed面6本)
-'   G30 CheckS1 11 / G31 CheckS2 16 / G31K CheckS2(ID実在) 3 /
+'   G30 CheckS1 11 / G31 CheckS2 15 / G31K CheckS2(ID実在) 3 /
 '   G32 CheckS3 9 / G32K CheckS3(ID実在) 6 / G33 CheckS4 6 /
 '   G34 CheckPF 6 / G34K CheckPF(ID実在) 3 / G35 CheckS2C 5 / G36 CheckS3C 5
 '
@@ -519,7 +519,7 @@ Private Sub T_S1()
         modValidate.CheckS1(PutVal(s1r, "current_coverage", "[]"), CT_RNW), okRnw
 
     ' 新規文脈へ更新案件の応答(現契約3件)を流す=新規なのに現契約がある。
-    ChkFire "V-S1-04_新規案件でcurrent_coverageが1件以上_15章§11", _
+    ChkFire "V-S1-04_新規案件で確認済みcurrent_coverageが1件以上_15章§11", _
         modValidate.CheckS1(s1r, CT_NEW), okRnw
 
     ChkFire "V-S1-05_missing_infoが0件_15章§11", _
@@ -600,9 +600,6 @@ Private Sub T_S2()
     ChkFire "V-S2-11_更新案件でgapsが0件_15章§11", _
         modValidate.CheckS2(PutVal(s2r, "gaps", "[]"), CT_RNW), okRnw
 
-    ChkFire "V-S2-12_新規案件でgapsが1件以上_15章§11", _
-        modValidate.CheckS2(s2r, CT_NEW), okRnw
-
     ChkFire "V-S2-13_gapsのgap_typeがenum外_15章§11", _
         modValidate.CheckS2(PutStr(s2r, "gap_type", "none"), CT_RNW), okRnw
 
@@ -612,9 +609,10 @@ Private Sub T_S2()
     ChkFire "V-S2-15_transferabilityがhardのリスク0件_15章§11", _
         modValidate.CheckS2(PutAllStr(s2n, "transferability", "cover"), CT_NEW), okNew
 
-    ' MK-S2-NEW の emerging_risks は1件(15章§8.1)。4件へ増やして上限超過。
-    ChkFire "V-S2-16_emerging_risksが3件超_15章§11", _
-        modValidate.CheckS2(ResizeKey(s2n, "emerging_risks", 4), CT_NEW), okNew
+    ' MK-S2-NEW の emerging_risks は1件(15章§8.1)。6件へ増やして上限超過
+    '   (v2.6・裁定書25 S7 で上限は5件)。
+    ChkFire "V-S2-16_emerging_risksが5件超_15章§11", _
+        modValidate.CheckS2(ResizeKey(s2n, "emerging_risks", 6), CT_NEW), okNew
 
     ChkFire "V-S2-17_emerging_risksのhorizonがenum外_15章§11", _
         modValidate.CheckS2(PutStr(s2n, "horizon", "far_future"), CT_NEW), okNew

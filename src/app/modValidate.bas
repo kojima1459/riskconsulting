@@ -45,9 +45,12 @@ Private Const VE_TRANSFER As String = "|cover|partial|hard|"
 Private Const VE_GAP_TYPE As String = "|uninsured|underinsured|overlap|"
 Private Const VE_HORIZON As String = "|already|near|mid_long|"
 Private Const VE_KIND As String = "|upsell|cross_sell|scheme|"
+' v2.6(裁定書25 S1/S3)。current_coverage[].certainty と financials.source。
+Private Const VE_CERTAINTY As String = "|confirmed|assumed|"
+Private Const VE_FIN_SOURCE As String = "|yuho|kessan_kokoku|tdb|view|memo|unknown|"
 
-' --- 15章 Schema-S1 の required 15キー(V-S1-01) ---
-Private Const VS1_REQUIRED As String = "company_name|business_summary|main_products|processes|locations|supply_chain|customers|workforce_notes|management_notes|strategy_outlook|current_coverage|field_insights|missing_info|input_quality|research_requests"
+' --- 15章 Schema-S1 の required 16キー(V-S1-01。v2.6 で financials 追加) ---
+Private Const VS1_REQUIRED As String = "company_name|business_summary|main_products|processes|locations|supply_chain|customers|workforce_notes|management_notes|strategy_outlook|current_coverage|financials|field_insights|missing_info|input_quality|research_requests"
 
 ' --- 件数・字数のしきい値(15章の各ルール表) ---
 Private Const VS1_ASPECT_N As Long = 14
@@ -57,7 +60,7 @@ Private Const VS2_RISK_MIN As Long = 5
 Private Const VS2_RISK_MAX As Long = 20
 Private Const VS2_PREV_MIN As Long = 1
 Private Const VS2_PREV_MAX As Long = 3
-Private Const VS2_EMERGING_MAX As Long = 3
+Private Const VS2_EMERGING_MAX As Long = 5
 Private Const VS3_STORY_N As Long = 3
 
 ' --- 前ラウンド無し(初回実行)を表す値(15章§3 prevS2Json の「なし」) ---
@@ -93,7 +96,7 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
 
     ctype = LCase$(Trim$(caseType))
 
-    ' --- V-S1-01: required 15キーのいずれかが欠落 ---
+    ' --- V-S1-01: required 16キーのいずれかが欠落 ---
     keyList = Split(VS1_REQUIRED, "|")
     For i = LBound(keyList) To UBound(keyList)
         If Not TopKeyExists(json, keyList(i)) Then
@@ -112,13 +115,31 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
         idx = idx + 1
     Next it
 
-    ' --- V-S1-03 / V-S1-04: current_coverage と case_type ---
-    nCount = modJsonLite.GetArrayItems(json, "current_coverage").Count
-    If ctype = "renewal" And nCount = 0 Then
+    ' --- V-S1-03 / V-S1-04 / V-S1-12: current_coverage と case_type ---
+    '     v2.6(裁定書25 S1): V-S1-04 は **certainty="confirmed" が1件以上**の
+    '     ときだけ発火する(全件 assumed の推定は新規案件でも正しい姿)。
+    Set itemsCol = modJsonLite.GetArrayItems(json, "current_coverage")
+    nCount = 0
+    idx = 0
+    For Each it In itemsCol
+        sVal = modJsonLite.GetStr(CStr(it), "certainty")
+        If Not InEnum(sVal, VE_CERTAINTY) Then
+            Ap r, "[V-S1-12] current_coverage[" & idx & "].certainty が不正です: " & sVal
+        End If
+        If sVal = "confirmed" Then nCount = nCount + 1
+        idx = idx + 1
+    Next it
+    If ctype = "renewal" And itemsCol.Count = 0 Then
         Ap r, "[V-S1-03] 更新案件ですが current_coverage が0件です"
     End If
     If ctype = "new" And nCount > 0 Then
-        Ap r, "[V-S1-04] 新規案件ですが current_coverage が" & nCount & "件あります"
+        Ap r, "[V-S1-04] 新規案件ですが確認済みの current_coverage が" & nCount & "件あります"
+    End If
+
+    ' --- V-S1-13: financials.source が enum 外(v2.6・裁定書25 S3) ---
+    sVal = modJsonLite.GetStr(json, "source")
+    If Not InEnum(sVal, VE_FIN_SOURCE) Then
+        Ap r, "[V-S1-13] financials.source が不正です: " & sVal
     End If
 
     ' --- V-S1-05: missing_info が0件 ---
@@ -179,7 +200,8 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
     CheckS1 = r
 End Function
 
-' CheckS2 - リスク仮説＋付保ギャップの検証(15章§3 CheckS2 検証ルール表。17件)
+' CheckS2 - リスク仮説＋付保ギャップの検証(15章§3 CheckS2 検証ルール表。18件)
+'   s1Json    : 企業プロファイル(V-S2-18 の financials.net_assets 判定。v2.6)
 '   menusText : S2へ注入した menusSummary(15章§3の1行書式。V-S2-06 の実在判定)
 '   prevS2Json: 前ラウンドのS2 JSON。"" または "なし" を初回実行とみなす
 '               (V-S2-09 は初回のみ / V-S2-10 は第2ラウンド以降のみ)
@@ -187,7 +209,8 @@ End Function
 '     Basic は空文字既定を束縛できず省略呼び出しが実行時エラー13になる(層(c))。
 Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
                         Optional ByVal menusText As String, _
-                        Optional ByVal prevS2Json As String) As String
+                        Optional ByVal prevS2Json As String, _
+                        Optional ByVal s1Json As String) As String
     Dim r As String
     Dim risksCol As Collection
     Dim gapsCol As Collection
@@ -297,13 +320,25 @@ Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
         End If
     End If
 
-    ' --- V-S2-11 / V-S2-12: gaps と case_type ---
+    ' --- V-S2-11: gaps と case_type ---
+    '     v2.6(裁定書25 S1): 旧 V-S2-12(新規で gaps>=1 は不合格)は**廃止・欠番**。
+    '     新規案件でこそ未充足リスク一覧が要る(15章§11 の枝番の注記)。
     nCount = gapsCol.Count
     If ctype = "renewal" And nCount = 0 Then
         Ap r, "[V-S2-11] 更新案件ですが gaps が0件です"
     End If
-    If ctype = "new" And nCount > 0 Then
-        Ap r, "[V-S2-12] 新規案件ですが gaps が" & nCount & "件あります"
+
+    ' --- V-S2-12b: 新規案件の gap_type は uninsured のみ(v2.6・裁定書25 S1) ---
+    If ctype = "new" Then
+        For Each it In gapsCol
+            rj = CStr(it)
+            noText = Trim$(modJsonLite.GetStr(rj, "gap_no"))
+            sVal = modJsonLite.GetStr(rj, "gap_type")
+            If sVal <> "uninsured" Then
+                Ap r, "[V-S2-12b] 新規案件ですが gap_no " & noText & " の gap_type が " & _
+                      sVal & " です(uninsured のみ)"
+            End If
+        Next it
     End If
 
     ' --- V-S2-13: gap_no の重複 / gap_type の enum ---
@@ -337,8 +372,13 @@ Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
     ' --- V-S2-16: emerging_risks の上限(0件は正常) ---
     nCount = emCol.Count
     If nCount > VS2_EMERGING_MAX Then
-        Ap r, "[V-S2-16] emerging_risks が" & nCount & "件です(0～3件)"
+        Ap r, "[V-S2-16] emerging_risks が" & nCount & "件です(0～5件)"
     End If
+
+    ' --- V-S2-18: 純資産が判明しているのに loss_scale_note が全件空(v2.6) ---
+    '     本体は modValidate2.CheckS2FinCore(30,000字契約により分離)。
+    sVal = modValidate2.CheckS2FinCore(json, s1Json)
+    If LenB(sVal) > 0 Then Ap r, sVal
 
     ' --- V-S2-17: emerging_risks[] の enum 3キー ---
     idx = 0
@@ -353,7 +393,8 @@ Public Function CheckS2(ByVal json As String, ByVal caseType As String, _
     CheckS2 = r
 End Function
 
-' CheckS3 - 提案マッチングの検証(15章§4 CheckS3 検証ルール表。13件。最重要)
+' CheckS3 - 提案マッチングの検証(15章§4 CheckS3 検証ルール表。21件。最重要)
+'   s1SummaryJson: 企業プロファイル要約(V-S3-21 の field_insights=constraint 判定)
 '   s2Json     : 審査対象のS2 JSON(risk_no / gap_no の実在判定)
 '   menusText / linesText / schemesText / casesText: S3へ注入した一覧
 '     (15章§4の1行書式。行頭 "[ID] ")。V-S3-03～V-S3-06 の実在判定に使う。
@@ -365,7 +406,8 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
                         Optional ByVal linesText As String, _
                         Optional ByVal schemesText As String, _
                         Optional ByVal casesText As String, _
-                        Optional ByVal caseType As String) As String
+                        Optional ByVal caseType As String, _
+                        Optional ByVal s1SummaryJson As String) As String
     Dim r As String
     Dim storiesCol As Collection
     Dim topicsCol As Collection
@@ -507,6 +549,11 @@ Public Function CheckS3(ByVal json As String, ByVal s2Json As String, _
     ' --- V-S3-14 ～ V-S3-18: growth_ideas(攻めの保険活用) ---
     '     本体は modValidate2.CheckS3GrowthCore(30,000字契約により分離)。
     sVal = modValidate2.CheckS3GrowthCore(json)
+    If LenB(sVal) > 0 Then Ap r, sVal
+
+    ' --- V-S3-19 ～ V-S3-21: talk_script(経営層向けトーク。v2.6・裁定書25 S2) ---
+    '     本体は modValidate2.CheckS3TalkCore(30,000字契約により分離)。
+    sVal = modValidate2.CheckS3TalkCore(json, s1SummaryJson)
     If LenB(sVal) > 0 Then Ap r, sVal
 
     CheckS3 = r

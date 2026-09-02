@@ -106,6 +106,41 @@ Failed:
     ReadCaseCtx = False
 End Function
 
+' CaseColumnOf - 案件一覧1行の1セルを列名で読む(13章§2.1)。
+'   ReadCaseCtx が返す10列の外にある列(round_no / focus_line_ids /
+'   adopted_story_nos 等)を、シートアクセスを1箇所に閉じたまま引くための口。
+'   列が無い・行が無い・シートが無いときは "" を返す(呼出側の既定値へ落とす)。
+Public Function CaseColumnOf(ByVal caseId As String, ByVal headerName As String) As String
+    On Error GoTo Failed
+
+    If Not modCaseStore.IsValidCaseId(caseId) Then Exit Function
+
+    Dim ws As Object
+    Set ws = SheetOf(CR_SHEET_CASES)
+    If ws Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = LastRowOf(ws)
+    If lastRow < 2 Then Exit Function
+
+    Dim blk As Variant
+    blk = ReadBlock(ws, lastRow)
+
+    Dim cCase As Long
+    cCase = modUtil.FindHeaderCol(blk, "case_id")
+    If cCase <= 0 Then Exit Function
+
+    Dim r As Long
+    r = RowOfCase(blk, lastRow, cCase, Trim$(caseId))
+    If r < 2 Then Exit Function
+
+    CaseColumnOf = ValueOf(blk, r, headerName)
+    Exit Function
+
+Failed:
+    CaseColumnOf = vbNullString
+End Function
+
 ' --- 内部ヘルパー(読取のみ) ---
 
 ' 列名で1セルを引く(13章冒頭。列が無ければ "")。

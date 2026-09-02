@@ -80,6 +80,8 @@ SECTION_MAP: list[tuple[str, list[str], str]] = [
     ("BLOCK_CTX", ["BlockCtx"], "modPromptsBlocks"),
     ("BLOCK_RENEWAL_S1 / S2 / S3",
      ["BlockRenewalS1", "BlockRenewalS2", "BlockRenewalS3"], "modPromptsBlocks"),
+    ("BLOCK_NEW_S2", ["BlockNewS2"], "modPromptsBlocks"),
+    ("BLOCK_ROUND2_FOCUS", ["BlockRound2Focus"], "modPromptsBlocks"),
     ("BLOCK_GUARD", ["BlockGuard"], "modPromptsBlocks"),
     ("BuildS1System", ["BuildS1System"], "modPromptsCore"),
     ("BuildS1User", ["BuildS1User"], "modPromptsCore"),

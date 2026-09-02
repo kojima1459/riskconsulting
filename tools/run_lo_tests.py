@@ -155,6 +155,10 @@ PURE_ALLOWLIST = [
     #     CritiqueDigest / DeepOutcomeOf / AdoptRevisionOf(E-36の採用。
     #     裁定書9-2)/ DeepWarningOf / DeepRouteOf
     "modInboxStore", "modPlayOps", "modPipeline2",
+    # W7(T-55)。modPipeline の分割先。テストが叩くのは純関数3本
+    #   (FinanceBlockText / IncidentsBlockText / FocusLineIdsAttr)だけで、
+    #   S*UserText / *Of 系はシートを読むため実行に到達しない(技術メモ4)。
+    "modPipeline3",
     # T-27(裁定書8 B-9)で 14章§6 が公開を宣言した壁打ちの純核3本を持つ。
     # モジュール全体は store/受信箱/LLM経由でExcelに触れるが、テストが叩くのは
     #   modSparring : HistoryJoinOf(保存形式 -> 新しい順の";;;"連結)/
@@ -223,7 +227,11 @@ PURE_ALLOWLIST = [
     # modUINav.StepText・StepAnchor(2本)/ StepFor(10本)/
     # modNavText.FitsInRows(2本)を叩く。modTestsPure13.RunAll の末尾から呼ぶ。
     "modTestsPure14",
-    "modMockLlm", "modMockLlm2",
+    # modTestsPure15: W7(裁定書25・17章 T-55)の純層12本。15章 v2.6 の新設・改訂
+    #   検証ルール(V-S1-12/13・V-S2-12b/18・V-S3-19/20/21 と V-S1-04・V-S2-16 の
+    #   改訂)を叩く。modTestsPure14.RunAll の末尾から呼ぶ。
+    "modTestsPure15",
+    "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
 
 TEMPLATE_PROFILE_DIR = Path(tempfile.gettempdir()) / "rpn_lo_template_profile"

@@ -177,6 +177,13 @@
       "wave": "T-28"
     },
     {
+      "name": "modPipeline3",
+      "path": "src/app/modPipeline3.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-55"
+    },
+    {
       "name": "modInboxStore",
       "path": "src/app/modInboxStore.bas",
       "role": "app",
@@ -541,6 +548,13 @@
       "wave": "W6.1"
     },
     {
+      "name": "modTestsPure15",
+      "path": "src/test/modTestsPure15.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-55"
+    },
+    {
       "name": "modTestsExcel",
       "path": "src/test/modTestsExcel.bas",
       "role": "test",
@@ -574,6 +588,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-14"
+    },
+    {
+      "name": "modMockLlm3",
+      "path": "src/test/modMockLlm3.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-55"
     }
   ]
 }

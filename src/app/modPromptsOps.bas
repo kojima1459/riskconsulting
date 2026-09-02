@@ -373,8 +373,8 @@ Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yu
                           ByVal memoTxt As String, ByVal contractTxt As String, _
                           ByVal prevRenewalTxt As String, ByVal dossierTxt As String, _
                           ByVal fieldNotes As String, ByVal coverageNote As String, _
-                          ByVal hearingAnswers As String) As String
-    Dim vals(0 To 12) As String
+                          ByVal hearingAnswers As String, ByVal financeTxt As String) As String
+    Dim vals(0 To 13) As String
     vals(0) = ctx.company
     vals(1) = ctx.industry_name
     vals(2) = ctx.case_type
@@ -388,35 +388,48 @@ Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yu
     vals(10) = fieldNotes
     vals(11) = coverageNote
     vals(12) = hearingAnswers
+    vals(13) = financeTxt
     AsmS1User = FillNamed(RenewalApplied(modPromptsCore.BuildS1User(), ctx.case_type, _
         "BLOCK_RENEWAL_S1", modPromptsBlocks.BlockRenewalS1()), _
         "company|industryName|case_typeの日本語|dossier_tierの日本語|hpText|yuhoText|" & _
         "memoText|contractText|prevRenewalText|dossierText|fieldNotesText|" & _
-        "coverageNoteText|hearingAnswersText", vals)
+        "coverageNoteText|hearingAnswersText|financeText", vals)
 End Function
 
 ' AsmS2User - 15章§3 user。menus=MenusSummaryFor()(related_menu_id の候補一覧)。
 '   prevS2Json / hearingAnswers は初回ラウンドでは "なし"(FR-35)。
 Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
                           ByVal menus As String, ByVal prevS2Json As String, _
-                          ByVal hearingAnswers As String) As String
-    Dim vals(0 To 5) As String
+                          ByVal hearingAnswers As String, ByVal incidents As String, _
+                          ByVal focusIds As String, ByVal roundNo As Long) As String
+    Dim tpl As String
+    Dim vals(0 To 7) As String
     vals(0) = CtxBlockText(ctx)
     vals(1) = s1Json
     vals(2) = riskLib
-    vals(3) = menus
-    vals(4) = prevS2Json
-    vals(5) = hearingAnswers
-    AsmS2User = FillNamed(RenewalApplied(modPromptsCore.BuildS2User(), ctx.case_type, _
-        "BLOCK_RENEWAL_S2", modPromptsBlocks.BlockRenewalS2()), _
-        "BLOCK_CTX|s1Json|riskLibText|menusText|prevS2Json|hearingAnswersText", vals)
+    vals(3) = incidents
+    vals(4) = menus
+    vals(5) = prevS2Json
+    vals(6) = hearingAnswers
+    vals(7) = focusIds
+    tpl = RenewalApplied(modPromptsCore.BuildS2User(), ctx.case_type, _
+        "BLOCK_RENEWAL_S2", modPromptsBlocks.BlockRenewalS2())
+    tpl = BlockApplied(tpl, Not IsRenewal(ctx.case_type), "BLOCK_NEW_S2", _
+        modPromptsBlocks.BlockNewS2())
+    tpl = BlockApplied(tpl, roundNo >= 2, "BLOCK_ROUND2_FOCUS", _
+        modPromptsBlocks.BlockRound2Focus())
+    AsmS2User = FillNamed(tpl, _
+        "BLOCK_CTX|s1Json|riskLibText|incidentsText|menusText|prevS2Json|" & _
+        "hearingAnswersText|focus_line_ids", vals)
 End Function
 
 ' AsmS3User - 15章§4 user(貼付ブロックの出現順 menus/lines/schemes/cases)。
 Public Function AsmS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
                           ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
-                          ByVal cases As String) As String
-    Dim vals(0 To 6) As String
+                          ByVal cases As String, ByVal focusIds As String, _
+                          ByVal roundNo As Long) As String
+    Dim tpl As String
+    Dim vals(0 To 7) As String
     vals(0) = CtxBlockText(ctx)
     vals(1) = s1Summary
     vals(2) = s2Json
@@ -424,9 +437,14 @@ Public Function AsmS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVa
     vals(4) = lines
     vals(5) = schemes
     vals(6) = cases
-    AsmS3User = FillNamed(RenewalApplied(modPromptsCore.BuildS3User(), ctx.case_type, _
-        "BLOCK_RENEWAL_S3", modPromptsBlocks.BlockRenewalS3()), _
-        "BLOCK_CTX|s1SummaryJson|s2Json|menusText|linesText|schemesText|casesText", vals)
+    vals(7) = focusIds
+    tpl = RenewalApplied(modPromptsCore.BuildS3User(), ctx.case_type, _
+        "BLOCK_RENEWAL_S3", modPromptsBlocks.BlockRenewalS3())
+    tpl = BlockApplied(tpl, roundNo >= 2, "BLOCK_ROUND2_FOCUS", _
+        modPromptsBlocks.BlockRound2Focus())
+    AsmS3User = FillNamed(tpl, _
+        "BLOCK_CTX|s1SummaryJson|s2Json|menusText|linesText|schemesText|casesText|" & _
+        "focus_line_ids", vals)
 End Function
 
 ' AsmS4System - 15章§5 system。BLOCK_S4_VARIANT の差替はここだけが行う。想定外の
@@ -569,15 +587,27 @@ End Function
 '   それ以外では**その行ごと**削除する(空行を残さない)。
 Private Function RenewalApplied(ByVal tplText As String, ByVal caseType As String, _
                                 ByVal markerName As String, ByVal blockText As String) As String
+    RenewalApplied = BlockApplied(tplText, IsRenewal(caseType), markerName, blockText)
+End Function
+
+' 15章§1.2b/§1.2c も同じ規約(該当しないときは行ごと消す)。applies=True で
+'   {{marker}} をブロック本文へ差し替え、False では**その行ごと**削除する。
+Private Function BlockApplied(ByVal tplText As String, ByVal applies As Boolean, _
+                              ByVal markerName As String, ByVal blockText As String) As String
     Dim tag As String
     tag = PH_OPEN & markerName & PH_CLOSE
-    If StrComp(Trim$(caseType), OPS_RENEWAL, vbBinaryCompare) = 0 Then
-        RenewalApplied = Replace(tplText, tag, blockText)
+    If applies Then
+        BlockApplied = Replace(tplText, tag, blockText)
         Exit Function
     End If
     Dim t As String
     t = Replace(tplText, tag & vbLf, vbNullString)
-    RenewalApplied = Replace(t, tag, vbNullString)
+    BlockApplied = Replace(t, tag, vbNullString)
+End Function
+
+' 15章§1.2: case_type=renewal かどうか。
+Private Function IsRenewal(ByVal caseType As String) As Boolean
+    IsRenewal = (StrComp(Trim$(caseType), OPS_RENEWAL, vbBinaryCompare) = 0)
 End Function
 
 ' 15章§5: {{pptMaxSlidesT2}} の値源は config ppt_max_slides_t2(既定10)。

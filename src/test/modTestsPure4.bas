@@ -36,6 +36,8 @@ Private Const KB_NONE As String = "(登録なし)"
 Private Const KB_NASHI As String = "なし"
 ' 15章§3: riskLibText の0行既定。
 Private Const RL_NONE As String = "(この業種の登録知識はまだありません)"
+' 15章§3 {{incidentsText}} の0行時の既定文言(v2.6・裁定書25 S6)。
+Private Const IC_NONE As String = "(この業種の登録事例はまだありません)"
 ' 15章§0.7: 行内切詰め長。
 Private Const KB_LINE As Long = 400
 
@@ -594,7 +596,7 @@ Private Sub T_Assemble()
 
     ' --- (b) 更新指示ブロックの条件挿入(15章§1.2・§10.1(d)) ---
     s = modPromptsOps.AsmS1User(ctxN, "HP", "なし", "なし", "なし", "なし", _
-                                "なし", "なし", "なし", "なし")
+                                "なし", "なし", "なし", "なし", "なし")
     ChkB "AsmS1User_new案件では更新指示ブロックを入れない_15章§10.1", _
         (InStr(s, "【更新案件の追加指示】") = 0 And _
          InStr(s, "{{BLOCK_RENEWAL_S1") = 0), "実際=[" & HeadOf(s) & "]"
@@ -604,13 +606,14 @@ Private Sub T_Assemble()
         "実際=[" & HeadOf(s) & "]"
 
     s = modPromptsOps.AsmS1User(ctxR, "HP", "なし", "なし", "契約サマリ", "なし", _
-                                "なし", "なし", "なし", "なし")
+                                "なし", "なし", "なし", "なし", "なし")
     ChkB "AsmS1User_renewalでは更新指示ブロックを差し込む_15章§1.2", _
         (InStr(s, "【更新案件の追加指示】") > 0 And _
          InStr(s, "current_coverage に契約の構造化を出力すること") > 0), _
         "実際=[" & HeadOf(s) & "]"
 
-    s = modPromptsOps.AsmS2User(ctxN, "{}", RL_NONE, KB_NONE, "なし", "なし")
+    s = modPromptsOps.AsmS2User(ctxN, "{}", RL_NONE, KB_NONE, "なし", "なし", _
+                                IC_NONE, "指定なし", 1)
     ChkB "AsmS2User_new案件では更新指示ブロックを入れない_15章§10.1", _
         (InStr(s, "【更新案件の追加指示】") = 0 And _
          InStr(s, "{{BLOCK_RENEWAL_S2") = 0), "実際=[" & HeadOf(s) & "]"

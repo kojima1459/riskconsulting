@@ -137,6 +137,12 @@ MODULE_REGISTRY = {
     #                   (modPipeline と同じくシートに触れない)。
     #   modCaseStore2 = 案件2枚の下位シートI/O(R4許可も併せて追加)。
     "modPipeline2", "modCaseStore2",
+    # W7(17章 T-55・裁定書25)で新設。12章§2のモジュール一覧に追記済み。
+    #   modPipeline3 = 15章 v2.6 で増えた3プレースホルダ({{financeText}} /
+    #                  {{incidentsText}} / {{focus_line_ids}})の値源組立。
+    #                  modPipeline が30,000字契約で満杯のため分割した。
+    #                  シートには store 経由でしか触れないので R4許可は与えない。
+    "modPipeline3",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
     "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
     "modHtmlTheme",
@@ -320,6 +326,7 @@ CONTRACT: dict[str, dict] = {
         "closed": True,
         "required": [
             "BlockCtx", "BlockRenewalS1", "BlockRenewalS2", "BlockRenewalS3",
+            "BlockNewS2", "BlockRound2Focus",
             "BlockGuard", "BlockS4Proposal", "BlockS4Alliance",
         ],
     },
@@ -372,7 +379,20 @@ CONTRACT: dict[str, dict] = {
         ],
     },
     # modCaseRead: 案件一覧の読取専用API(裁定書7 B-7。14章§6が ReadCaseCtx を宣言)。
-    "modCaseRead": {"closed": False, "required": ["ReadCaseCtx"]},
+    "modCaseRead": {"closed": False, "required": ["ReadCaseCtx", "CaseColumnOf"]},
+    # modPipeline3: 30,000字契約による modPipeline の分割先(17章 T-55・裁定書25)。
+    #   15章 v2.6 の3プレースホルダの値源組立。純関数3本(FinanceBlockText /
+    #   IncidentsBlockText / FocusLineIdsAttr)は層(a)から叩く回帰網の対象なので
+    #   required に載せる(Private へ戻すと検査が黙って消える)。IncidentsFor は
+    #   班C(T-56)の modKnowledge 実装へ差し替えるための**呼び口1本**。
+    "modPipeline3": {
+        "closed": False,
+        "required": [
+            "S1UserText", "S2UserText", "S3UserText",
+            "FinanceBlockText", "IncidentsBlockText", "FocusLineIdsAttr",
+            "IncidentsFor",
+        ],
+    },
     # modPlayOps: プリフライト診断(T-25)。14章§6が宣言した判定核5本を required
     #   に載せる(裁定書9-3。純核を Private へ戻すと層(a)から検査できなくなる)。
     "modPlayOps": {

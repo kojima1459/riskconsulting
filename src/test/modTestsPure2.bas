@@ -149,15 +149,18 @@ Private Sub T_MockNormal()
     modTestRunner.Check "MKS3CCLEAN_ExtractJsonBlockで抽出可能_15章§8.1", _
         (MockJson("MK-S3C-CLEAN") <> ""), "抽出できない"
 
-    ' new文脈: current_coverage は必須キーだが空配列(15章§0原則6)。
+    ' new文脈: v2.6(裁定書25 S1)から【付保の見立て】由来の1件を certainty=assumed
+    '   で持つ(全件 assumed なので新規案件でも警告が出ない。15章§8.1)。
     js = MockJson("MK-S1-NEW")
-    ChkN "MKS1NEW_current_coverageが0件_15章§8.1", ArrCount(js, "current_coverage"), 0
+    ChkN "MKS1NEW_current_coverageが1件_15章§8.1", ArrCount(js, "current_coverage"), 1
 
     ChkN "MKS1RNW_current_coverageが3件_15章§8.1", _
         ArrCount(MockJson("MK-S1-RNW"), "current_coverage"), 3
 
     js = MockJson("MK-S2-NEW")
     ChkN "MKS2NEW_emerging_risksが1件_15章§8.1", ArrCount(js, "emerging_risks"), 1
+    ' v2.6(裁定書25 S1): 新規案件でも未充足リスク一覧が出ることをmockで担保する。
+    ChkN "MKS2NEW_gapsが2件_15章§8.1", ArrCount(js, "gaps"), 2
 
     js = MockJson("MK-S2-RNW")
     ChkN "MKS2RNW_gapsが3件_15章§8.1", ArrCount(js, "gaps"), 3
@@ -167,6 +170,8 @@ Private Sub T_MockNormal()
 
     js = MockJson("MK-S3")
     ChkN "MKS3_storiesが3件_15章§8.1", ArrCount(js, "stories"), 3
+    ' v2.6(裁定書25 S2): talk_script の flow は STEP1-4 相当の4文(15章§8.1)。
+    ChkN "MKS3_talk_scriptのflowが4件_15章§8.1", ArrCount(js, "flow"), 4
     ' 正常系mockが使ってよいIDは M-0012 / L-03 / S-0004 / K-0003 / P9 / MC-0107 のみ。
     ' 障害注入 ghost_id 専用の M-9999 が正常系へ混ざっていないこと。
     modTestRunner.Check "MKS3_幽霊IDを含まない_15章§8.1", _

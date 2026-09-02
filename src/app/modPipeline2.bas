@@ -252,12 +252,12 @@ Private Function RunRevision(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
 
     If d.stepNo = 2 Then
         sysText = modPromptsCore.BuildS2System()
-        userText = modPromptsOps.AsmS2User(ctx, d.s1Json, d.riskLibText, d.menusText, _
-                                           d.prevS2Json, HearingOf(d.caseId))
+        userText = modPipeline3.S2UserText(ctx, d.caseId, d.s1Json, d.riskLibText, _
+                                           d.menusText, d.prevS2Json, HearingOf(d.caseId))
         schemaText = modSchemas.SchemaS2()
     Else
         sysText = modPromptsCore.BuildS3System()
-        userText = modPromptsOps.AsmS3User(ctx, modPipeline.S1SummaryOf(d.s1Json), _
+        userText = modPipeline3.S3UserText(ctx, d.caseId, modPipeline.S1SummaryOf(d.s1Json), _
                                            d.s2Json, d.menusText, d.linesText, _
                                            d.schemesText, d.casesText)
         schemaText = modSchemas.SchemaS3()
@@ -578,10 +578,12 @@ Private Function Defend(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
         Case "s3c"
             Defend = modValidate.CheckS3C(outJson)
         Case "s2r"
-            Defend = modValidate.CheckS2(outJson, ctx.case_type, d.menusText, d.prevS2Json)
+            Defend = modValidate.CheckS2(outJson, ctx.case_type, d.menusText, _
+                                         d.prevS2Json, d.s1Json)
         Case "s3r"
             Defend = modValidate.CheckS3(outJson, d.s2Json, d.menusText, d.linesText, _
-                                         d.schemesText, d.casesText, ctx.case_type)
+                                         d.schemesText, d.casesText, ctx.case_type, _
+                                         modPipeline.S1SummaryOf(d.s1Json))
     End Select
 End Function
 

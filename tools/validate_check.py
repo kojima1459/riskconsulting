@@ -80,9 +80,15 @@ TOTAL_11 = re.compile(
 )
 # 各Check節の表の行: | V-S1-01 | 対象キー | 条件 | 不合格 | `[V-S1-01] ...` |
 ROW_RULE = re.compile(
-    r"^\|\s*(V-[A-Z0-9]+-\d+)\s*\|([^|]*)\|(.*)\|\s*(不合格|警告|合格)\s*\|(.*)\|\s*$"
+    r"^\|\s*(V-[A-Z0-9]+-\d+[a-z]?)\s*\|([^|]*)\|(.*)\|\s*(不合格|警告|合格)\s*\|(.*)\|\s*$"
 )
-CASE_ID = re.compile(r"V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2}")
+# 枝番(V-S2-12b)を読めるように末尾1文字の小文字を許す(v2.6・裁定書25 S1。17章 T-55①b)。
+CASE_ID = re.compile(r"V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2}[a-z]?")
+# §11の枝番・欠番の注記:「**枝番 `V-S2-12b` と欠番 `V-S2-12` の扱い(...)**」
+# 欠番になった番号を、その位置に立つ枝番へ読み替えるための対応表を作る。
+BRANCH_NOTE = re.compile(
+    r"枝番\s*`(V-[A-Z0-9]+-\d+[a-z])`\s*と欠番\s*`(V-[A-Z0-9]+-\d+)`"
+)
 # テスト名 = Check / Chk* 呼び出しの第1引数の文字列リテラル
 TEST_NAME = re.compile(r"\b(?:Check|Chk[A-Za-z]*)\s*\(?\s*\"((?:[^\"]|\"\")*)\"")
 
@@ -118,6 +124,14 @@ def parse_section_11(text: str, rep: Report):
     ids: list[str] = []
     verdict: dict[str, str] = {}
     by_check: dict[str, list[str]] = {}
+    # 欠番 -> 枝番 の読み替え(§11の注記が正。注記が無ければ空= 従来どおり)。
+    alias: dict[str, str] = {}
+    for bm in BRANCH_NOTE.finditer(body):
+        branch, retired = bm.group(1), bm.group(2)
+        if not branch.startswith(retired):
+            rep.err(f"§11 枝番の注記: {branch} は欠番 {retired} の枝番ではありません")
+            continue
+        alias[retired] = branch
 
     for line in body.splitlines():
         m = ROW_11.match(line)
@@ -131,6 +145,8 @@ def parse_section_11(text: str, rep: Report):
             continue
         width = len(lo)
         row_ids = [f"{pre1}-{str(n).zfill(width)}" for n in range(int(lo), int(hi) + 1)]
+        # 欠番の位置は§11の注記が指す枝番へ読み替える(番号は再利用しない)。
+        row_ids = [alias.get(c, c) for c in row_ids]
         if len(row_ids) != declared:
             rep.err(f"§11 {check}: 範囲 {pre1}-{lo}～{hi} は{len(row_ids)}件ですが"
                     f"表の宣言は{declared}件です")
@@ -139,6 +155,7 @@ def parse_section_11(text: str, rep: Report):
         for label, cell in (("不合格", fail_c), ("警告", warn_c), ("合格", pass_c)):
             for nn in split_nums(cell):
                 cid = f"{pre1}-{nn}"
+                cid = alias.get(cid, cid)
                 if cid in seen:
                     rep.err(f"§11 {check}: {cid} が「{seen[cid]}」と「{label}」に重複しています")
                 seen[cid] = label
@@ -230,7 +247,7 @@ def check_impl(ids: list[str], verdict: dict[str, str], rep: Report) -> None:
     rep.note(f"(a) 実装: {', '.join(srcs)}")
     joined = "\n".join(srcs.values())
     # 実装中の "[V-xxx] " で始まる文字列リテラルを集める。
-    lit_ids = set(re.findall(r'"\[(V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2})\]\s', joined))
+    lit_ids = set(re.findall(r'"\[(V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2}[a-z]?)\]\s', joined))
     examined = 0
     for cid in ids:
         examined += 1
