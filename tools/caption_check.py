@@ -20,6 +20,19 @@
   (A)(B)(C) は**集合として完全一致**を要求する。(D) はツアーが全ボタンに
   触れるわけではないので **(A)の部分集合**であることだけを要求する。
 
+(E) 使い方タブ⑦「上級」の動作ボタン3本(v3.2.1・裁定書22):
+  [第2ラウンドを始める][企業ファイルへ保存][企業ファイルを開く]は**ナビの
+  配置表には載らない**(ナビに置かないボタンなので (A) の集合には入れない)が、
+  同じ「同じ文字列が3か所に別々に書かれている」問題を持つ。
+      (E1) src/ui/modUIGuide.bas の AdvActionRow()(図形名;キャプション;
+           OnAction;幅pt) = **唯一の値源**
+      (E2) build/build_rpn.py の GUIDE_ADVANCED_ACTIONS(キャプション・
+           いつ使うか・OnAction)
+      (E3) docs/spec/13_データ設計.md §2.18 の動作ボタン表([～]表記と OnAction)
+  キャプションと OnAction の**両方**を集合として完全一致で照合する
+  (OnAction を取り違えると押しても別の処理が走る=キャプション照合だけでは
+   捕まらない)。
+
 繰り返しキャプションを載せない規約(13章§2.10(f)):
   区画①の[コピー]8本と区画②の6欄×3種18本は、同じ語が複数出ると逐語照合の
   突合が壊れるため**配置表にも早見にも載せない**(生成規則の側が正を持つ)。
@@ -62,6 +75,8 @@ REPEATING_CAPTIONS = {
 }
 
 BRACKET = re.compile(r"\[([^\[\]]+)\]")
+# (E3) 13章§2.18 の動作ボタン表の行(1列目が [～] で始まる行だけを表とみなす)。
+SPEC_ADV_ROW = re.compile(r"^\|\s*\[([^\]]+)\]\s*\|")
 errors = []
 
 
@@ -207,6 +222,70 @@ def captions_from_tour():
     return out
 
 
+def adv_actions_from_guide():
+    """(E1) modUIGuide.AdvActionRow() の配置表。(キャプション, OnAction) の順序つき。"""
+    text = read(SRC_GUIDE)
+    if text is None:
+        return []
+    out = []
+    for lit in vba_const_value(text, "UG_ROW_ADV_ACT", SRC_GUIDE):
+        flds = lit.split(";")
+        if len(flds) < 4:
+            fail("%s の UG_ROW_ADV_ACT に「図形名;キャプション;OnAction;幅pt」でない要素: %r"
+                 % (SRC_GUIDE, lit))
+            continue
+        cap = flds[1].strip()
+        act = flds[2].strip()
+        if not cap or not act:
+            fail("%s の UG_ROW_ADV_ACT にキャプションかOnActionが空の要素がある" % SRC_GUIDE)
+            continue
+        out.append((cap, act))
+    return out
+
+
+def adv_actions_from_build():
+    """(E2) build_rpn.py の GUIDE_ADVANCED_ACTIONS。(キャプション, OnAction)。"""
+    text = read(SRC_BUILD)
+    if text is None:
+        return []
+    m = re.search(r"^GUIDE_ADVANCED_ACTIONS\s*=\s*\[(.*?)^\]", text, re.M | re.S)
+    if not m:
+        fail("%s に GUIDE_ADVANCED_ACTIONS の定義が見つからない" % SRC_BUILD)
+        return []
+    out = []
+    for cap, _when, act in re.findall(
+            r'\(\s*"([^"]*)"\s*,\s*\n?\s*"([^"]*)"\s*,\s*\n?\s*"([^"]*)"\s*,?\s*\)',
+            m.group(1)):
+        out.append((cap.strip(), act.strip()))
+    return out
+
+
+def adv_actions_from_spec():
+    """(E3) 13章§2.18 の動作ボタン表。(キャプション, OnAction)。"""
+    text = read(SRC_SPEC)
+    if text is None:
+        return []
+    m = re.search(r"^### 2\.18 .*?$(.*?)^### 2\.19 ", text, re.M | re.S)
+    if not m:
+        fail("%s に §2.18 の節が見つからない" % SRC_SPEC)
+        return []
+    out = []
+    for line in m.group(1).split("\n"):
+        hit = SPEC_ADV_ROW.match(line.strip())
+        if not hit:
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            fail("%s §2.18 の動作ボタン表の行が3列以上でない: %r" % (SRC_SPEC, line[:40]))
+            continue
+        acts = re.findall(r"`([\w.]+)`", cells[2])
+        if not acts:
+            fail("%s §2.18 の動作ボタン表の行に OnAction が無い: %r" % (SRC_SPEC, line[:40]))
+            continue
+        out.append((hit.group(1).strip(), acts[0]))
+    return out
+
+
 def compare_sets(label, impl, other):
     missing = sorted(set(impl) - set(other))
     extra = sorted(set(other) - set(impl))
@@ -251,6 +330,24 @@ def main():
             for cap in sorted(set(tour) - set(impl) - REPEATING_CAPTIONS):
                 fail("初回ツアーの文言に、実装に無いボタン名がある: [%s] (%s)" % (cap, SRC_GUIDE))
 
+    # (E) 使い方タブ⑦の動作ボタン3本(v3.2.1・裁定書22)。
+    adv_impl = adv_actions_from_guide()
+    adv_build = adv_actions_from_build()
+    adv_spec = adv_actions_from_spec()
+    if not adv_impl:
+        fail("%s の AdvActionRow()(UG_ROW_ADV_ACT)から⑦上級の動作ボタンを"
+             "1件も抽出できなかった" % SRC_GUIDE)
+    else:
+        if not adv_build:
+            fail("%s の GUIDE_ADVANCED_ACTIONS から1件も抽出できなかった" % SRC_BUILD)
+        else:
+            compare_sets("使い方タブ⑦の動作ボタン(%s の GUIDE_ADVANCED_ACTIONS)"
+                         % SRC_BUILD, adv_impl, adv_build)
+        if not adv_spec:
+            fail("%s §2.18 の動作ボタン表から1件も抽出できなかった" % SRC_SPEC)
+        else:
+            compare_sets("13章§2.18 の動作ボタン表", adv_impl, adv_spec)
+
     if errors:
         print("[caption_check] ナビのボタン名の逐語照合")
         for e in errors:
@@ -261,6 +358,8 @@ def main():
 
     print("照合先: 使い方タブ早見 %d件 / 13章§2.10(f) %d件 / ツアー文言 %d件(部分集合)"
           % (len(guide), len(spec), len(tour)))
+    print("使い方タブ⑦の動作ボタン: %d本(キャプション＋OnActionを build と 13章§2.18 へ照合)"
+          % len(adv_impl))
     print("OK: 全%d本のキャプションが3系統と一致しました（コーチ帯%d / 4区画%d）"
           % (len(impl), len(main_caps), len(sub_caps)))
     return 0

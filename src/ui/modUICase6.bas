@@ -309,7 +309,6 @@ Public Sub PasteIntoArea(ByVal areaKey As String)
     If StrComp(areaKey, "field_notes", vbBinaryCompare) = 0 Then
         If Not AppendToFieldNotes(body) Then
             modUIHome.ShowWarning U6_MSG_MEMO_ROWS
-            modUIToast.ShowToast U6_MSG_MEMO_ROWS, "error"
             Exit Sub
         End If
         modUINavDraw.RefreshArea caseId, areaKey
@@ -490,9 +489,9 @@ Public Sub SaveNav()
     On Error GoTo Done
 
     ' 裁定書22 m3(B15): 描き切れていない画面から保存しない(全欄ブロック)。
+    ' modUIHome.ShowWarning は hm_warning とトーストの両方へ出す(2度出さない)。
     If Not modUINav.DrawOk() Then
         modUIHome.ShowWarning U6_MSG_NO_DRAW
-        modUIToast.ShowToast U6_MSG_NO_DRAW, "error"
         GoTo Done
     End If
 

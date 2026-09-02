@@ -41,8 +41,11 @@ RPNの規約(12章§2・§4 / 16章NFR-S7 / 17章T-46):
 from __future__ import annotations
 
 import argparse
+import io
+import json
 import re
 import sys
+import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1092,6 +1095,86 @@ def check_docs_prompt_cp932(repo_root: Path) -> list[tuple[str, int, str]]:
                 rel, lineno,
                 f"プロンプト本文(コードフェンス内)にCP932に無い文字: {shown} 。"
                 f"15章§0 原則7。ここを写した .bas がVBEで '?' に化けます"))
+    return out
+
+
+# ==============================================================================
+# 製品へ焼く文字列の危険6字検査(裁定書22 m6・11章§7.1)
+# ------------------------------------------------------------------------------
+# build/build_rpn.py と build/sheets_main.json の**文字列**は、そのまま配布ブックの
+# セルへ焼かれる。CP932 に無い字(とりわけ U+301C WAVE DASH)が混ざると、Windows で
+# 開いた利用者の画面に化けた字が出る。.bas と同じ _CP932_DENY(危険6字)で検査する。
+#   ・.py は Python の字句解析で**文字列リテラルだけ**を見る(コメントは対象外だが、
+#     写した瞬間に化けるので実運用ではコメントも揃えてある)
+#   ・.json は全ての文字列(キーと値)を見る
+# 全文の CP932 検査にしない理由: この2ファイルはコード生成器であり、日本語の
+# 説明文に CP932 外の記号(┈ 等)を意図して使う箇所がある。**化けると実害が出る
+# 6字だけ**を ERROR にする(検査を骨抜きにせず、偽陽性も出さない境界)。
+# ==============================================================================
+BUILD_TEXT_FILES = ("build/build_rpn.py", "build/sheets_main.json")
+
+
+def _deny_hits(text: str) -> list[str]:
+    return sorted({ch for ch in text if ch in _CP932_DENY})
+
+
+def check_build_strings(repo_root: Path) -> list[tuple[str, int, str]]:
+    """build/ の製品文字列に危険6字が混ざっていないか(すべてERROR相当)。"""
+    out: list[tuple[str, int, str]] = []
+    for rel in BUILD_TEXT_FILES:
+        path = repo_root / rel
+        if not path.exists():
+            out.append((rel, 1, "製品へ焼く文字列を持つファイルが見つかりません"
+                                "(パスを変えたら BUILD_TEXT_FILES を更新してください)"))
+            continue
+        text = path.read_text(encoding="utf-8")
+        if rel.endswith(".py"):
+            try:
+                toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+            except (tokenize.TokenError, IndentationError, SyntaxError) as exc:
+                out.append((rel, 1, f"字句解析できませんでした: {exc}"))
+                continue
+            for tok in toks:
+                if tok.type != tokenize.STRING:
+                    continue
+                bad = _deny_hits(tok.string)
+                if not bad:
+                    continue
+                shown = " ".join(f"{ch}(U+{ord(ch):04X})" for ch in bad[:6])
+                out.append((
+                    rel, tok.start[0],
+                    f"製品へ焼く文字列に CP932 の危険字: {shown} 。"
+                    f"11章§7.1。波ダッシュは ～(U+FF5E)で書いてください"))
+        else:
+            try:
+                data = json.loads(text)
+            except ValueError as exc:
+                out.append((rel, 1, f"JSONとして読めませんでした: {exc}"))
+                continue
+            found: set[str] = set()
+
+            def walk(node):
+                if isinstance(node, dict):
+                    for k, v in node.items():
+                        found.update(_deny_hits(k))
+                        walk(v)
+                elif isinstance(node, list):
+                    for v in node:
+                        walk(v)
+                elif isinstance(node, str):
+                    found.update(_deny_hits(node))
+
+            walk(data)
+            for ch in sorted(found):
+                lineno = 1
+                for i, line in enumerate(text.split("\n"), 1):
+                    if ch in line:
+                        lineno = i
+                        break
+                out.append((
+                    rel, lineno,
+                    f"製品へ焼く文字列に CP932 の危険字: {ch}(U+{ord(ch):04X}) 。"
+                    f"11章§7.1。波ダッシュは ～(U+FF5E)で書いてください"))
     return out
 
 
@@ -2690,6 +2773,14 @@ def run_lint(src_root: Path) -> int:
         for rel, ln, msg in docs_bad:
             print(f"  ERROR L{ln}: [{rel}] {msg}")
         total_error += len(docs_bad)
+
+    # 製品へ焼く文字列の危険6字検査(裁定書22 m6・11章§7.1)。
+    build_bad = check_build_strings(REPO_ROOT)
+    if build_bad:
+        print("\n[製品へ焼く文字列の危険6字検査 - 11章§7.1]")
+        for rel, ln, msg in build_bad:
+            print(f"  ERROR L{ln}: [{rel}] {msg}")
+        total_error += len(build_bad)
 
     if ARGC_SKIPPED:
         # 引数数照合の実効範囲の申告。数え切れなかった呼び出しは黙って通して

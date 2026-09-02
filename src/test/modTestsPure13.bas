@@ -14,6 +14,7 @@ Option Explicit
 '   W6C  SplitFieldNotes  最低7本   11章§3.3.6(4見出し / 見出しなし / 順序違い /
 '                                    空節 / 本文中の見出し語 / 末尾改行 / 例文除去)
 '   計 18本(612 -> 630。7 + 4 + 7)
+' 末尾から modTestsPure14.RunAll(W6.1・裁定書22 の28本)を呼ぶ。
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -28,6 +29,9 @@ WB:
 WC:
     On Error GoTo FC
     T_W6C_SplitFieldNotes
+WD:
+    On Error GoTo FD
+    modTestsPure14.RunAll
 WDone:
     Exit Sub
 FA:
@@ -38,6 +42,9 @@ FB:
     Resume WC
 FC:
     GroupFail "W6C SplitFieldNotes"
+    Resume WD
+FD:
+    GroupFail "modTestsPure14.RunAll"
     Resume WDone
 End Sub
 

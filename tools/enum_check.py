@@ -26,6 +26,11 @@ enum_check.py - 19章§3 enumレジストリ と modUICase の変換表の一致
     [4] 1グループ内で機械値・日本語ラベルがそれぞれ一意であること
         (重複すると EnumEn / EnumJa の逆引きが一意に決まらない)。
     [5] 値・ラベルに CSV の区切り(",")や改行が含まれないこと(表形式が壊れる)。
+    [7] 15章§2.0「既知フッター語の一覧」の箇条書き <-> src/core/modNavText.bas の
+        NT_FOOTER_WORDS 定数が**集合として一致**すること(11章§3.3.5 は規則の正・
+        15章§2.0 が語の一覧の正であり、実装はそれを写す)。**fail-closed**:
+        章が読めない・箇条書きが取れない・定数が読めない・どちらかが0件、の
+        いずれでも赤にする(「たまたま通る」を作らない)。
     [6] build/sheets_main.json の `enums` にある `*_ja`(入力規則へ焼く日本語ラベル
         の配列)が、対応するenumグループの19章§3の日本語ラベルと**並び順まで**
         一致すること(裁定書14 裁定1。発見Fの根治)。
@@ -62,6 +67,10 @@ REPO_ROOT = TOOLS_DIR.parent
 DEFAULT_SPEC = REPO_ROOT / "docs" / "spec" / "19_用語集とレジストリ.md"
 DEFAULT_SRC = REPO_ROOT / "src" / "ui" / "modUICase.bas"
 DEFAULT_SHEETS_JSON = REPO_ROOT / "build" / "sheets_main.json"
+# [7] 既知フッター語(15章§2.0 <-> modNavText.NT_FOOTER_WORDS)。
+DEFAULT_SPEC15 = REPO_ROOT / "docs" / "spec" / "15_プロンプトとJSONスキーマ.md"
+DEFAULT_NAVTEXT = REPO_ROOT / "src" / "core" / "modNavText.bas"
+FOOTER_CONST = "NT_FOOTER_WORDS"
 PAIRS_FUNC = "EnumPairsCsv"
 JA_SUFFIX = "_ja"
 
@@ -506,6 +515,78 @@ def check_json_ja(pairs: list[tuple[str, str, str]],
     return (problems, unmatched, checked)
 
 
+# ==============================================================================
+# [7] 15章§2.0 の既知フッター語 <-> modNavText.NT_FOOTER_WORDS
+# ==============================================================================
+_FOOTER_HEAD_RE = re.compile(r"^\*\*既知フッター語の一覧", re.M)
+
+
+def footer_words_from_spec(path: Path) -> tuple[list[str], list[str]]:
+    """15章§2.0 の「既知フッター語の一覧」直後の箇条書きから語を取り出す。
+
+    1行 = "- `語` / `語`" 形式。バッククォートの中だけを語として拾う。
+    戻り値 (語のリスト, 問題のリスト)。
+    """
+    problems: list[str] = []
+    if not path.exists():
+        return [], [f"15章が見つかりません: {path}"]
+    text = path.read_text(encoding="utf-8")
+    m = _FOOTER_HEAD_RE.search(text)
+    if not m:
+        return [], ["15章§2.0 に「**既知フッター語の一覧」の見出しが見つかりません"
+                    "(節を動かしたら enum_check.py の _FOOTER_HEAD_RE を直してください)"]
+    words: list[str] = []
+    started = False
+    for line in text[m.end():].split("\n"):
+        st = line.strip()
+        if st.startswith("- "):
+            started = True
+            words.extend(re.findall(r"`([^`]+)`", st))
+            continue
+        if started and st:
+            break
+    if not words:
+        problems.append("15章§2.0 の箇条書きから既知フッター語を1語も取り出せません")
+    return words, problems
+
+
+def footer_words_from_bas(path: Path) -> tuple[list[str], list[str]]:
+    """modNavText.bas の NT_FOOTER_WORDS の文字列リテラルを取り出す。"""
+    problems: list[str] = []
+    if not path.exists():
+        return [], [f"modNavText.bas が見つかりません: {path}"]
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r"^\s*(?:Private|Public)\s+Const\s+%s\s+As\s+String\s*="
+                  % re.escape(FOOTER_CONST), text, re.M)
+    if not m:
+        return [], [f"modNavText.bas に定数 {FOOTER_CONST} が見つかりません"]
+    logical = []
+    for ln in text[m.start():].split("\n"):
+        st = ln.rstrip()
+        logical.append(st)
+        if not st.endswith(" _"):
+            break
+    words = [w for w in re.findall(r'"([^"]*)"', "\n".join(logical)) if w.strip()]
+    if not words:
+        problems.append(f"{FOOTER_CONST} から語を1語も取り出せません")
+    return words, problems
+
+
+def check_footer_words(spec15: Path, bas: Path) -> tuple[list[str], int]:
+    want, p1 = footer_words_from_spec(spec15)
+    got, p2 = footer_words_from_bas(bas)
+    problems = p1 + p2
+    if problems:
+        return problems, 0
+    missing = sorted(set(want) - set(got))
+    extra = sorted(set(got) - set(want))
+    for w in missing:
+        problems.append(f"[既知フッター語] 15章§2.0 にあるが NT_FOOTER_WORDS に無い: {w}")
+    for w in extra:
+        problems.append(f"[既知フッター語] NT_FOOTER_WORDS にあるが 15章§2.0 に無い: {w}")
+    return problems, len(want)
+
+
 def to_bas(pairs: list[tuple[str, str, str]]) -> str:
     """.bas の連結文へ整形(--dump-bas。実装を手で書き写す事故を防ぐため)。"""
     out = []
@@ -521,6 +602,10 @@ def main() -> int:
     ap.add_argument("--src", default=str(DEFAULT_SRC))
     ap.add_argument("--sheets", default=str(DEFAULT_SHEETS_JSON),
                     help="build/sheets_main.json のパス(検査[6]用)")
+    ap.add_argument("--spec15", default=str(DEFAULT_SPEC15),
+                    help="15章のパス(検査[7]用)")
+    ap.add_argument("--navtext", default=str(DEFAULT_NAVTEXT),
+                    help="src/core/modNavText.bas のパス(検査[7]用)")
     ap.add_argument("--dump", action="store_true", help="期待されるCSV本文を出力")
     ap.add_argument("--dump-bas", action="store_true", help="上を .bas の連結文で出力")
     args = ap.parse_args()
@@ -568,6 +653,12 @@ def main() -> int:
         print("    検査対象外(キー名からenumグループを機械導出できないため): "
               + ", ".join(ja_unmatched))
     problems = problems + ja_problems
+
+    # [7] 15章§2.0 の既知フッター語 <-> modNavText.NT_FOOTER_WORDS(fail-closed)。
+    fw_problems, fw_count = check_footer_words(Path(args.spec15), Path(args.navtext))
+    print(f"  既知フッター語   : 15章§2.0 の{fw_count}語を "
+          f"{Path(args.navtext).name}.{FOOTER_CONST} と集合照合")
+    problems = problems + fw_problems
 
     if problems:
         print("-" * 78)

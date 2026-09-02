@@ -33,6 +33,14 @@ Private Const T2_CHUNK As Long = 32000
 ' 13章§2.12 B1 と同一の不一致文言(裁定書11 Q1 で案件入力側も同じ作法にした)。
 Private Const T2_MSG_MISMATCH As String = "画面の案件と保存先が一致しません。再描画してください"
 
+' 11章§3.3.7 の逐語(ナビ側の不一致文言。裁定書22 W6.1 で層(b)へ回帰を1本足した)。
+Private Const T2_MSG_NAV_MISMATCH As String = _
+    "画面の案件と保存先が合いません。いちばん上の帯で、案件を選び直してください。"
+
+' 個人情報を含む貼付の材料(16章 E-05。実在しない氏名)。
+Private Const T2_PII_TEXT As String = "本件の窓口は 山田 太郎 様（総務部長）です。"
+Private Const T2_SAFE_TEXT As String = "当社は1952年の創業以来、静岡県浜松市を拠点に事業を営んでいます。"
+
 Private m2Run As Long
 
 ' ============================================================================
@@ -42,6 +50,7 @@ Public Function RunExcelTests2() As Long
     m2Run = 0
     TestQ9PasteRoundTrip
     TestV5DraftRowNotCounted
+    TestW61NavPaste
     RunExcelTests2 = m2Run
 End Function
 
@@ -201,6 +210,152 @@ Crashed:
     ECheck "T47B-Q9-99_想定外エラー", False, _
            "Err=" & CStr(Err.Number) & " " & Err.Description
     Resume Cleanup
+End Sub
+
+' ============================================================================
+' W6.1(裁定書22 M4 層(b)3本): ナビの[ここに貼る]と[貼ったものを保存する]の
+'   **ブックに残るセルが根拠**である3点。いずれも層(a)から原理的に到達できない
+'   (クリップボード・案件一覧への採番・画面のセル状態が絡むため)。
+'   (1) [ここに貼る]で個人情報を検知したら case_data が**1字も増えない**
+'       (16章 E-05・11章§3.3.7。採番より前に弾く=裁定書22 m8)
+'   (2) 案件未選択(固定マーカー)の画面へ貼ると **採番 -> 保存** の順で通り、
+'       採番したIDの case_data に本文が入る(13章§2.11(e) の書き手(3))
+'   (3) ci_case_id が案件ID書式でも固定マーカーでもない画面からの
+'       [貼ったものを保存する]は**1欄も書かず**不一致文言を出す(第2の壁)
+' ============================================================================
+Private Sub TestW61NavPaste()
+    Dim wsCases As Object
+    Dim hdr As Variant
+    Dim cCase As Long
+    Dim rowNo As Long
+    Dim warnOrig As String
+    Dim actOrig As String
+    Dim newCaseId As String
+    Dim okPii As Boolean
+    Dim okNew As Boolean
+    Dim okMismatch As Boolean
+    Dim detPii As String
+    Dim detNew As String
+    Dim detMis As String
+    On Error GoTo Crashed
+
+    detPii = "前提不成立"
+    detNew = "前提不成立"
+    detMis = "前提不成立"
+    actOrig = ActiveSheetName()
+    warnOrig = modUISheet.ReadNamed("hm_warning")
+
+    Set wsCases = SheetByName("案件一覧")
+    If wsCases Is Nothing Then GoTo Report
+    hdr = Hdr1(wsCases, 32)
+    cCase = modUtil.FindHeaderCol(hdr, "case_id")
+    If cCase <= 0 Then GoTo Report
+
+    ' フィクスチャ案件を1本置き、ナビを描いてから始める(DrawOk を立てる。m3)。
+    rowNo = LastRowA(wsCases) + 1
+    PutCell wsCases, rowNo, cCase, T2_CASE
+    PutNamedCol wsCases, hdr, rowNo, "company", T2_COMPANY
+    PutNamedCol wsCases, hdr, rowNo, "industry_code", "T47"
+    PutNamedCol wsCases, hdr, rowNo, "industry_name", "検査用"
+    PutNamedCol wsCases, hdr, rowNo, "case_type", "new"
+    PutNamedCol wsCases, hdr, rowNo, "status", "draft"
+
+    modCaseStore.SaveData T2_CASE, "input_hp", vbNullString
+    modUISheet.WriteNamed "hm_case_id", T2_CASE
+    modUINav.DrawNav
+    If Not modUINav.DrawOk() Then
+        detPii = "DrawNav が描き切っていない(以降の貼付は全欄ブロックが正)"
+        detNew = detPii
+        detMis = detPii
+        GoTo Report
+    End If
+
+    ' ---- (1) 個人情報を含む貼付は case_data を1字も増やさない ----------
+    Dim beforeLen As Long
+    beforeLen = Len(modCaseStore.LoadData(T2_CASE, "input_hp"))
+    If modUISheet.CopyToClipboard(T2_PII_TEXT) Then
+        modUICase6.PasteIntoArea "hp"
+        Dim afterLen As Long
+        afterLen = Len(modCaseStore.LoadData(T2_CASE, "input_hp"))
+        okPii = (afterLen = beforeLen)
+        detPii = "貼付前=" & CStr(beforeLen) & "字 貼付後=" & CStr(afterLen) & "字"
+    Else
+        okPii = True
+        detPii = "SKIP: クリップボードへ書けない環境"
+    End If
+
+    ' ---- (2) 案件未選択 -> 採番 -> 保存 の順序 --------------------------
+    modUISheet.WriteNamed "hm_case_id", vbNullString
+    modUISheet.WriteNamed "ci_company", T2_COMPANY & "2"
+    modUISheet.WriteNamed "ci_industry_name", "検査用"
+    modUISheet.WriteNamed "ci_industry_code", "T47"
+    modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
+    If modUISheet.CopyToClipboard(T2_SAFE_TEXT) Then
+        modUICase6.PasteIntoArea "hp"
+        newCaseId = Trim$(modUISheet.ReadNamed("hm_case_id"))
+        okNew = modCaseStore.IsValidCaseId(newCaseId)
+        If okNew Then
+            okNew = (StrComp(modCaseStore.LoadData(newCaseId, "input_hp"), _
+                             T2_SAFE_TEXT, vbBinaryCompare) = 0)
+        End If
+        detNew = "採番=[" & newCaseId & "] 保存字数=" & _
+                 CStr(Len(modCaseStore.LoadData(newCaseId, "input_hp")))
+    Else
+        okNew = True
+        detNew = "SKIP: クリップボードへ書けない環境"
+    End If
+
+    ' ---- (3) ci_case_id が3値のどれでもない画面からは1字も書かない -----
+    modCaseStore.SaveData T2_CASE, "input_hp", T2_SAFE_TEXT
+    modUISheet.WriteNamed "hm_warning", vbNullString
+    modUISheet.WriteNamed "ci_case_id", "こわれた値"
+    modUISheet.WriteNamed "ci_raw_hp", "直貼りした本文"
+    modUICase6.SaveNav
+    okMismatch = (StrComp(modCaseStore.LoadData(T2_CASE, "input_hp"), _
+                          T2_SAFE_TEXT, vbBinaryCompare) = 0)
+    okMismatch = okMismatch And _
+        (InStr(1, modUISheet.ReadNamed("hm_warning"), T2_MSG_NAV_MISMATCH, _
+               vbBinaryCompare) > 0)
+    detMis = "hm_warning=[" & modUISheet.ReadNamed("hm_warning") & "]"
+
+Report:
+    ECheck "T47B-W61-14_[ここに貼る]は個人情報を検知したらcase_dataを1字も増やさない", _
+           okPii, detPii
+    ECheck "T47B-W61-15_案件未選択の画面へ貼ると採番->保存の順で通る", _
+           okNew, detNew
+    ECheck "T47B-W61-16_ci_case_id不一致の画面からの保存は1欄も書かない", _
+           okMismatch, detMis
+
+    On Error Resume Next
+    modCaseStore.SaveData T2_CASE, "input_hp", vbNullString
+    If LenB(newCaseId) > 0 Then
+        modCaseStore.SaveData newCaseId, "input_hp", vbNullString
+        DropFixtureRow wsCases, cCase
+        Dim rNew As Long
+        For rNew = LastRowA(wsCases) To 2 Step -1
+            If StrComp(CellStr(wsCases, rNew, cCase), newCaseId, vbBinaryCompare) = 0 Then
+                wsCases.Rows(rNew).Delete
+            End If
+        Next rNew
+    End If
+    ClearNamed "ci_raw_hp"
+    ClearNamed "ci_company"
+    ClearNamed "ci_industry_code"
+    ClearNamed "ci_industry_name"
+    modUISheet.WriteNamed "ci_case_id", vbNullString
+    modUISheet.WriteNamed "hm_case_id", vbNullString
+    modUISheet.WriteNamed "hm_warning", warnOrig
+    DropFixtureRow wsCases, cCase
+    If LenB(actOrig) > 0 Then modUISheet.ShowSheet actOrig
+    Exit Sub
+Crashed:
+    detPii = "Err=" & CStr(Err.Number) & " " & Err.Description
+    detNew = detPii
+    detMis = detPii
+    okPii = False
+    okNew = False
+    okMismatch = False
+    Resume Report
 End Sub
 
 ' ============================================================================

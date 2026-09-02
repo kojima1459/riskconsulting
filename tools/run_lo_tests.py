@@ -175,6 +175,14 @@ PURE_ALLOWLIST = [
     #   modUIGeom  : 帯・ボタンの並びとカードの高さ・表示時間の算数
     #   modNavText : StripDrFooter / PreviewLines / SplitFieldNotes / JoinFieldNotes
     "modUIGeom", "modNavText",
+    # W6.1(裁定書22)。ui層だがテストが叩くのは14章§6が公開を宣言した純関数だけ
+    # (技術メモ4。モジュールの他の関数はシート・クリップボードに触れるが実行に
+    #  到達しない):
+    #   modUIResearch : FillTemplate / PlaceholderTable / PlaceholderKeys(M1)
+    #   modUICase6    : AreaTable / AreaKeys / AreaField / HandlerName(M4)
+    #   modUINav      : StepRuleOf / StepFor / StepActionOf / StepText /
+    #                   StepAnchor(M4。優先順位10行の判定核)
+    "modUIResearch", "modUICase6", "modUINav",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",
@@ -205,6 +213,12 @@ PURE_ALLOWLIST = [
     # PreviewLines(4本)/ SplitFieldNotes・JoinFieldNotes(7本)を叩く。
     # modTestsPure12.RunAll の末尾から呼ぶ。
     "modTestsPure13",
+    # modTestsPure14: W6.1(裁定書22)の純層28本。11章v3.2.1 §3.1.1 / §3.2 /
+    # §3.3.7 と 13章§2.11・§2.19、docs/08 の実測だけを根拠に
+    # modUIResearch.FillTemplate(11本)/ modUICase6.HandlerName・AreaTable(3本)/
+    # modUINav.StepText・StepAnchor(2本)/ StepFor(10本)/
+    # modNavText.FitsInRows(2本)を叩く。modTestsPure13.RunAll の末尾から呼ぶ。
+    "modTestsPure14",
     "modMockLlm", "modMockLlm2",
 ]
 

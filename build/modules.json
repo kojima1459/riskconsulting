@@ -534,6 +534,13 @@
       "wave": "T-49"
     },
     {
+      "name": "modTestsPure14",
+      "path": "src/test/modTestsPure14.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W6.1"
+    },
+    {
       "name": "modTestsExcel",
       "path": "src/test/modTestsExcel.bas",
       "role": "test",
