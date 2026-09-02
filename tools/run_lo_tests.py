@@ -183,6 +183,10 @@ PURE_ALLOWLIST = [
     #   modUINav      : StepRuleOf / StepFor / StepActionOf / StepText /
     #                   StepAnchor(M4。優先順位10行の判定核)
     "modUIResearch", "modUICase6", "modUINav",
+    # W6.2(裁定書23追補2)。ui層だがテストが叩くのは MaxWaitText(秒→分の切り上げ)
+    # だけ。Excel・シート・モジュール変数のどれにも触れない純関数である
+    # (技術メモ4。SetStage 等の他の関数はシートに触るが実行に到達しない)。
+    "modUIProgress",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",

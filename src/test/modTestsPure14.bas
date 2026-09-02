@@ -17,7 +17,11 @@ Option Explicit
 '   W61C StepText/Anchor 2本  11章§3.1.1(M4)。6文と7本目が無いこと／移動先の表
 '   W61D StepFor       10本   11章§3.1.1(M4)。優先順位10行を1行1本で固定
 '   W61E FitsInRows     2本   11章§3.3.7(M2)。60行ちょうど / 61行
-'   計 28本
+'   W62F LineCountFor   4本   裁定書23追補2。折り返し行数の切り上げ
+'                             (割り切れる / 余りあり / 複数行の合計 / 空文字と桁0)
+'   W62G MaxWaitText    3本   裁定書23追補2。秒→分の切り上げ
+'                             (割り切れる / 余りあり / 0秒)
+'   計 35本
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -38,6 +42,12 @@ WD:
 WE:
     On Error GoTo FE
     T_W61E_FitsInRows
+WF:
+    On Error GoTo FF
+    T_W62F_LineCountFor
+WG:
+    On Error GoTo FG
+    T_W62G_MaxWaitText
 WDone:
     Exit Sub
 FA:
@@ -54,6 +64,12 @@ FD:
     Resume WE
 FE:
     GroupFail "W61E FitsInRows"
+    Resume WF
+FF:
+    GroupFail "W62F LineCountFor"
+    Resume WG
+FG:
+    GroupFail "W62G MaxWaitText"
     Resume WDone
 End Sub
 
@@ -300,4 +316,62 @@ Private Sub T_W61E_FitsInRows()
           modNavText.FitsInRows(Replace$(LinesOf(60), vbLf, vbCrLf), 60)
     modTestRunner.Check "Test_W61E_02_61行は入らず枠0行はfail-closed_11章3.3.7", ok2, _
         "61行=False / rows=0=False / CrLfも1改行として数える の3点"
+End Sub
+
+' ============================================================================
+' W62F LineCountFor(modUIGeom。裁定書23追補2)
+' ----------------------------------------------------------------------------
+' 契約(12章§2 のカード高さ算出が前提にしている数え方):
+'   ・1行の表示行数は「文字数 ÷ 1行あたり文字数」の**切り上げ**
+'   ・改行で区切られた各行の表示行数の**合計**を返す
+'   ・空文字でも 1 行と数える(高さ0のカードを作らない)
+'   ・1行あたり文字数が0以下のときは1文字/行として数える(fail-closed)
+' 期待値は上の規約から手計算した(実装の式は写していない)。
+'   10文字 ÷ 5 = 2.0        -> 切り上げても 2(割り切れる)
+'    6文字 ÷ 5 = 1.2        -> 切り上げて   2(余りあり)
+'   "abcdefghij" & 改行 & "abc" は 2 + 1 = 3
+'   "" は規約により 1 / "abcd" を1文字ずつなら 4
+' ============================================================================
+Private Sub T_W62F_LineCountFor()
+    ChkL "Test_W62F_01_割り切れる折り返しは切り上げても増えない_12章2", _
+         modUIGeom.LineCountFor("abcdefghij", 5), 2
+    ChkL "Test_W62F_02_余りのある折り返しは1行増える_12章2", _
+         modUIGeom.LineCountFor("abcdef", 5), 2
+
+    Dim two As String
+    two = "abcdefghij" & vbLf & "abc"
+    ChkL "Test_W62F_03_複数行は各行の切り上げの合計_12章2", _
+         modUIGeom.LineCountFor(two, 5), 3
+
+    Dim ok0 As Boolean
+    ok0 = (modUIGeom.LineCountFor("", 20) = 1) And _
+          (modUIGeom.LineCountFor("abcd", 0) = 4)
+    modTestRunner.Check "Test_W62F_04_空文字は1行_桁0は1文字毎_12章2", ok0, _
+        "空文字=1 と 桁0のとき4 の2点"
+End Sub
+
+' ============================================================================
+' W62G MaxWaitText(modUIProgress。裁定書23追補2)
+' ----------------------------------------------------------------------------
+' 契約(11章のワイヤー「最大N分」・16章E-50(a)):
+'   ・秒を分へ換算し、端数は**切り上げる**(待ち時間を短く見せない)
+'   ・0以下でも「最大1分」と見せる(「最大0分」と言わない)
+' 文面全体ではなく**分の値**だけを固定する(文面の言い回しは11章のワイヤー側の
+' 領分であり、ここで検査したいのは切り上げの算数だから)。期待値は手計算:
+'   120秒 = 2.0分 -> 2(割り切れる) / 130秒 = 2.17分 -> 3(余りあり) / 0秒 -> 1
+' ============================================================================
+Private Sub T_W62G_MaxWaitText()
+    ChkMins "Test_W62G_01_割り切れる秒はそのままの分_11章ワイヤー", 120, 2
+    ChkMins "Test_W62G_02_端数のある秒は切り上げ_11章ワイヤー", 130, 3
+    ChkMins "Test_W62G_03_0秒でも最大1分と見せる_11章ワイヤー", 0, 1
+End Sub
+
+' 「最大N分」の N だけを見る(N の前後の言い回しには依存しない)。
+Private Sub ChkMins(ByVal nm As String, ByVal waitSec As Long, ByVal wantMins As Long)
+    Dim txt As String
+    txt = modUIProgress.MaxWaitText(waitSec)
+    Dim want As String
+    want = "最大" & CStr(wantMins) & "分"
+    modTestRunner.Check nm, (InStr(1, txt, want, vbBinaryCompare) > 0), _
+        "期待=[" & want & "] を含むこと 実際=[" & txt & "]"
 End Sub

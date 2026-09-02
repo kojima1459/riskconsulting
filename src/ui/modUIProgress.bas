@@ -100,8 +100,10 @@ Public Function IsUiLocked() As Boolean
 End Function
 
 ' 「最大20分（1Stepあたり llm_wait_sec 秒）」相当の文言(11章のワイヤー)。
-'   秒を分へ換算し、端数は切り上げる(短く見せない)。
-Private Function MaxWaitText(ByVal waitSec As Long) As String
+'   秒を分へ換算し、端数は切り上げる(短く見せない)。0以下でも「1分」と見せる。
+' Excel・シートに一切触らない純関数なので層(a)から直接叩く(裁定書23追補2)。
+'   → そのために Public にしてある(呼び出しは本モジュール内と純層テストだけ)。
+Public Function MaxWaitText(ByVal waitSec As Long) As String
     Dim mins As Long
     mins = CLng(Fix(waitSec / 60))
     If mins * 60 < waitSec Then mins = mins + 1
