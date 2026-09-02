@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>春華堂｜経営リスク分析・総合提案構想</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#667085; --line:#e6e8ec; --paper:#ffffff; --bg:#f5f6f8;
+    --brand:#a5312f; --brand2:#6f1e1e; --accent:#b88a44; --navy:#27364a;
+    --green:#2d6a4f; --amber:#b7791f; --red:#b42318; --blue:#2f5da8; --purple:#6f42c1;
+    --soft-red:#fff1f0; --soft-amber:#fff7e8; --soft-green:#edf8f2; --soft-blue:#eef4ff; --soft-purple:#f5f1ff; --soft-brand:#f7eeed; --soft-brand-hover:#f2e3e1;
+    --shadow:0 12px 32px rgba(16,24,40,.07);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.7}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .topbar-inner{max-width:1180px;margin:auto;padding:9px 22px;display:flex;gap:8px;align-items:center;overflow-x:auto;white-space:nowrap}
+  .topbar a{display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#495365;font-weight:650;padding:6px 10px;border:1px solid #e5d7d5;background:var(--soft-brand);border-radius:8px;box-shadow:0 1px 2px rgba(16,24,40,.03);transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+  .topbar a:hover{background:var(--soft-brand-hover);border-color:#d7bbb8;box-shadow:0 2px 6px rgba(16,24,40,.07);text-decoration:none;transform:translateY(-1px)}
+  .topbar a:focus-visible{outline:2px solid rgba(165,49,47,.22);outline-offset:2px;border-color:#c9a2a1}
+  .hero{background:linear-gradient(135deg,#5d1719 0%,#9b292b 48%,#bb4b41 100%);color:white;padding:70px 24px 64px;position:relative;overflow:hidden}
+  .hero:after{content:"";position:absolute;width:520px;height:520px;border:1px solid rgba(255,255,255,.15);border-radius:50%;right:-150px;top:-260px;box-shadow:0 0 0 70px rgba(255,255,255,.03),0 0 0 150px rgba(255,255,255,.02)}
+  .hero-inner{max-width:1180px;margin:auto;position:relative;z-index:2}
+  .eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;opacity:.88}
+  .sample-tag{display:inline-flex;align-items:center;justify-content:center;padding:5px 11px;border-radius:999px;background:#fff;color:var(--brand2);font-size:11px;font-weight:900;letter-spacing:.14em;box-shadow:0 4px 12px rgba(0,0,0,.12);margin-bottom:13px}
+  .hero-subtitle{max-width:940px;font-size:17px;font-weight:650;letter-spacing:.01em;color:rgba(255,255,255,.94);margin:0 0 18px}
+  h1{font-size:clamp(30px,4vw,54px);line-height:1.18;margin:12px 0 15px;letter-spacing:.01em}
+  .hero p{max-width:900px;font-size:16px;margin:0 0 22px;color:rgba(255,255,255,.9)}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-size:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.10);padding:6px 10px;border-radius:999px}
+  main{max-width:1180px;margin:0 auto;padding:32px 22px 80px}
+  section{scroll-margin-top:58px;margin:0 0 34px}
+  .section-head{display:block;margin-bottom:14px}
+  .section-kicker{font-size:11px;color:var(--brand);font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+  h2{font-size:clamp(22px,2.35vw,26px);line-height:1.3;margin:3px 0 0;white-space:nowrap} h3{font-size:17px;margin:0 0 10px} h4{margin:0 0 6px}
+  .sub{color:var(--muted);font-size:13px;max-width:none;margin-top:7px}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);padding:22px}
+  .grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .metric{padding:18px;border-radius:12px;background:#fafafa;border:1px solid var(--line)}
+  .metric .label{font-size:11px;color:var(--muted);font-weight:700}.metric .value{font-size:22px;font-weight:850;margin-top:2px}.metric .note{font-size:11px;color:var(--muted);margin-top:3px}
+  .callout{border-left:4px solid var(--brand);background:#fff8f7;padding:14px 16px;border-radius:0 10px 10px 0;margin-top:14px}
+  .callout strong{color:var(--brand2)}
+  .tag{display:inline-flex;align-items:center;font-size:10px;font-weight:800;border-radius:999px;padding:4px 8px;margin:2px 3px 2px 0}
+  .fact{background:var(--soft-blue);color:#2f5da8}.infer{background:var(--soft-amber);color:#8a5d13}.verify{background:#f2f4f7;color:#475467}.cover{background:var(--soft-green);color:#236144}.partial{background:var(--soft-amber);color:#8a5d13}.hard{background:var(--soft-red);color:#9f1f17}
+  .story{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:15px;overflow:hidden;background:white;box-shadow:var(--shadow)}
+  .story>div{padding:22px;min-height:200px}.story>div+div{border-left:1px solid var(--line)}
+  .story .num{font-size:12px;font-weight:900;color:var(--brand);letter-spacing:.12em}.story h3{font-size:20px;margin:8px 0}.story p{font-size:13px;color:#4d5768;margin:0}
+  .company-map{display:grid;grid-template-columns:1.05fr 1fr;gap:14px}
+  .biz-stack{display:grid;gap:8px;margin-top:12px}.biz{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border-radius:10px;background:#fafafa;border:1px solid var(--line)}
+  .biz b{min-width:118px;font-size:12px}.biz span{font-size:12px;color:#566070}
+  .universe{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .u{padding:13px;border:1px solid var(--line);background:white;border-radius:12px;min-height:124px}
+  .u .n{font-size:10px;color:var(--brand);font-weight:900}.u h4{font-size:13px;margin:4px 0 5px}.u p{font-size:10px;color:var(--muted);line-height:1.5;margin:0}
+  .heat-wrap{display:grid;grid-template-columns:460px 1fr;gap:20px;align-items:start}
+  .heatmap{position:relative;display:grid;grid-template-columns:38px repeat(5,1fr);grid-template-rows:repeat(5,72px) 28px;gap:3px;user-select:none}
+  .heatmap .y{display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted)}
+  .cell{position:relative;border-radius:7px;border:1px solid rgba(0,0,0,.04)}
+  .c-low{background:#e9f5ee}.c-mid{background:#fff6db}.c-high{background:#ffe8d3}.c-crit{background:#ffd9d7}
+  .xlab{display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted)}
+  .dot{position:absolute;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:850;color:white;background:var(--brand);border:2px solid white;box-shadow:0 3px 8px rgba(0,0,0,.22);transform:translate(-50%,-50%);cursor:help}
+  .risk-legend{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.legend-item{font-size:11px;color:var(--muted);display:flex;gap:5px;align-items:center}.sw{width:12px;height:12px;border-radius:3px}
+  .priority-list{display:grid;gap:9px}.priority{display:grid;grid-template-columns:38px 1fr 70px;gap:10px;align-items:start;padding:12px;border:1px solid var(--line);border-radius:10px}.priority .rid{font-weight:900;color:var(--brand);font-size:12px}.priority .riskname{font-size:12px;font-weight:700}.priority .why{font-size:11px;color:var(--muted);margin-top:3px}.score{font-size:11px;font-weight:850;text-align:right}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}.filters button{border:1px solid var(--line);background:white;padding:7px 10px;border-radius:999px;font-size:11px;cursor:pointer}.filters button.active{background:var(--navy);color:white;border-color:var(--navy)}
+  .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:white}
+  table{border-collapse:collapse;width:100%;min-width:1040px;font-size:11px} th,td{padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:top} th{background:#f8f9fb;text-align:left;color:#4b5565;font-size:10px;position:sticky;top:0;z-index:1}.nowrap{white-space:nowrap}.risk-title{font-weight:800}.mini{font-size:10px;color:var(--muted);line-height:1.45;margin-top:3px}
+  .lvl{font-size:9px;font-weight:900;padding:3px 7px;border-radius:999px;display:inline-block}.lv-critical{background:#fde3e1;color:#9b1c14}.lv-high{background:#ffedd5;color:#9a4c06}.lv-medium{background:#fff7d6;color:#7a5a05}.lv-low{background:#e7f6ed;color:#236144}
+  .radar{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}.radar-item{border:1px solid var(--line);border-radius:12px;padding:15px;background:white}.radar-top{display:flex;justify-content:space-between;gap:10px}.horizon{font-size:10px;font-weight:800;color:var(--purple);background:var(--soft-purple);border-radius:999px;padding:3px 7px;white-space:nowrap}.radar-item h4{font-size:13px}.radar-item p{font-size:11px;color:var(--muted);margin:7px 0}.bar{height:6px;background:#edf0f3;border-radius:99px;overflow:hidden}.bar span{display:block;height:100%;background:var(--brand)}
+  .ideas{display:grid;gap:12px}.idea{border:1px solid var(--line);background:white;border-radius:14px;padding:18px;display:grid;grid-template-columns:44px 1fr 250px;gap:15px;align-items:start}.idea .rank{width:36px;height:36px;border-radius:10px;background:#f5e8e7;color:var(--brand);font-weight:900;display:flex;align-items:center;justify-content:center}.idea h4{font-size:14px}.idea p{font-size:11px;color:var(--muted);margin:6px 0 0}.idea-side{font-size:10px;border-left:1px solid var(--line);padding-left:14px;color:#566070}.idea-side b{color:#344054}.stars{letter-spacing:1px;color:var(--accent);font-size:13px}
+  .proposal{background:linear-gradient(135deg,#202b3b,#34475e);color:white;border-radius:16px;padding:26px;box-shadow:var(--shadow)}
+  .proposal h3{font-size:24px}.proposal p{color:rgba(255,255,255,.82);font-size:13px}.proposal-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:15px}.pf{padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(255,255,255,.05)}.pf .n{font-size:10px;opacity:.7}.pf b{display:block;margin:3px 0 6px;font-size:13px}.pf span{font-size:10px;opacity:.78}
+  .questions{columns:2;column-gap:30px}.q{break-inside:avoid;margin:0 0 9px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:11px}.q b{color:var(--brand)}
+  .sources li{font-size:11px;margin-bottom:6px;color:#566070}.footnote{font-size:10px;color:#7a8494}.disclaimer{background:#f8f9fb;border:1px solid var(--line);border-radius:12px;padding:16px;font-size:10px;color:#667085}
+  .badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:800}.b-red{background:#fde3e1;color:#9b1c14}.b-blue{background:#e8f0ff;color:#315ea8}.b-green{background:#e6f5ec;color:#276447}.b-gray{background:#eef0f3;color:#536071}
+  .separator{height:1px;background:var(--line);margin:15px 0}
+  @media(max-width:900px){.g4,.g3{grid-template-columns:repeat(2,1fr)}.company-map,.heat-wrap{grid-template-columns:1fr}.universe{grid-template-columns:repeat(2,1fr)}.heatmap{max-width:520px}.idea{grid-template-columns:44px 1fr}.idea-side{grid-column:2;border-left:0;border-top:1px solid var(--line);padding:10px 0 0}.proposal-flow{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:620px){main{padding:22px 13px 60px}.hero{padding:52px 16px}.g2,.g3,.g4{grid-template-columns:1fr}.story{grid-template-columns:1fr}.story>div+div{border-left:0;border-top:1px solid var(--line)}.universe{grid-template-columns:1fr}.radar{grid-template-columns:1fr}.questions{columns:1}.proposal-flow{grid-template-columns:1fr}.heatmap{grid-template-rows:repeat(5,62px) 28px}h2{white-space:normal}.sub{margin-top:5px}}
+  @media print{.topbar{display:none}.hero{padding:35px 20px}body{background:white}.card,.story,.proposal{box-shadow:none}section{break-inside:avoid}main{max-width:none}}
+</style>
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a href="#summary">Executive Summary</a><a href="#company">企業理解</a><a href="#universe">Risk Universe</a><a href="#map">Risk Map</a><a href="#coverage">保険カバレッジ</a><a href="#newrisk">New Risk</a><a href="#growth">攻めの保険活用</a><a href="#story">提案ストーリー</a><a href="#questions">追加ヒアリング</a><a href="#sources">Sources</a>
+</div></nav>
+<header class="hero">
+ <div class="hero-inner">
+  <div class="sample-tag">SAMPLE</div>
+  <div class="eyebrow">Integrated Risk & Insurance Advisory</div>
+  <h1>経営リスク分析・総合提案構想</h1>
+  <div class="hero-subtitle">― リスクマネジメント高度化と保険を活用した事業支援の検討案 ―</div>
+  <p>食品メーカーとしての「守り」に加え、小売・EC・観光体験・地域ブランドまで含めた事業モデルを俯瞰し、既存保険で移転できるリスク、保険だけでは解決できないニューリスク、そして保険を事業成長のインフラとして使う機会を一体で可視化しています。</p>
+  <div class="hero-meta"><span class="pill">対象：有限会社春華堂／春華堂グループ</span><span class="pill">公開情報調査基準日：2026-08-27</span><span class="pill">実契約・実損害実績は未確認</span></div>
+ </div>
+</header>
+<main>
+<section id="summary">
+ <div class="section-head"><div><div class="section-kicker">01 / Executive Summary</div><h2>経営層に伝えるべき結論</h2></div><div class="sub">「保険の見直し」ではなく、「ブランドを守る・事業を止めない・成長を後押しする」の3テーマに再構成します。</div></div>
+ <div class="story">
+  <div><div class="num">01 PROTECT</div><h3>ブランドを守る</h3><p>食品事故、品質問題、転売・不正流通、サイバー事故、SNS上の誤情報など、春華堂にとって価値の毀損が大きいのは「モノの損失」だけではなく、長年蓄積した信用・ブランドの毀損です。既存のPL・リコール・サイバー等を“ブランド危機対応”として束ね直す余地があります。</p></div>
+  <div><div class="num">02 RESILIENCE</div><h3>事業を止めない</h3><p>複数工場・店舗・体験施設を有する一方、地域集中、自然災害、設備停止、原材料・包装資材の供給途絶、人材・技能継承、IT停止が連鎖すると、製造・販売・観光体験が同時に影響を受けます。財物補償だけでなく「復旧時間」をKPIにしたBCP設計が重要です。</p></div>
+  <div><div class="num">03 GROWTH</div><h3>保険で成長を後押しする</h3><p>保険をコストではなく、新しい販売チャネル・法人取引・地域観光・コラボレーションに踏み出す際の“リスク許容力”として活用します。ギフト安心保証、体験キャンセル補償、法人納品保証、新規取引先への信用補完などを優先候補とします。</p></div>
+ </div>
+ <div class="grid g4" style="margin-top:14px">
+  <div class="metric"><div class="label">優先管理テーマ</div><div class="value">5</div><div class="note">Cat / Food / Supply / Cyber / People</div></div>
+  <div class="metric"><div class="label">既存保険で移転可能</div><div class="value">広い</div><div class="note">ただし免責・限度額・トリガー要確認</div></div>
+  <div class="metric"><div class="label">保険だけでは不足</div><div class="value">構造的</div><div class="note">ブランド・需要・原料価格・人材等</div></div>
+  <div class="metric"><div class="label">攻めの保険活用</div><div class="value">8案</div><div class="note">うち優先提案4案</div></div>
+ </div>
+ <div class="callout"><strong>提案の核：</strong> 春華堂のリスクは「菓子工場の火災・PL」に限定されません。製造、ブランド、小売、EC、観光・体験、地域連携が一体化した事業モデルであるため、保険設計も事業ポートフォリオ横断で組み直すことが合理的です。</div>
+</section>
+
+<section id="company">
+ <div class="section-head"><div><div class="section-kicker">02 / Business Understanding</div><h2>企業理解：リスクを生む事業構造</h2></div><div class="sub">公開情報から確認できる事実と、提案設計上の推定を分離しています。</div></div>
+ <div class="company-map">
+  <div class="card">
+   <h3>Public facts</h3>
+   <div class="grid g2">
+    <div class="metric"><div class="label">創業</div><div class="value">1887</div><div class="note">長期ブランド資産を保有 <a href="#s2">[S2]</a></div></div>
+    <div class="metric"><div class="label">代表的商品</div><div class="value" style="font-size:19px">うなぎパイ</div><div class="note">1961年誕生 <a href="#s2">[S2]</a></div></div>
+    <div class="metric"><div class="label">主な事業拠点</div><div class="value">複数</div><div class="note">工場・営業所・体験施設 <a href="#s1">[S1]</a></div></div>
+    <div class="metric"><div class="label">事業特性</div><div class="value" style="font-size:18px">製造＋体験</div><div class="note">工場見学・商業施設・コミュニティ <a href="#s5">[S5]</a><a href="#s6">[S6]</a></div></div>
+   </div>
+   <div class="biz-stack">
+    <div class="biz"><b>菓子製造</b><span>和洋菓子、うなぎパイ、五穀屋、coneri等。原材料・設備・品質管理・技能への依存が大きい。</span></div>
+    <div class="biz"><b>小売・卸</b><span>直営店舗、百貨店等の正規販売網。商品特性上、一部商品は通信販売を行わず、品質管理と正規流通を重視。<a href="#s3">[S3]</a></span></div>
+    <div class="biz"><b>EC・会員</b><span>オンラインショップを運営。2026年10月に公式アプリを終了し、LINEへ会員・ポイントを移行予定。<a href="#s4">[S4]</a><a href="#s7">[S7]</a></span></div>
+    <div class="biz"><b>観光・体験</b><span>うなぎパイファクトリーの工場見学、nicoeのイベント、SWEETS BANKの商業・コミュニティ機能。<a href="#s5">[S5]</a><a href="#s6">[S6]</a></span></div>
+    <div class="biz"><b>地域共創</b><span>学生・地域企業とのスタディツアー等、地域価値・人材育成に関わる活動も展開。<a href="#s8">[S8]</a></span></div>
+   </div>
+  </div>
+  <div class="card">
+   <h3>Risk implications</h3>
+   <p class="mini"><span class="tag fact">事実</span>公開情報で確認　<span class="tag infer">推定</span>事業構造から合理的に想定　<span class="tag verify">要確認</span>顧客ヒアリングが必要</p>
+   <div class="separator"></div>
+   <div class="biz-stack">
+    <div class="biz"><b>地域集中</b><span><span class="tag infer">推定</span>主要製造・体験拠点が浜松周辺に集積。大規模地震や広域停電・交通寸断時は相関損失が発生し得ます。静岡県・浜松市は南海トラフ巨大地震等を想定。<a href="#s9">[S9]</a></span></div>
+    <div class="biz"><b>ブランド集約</b><span><span class="tag infer">推定</span>「うなぎパイ」等の認知度が高いほど、食品事故・偽情報・転売品質問題のレピュテーション影響は財物損失を上回り得ます。</span></div>
+    <div class="biz"><b>人依存</b><span><span class="tag fact">事実</span>職人の手わざを価値として明示。<span class="tag infer">推定</span>技能継承・採用難は中長期の生産能力リスク。2026年には原材料価格・為替・人材確保を背景に賃金改定も公表。<a href="#s8">[S8]</a></span></div>
+    <div class="biz"><b>デジタル依存</b><span><span class="tag infer">推定</span>EC・キャッシュレス・会員基盤・LINE連携等により、IT障害・サイバー事故が売上だけでなく顧客接点にも波及。</span></div>
+    <div class="biz"><b>来訪者リスク</b><span><span class="tag fact">事実</span>工場見学・体験施設を運営。<span class="tag infer">推定</span>一般的な製造業より施設賠償・イベント・混雑・事故対応の論点が増えます。</span></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section id="universe">
+ <div class="section-head"><div><div class="section-kicker">03 / MECE Risk Universe</div><h2>リスクユニバース：10カテゴリーで漏れを抑える</h2></div><div class="sub">各リスクは「主たる発生源」で一意に分類し、重複計上を避けます。保険商品の分類ではなく、企業経営上のリスク発生構造から整理しています。</div></div>
+ <div class="universe">
+  <div class="u"><div class="n">01</div><h4>戦略・市場</h4><p>需要構造、観光需要、商品ポートフォリオ、競争、地域依存、成長投資</p></div>
+  <div class="u"><div class="n">02</div><h4>調達・供給網</h4><p>原材料、包装材、単一仕入先、価格・為替、物流寸断、仕入先品質</p></div>
+  <div class="u"><div class="n">03</div><h4>製造・品質</h4><p>食品安全、異物・アレルゲン、設備故障、歩留まり、工程停止、リコール</p></div>
+  <div class="u"><div class="n">04</div><h4>販売・顧客</h4><p>店舗、卸、EC、配送、決済、顧客苦情、正規流通、ギフト納品</p></div>
+  <div class="u"><div class="n">05</div><h4>施設・BCP</h4><p>火災、地震、風水害、停電、来訪者事故、イベント、復旧遅延</p></div>
+  <div class="u"><div class="n">06</div><h4>人材・労務</h4><p>採用、技能継承、労災、長時間労働、ハラスメント、キーパーソン</p></div>
+  <div class="u"><div class="n">07</div><h4>デジタル・情報</h4><p>ランサムウェア、個人情報、EC停止、外部SaaS、OT/設備接続、詐欺</p></div>
+  <div class="u"><div class="n">08</div><h4>法務・規制</h4><p>食品表示、広告、知財、契約、景品表示、個人情報、取引条件</p></div>
+  <div class="u"><div class="n">09</div><h4>財務・取引先</h4><p>売掛債権、資金繰り、盗難・不正、与信、投資回収、価格転嫁</p></div>
+  <div class="u"><div class="n">10</div><h4>ブランド・社会</h4><p>SNS炎上、偽情報、転売品質、地域信頼、危機広報、ESG・社会要請</p></div>
+ </div>
+</section>
+
+<section id="map">
+ <div class="section-head"><div><div class="section-kicker">04 / Risk Map</div><h2>リスクマップ：優先順位を経営言語に変換</h2></div><div class="sub">下記スコアは公開情報から作成した仮評価であり、事故実績・売上構成・BCP・保険契約を確認した実評価ではありません。Impact × Likelihood（各1–5）で表示します。</div></div>
+ <div class="card heat-wrap">
+   <div>
+    <h3>Impact × Likelihood</h3>
+    <div id="heatmap" class="heatmap"></div>
+    <div class="risk-legend"><span class="legend-item"><span class="sw c-low"></span>Low</span><span class="legend-item"><span class="sw c-mid"></span>Medium</span><span class="legend-item"><span class="sw c-high"></span>High</span><span class="legend-item"><span class="sw c-crit"></span>Critical</span></div>
+   </div>
+   <div>
+    <h3>経営優先度 Top 8</h3>
+    <div id="priorityList" class="priority-list"></div>
+   </div>
+ </div>
+</section>
+
+<section id="coverage">
+ <div class="section-head"><div><div class="section-kicker">05 / Insurance Coverage Matrix</div><h2>既存保険商品による移転可能性とギャップ</h2></div><div class="sub">「既存保険でカバーされるか」は商品名ではなく、原因・損害類型・免責・待機期間・サブリミット・利益損失算定方法で判定します。実契約の加入有無は未確認です。</div></div>
+ <div class="filters"><button data-filter="all" class="active">すべて</button><button data-filter="critical">Critical</button><button data-filter="high">High</button><button data-filter="gap">カバレッジGap大</button><button data-filter="insurable">保険移転しやすい</button></div>
+ <div class="table-wrap"><table><thead><tr><th>ID</th><th>カテゴリー</th><th>リスク</th><th>評価</th><th>想定される既存商品</th><th>一般的なカバー可能性</th><th>主なギャップ／確認点</th><th>管理策</th></tr></thead><tbody id="riskRows"></tbody></table></div>
+ <p class="footnote">※商品名は一般名称です。実際の補償可否は保険会社・約款・特約・告知内容等により異なります。</p>
+</section>
+
+<section id="newrisk">
+ <div class="section-head"><div><div class="section-kicker">06 / New Risk Radar</div><h2>既存保険だけでは処理しにくいニューリスク</h2></div><div class="sub">「保険がない＝提案できない」ではなく、回避・低減・契約移転・金融ヘッジ・保有・保険を組み合わせる領域です。</div></div>
+ <div class="radar">
+  <div class="radar-item"><div class="radar-top"><h4>原材料・エネルギー・為替の構造的ボラティリティ</h4><span class="horizon">NOW–3Y</span></div><p>春華堂自身が原材料価格高騰・為替変動を外部環境として言及。通常の企業保険では価格上昇そのものは原則カバーしません。<a href="#s8">[S8]</a></p><div class="bar"><span style="width:92%"></span></div><p><b>推奨：</b>調達分散、価格スライド条項、先物・為替ヘッジ、天候指数等の限定的リスクファイナンスを組合せ。</p></div>
+  <div class="radar-item"><div class="radar-top"><h4>職人技能・商品文化の継承リスク</h4><span class="horizon">1–5Y</span></div><p>「職人の手わざ」をブランド価値とするため、キーパーソンの退職・採用難・技能伝承の失敗は製品品質・生産能力に波及し得ます。</p><div class="bar"><span style="width:82%"></span></div><p><b>推奨：</b>技能マップ、複線化、教育工程の標準化、キーパーソン依存度KRIの設定。生命・所得補償は一部可能でも、技能喪失そのものは保険で代替困難。</p></div>
+  <div class="radar-item"><div class="radar-top"><h4>ブランド偽情報・Deepfake・なりすまし</h4><span class="horizon">NOW–3Y</span></div><p>AI生成コンテンツ等により、偽キャンペーン、偽広告、食品事故の偽情報が短時間で拡散するリスク。従来のサイバー保険では第三者発信の風評損失が十分に拾えない場合があります。</p><div class="bar"><span style="width:76%"></span></div><p><b>推奨：</b>ブランド監視、公式アカウント認証、危機広報プレイブック、削除・法務対応費用の補償可否確認。</p></div>
+  <div class="radar-item"><div class="radar-top"><h4>プラットフォーム依存・顧客接点喪失</h4><span class="horizon">NOW–3Y</span></div><p>アプリからLINEへの会員基盤移行は、顧客接点の効率化と同時に外部プラットフォーム依存を高める可能性があります。<a href="#s7">[S7]</a></p><div class="bar"><span style="width:70%"></span></div><p><b>推奨：</b>顧客ID・同意情報の可搬性、障害時の代替チャネル、ベンダーSLA、システム障害による利益損失のサイバー保険適用確認。</p></div>
+  <div class="radar-item"><div class="radar-top"><h4>気候変動による農産物・一次産品の供給変動</h4><span class="horizon">3–10Y</span></div><p>菓子は小麦、砂糖、乳製品、卵、カカオ、栗等の農畜産原料に依存します。気候由来の収量・価格変動は財物事故を伴わずに利益率を圧迫します。</p><div class="bar"><span style="width:74%"></span></div><p><b>推奨：</b>原産地分散、代替レシピR&D、長期調達、指数連動型保険の適用可能性検討。</p></div>
+  <div class="radar-item"><div class="radar-top"><h4>地域観光・交通需要の急変</h4><span class="horizon">NOW–5Y</span></div><p>工場見学や体験型施設を持つため、感染症、交通障害、旅行需要変化等により来訪者数が大きく変動し得ます。多くの場合、単純な需要減は保険対象外です。</p><div class="bar"><span style="width:63%"></span></div><p><b>推奨：</b>地元企業・交通事業者との周遊商品、イベント収益の分散、特定イベントのキャンセル保険や天候トリガーの活用。</p></div>
+ </div>
+</section>
+
+<section id="growth">
+ <div class="section-head"><div><div class="section-kicker">07 / Insurance-enabled Growth</div><h2>保険を「本業拡大の装置」に変えるアイデア</h2></div><div class="sub">実現可否は保険業法、約款設計、募集スキーム、料率、データ取得可否、対象顧客の同意等の検討が必要です。ここではアイデア発散を優先しています。</div></div>
+ <div class="ideas">
+  <div class="idea"><div class="rank">A</div><div><h4>法人ギフト「納品・代替調達保証」</h4><p>企業の周年記念、キャンペーン、株主・顧客向けギフト等で、期日納品が重要な案件に対し、偶発事故で約定数量・期日に納品できない場合の緊急輸送、代替品調達、再製造等の追加費用を保険化。営業担当が「納期リスクまで引き受ける菓子会社」として法人案件を取りに行ける設計です。</p></div><div class="idea-side"><b>狙い</b> 大口B2Bの受注率向上<br><b>適合商品</b> 約定履行費用・特約開発<br><b>事業効果</b> <span class="stars">★★★★★</span><br><b>実装難度</b> 中〜高</div></div>
+  <div class="idea"><div class="rank">B</div><div><h4>「ハレの日ギフト安心保証」— Embedded Gift Protection</h4><p>ECで購入する誕生日・結婚・出産・記念日のギフトに、配送事故、一定の遅延、破損等への再送・返金保証を小額で付帯。特に「うなぎパイミニ アニバーサリー」等の祝い用途と親和性があります。顧客の“失敗できないギフト”の心理障壁を下げ、単価上昇・CVR向上を狙います。</p></div><div class="idea-side"><b>狙い</b> ECギフト市場の拡大<br><b>適合商品</b> 動産・費用保険の組成<br><b>事業効果</b> <span class="stars">★★★★★</span><br><b>実装難度</b> 中</div></div>
+  <div class="idea"><div class="rank">C</div><div><h4>nicoe／工場見学「体験キャンセル安心」</h4><p>有料ツアー、ワークショップ、季節イベント等に、参加者の急病・交通障害等を対象とするキャンセル費用補償を付帯。予約時点の不安を下げ、先行予約・高付加価値体験への転換を促します。地域ホテル・交通との周遊パッケージにも拡張可能です。</p></div><div class="idea-side"><b>狙い</b> 予約CVR・客単価向上<br><b>適合商品</b> キャンセル費用保険<br><b>事業効果</b> <span class="stars">★★★★☆</span><br><b>実装難度</b> 低〜中</div></div>
+  <div class="idea"><div class="rank">D</div><div><h4>新規卸・海外販路を広げる「信用補完パッケージ」</h4><p>新規の小売・卸・海外販売先への取引拡大時、取引信用保険、貨物保険、海外PL、リコール等をセットで設計。与信上限を理由に躊躇していた販売先への進出を可能にし、保険を「営業可能な取引枠」を広げる資本効率ツールとして使います。</p></div><div class="idea-side"><b>狙い</b> 新規販路・海外展開<br><b>適合商品</b> 取引信用・貨物・海外PL<br><b>事業効果</b> <span class="stars">★★★★☆</span><br><b>実装難度</b> 中</div></div>
+  <div class="idea"><div class="rank">E</div><div><h4>正規販売店「品質信頼マーク＋購入者保証」</h4><p>転売品による品質トラブルをブランド課題として捉え、正規販売店での購入者に限り、一定の保存・配送事故等に対する交換費用を保証。QR等で正規流通を可視化し、「正規店で買う理由」を補強します。保険は保証コストの安定化に利用します。</p></div><div class="idea-side"><b>狙い</b> 正規流通・ブランド保護<br><b>適合商品</b> 保証費用・動産系<br><b>事業効果</b> <span class="stars">★★★★☆</span><br><b>実装難度</b> 中〜高</div></div>
+  <div class="idea"><div class="rank">F</div><div><h4>コラボ商品「Launch Safe」プログラム</h4><p>学校・地域企業・異業種との商品共同開発時に、PL、リコール、知財紛争費用、イベント中止等を案件単位でテンプレート化。企画部門が「事故が怖いからやらない」状態を避け、外部コラボレーションの試行回数を増やします。</p></div><div class="idea-side"><b>狙い</b> 共創案件の高速化<br><b>適合商品</b> PL・Recall・知財・Event<br><b>事業効果</b> <span class="stars">★★★☆☆</span><br><b>実装難度</b> 中</div></div>
+  <div class="idea"><div class="rank">G</div><div><h4>農産物サプライヤーと組む「収量・天候リスク共同管理」</h4><p>栗、果実等の重点原料について、産地と共同で天候指数保険や契約栽培・最低購入量を組み合わせるスキーム。単なる仕入価格交渉から、産地の持続性と自社の安定調達を同時に守る関係へ移行します。</p></div><div class="idea-side"><b>狙い</b> 安定調達・産地共生<br><b>適合商品</b> 天候指数等（要個別設計）<br><b>事業効果</b> <span class="stars">★★★☆☆</span><br><b>実装難度</b> 高</div></div>
+  <div class="idea"><div class="rank">H</div><div><h4>地域周遊「浜松スイーツ・ものづくりパス」＋包括補償</h4><p>工場見学、SWEETS BANK、地域企業・交通・宿泊等を束ねた周遊商品に、旅行中の傷害・賠償・キャンセル補償等を組み込み、地域滞在時間と消費額を伸ばす構想。保険会社が地域事業者間の共通リスク設計を担うことで、連携の摩擦を下げます。</p></div><div class="idea-side"><b>狙い</b> 地域観光・送客拡大<br><b>適合商品</b> 旅行・傷害・賠償・Cancel<br><b>事業効果</b> <span class="stars">★★★☆☆</span><br><b>実装難度</b> 高</div></div>
+ </div>
+</section>
+
+<section id="story">
+ <div class="section-head"><div><div class="section-kicker">08 / Executive Proposal Story</div><h2>経営層に刺さる提案ストーリー</h2></div><div class="sub">保険種目の羅列ではなく、経営アジェンダ→リスク→打ち手→保険の順に会話します。</div></div>
+ <div class="proposal">
+  <h3>「138年超のブランドを、次の成長のリスク許容力へ。」</h3>
+  <p>春華堂の強みは、長年のブランド、職人性、地域との関係、そして“お菓子を売る”を超えた体験価値です。一方、その強みは品質事故・自然災害・技能継承・デジタル接点の障害などに対して、損失の連鎖を生み得ます。そこで、保険を単なる事故後の補填ではなく、①事業継続の確度を上げ、②ブランド危機を抑え、③新しい販売・体験・取引に踏み出せるリスク許容力として再設計します。</p>
+  <div class="proposal-flow">
+   <div class="pf"><div class="n">STEP 1</div><b>守る対象を再定義</b><span>建物・設備だけでなく、ブランド、納期、顧客接点、技能、地域信頼を重要資産として棚卸し。</span></div>
+   <div class="pf"><div class="n">STEP 2</div><b>止まり方を可視化</b><span>地震・食品事故・サイバー・供給途絶が、製造→店舗→EC→観光へどう連鎖するかをシナリオ化。</span></div>
+   <div class="pf"><div class="n">STEP 3</div><b>保有と移転を最適化</b><span>既存保険で移せる損害、条件付きで移せる損害、保険対象外の経営リスクを切り分ける。</span></div>
+   <div class="pf"><div class="n">STEP 4</div><b>保険を成長に使う</b><span>法人納品保証、ギフト安心、体験キャンセル、信用補完等を事業側のKPIと接続。</span></div>
+  </div>
+ </div>
+ <div class="grid g3" style="margin-top:14px">
+  <div class="card"><h3>提案テーマ 1｜Resilience</h3><p class="mini"><b>論点：</b>地震・火災・設備・供給途絶・サイバーを個別ではなく「復旧時間」で統合。<br><b>保険：</b>財物＋利益＋地震＋機械＋サイバー＋供給網。<br><b>経営KPI：</b>重要商品別RTO、代替生産可能率、在庫日数、代替仕入先率。</p></div>
+  <div class="card"><h3>提案テーマ 2｜Brand Trust</h3><p class="mini"><b>論点：</b>食品事故・転売・偽情報・個人情報を「ブランド危機」として統合。<br><b>保険：</b>PL＋Recall＋Cyber＋危機広報費用等。<br><b>経営KPI：</b>初動時間、回収完了時間、問い合わせ急増対応、正規流通比率。</p></div>
+  <div class="card"><h3>提案テーマ 3｜Growth</h3><p class="mini"><b>論点：</b>新規法人取引・EC・体験・地域連携で、失敗時コストを保険で限定。<br><b>保険：</b>信用・履行費用・Cancel・動産・海外PL等。<br><b>経営KPI：</b>新規取引枠、CVR、法人案件単価、予約率、海外売上。</p></div>
+ </div>
+</section>
+
+<section id="questions">
+ <div class="section-head"><div><div class="section-kicker">09 / Discovery Questions</div><h2>正式提案に進むための追加ヒアリング</h2></div><div class="sub">AIによる公開情報分析の限界を、顧客との対話で埋める設計です。回答によりスコアと推奨保険を自動更新する想定です。</div></div>
+ <div class="questions">
+  <div class="q"><b>売上構成：</b>うなぎパイ、その他菓子、直営、卸、EC、施設・飲食等の売上・粗利構成はどうなっていますか。</div>
+  <div class="q"><b>生産集中：</b>主要商品ごとの生産工場、代替工場、相互生産可否、最大復旧許容時間（RTO）は。</div>
+  <div class="q"><b>設備：</b>ボトルネック設備、交換リードタイム、メーカー保守、予備品の保有状況は。</div>
+  <div class="q"><b>調達：</b>重要原材料・包装資材の単一調達比率、代替レシピ、代替仕入先、在庫日数は。</div>
+  <div class="q"><b>食品安全：</b>HACCP運用、トレーサビリティ、過去の自主回収・クレーム、回収訓練の実施状況は。</div>
+  <div class="q"><b>自然災害：</b>各拠点の耐震・浸水・液状化・停電対策、非常用電源、従業員参集計画は。</div>
+  <div class="q"><b>IT：</b>EC・POS・基幹・生産設備の依存関係、バックアップ、MFA、EDR、外部委託先、復旧訓練は。</div>
+  <div class="q"><b>個人情報：</b>EC・LINE・会員情報の件数、委託先、データ連携、漏えい時の連絡体制は。</div>
+  <div class="q"><b>人材：</b>重要工程の技能保有者数、年齢構成、代替要員、教育期間、採用充足率は。</div>
+  <div class="q"><b>来訪者：</b>工場見学・nicoe・SWEETS BANKの年間来訪者、イベント最大人数、事故履歴は。</div>
+  <div class="q"><b>取引先：</b>上位販売先・仕入先への集中度、支払条件、信用限度、新規販路拡大方針は。</div>
+  <div class="q"><b>保険：</b>財物・利益・地震・PL・Recall・Cyber・D&O等の現契約、支払限度額、免責、主要免責事由は。</div>
+  <div class="q"><b>成長戦略：</b>EC、法人ギフト、海外、体験事業、地域連携のうち、今後3年で重点投資する領域は。</div>
+  <div class="q"><b>許容損失：</b>単一事故で許容できる最大自己負担額と、経営として許容できない非財務損失は何ですか。</div>
+ </div>
+</section>
+
+<section id="sources">
+ <div class="section-head"><div><div class="section-kicker">10 / Sources & Methodology</div><h2>公開情報・評価上の留意事項</h2></div></div>
+ <div class="card">
+  <ol class="sources">
+   <li id="s1"><b>[S1] 春華堂 企業情報（会社概要・事業所）</b><br><a href="https://group.shunkado.co.jp/company/" target="_blank" rel="noopener">https://group.shunkado.co.jp/company/</a></li>
+   <li id="s2"><b>[S2] 春華堂 沿革／ブランド・施設</b><br><a href="https://group.shunkado.co.jp/company/history.php" target="_blank" rel="noopener">https://group.shunkado.co.jp/company/history.php</a> / <a href="https://group.shunkado.co.jp/brand/" target="_blank" rel="noopener">https://group.shunkado.co.jp/brand/</a></li>
+   <li id="s3"><b>[S3] うなぎパイ取扱店・通信販売／転売に関する案内</b><br><a href="https://www.shunkado.co.jp/sales/" target="_blank" rel="noopener">https://www.shunkado.co.jp/sales/</a> / <a href="https://www.shunkado.co.jp/unagipie-ec.php" target="_blank" rel="noopener">https://www.shunkado.co.jp/unagipie-ec.php</a></li>
+   <li id="s4"><b>[S4] 春華堂オンラインショップ</b><br><a href="https://ec.shunkado.co.jp/" target="_blank" rel="noopener">https://ec.shunkado.co.jp/</a></li>
+   <li id="s5"><b>[S5] うなぎパイファクトリー（施設・工場見学）</b><br><a href="https://www.unagipai-factory.jp/about/" target="_blank" rel="noopener">https://www.unagipai-factory.jp/about/</a> / <a href="https://www.unagipai-factory.jp/tour/" target="_blank" rel="noopener">https://www.unagipai-factory.jp/tour/</a></li>
+   <li id="s6"><b>[S6] SWEETS BANK／nicoe</b><br><a href="https://www.sweetsbank.jp/" target="_blank" rel="noopener">https://www.sweetsbank.jp/</a> / <a href="https://www.nicoe.jp/event/" target="_blank" rel="noopener">https://www.nicoe.jp/event/</a></li>
+   <li id="s7"><b>[S7] 春華堂公式アプリサービス終了のお知らせ（2026-08-04）</b><br><a href="https://group.shunkado.co.jp/information/2026/08/post-40.php" target="_blank" rel="noopener">https://group.shunkado.co.jp/information/2026/08/post-40.php</a></li>
+   <li id="s8"><b>[S8] 新卒初任給引き上げのお知らせ／地域スタディツアー</b><br><a href="https://group.shunkado.co.jp/press/20260209_%E5%88%9D%E4%BB%BB%E7%B5%A6%E3%82%A2%E3%83%83%E3%83%97.pdf" target="_blank" rel="noopener">春華堂 2026年2月9日プレスリリース（PDF）</a> / <a href="https://group.shunkado.co.jp/press/20251020%E3%82%B9%E3%82%BF%E3%83%87%E3%82%A3%E3%83%84%E3%82%A2%E3%83%BC%E4%BA%8B%E5%BE%8C%E5%A0%B1%E5%91%8A%28%E8%B6%8A%E5%A2%83%E5%9E%8B%E5%9C%B0%E5%9F%9F%E5%AD%A6%E7%BF%92%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%A0%29.pdf" target="_blank" rel="noopener">スタディツアー事後報告（PDF）</a></li>
+   <li id="s9"><b>[S9] 静岡県第4次地震被害想定／浜松市地域防災計画</b><br><a href="https://www.pref.shizuoka.jp/bosaikinkyu/sonae/earthquake/1040810/1029867.html" target="_blank" rel="noopener">https://www.pref.shizuoka.jp/bosaikinkyu/sonae/earthquake/1040810/1029867.html</a> / <a href="https://www.city.hamamatsu.shizuoka.jp/kiki/bousaikeikaku/02/01/02_01_01.html" target="_blank" rel="noopener">https://www.city.hamamatsu.shizuoka.jp/kiki/bousaikeikaku/02/01/02_01_01.html</a></li>
+   <li id="s10"><b>[S10] IPA サイバーセキュリティ経営ガイドライン関連</b><br><a href="https://www.ipa.go.jp/security/economics/practices_navi/practice210.html" target="_blank" rel="noopener">https://www.ipa.go.jp/security/economics/practices_navi/practice210.html</a> / <a href="https://www.ipa.go.jp/security/controlsystem/riskanalysis.html" target="_blank" rel="noopener">https://www.ipa.go.jp/security/controlsystem/riskanalysis.html</a></li>
+  </ol>
+  <div class="disclaimer"><b>Methodology / Disclaimer</b><br>本レポートは、公開情報のみを用いて事業構造と一般的なリスクを仮説化したものです。春華堂の実際の保険契約、損害履歴、財務数値、設備仕様、サイバー対策、仕入先集中度、事故履歴等は確認していません。リスクスコアは営業対話を開始するための仮評価であり、保険引受判断・保険価額算定・法的意見・安全性保証を目的としません。正式提案時は、各項目を顧客ヒアリング、現地調査、保険証券レビュー、必要に応じ専門家調査により更新してください。</div>
+ </div>
+</section>
+</main>
+<script>
+const risks = [
+ {id:'R01',cat:'戦略・市場',risk:'観光・土産需要の変動／地域依存',impact:4,like:3,insurance:'原則として標準保険の対象外',cover:'hard',gap:'需要減そのものは偶然な物的損害を伴わず保険化困難。',manage:'EC・法人需要・地域外販路の分散。来訪KPIを先行管理。'},
+ {id:'R02',cat:'戦略・市場',risk:'新規ブランド・施設投資の回収未達',impact:3,like:2,insurance:'一部の事業中断保険等（事故起因のみ）',cover:'hard',gap:'通常の事業不振・投資回収未達は対象外。',manage:'ステージゲート、PoC、投資上限、撤退基準。'},
+ {id:'R03',cat:'調達・供給網',risk:'原材料価格・為替・エネルギー価格上昇',impact:4,like:4,insurance:'標準企業保険では原則対象外',cover:'hard',gap:'価格変動自体は保険事故ではない。',manage:'調達分散、価格転嫁、長期契約、金融ヘッジ。'},
+ {id:'R04',cat:'調達・供給網',risk:'重要原材料・包装資材の供給途絶',impact:5,like:3,insurance:'利益保険のCBI特約、貨物、取引信用等',cover:'partial',gap:'指定仕入先・原因・地域・サブリミットにより制限。非物損型途絶は対象外になり得る。',manage:'単一調達把握、代替認証、在庫戦略、Supplier BCP。'},
+ {id:'R05',cat:'製造・品質',risk:'食品汚染・異物・アレルゲン誤表示',impact:5,like:3,insurance:'PL保険、リコール費用保険、危機対応費用',cover:'cover',gap:'自主回収の定義、汚染判定、ブランド回復費用、利益損失限度を要確認。',manage:'HACCP、トレーサビリティ、Recall訓練、危機広報。'},
+ {id:'R06',cat:'製造・品質',risk:'主要製造設備の故障・長期停止',impact:5,like:3,insurance:'機械保険、財物保険、利益保険',cover:'cover',gap:'経年劣化・保守不良、待機期間、代替設備費、増加費用限度。',manage:'予防保全、予備品、メーカー復旧SLA、代替生産。'},
+ {id:'R07',cat:'製造・品質',risk:'品質ばらつき／職人技能の継承失敗',impact:4,like:3,insurance:'標準保険では限定的',cover:'hard',gap:'技能喪失・品質低下そのものは保険対象外。',manage:'技能マップ、教育標準化、多能工化、工程データ化。'},
+ {id:'R08',cat:'販売・顧客',risk:'配送事故・破損・納期遅延',impact:3,like:3,insurance:'貨物・運送保険、動産総合、費用保険',cover:'cover',gap:'遅延のみの損害や営業機会損失は限定的。',manage:'包装試験、運送契約、ギフト納品保証の設計。'},
+ {id:'R09',cat:'販売・顧客',risk:'EC・決済停止による販売機会損失',impact:4,like:3,insurance:'サイバー保険、ネットワーク中断、特定ベンダー障害特約',cover:'partial',gap:'外部SaaS障害、待機時間、純粋な性能劣化、売上算定方法。',manage:'代替注文チャネル、SLA、障害訓練、復旧手順。'},
+ {id:'R10',cat:'販売・顧客',risk:'不正転売・正規外流通による品質毀損',impact:4,like:4,insurance:'標準保険では限定的',cover:'hard',gap:'第三者転売によるブランド毀損は通常補償外。',manage:'正規流通認証、EC監視、購入者教育、保証制度。'},
+ {id:'R11',cat:'施設・BCP',risk:'大規模地震による工場・店舗・交通の同時被災',impact:5,like:4,insurance:'地震保険・地震危険補償、利益保険、財物保険',cover:'partial',gap:'地震免責、限度額、広域インフラ停止、サプライチェーン相関損失。',manage:'拠点別PML、耐震、代替生産、非常電源、広域BCP。'},
+ {id:'R12',cat:'施設・BCP',risk:'火災・爆発・水濡れ等による工場停止',impact:5,like:2,insurance:'財物オールリスク、利益保険、機械保険',cover:'cover',gap:'復旧期間と保険期間、過少保険、増加費用・臨時費用限度。',manage:'防火区画、消火設備、復旧業者契約、BI算定。'},
+ {id:'R13',cat:'施設・BCP',risk:'工場見学・商業施設での来訪者事故',impact:4,like:3,insurance:'施設賠償責任、PL、傷害、イベント保険',cover:'cover',gap:'混雑事故、遊具・イベント特約、医療費用、委託先責任。',manage:'導線、定員、事故対応、委託先契約、訓練。'},
+ {id:'R14',cat:'施設・BCP',risk:'風水害・停電・交通寸断による休業',impact:4,like:3,insurance:'財物・利益、ユーティリティサービス中断特約',cover:'partial',gap:'敷地外停電・アクセス不能・公共交通停止のトリガー確認。',manage:'非常電源、在庫温度管理、交通代替、営業継続判断基準。'},
+ {id:'R15',cat:'人材・労務',risk:'採用難・人件費上昇・要員不足',impact:4,like:4,insurance:'標準保険では原則対象外',cover:'hard',gap:'労働市場・賃金上昇は保険化困難。',manage:'省人化、採用チャネル、離職KRI、多能工、処遇設計。'},
+ {id:'R16',cat:'人材・労務',risk:'労災・熱中症・製造現場事故',impact:4,like:3,insurance:'労災上乗せ、使用者賠償責任、傷害保険',cover:'cover',gap:'安全配慮義務、精神疾患、長期休業、派遣・委託の取扱い。',manage:'安全衛生、教育、設備安全、労災分析。'},
+ {id:'R17',cat:'デジタル・情報',risk:'ランサムウェア／基幹・EC・生産システム停止',impact:5,like:4,insurance:'サイバー保険（事故対応・復旧・BI等）',cover:'partial',gap:'OT停止、待機期間、バックアップ復旧、ベンダー起因、身代金制限。',manage:'MFA、EDR、分離バックアップ、演習、OT資産把握。'},
+ {id:'R18',cat:'デジタル・情報',risk:'個人情報・会員情報の漏えい',impact:4,like:3,insurance:'サイバー保険、個人情報漏えい費用',cover:'cover',gap:'委託先・クラウド起因、行政対応、通知・コールセンター費用限度。',manage:'データ最小化、委託先管理、暗号化、権限管理。'},
+ {id:'R19',cat:'デジタル・情報',risk:'LINE等外部プラットフォームへの依存',impact:3,like:3,insurance:'サイバー保険の外部サービス中断（商品による）',cover:'partial',gap:'規約変更・アカウント停止・機能変更は事故トリガー外となりやすい。',manage:'顧客データ可搬性、複線チャネル、ベンダーExit計画。'},
+ {id:'R20',cat:'法務・規制',risk:'食品表示・景品表示・広告表現の違反',impact:4,like:2,insurance:'一部D&O・危機費用、専門職賠償等（限定的）',cover:'partial',gap:'行政罰・故意・是正コストは補償されない場合が多い。',manage:'法務レビュー、表示承認、キャンペーンチェック。'},
+ {id:'R21',cat:'法務・規制',risk:'知的財産・コラボ契約紛争',impact:3,like:2,insurance:'知財訴訟費用、D&O、一般賠償の一部',cover:'partial',gap:'侵害類型、地域、契約責任、差止めによる逸失利益。',manage:'権利調査、契約テンプレート、成果物権利帰属。'},
+ {id:'R22',cat:'財務・取引先',risk:'販売先倒産・売掛金回収不能',impact:3,like:2,insurance:'取引信用保険',cover:'cover',gap:'対象取引先、免責、信用限度、支払遅延の定義。',manage:'与信基準、集中管理、保険で新規取引枠拡大。'},
+ {id:'R23',cat:'財務・取引先',risk:'内部不正・送金詐欺・サイバー詐欺',impact:3,like:3,insurance:'犯罪保険、サイバー犯罪・詐欺特約',cover:'partial',gap:'ソーシャルエンジニアリング、本人確認手順違反、現金等の対象。',manage:'二重承認、口座変更コールバック、職務分掌。'},
+ {id:'R24',cat:'ブランド・社会',risk:'SNS炎上・偽情報・事故時のブランド毀損',impact:5,like:3,insurance:'危機管理費用、サイバー、Recall等の事故連動補償',cover:'partial',gap:'事故トリガーのない風評・売上減は補償外となりやすい。',manage:'監視、危機広報、承認フロー、初動テンプレート。'}
+];
+function level(score){ if(score>=20)return 'critical'; if(score>=15)return 'high'; if(score>=8)return 'medium'; return 'low'; }
+function levelJP(l){return {critical:'Critical',high:'High',medium:'Medium',low:'Low'}[l]}
+function coverTag(c){return c==='cover'?'<span class="tag cover">比較的移転しやすい</span>':c==='partial'?'<span class="tag partial">条件付き／部分的</span>':'<span class="tag hard">保険化困難</span>'}
+function renderHeat(){
+ const el=document.getElementById('heatmap'); el.innerHTML='';
+ for(let impact=5;impact>=1;impact--){
+  let y=document.createElement('div');y.className='y';y.textContent='影響 '+impact;el.appendChild(y);
+  for(let like=1;like<=5;like++){
+   const score=impact*like; const c=document.createElement('div'); c.className='cell '+(score>=20?'c-crit':score>=15?'c-high':score>=8?'c-mid':'c-low');
+   const rs=risks.filter(r=>r.impact===impact&&r.like===like);
+   rs.forEach((r,i)=>{const d=document.createElement('div');d.className='dot';d.textContent=r.id.replace('R',''); d.title=`${r.id} ${r.risk} / ${score}`; const offsets=[[-14,-11],[12,10],[-12,14],[14,-14],[0,0]]; const o=offsets[i%offsets.length]; d.style.left=`calc(50% + ${o[0]}px)`; d.style.top=`calc(50% + ${o[1]}px)`; c.appendChild(d)});
+   el.appendChild(c);
+  }
+ }
+ const blank=document.createElement('div');el.appendChild(blank); for(let i=1;i<=5;i++){let x=document.createElement('div');x.className='xlab';x.textContent='発生 '+i;el.appendChild(x)}
+}
+function renderPriority(){
+ const top=[...risks].sort((a,b)=>b.impact*b.like-a.impact*a.like || b.impact-a.impact).slice(0,8); const el=document.getElementById('priorityList');
+ el.innerHTML=top.map(r=>`<div class="priority"><div class="rid">${r.id}</div><div><div class="riskname">${r.risk}</div><div class="why">${r.cat}｜${r.manage}</div></div><div class="score"><span class="lvl lv-${level(r.impact*r.like)}">${levelJP(level(r.impact*r.like))}</span><br>${r.impact*r.like}/25</div></div>`).join('');
+}
+function renderRows(filter='all'){
+ let rows=risks.filter(r=>{const l=level(r.impact*r.like); if(filter==='all')return true;if(filter==='critical')return l==='critical';if(filter==='high')return l==='high';if(filter==='gap')return r.cover==='hard'||r.cover==='partial';if(filter==='insurable')return r.cover==='cover';return true;});
+ document.getElementById('riskRows').innerHTML=rows.map(r=>{const s=r.impact*r.like,l=level(s);return `<tr><td class="nowrap"><b>${r.id}</b></td><td class="nowrap">${r.cat}</td><td><div class="risk-title">${r.risk}</div></td><td class="nowrap"><span class="lvl lv-${l}">${levelJP(l)}</span><div class="mini">I${r.impact} × L${r.like} = ${s}</div></td><td>${r.insurance}</td><td>${coverTag(r.cover)}</td><td>${r.gap}</td><td>${r.manage}</td></tr>`}).join('');
+}
+document.querySelectorAll('.filters button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filters button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRows(b.dataset.filter)}));
+renderHeat(); renderPriority(); renderRows();
+</script>
+</body>
+</html>
