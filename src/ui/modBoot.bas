@@ -114,11 +114,14 @@ Private Const BOOT_DV_ERROR_MSG As String = "一覧から選んでください�
 Private Const BOOT_MSG_LIMIT_REACHED As String = _
     "リボンの利用上限の可能性があります。実行時に案内します。"
 
-' ナレッジブックの自動発見(裁定書17 H1)。config kb_path の既定値は配置前の
-' プレースホルダ(BOOT_KB_PLACEHOLDER を含む)であり、実機では「本体と同じ
-' フォルダにナレッジブックを置いたのに読めない」が起きた。空・プレースホルダ・
-' 不在のときは本体と同じフォルダの BOOT_KB_FILE を探し、あれば kb_path へ
-' 書いてから読み込みへ進む(URL形式は社内共有の正規指定なので触らない)。
+' ナレッジブックの自動発見(裁定書17 H1 / 裁定書19 H8(b) で改訂)。config
+' kb_path の既定値は配置前のプレースホルダ(BOOT_KB_PLACEHOLDER を含む)であり、
+' 実機では「本体と同じフォルダにナレッジブックを置いたのに読めない」が起きた。
+' kb_path が空・プレースホルダ・不在のときは本体と同じフォルダの BOOT_KB_FILE を
+' kb_path へ書いてから読み込みへ進む。**本体がOneDrive同期フォルダにあると
+' ThisWorkbook.Path がURL形式("://" を含む)になり、"\" 連結+Dir$ では必ず
+' 不発になる**ため、URLのときは "/" で連結し Dir$ を通さずに書く(開けるか
+' どうかの判定は modKnowledge.LoadKnowledge に委ねる=fail-closedはそちら)。
 Private Const BOOT_KB_KEY As String = "kb_path"
 Private Const BOOT_KB_FILE As String = "ナレッジブック.xlsx"
 Private Const BOOT_KB_PLACEHOLDER As String = "\\...\"
@@ -171,7 +174,7 @@ Private Sub BootStep(ByVal stepNo As Long)
         '         (再送はLoadKnowledge内部のFlushPendingが無音で行う。E-13)
         '         読込の**前**に kb_path の自動発見を1回だけ挟む(裁定書17 H1)。
         ResolveKbPath
-        modKnowledge.LoadKnowledge
+        If Not modKnowledge.LoadKnowledge() Then LogKbPathTried
     Case 7
         ' 業種入力規則(13章§2.11・裁定書9 §4)。ナレッジ読込の**後**に置く
         ' (直前の読込で更新されたスナップショットを使う)。
@@ -348,11 +351,17 @@ Private Sub ApplyDataKeyValidation()
 End Sub
 
 ' ----------------------------------------------------------------------------
-' (5の前) ナレッジブックの自動発見(裁定書17 H1)。
+' (5の前) ナレッジブックの自動発見(裁定書17 H1 / 裁定書19 H8(b))。
 '   config kb_path が (a)空 (b)プレースホルダ "\\...\" を含む (c)Dir$で不在
-'   のいずれかなら、ThisWorkbook.Path の直下に BOOT_KB_FILE があるか調べ、
-'   あれば modConfig.SetValue で kb_path へ書いてから通常の読込へ進む。
-'   **URL形式("://" を含む)は触らない**(社内共有の正規指定を上書きしない)。
+'   のいずれかなら、本体ブックと同じフォルダの BOOT_KB_FILE を kb_path へ
+'   書いてから通常の読込へ進む。**kb_path がURLでも同じ扱い**にする
+'   (URLだからといって「利用者が正しく設定した」とは限らないため。kb_path が
+'    URLで実在するかは Dir$ で判定できないので、判定できるとき=ローカルの
+'    ときだけ実在を見て、それ以外は本体フォルダ候補を優先する)。
+'   本体側 ThisWorkbook.Path がURL形式("://" を含む=OneDrive同期フォルダ)の
+'   ときは "/" で連結し、**Dir$ を通さずに** kb_path へ書く(URLは Dir$ で
+'   必ず不発になり、書けないまま「置いたのに読めない」になるため)。実際に
+'   開けるかどうかの判定は modKnowledge.LoadKnowledge が担う(fail-closed)。
 '   探索と判定はこのPrivate 1本に閉じる(modBoot以外に起動処理を置かない)。
 ' ----------------------------------------------------------------------------
 Private Sub ResolveKbPath()
@@ -362,10 +371,11 @@ Private Sub ResolveKbPath()
 
     Dim pathText As String
     pathText = Trim$(modConfig.GetStr(BOOT_KB_KEY, vbNullString))
-    If InStr(1, pathText, "://", vbBinaryCompare) > 0 Then Exit Sub
     If LenB(pathText) > 0 Then
         If InStr(1, pathText, BOOT_KB_PLACEHOLDER, vbBinaryCompare) = 0 Then
-            If LenB(Dir$(pathText)) > 0 Then Exit Sub
+            If InStr(1, pathText, "://", vbBinaryCompare) = 0 Then
+                If LenB(Dir$(pathText)) > 0 Then Exit Sub
+            End If
         End If
     End If
 
@@ -374,8 +384,13 @@ Private Sub ResolveKbPath()
     If LenB(baseDir) = 0 Then Exit Sub
 
     Dim candidate As String
-    candidate = baseDir & "\" & BOOT_KB_FILE
-    If LenB(Dir$(candidate)) = 0 Then Exit Sub
+    If InStr(1, baseDir, "://", vbBinaryCompare) > 0 Then
+        ' OneDrive同期フォルダ。Dir$ では見えないので確かめずに書く。
+        candidate = baseDir & "/" & BOOT_KB_FILE
+    Else
+        candidate = baseDir & "\" & BOOT_KB_FILE
+        If LenB(Dir$(candidate)) = 0 Then Exit Sub
+    End If
 
     modConfig.SetValue BOOT_KB_KEY, candidate
     gKbAutoFound = True
@@ -389,6 +404,18 @@ End Sub
 Public Function KbAutoNote() As String
     If gKbAutoFound Then KbAutoNote = BOOT_KB_AUTO_NOTE
 End Function
+
+' ----------------------------------------------------------------------------
+' LogKbPathTried - ナレッジ読込に失敗したとき、**実際に開こうとしたパス**を
+'   err_log へ1行残す(裁定書19 H8(a)の代替措置)。modKnowledge は30,000字契約
+'   の満杯モジュールで detail を伸ばせないため、記録はこちら(modBoot)で行う。
+'   E0401 kb_open_failed(modKnowledge側)と対で読むと、探した場所が分かる。
+' ----------------------------------------------------------------------------
+Private Sub LogKbPathTried()
+    On Error Resume Next
+    modLog.LogError "E0401", BOOT_SRC & ".ResolveKbPath", _
+        "kb_path_tried:" & modConfig.GetStr(BOOT_KB_KEY, vbNullString)
+End Sub
 
 ' ----------------------------------------------------------------------------
 ' 業種入力規則(13章§2.11・裁定書9 §4。検証欠陥#1)
