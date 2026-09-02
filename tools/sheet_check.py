@@ -12,6 +12,10 @@ sheet_check.py - 13章(データ設計)と、シート台帳/ビルド済みブ�
 
   1. シート集合   13章§2の節見出しとガードシート規定から本体18枚を導き、
                   JSON・ブックの双方と突合する(順序はJSONが正・ブックはJSON順)。
+  1b. 可視性     13章§2.9の可視性表(visible / hidden / veryHidden)と、JSONの
+                  state・ブックの sheet_state が一致するか。本体の全シートが
+                  表に載っていることも確かめる(裁定書17 H4で err_log /
+                  usage_log / run_log を可視へ変えたときの取りこぼし防止)。
   2. シート型     13章§2.9の型表(帳票型=HOME/案件入力・テーブル型=6枚)と
                   JSONの role が一致するか。
   3. 列物理名     テーブル型シートの列名と物理順。1シート1テーブルのシートは
@@ -136,6 +140,7 @@ class Ch13:
         self.config_defaults: dict[str, str] = {}        # 機械比較できる行だけ
         self.config_unparsed: list[str] = []
         self.guard_sheet: str = ""
+        self.visibility: dict[str, str] = {}      # シート -> 初期可視状態(13章§2.9)
         self.form_sheets: list[str] = []
         self.table_sheets: list[str] = []
         self.prefix_of: dict[str, str] = {}      # シート -> 名前付きレンジ接頭辞
@@ -265,7 +270,16 @@ class Ch13:
             self.guard_sheet = m.group(1)
             self.sheets.insert(0, self.guard_sheet)
         for t in _parse_tables(body):
-            if _strip_marks(t["header"][0]) != "型":
+            head0 = _strip_marks(t["header"][0])
+            # 初期可視状態の表(13章§2.9・裁定書17 H4)。1行=1可視状態で、
+            # 対象シートは `...` のバッククォート表記から拾う。
+            if head0 == "可視状態":
+                for row in t["rows"]:
+                    state = _strip_marks(row[0]).split("（")[0].split("(")[0].strip()
+                    for nm in re.findall(r"`([^`]+)`", row[1]):
+                        self.visibility[nm] = state
+                continue
+            if head0 != "型":
                 continue
             for row in t["rows"]:
                 kind = _strip_marks(row[0])
@@ -730,6 +744,25 @@ def run(book_path: Path | None, rep: Report) -> None:
                       "ガードシートがブックで可視",
                       f"実際={book.wb[ch13.guard_sheet].sheet_state}")
 
+    # --- 1b. 初期可視状態 ------------------------------------------------------
+    print("\n[1b] シートの初期可視状態(13章§2.9の可視性表 ⇔ 台帳 state ⇔ ブック)")
+    rep.check(bool(ch13.visibility), "13章§2.9の可視性表を読めること",
+              "「可視状態 | シート | 根拠」の表が値源です")
+    known = {s["name"] for s in led.specs} | {s["name"] for s in led.infra}
+    unknown = sorted(set(ch13.visibility) - known)
+    rep.check(not unknown, "可視性表のシートが台帳に実在すること", f"未知: {unknown}")
+    for nm, want in sorted(ch13.visibility.items()):
+        spec = led.by_name.get(nm) or next(
+            (x for x in led.infra if x["name"] == nm), {})
+        rep.check(spec.get("state") == want, f"[台帳] '{nm}' の初期可視状態",
+                  f"13章={want} / 台帳={spec.get('state')}")
+        if book and nm in book.wb.sheetnames:
+            rep.check(book.wb[nm].sheet_state == want, f"[ブック] '{nm}' の可視状態",
+                      f"13章={want} / ブック={book.wb[nm].sheet_state}")
+    missing = sorted(n for n in led.order if n not in ch13.visibility)
+    rep.check(not missing, "可視性表が本体の全シートを網羅すること", f"未記載: {missing}")
+    print(f"    照合したシート: {len(ch13.visibility)}枚")
+
     # --- 2. シート型 ----------------------------------------------------------
     print("\n[2] シート型(13章§2.9の型表 ⇔ 台帳の role)")
     print(f"    帳票型={ch13.form_sheets} / テーブル型={ch13.table_sheets}")
@@ -1024,7 +1057,7 @@ def main() -> int:
               "(シート集合と順序・列名と物理順・業種マスタ30行・mock用ナレッジ行6件)")
     else:
         print(f"OK: 全{rep.oks}項目一致 "
-              "(シート集合・シート型・列名と物理順・名前付きレンジ・configキーと既定値)")
+              "(シート集合・可視性・シート型・列名と物理順・名前付きレンジ・configキーと既定値)")
     return 0
 
 

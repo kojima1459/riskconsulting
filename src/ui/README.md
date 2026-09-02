@@ -17,6 +17,8 @@
 | `modUICase4` | フィードバック・判断台帳 | T-31 |
 | `modUIInbox` | 受信箱(投函・一括診断・診断表示・判定入力 E-41) | T-32 |
 | `modUISparring` | 壁打ち(履歴表示・発話入出力・受信箱へ送信) | T-34 |
+| `modUIGuide` | 初回ガイドツアー(カード3枚・Shape接頭辞 gt_)と操作ガイドの図形ボタン | T-30 |
+| `modUIToast` | トースト(図形カード ts_ ＋ `Application.OnTime` の自動消去)・次の一手の文言・`hm_warning` の1行組み立て(裁定書17 H2/H4) | T-30 |
 
 ## この層の約束(11章§5)
 
