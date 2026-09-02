@@ -101,3 +101,24 @@ Public Function BuildS3CCleanJson() As String
 
     BuildS3CCleanJson = s
 End Function
+
+' ==============================================================================
+' 実リボンの定型失敗文(15章§8.2・裁定書24 A-1)
+' ------------------------------------------------------------------------------
+'   社内AIアドイン「リボンちゃん」は失敗時に空文字を返さず、log.bas parseText
+'   が組み立てた定型の日本語文字列を返す。mock_fault の ribbon_429 /
+'   ribbon_disconnect / ribbon_content_filter がこの3実体を返し、
+'   modGatewayRPN.RibbonFailureCode の先頭一致(E0204/E0202/E0207)を通す。
+'   語彙をここ1箇所に置き、gateway側は先頭語だけを持つ。
+' ==============================================================================
+Public Function RibbonErr429Text() As String
+    RibbonErr429Text = "(error:429)Too Many Requests"
+End Function
+
+Public Function RibbonDisconnectText() As String
+    RibbonDisconnectText = "接続切れ"
+End Function
+
+Public Function RibbonContentFilterText() As String
+    RibbonContentFilterText = "content_filterに該当しました"
+End Function

@@ -22,7 +22,7 @@ Private mOnceFired As Boolean
 '     s1/s2/s2r/s3/s3r/s4/pf/s2c/s3c/sp、variantName は ResolveMockVariant の
 '     戻り値(new/renewal/hit/clean/common)、fault は config mock_fault の値。
 '   ResponseById(mockId)          : 15章§8.1の11 IDで正常応答。表外のIDは ""。
-'   FaultResponse(faultKind, step): 15章§8.2の8値の障害注入応答。空なら ""。
+'   FaultResponse(faultKind, step): 15章§8.2の11値の障害注入応答。空なら ""。
 '   戻り値は生応答そのもの。JSON防衛線(抽出・検証)は呼び出し側の責務であり、
 '   ここでは通さない(14章§5)。
 '
@@ -32,12 +32,14 @@ Private mOnceFired As Boolean
 '   RNWはrenewal。共通応答は両文脈)でmodValidateに合格する(受入条件1)。
 '   sp(壁打ち)はスキーマを持たないため自由文を返す(表外。IDを持たない)。
 '
-' 障害注入(15章§8.2の表が正。config mock_fault。既定は空=正常応答のみ)。8値と
+' 障害注入(15章§8.2の表が正。config mock_fault。既定は空=正常応答のみ)。11値と
 ' 適用stepは FaultBody の Select Case が実体で、broken_json=末尾の閉じ括弧欠落 /
 ' enum_violation=s2のcategoryをenum外"quality"へ / count_violation=s3のstories
 ' 2件 / ghost_id=s3のmenu_idsに"M-9999"混入 / empty=空文字 / limit=固定の上限
-' 文字列 / fake_err=先頭行"#ERR:E0201:"+正常JSON本体。8値以外は正常応答へ
-' フォールバックする(config入力ミスでE2E全体を暴走させないため)。
+' 文字列 / fake_err=先頭行"#ERR:E0201:"+正常JSON本体 / ribbon_429・
+' ribbon_disconnect・ribbon_content_filter=実リボンの定型失敗文(裁定書24 A-1。
+' 実体は modMockLlm2)。11値以外は正常応答へフォールバックする(config入力ミス
+' でE2E全体を暴走させないため)。
 '
 ' 【状態レス規約(15章§8.2)】fault指定中は毎回同じ応答を返す。「最初の1回だけ
 ' 壊す」型の内部カウンタは持たない(乱数・現在時刻を使わないのと同じ理由=再現性。
@@ -142,6 +144,15 @@ Private Function FaultBody(ByVal f As String, ByVal stepKey As String, _
         Exit Function
     ElseIf f = "limit" Then
         FaultBody = LimitFaultText()
+        Exit Function
+    ElseIf f = "ribbon_429" Then
+        FaultBody = modMockLlm2.RibbonErr429Text()
+        Exit Function
+    ElseIf f = "ribbon_disconnect" Then
+        FaultBody = modMockLlm2.RibbonDisconnectText()
+        Exit Function
+    ElseIf f = "ribbon_content_filter" Then
+        FaultBody = modMockLlm2.RibbonContentFilterText()
         Exit Function
     End If
 
