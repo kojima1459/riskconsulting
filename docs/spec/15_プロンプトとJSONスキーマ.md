@@ -1,4 +1,6 @@
-# 15. プロンプトとJSONスキーマ v2.4（本製品の核心）
+# 15. プロンプトとJSONスキーマ v2.5（本製品の核心）
+
+> v2.5（裁定書21・11章v3.2 利用者回答3「攻めの保険活用A〜Hを1回の出力で」）: **S3に4本目のキー `growth_ideas[]` を追加**した。§4 user の末尾に生成指示1行と出力JSON例1件分・※3行を追記し（既存の「商談用の提案ストーリー3本を」以下3キーの文言は1字も変えていない）、Schema-S3 に `growth_ideas`（`title`≤30字 / `what`≤100字 / `why`≤100字 / `insurance_fit` / `effect` 1〜5 / `difficulty` enum `low`/`mid`/`high`・`minItems` 4・`maxItems` 8・`additionalProperties` false）を足し、CheckS3 へ V-S3-14〜V-S3-18 の5件（件数4〜8 / effect範囲 / difficulty enum / title長と重複 / stories[].headline との重複）を追加して**計69件**へ更新した。`difficulty` の日本語ラベル（低 / 中 / 高）は19章§3に登記。§8.1 の MK-S3 にも `growth_ideas` を4件足した。描画は18章 SEC-17。
 
 > v2.4.2（裁定書6: W2a整合）: §0 原則7に「PythonのCP932コーデックは通すがWindows実機で化ける6字（U+301C / U+2016 / U+2212 / U+00A2 / U+00A3 / U+00AC）も禁止対象」と、**仕様側（本章と docs/08）のコードフェンス内にも同じ検問を掛ける**（`vba_lint.py` の `check_docs_prompt_cp932`）ことを明記。本章のフェンス内に残っていた U+301C はすべて **U+FF5E「～」** へ置換した。§5 の差替規約の主語を **`AsmS4System`**（組立層）へ改訂し、§10.2 の対応表の関数を**すべて無引数のテンプレート関数**へ書き換えた（プレースホルダの埋め込みとブロックの差し込みは `modPromptsOps` の `Fill` / `Asm*` が行う。契約は14章§6）。
 
@@ -696,6 +698,7 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 ■■■成功事例ここまで■■■
 
 商談用の提案ストーリー3本を、指定のJSON形式で出力してください。
+あわせて、保険を本業の拡大に使うアイデア(攻めの保険活用)を4～8件、growth_ideas に出してください。
 
 出力するJSONの形式:
 {
@@ -721,10 +724,23 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
   ],
   "do_not_propose": [
     {"topic": "提案を控える種目・リスク(例: D&O)", "reason": "控える理由(引受目線・1～2文)"}
+  ],
+  "growth_ideas": [
+    {
+      "title": "アイデアの名前(30字以内)",
+      "what": "何をするのか(100字以内・1～2文)",
+      "why": "なぜこの会社に効くのか(100字以内。企業プロファイルとリスク仮説の事実を根拠に引く)",
+      "insurance_fit": "保険との接点(1～2文・自由文)",
+      "effect": 4,
+      "difficulty": "low/mid/high"
+    }
   ]
 }
 ※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。
 ※do_not_propose は該当が無ければ [] とする(水増し禁止)。
+※growth_ideas は目の前のリスクへの打ち手(stories)ではなく、顧客の事業機会を広げる発想である。
+※growth_ideas に menu_ids / line_ids は持たせない。保険との接点は insurance_fit の自由文で書く。
+※growth_ideas の title は stories の headline と同じ文言にしない(同じ案を2箇所に出さない)。
 ```
 
 **{{s1SummaryJson}} の生成規則（modPipeline）**: `s1_edited > s1_json` で解決した企業プロファイルから、次の4キーだけを抜き出した JSON オブジェクトを組み立てる。他のキーは含めない（S3のuserが肥大するのを避けるため）。§4.6 S3C の {{s1SummaryJson}} も同一の生成規則を使う。
@@ -781,9 +797,19 @@ linesText の `| 市場環境:…` は種目マスタの `market_note`（管理�
     "do_not_propose": {"type": "array", "items": {"type": "object", "properties": {
       "topic": {"type": "string"},
       "reason": {"type": "string"}
-    }, "required": ["topic", "reason"], "additionalProperties": false}}
+    }, "required": ["topic", "reason"], "additionalProperties": false}},
+    "growth_ideas": {"type": "array", "minItems": 4, "maxItems": 8,
+      "items": {"type": "object", "properties": {
+      "title": {"type": "string", "maxLength": 30},
+      "what": {"type": "string", "maxLength": 100},
+      "why": {"type": "string", "maxLength": 100},
+      "insurance_fit": {"type": "string"},
+      "effect": {"type": "integer", "minimum": 1, "maximum": 5},
+      "difficulty": {"type": "string", "enum": ["low", "mid", "high"]}
+    }, "required": ["title", "what", "why", "insurance_fit", "effect", "difficulty"],
+       "additionalProperties": false}}
   },
-  "required": ["stories", "unmatched_risks", "do_not_propose"],
+  "required": ["stories", "unmatched_risks", "do_not_propose", "growth_ideas"],
   "additionalProperties": false
 }
 ```
@@ -805,6 +831,13 @@ linesText の `| 市場環境:…` は種目マスタの `market_note`（管理�
 | V-S3-11 | stories[].story_no | 1..3 の連番でない、または重複 | 不合格 | `[V-S3-11] story_no が1..3の連番ではありません: {value}` |
 | V-S3-12 | unmatched_risks[].risk_no | s2Json の risk_no に存在しない | 不合格 | `[V-S3-12] unmatched_risks の risk_no {value} が S2 に存在しません` |
 | V-S3-13 | stories[].proposal_kind | case_type=renewal で upsell も cross_sell も0本 | 警告 | `[V-S3-13] 更新案件ですが upsell/cross_sell が0本です` |
+| V-S3-14 | growth_ideas | 件数が4未満または8超 | 不合格 | `[V-S3-14] growth_ideas が{n}件です(4～8件)` |
+| V-S3-15 | growth_ideas[].effect | 1～5の整数でない | 不合格 | `[V-S3-15] growth_ideas の effect が1～5ではありません: {value}` |
+| V-S3-16 | growth_ideas[].difficulty | enum（low/mid/high）以外 | 不合格 | `[V-S3-16] growth_ideas の difficulty が不正です: {value}` |
+| V-S3-17 | growth_ideas[].title | 30字を超える、または title が重複 | 不合格 | `[V-S3-17] growth_ideas の title が30字超か重複です: {value}` |
+| V-S3-18 | growth_ideas[].title | stories[].headline と完全一致（同じ案を2箇所に出す） | 不合格 | `[V-S3-18] growth_ideas の title が stories の headline と重複です: {value}` |
+
+**growth_ideas（攻めの保険活用。v3.2で追加。11章§3.8.2b・§9-9）**: `stories[]` が「目の前のリスクへの打ち手」であるのに対し、`growth_ideas[]` は「保険を本業の拡大に使う事業機会」である。**同じ1回のS3呼出で生成**し（待ち時間を増やさない）、`menu_ids` / `line_ids` を持たせない（実在しないIDを引く経路を作らない）。V-S3-14～V-S3-18 はこの4本目のキーだけを見る検証であり、既存の V-S3-01～V-S3-13（`stories` / `unmatched_risks` / `do_not_propose`）の条件・エラー文は1字も変えていない。18章 SEC-17 がこの配列を描く。
 
 **ID実在チェックの停止規約**: V-S3-03～V-S3-06 は**不合格→修復リトライ→なお不合格なら E0301 で停止**する（status=error。S1/S2の結果は保持し、S3から再開できる）。**幻覚IDの黙殺除去は禁止**（KPI「S3実在チェックのすり抜け0件」を直接担う分岐であるため）。
 補足: V-S3-13 の upsell 判定は {{s1SummaryJson}} の current_coverage を根拠に行われる（systemルール11）。S3 userにS1要約を注入していない実装ではこの判定が成立しないため、注入の有無は17章§4-2のプレースホルダ突合で検査する。
@@ -1475,12 +1508,12 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 |---|---|---|---|---|
 | CheckS1 | V-S1-01 ～ V-S1-11（11件） | 01/02/03/06/07/09/10 | 04/05/08/11 | - |
 | CheckS2 | V-S2-01 ～ V-S2-17（17件） | 01/02/03/04/05/06/07/08/09/12/13/16/17（06は一覧未提供時も不合格） | 10/11/14/15 | - |
-| CheckS3 | V-S3-01 ～ V-S3-13（13件） | 01/02/03/04/05/06/07/08/09/10/11/12（03から06は一覧未提供時も不合格） | 13 | - |
+| CheckS3 | V-S3-01 ～ V-S3-18（18件） | 01/02/03/04/05/06/07/08/09/10/11/12/14/15/16/17/18（03から06は一覧未提供時も不合格） | 13 | - |
 | CheckS4 | V-S4-01 ～ V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
 | CheckPF | V-PF-01 ～ V-PF-07（7件） | 01/02/03/04/05/06/07（03は一覧未提供時も不合格） | - | - |
 | CheckS2C | V-S2C-01 ～ V-S2C-05（5件） | 01/02/03（03は審査対象S2の未提供時も不合格） | 04 | 05（issues 0件=改訂スキップ） |
 | CheckS3C | V-S3C-01 ～ V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
 
-**合計64件**（不合格52件 / 警告10件 / 合格判定2件）。ケースIDは欠番を作らず、削除する場合も番号を再利用しない（追番のみ）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
+**合計69件**（不合格57件 / 警告10件 / 合格判定2件）。ケースIDは欠番を作らず、削除する場合も番号を再利用しない（追番のみ）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
 
 **「一覧未提供時も不合格」（ID実在検査の fail-closed。裁定書7 A-2）**: ID実在を見るケース（V-S2-06 / V-S3-03..06 / V-PF-03 と、審査対象S2の番号実在を見る V-S2C-03）は、**検査対象のキーが非空のIDを持つのに対応する一覧テキストが渡されていない**とき、当該ケースIDで不合格とし `[ケースID] ID実在検査が実行できません（ID一覧未提供）` を返す。一覧が空でも合格にしていた旧規約（fail-open）は、引数の渡し忘れ1つで幻覚IDの検問が無言で消えるため廃止した（16章E-07のKPI「S3実在チェックのすり抜け0件」）。値が `""` のID（`scheme_id` / `similar_case_id` の空許容など）は従来どおり検査対象外であり、15章§6.1 の `(登録なし)` は空文字ではないので通常の実在検査が走る。一覧テキストの供給元は14章§6（呼出側＝modPipeline / modPlayOps が modKnowledge から取得して渡す）。

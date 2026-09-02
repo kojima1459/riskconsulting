@@ -11,7 +11,7 @@ Option Explicit
 ' 役割: modTestsPure8/9 と同じく**実装を1行も読まず**、18章全文・14章§6の宣言・
 '   16章E-46/E-47/NFR-S7・15章スキーマ・19章§3・11章だけを根拠に入出力を固定する。
 '   期待値が一意に決まらない項目はテストにせず末尾へ列挙する。
-'     G87 テーマ(§5.1の28変数・§5.2の差替単位)
+'     G87 テーマ(§5.1の39変数・§5.2の差替単位)
 '     G88 BuildDocumentの全文組立    G89 HeadHtml/BodyShellHtml(§4.4・§5.1・§6)
 '     G90 セクション登録表(§4.2)     G91 SEC-09/SEC-16(§3のv1.0裁定)
 '     G92 描画規約(§4.1)             G93 固定文(§3.5・§3.4)
@@ -30,20 +30,22 @@ Option Explicit
 ' ============================
 
 ' ---- 素材の定数 ----
-' 18章§5.1 の閉じた一覧28変数(宣言の有無は「名前+:」で照合する。--line は
+' 18章§5.1 の閉じた一覧39変数(v1.2。宣言の有無は「名前+:」で照合する。--line は
 ' --line-height の接頭辞なので、コロンまで含めないと取り違える)。
 Private Const THEME_VARS As String = _
     "--page-width:;--page-pad:;--font-sans:;--font-serif:;--font-size:;" & _
-    "--line-height:;--paper:;--ink:;--sub:;--mist:;--line:;--ai:;--kaki:;" & _
-    "--matsu:;--deep:;--warn:;--warn-line:;--heat-1:;--heat-2:;--heat-3:;" & _
-    "--heat-4:;--heat-5:;--tr-cover:;--tr-partial:;--tr-hard:;--iq-ok:;" & _
-    "--iq-partial:;--iq-missing:"
+    "--line-height:;--bg:;--paper:;--ink:;--sub:;--mist:;--line:;" & _
+    "--brand:;--brand2:;--accent:;--navy:;--kaki:;--matsu:;--deep:;" & _
+    "--soft-brand:;--soft-red:;--soft-amber:;--soft-green:;--soft-blue:;" & _
+    "--soft-purple:;--shadow:;--warn:;--warn-line:;--heat-1:;--heat-2:;" & _
+    "--heat-3:;--heat-4:;--heat-5:;--tr-cover:;--tr-partial:;--tr-hard:;" & _
+    "--iq-ok:;--iq-partial:;--iq-missing:"
 
-' 18章§3の表の並び(SEC-01..09 -> SEC-16 -> SEC-10..15)。slug は section id と
-' 目次アンカーになる。
+' 18章§3の表の並び(v1.2で見本の10節の流れへ並べ替えた。§3.0)。slug は
+' section id と上部ナビ・目次のアンカーになる。
 Private Const SEC_SLUGS As String = _
-    "cover;exec;profile;sufficiency;riskuniv;riskmap;risks;coverage;newrisk;" & _
-    "round-update;story;prevent;limit;hearing;source;disclaimer"
+    "cover;exec;profile;sufficiency;riskuniv;riskmap;round-update;risks;" & _
+    "coverage;prevent;limit;newrisk;growth;story;hearing;source;disclaimer"
 
 ' 19章§3 リスクユニバース10分類の日本語ラベル(15章§0の変換表の記載順)。
 Private Const CAT_LABELS As String = _
@@ -259,7 +261,7 @@ End Function
 Private Function SecIds() As String
     Dim i As Long
     Dim acc As String
-    For i = 1 To 16
+    For i = 1 To 17
         If i < 10 Then
             acc = acc & "SEC-0" & i & ";"
         Else
@@ -353,7 +355,7 @@ Private Function DataLiteral(ByVal doc As String) As String
     If b = 0 Then Exit Function
     DataLiteral = Mid$(doc, a, b - a)
 End Function
-' ---- G87 テーマ(§5.1の閉じた一覧28変数・§5.2の差替単位) ----
+' ---- G87 テーマ(§5.1の閉じた一覧39変数・§5.2の差替単位) ----
 Private Sub T_Theme()
     Dim names As String
     Dim nameArr() As String
@@ -369,8 +371,9 @@ Private Sub T_Theme()
     nameArr = Split(names, ";")
     ChkS "G87_テーマ一覧の先頭が既定テーマ_18章§5.2", nameArr(0), "standard"
 
-    ChkB "G87_初期テーマはstandardとmonoの2本_18章§5.2", _
-        (Ctn(names, "mono") And (UBound(nameArr) >= 1)), "実際=[" & names & "]"
+    ChkB "G87_テーマはstandardとmonoとdsの3本_18章§5.2", _
+        (Ctn(names, "mono") And Ctn(names, "ds") And (UBound(nameArr) >= 2)), _
+        "実際=[" & names & "]"
 
     css = Squash(modHtmlTheme.ThemeCss("standard"))
     ChkB "G87_戻り値はroot1ブロックだけでセレクタを持たない_18章§5.1", _
@@ -390,22 +393,23 @@ Private Sub T_Theme()
     ChkB "G87_内側はCSS変数の宣言だけ_18章§5.1", okAll, _
         "変数以外の宣言がある: [" & HeadOf(inner) & "]"
 
-    ChkB "G87_standardが28変数を過不足なく宣言する_18章§5.1", _
-        ((LenB(MissingOf(css, THEME_VARS)) = 0) And (CountOcc(css, "--") = 28)), _
+    ChkB "G87_standardが39変数を過不足なく宣言する_18章§5.1", _
+        ((LenB(MissingOf(css, THEME_VARS)) = 0) And (CountOcc(css, "--") = 39)), _
         "不足=[" & MissingOf(css, THEME_VARS) & "] 数=" & CountOcc(css, "--")
 
     cssMono = Squash(modHtmlTheme.ThemeCss("mono"))
-    ChkB "G87_monoも28変数を過不足なく宣言し配色が異なる_18章§5.2", _
+    ChkB "G87_monoも39変数を過不足なく宣言し配色が異なる_18章§5.2", _
         ((LenB(MissingOf(cssMono, THEME_VARS)) = 0) And _
-         (CountOcc(cssMono, "--") = 28) And (cssMono <> css)), _
+         (CountOcc(cssMono, "--") = 39) And (cssMono <> css)), _
         "不足=[" & MissingOf(cssMono, THEME_VARS) & "] 数=" & CountOcc(cssMono, "--")
 
     ChkB "G87_未知のテーマ名はstandardへフォールバックする_18章§5.2", _
         (Squash(modHtmlTheme.ThemeCss("no_such_theme")) = css), _
         "実際=[" & HeadOf(Squash(modHtmlTheme.ThemeCss("no_such_theme"))) & "]"
 
-    wantVals = "--PAPER:#FFFFFF;--INK:#24303E;--HEAT-3:#FFF4D6;" & _
-               "--TR-HARD:#B4552D;--PAGE-WIDTH:900PX;--FONT-SIZE:14.5PX"
+    wantVals = "--PAPER:#FFFFFF;--INK:#1D2433;--BRAND:#A5312F;" & _
+               "--ACCENT:#B88A44;--HEAT-3:#FFF6DB;--TR-HARD:#B42318;" & _
+               "--PAGE-WIDTH:1180PX;--FONT-SIZE:14PX"
     ChkAll "G87_standardの既定値が18章§5.1の表どおり_18章§5.1", UCase$(css), wantVals
 End Sub
 
@@ -512,9 +516,9 @@ Private Sub T_Sections()
         (Ctn(sj, "varSECTIONS=[") And Ctn(sj, "];")), _
         "宣言=" & InStr(sj, "varSECTIONS=[") & " 閉じ=" & InStr(sj, "];")
 
-    ChkAll "G90_16のセクションIDが登録表にある_18章§3", sj, SecIds()
+    ChkAll "G90_17のセクションIDが登録表にある_18章§3", sj, SecIds()
 
-    ChkAll "G90_16のslugが登録表にある_18章§4.2", sj, slugKeys
+    ChkAll "G90_17のslugが登録表にある_18章§4.2", sj, slugKeys
 
     ChkAll "G90_登録行のキーは7つに固定_18章§4.2", sj, keys
 
@@ -558,11 +562,12 @@ Private Sub T_NewAndRound()
                        "need:['s2'],empty:'hide',render:renderRoundUpdate},")), _
         "SEC-16位置=" & InStr(sj, "id:'SEC-16'")
 
-    ' §3の表の並び: SEC-09 の次が SEC-16、その次が SEC-10(紙面順)。
-    ChkB "G91_紙面順はSEC-09の次がSEC-16でその次がSEC-10_18章§3", _
-        InOrder(sj, "id:'SEC-09';id:'SEC-16';id:'SEC-10'"), _
-        "09=" & InStr(sj, "id:'SEC-09'") & " 16=" & InStr(sj, "id:'SEC-16'") & _
-        " 10=" & InStr(sj, "id:'SEC-10'")
+    ' §3の表の並び(v1.2の紙面順): SEC-06 の次が SEC-16、その次が SEC-07。
+    ' SEC-16 は見本の #coverage の直前に置く(11章§3.8.1)。
+    ChkB "G91_紙面順はSEC-06の次がSEC-16でその次がSEC-07_18章§3", _
+        InOrder(sj, "id:'SEC-06';id:'SEC-16';id:'SEC-07'"), _
+        "06=" & InStr(sj, "id:'SEC-06'") & " 16=" & InStr(sj, "id:'SEC-16'") & _
+        " 07=" & InStr(sj, "id:'SEC-07'")
 
     ' v1.0で削除された文言。残っていれば SEC-09 の意味が旧版のままになる。
     ChkB "G91_第2ラウンド以降に表示の文言が残っていない_18章v1.0", _

@@ -131,6 +131,7 @@ PURE_ALLOWLIST = [
     # (lint の R4 が Excelトークンの混入を機械的に禁止している)。
     "modHtmlTheme", "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
     "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
+    "modHtmlTemplate7",
     # T-33(W3)。modExportHtml はファイルI/O(ADODB.Stream)とstore経由の読取を
     # 持つが、純組立関数(BuildReportHtml / BuildMetaJson)はどちらにも触れない
     # ため、テストが叩くのはその2本だけ(技術メモ4)。tools/render_report.py も

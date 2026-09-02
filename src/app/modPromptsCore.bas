@@ -392,6 +392,7 @@ Public Function BuildS3User() As String
     s = s & "■■■成功事例ここまで■■■" & vbLf
     s = s & vbLf
     s = s & "商談用の提案ストーリー3本を、指定のJSON形式で出力してください。" & vbLf
+    s = s & "あわせて、保険を本業の拡大に使うアイデア(攻めの保険活用)を4～8件、growth_ideas に出してください。" & vbLf
     s = s & vbLf
     s = s & "出力するJSONの形式:" & vbLf
     s = s & "{" & vbLf
@@ -417,10 +418,23 @@ Public Function BuildS3User() As String
     s = s & "  ]," & vbLf
     s = s & "  ""do_not_propose"": [" & vbLf
     s = s & "    {""topic"": ""提案を控える種目・リスク(例: D&O)"", ""reason"": ""控える理由(引受目線・1～2文)""}" & vbLf
+    s = s & "  ]," & vbLf
+    s = s & "  ""growth_ideas"": [" & vbLf
+    s = s & "    {" & vbLf
+    s = s & "      ""title"": ""アイデアの名前(30字以内)""," & vbLf
+    s = s & "      ""what"": ""何をするのか(100字以内・1～2文)""," & vbLf
+    s = s & "      ""why"": ""なぜこの会社に効くのか(100字以内。企業プロファイルとリスク仮説の事実を根拠に引く)""," & vbLf
+    s = s & "      ""insurance_fit"": ""保険との接点(1～2文・自由文)""," & vbLf
+    s = s & "      ""effect"": 4," & vbLf
+    s = s & "      ""difficulty"": ""low/mid/high""" & vbLf
+    s = s & "    }" & vbLf
     s = s & "  ]" & vbLf
     s = s & "}" & vbLf
     s = s & "※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。" & vbLf
-    s = s & "※do_not_propose は該当が無ければ [] とする(水増し禁止)。"
+    s = s & "※do_not_propose は該当が無ければ [] とする(水増し禁止)。" & vbLf
+    s = s & "※growth_ideas は目の前のリスクへの打ち手(stories)ではなく、顧客の事業機会を広げる発想である。" & vbLf
+    s = s & "※growth_ideas に menu_ids / line_ids は持たせない。保険との接点は insurance_fit の自由文で書く。" & vbLf
+    s = s & "※growth_ideas の title は stories の headline と同じ文言にしない(同じ案を2箇所に出さない)。"
     BuildS3User = s
 End Function
 

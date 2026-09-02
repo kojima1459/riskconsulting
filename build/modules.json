@@ -261,6 +261,13 @@
       "wave": "T-35"
     },
     {
+      "name": "modHtmlTemplate7",
+      "path": "src/app/modHtmlTemplate7.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-35"
+    },
+    {
       "name": "modExportHtml",
       "path": "src/app/modExportHtml.bas",
       "role": "app",

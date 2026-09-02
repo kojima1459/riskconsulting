@@ -48,9 +48,11 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
 
 検査(DoD):
     (1) 先頭付近に `<meta charset="utf-8"` がある(18章§5.3(3))
-    (2) 18章§3の全16セクションが登録表にある(id と slug と描画関数名の3点)
+    (2) 18章§3の全17セクション(v1.2で SEC-17 growth を追加)が登録表にある
+        (id と slug と描画関数名の3点)
     (3) node があれば、最小DOMスタブでページ内スクリプトを実際に走らせ、
-        `sec-<slug>` の要素が16本すべて生成されることまで確認する。
+        `sec-<slug>` の要素がすべて生成されることと、上部ナビ・目次の
+        アンカーが表示対象と1対1であること(11章§3.8.3)まで確認する。
         セクションの実体はブラウザ側のJSが作る(18章§4.1)ので、HTMLソースを
         grep しても cover 以外のアンカーは出てこない。ソース検査(2)だけでは
         「登録したが描けない」を見逃すため、可能なら(3)まで行う。
@@ -95,6 +97,7 @@ RENDER_MODULES = [
     "modHtmlTheme",
     "modHtmlTemplate1", "modHtmlTemplate2", "modHtmlTemplate3",
     "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
+    "modHtmlTemplate7",
     "modExportHtml",
     "modMockLlm", "modMockLlm2",
 ]
@@ -107,33 +110,39 @@ SECTIONS = [
     ("SEC-04", "sufficiency", "renderSufficiency"),
     ("SEC-05", "riskuniv", "renderRiskUniv"),
     ("SEC-06", "riskmap", "renderRiskMap"),
+    ("SEC-16", "round-update", "renderRoundUpdate"),
     ("SEC-07", "risks", "renderRisks"),
     ("SEC-08", "coverage", "renderCoverage"),
-    ("SEC-09", "newrisk", "renderNewRisk"),
-    ("SEC-16", "round-update", "renderRoundUpdate"),
-    ("SEC-10", "story", "renderStory"),
     ("SEC-11", "prevent", "renderPrevent"),
     ("SEC-12", "limit", "renderLimit"),
+    ("SEC-09", "newrisk", "renderNewRisk"),
+    ("SEC-17", "growth", "renderGrowth"),
+    ("SEC-10", "story", "renderStory"),
     ("SEC-13", "hearing", "renderHearing"),
     ("SEC-14", "source", "renderSource"),
     ("SEC-15", "disclaimer", "renderDisclaimer"),
 ]
 
+
 # 18章§4.1 が構造的に排除している書き込み口。1つでも出たら出荷しない。
 BANNED_JS = ["innerHTML", "insertAdjacentHTML", "document.write", "outerHTML"]
 
-# 18章§5.1「テーマが定義してよいCSS変数の閉じた一覧」(28個)。テーマは**過不足
-# なく**これだけを定義し、共通CSSはこれ以外の色を持たない(唯一の例外は #fff)。
+# 18章§5.1「テーマが定義してよいCSS変数の閉じた一覧」(v1.2で39個)。テーマは
+# **過不足なく**これだけを定義し、共通CSSはこれ以外の16進色を持たない
+# (唯一の例外は #fff。rgba() の半透明は§5.1の規約で例外)。
 THEME_VARS = [
     "--page-width", "--page-pad", "--font-sans", "--font-serif", "--font-size",
     "--line-height",
-    "--paper", "--ink", "--sub", "--mist", "--line",
-    "--ai", "--kaki", "--matsu", "--deep",
+    "--bg", "--paper", "--ink", "--sub", "--mist", "--line",
+    "--brand", "--brand2", "--accent", "--navy", "--kaki", "--matsu", "--deep",
+    "--soft-brand", "--soft-red", "--soft-amber", "--soft-green", "--soft-blue",
+    "--soft-purple", "--shadow",
     "--warn", "--warn-line",
     "--heat-1", "--heat-2", "--heat-3", "--heat-4", "--heat-5",
     "--tr-cover", "--tr-partial", "--tr-hard",
     "--iq-ok", "--iq-partial", "--iq-missing",
 ]
+
 
 # サンプルの meta(18章§2)。日時を固定しておくと、見た目の差分レビューで
 # 「毎回変わる1行」がノイズにならない。
@@ -277,13 +286,16 @@ function runPass(mutate) {
   byId = Object.create(null);
   function mk(tag, id) { const n = new El(tag); if (id) { n.setAttribute('id', id); } return n; }
   const root = mk('body', null);
-  const doc = mk('main', 'doc');
-  root.appendChild(doc);
-  // 静的HTML側(BodyShellHtml)にある id を先に用意する。
-  doc.appendChild(mk('section', 'sec-cover'));
-  doc.appendChild(mk('nav', 'toc'));
+  // 静的HTML側(BodyShellHtml。18章§3.6 v1.2)にある id を先に用意する。
+  // 上部ナビ(toc)はヒーローより前、本文先頭の目次(tocprint)と表紙(sec-cover)は
+  // <main id="doc"> の中にある。
+  root.appendChild(mk('nav', 'toc'));
   root.appendChild(mk('div', 'warnbox'));
   root.appendChild(mk('button', 'btnPrint'));
+  const doc = mk('main', 'doc');
+  root.appendChild(doc);
+  doc.appendChild(mk('nav', 'tocprint'));
+  doc.appendChild(mk('section', 'sec-cover'));
   global.document = {
     createElement: (t) => new El(t),
     getElementById: (id) => (byId[id] || null)
@@ -300,7 +312,7 @@ function runPass(mutate) {
     if (n.attrs && n.attrs.id) { ids.push(n.attrs.id); }
     if (n.attrs && n.attrs.href) { hrefs.push(n.attrs.href); }
     for (const c of n.childNodes) { walk(c); }
-  })(doc);
+  })(root);
   return { ids: ids, hrefs: hrefs };
 }
 
@@ -382,7 +394,7 @@ def check_theme_css(html: str) -> list[str]:
     if sorted(declared) != sorted(THEME_VARS):
         missing = sorted(set(THEME_VARS) - set(declared))
         extra = sorted(set(declared) - set(THEME_VARS))
-        problems.append(f"テーマCSSの28変数が過不足です(不足={missing} 余分={extra})")
+        problems.append(f"テーマCSSの39変数が過不足です(不足={missing} 余分={extra})")
     # 共通CSS(= :root ブロック以外の <style> 本文)に生の色指定が無いこと。
     style = re.search(r"<style>(.*?)</style>", html, re.S)
     if style is not None:
@@ -448,6 +460,24 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
     # パスBが「SEC-16以外まで消えた」状態でないこと(ガードの効きすぎ・空振り防止)。
     if "sec-exec" not in ids_b:
         problems.append("パスB(round_no=1)で sec-exec まで消えています(DOM検査が空振り)")
+
+    # --- 11章§3.8.3(1)(2): 上部ナビのアンカー本数 = 表示対象数、id は slug と1対1 ---
+    # 見出しを持たない SEC-01 cover はナビにも目次にも並べない(18章§3.6)ので、
+    # 期待本数は「描かれたセクション - cover」。上部ナビと印刷用目次は同じ一覧から
+    # 作るので、アンカーは1セクションにつき2本(帯 + 目次)出る。
+    shown_slugs = [slug for _sid, slug, _fn in SECTIONS
+                   if ("sec-" + slug) in ids_a and slug != "cover"]
+    want = sorted("#sec-" + s for s in shown_slugs)
+    got_nav = sorted(h for h in got["A"]["hrefs"] if h.startswith("#sec-"))
+    if sorted(set(got_nav)) != want:
+        problems.append(
+            f"上部ナビ・目次のアンカーが表示対象と一致しません"
+            f"(不足={sorted(set(want) - set(got_nav))} 余分={sorted(set(got_nav) - set(want))}"
+            f"。11章§3.8.3(1)(2)・18章§3.6)")
+    if len(got_nav) != len(want) * 2:
+        problems.append(
+            f"アンカーの本数が{len(got_nav)}本です(上部ナビ{len(want)}本+印刷用目次"
+            f"{len(want)}本の計{len(want) * 2}本を期待。18章§3.6)")
     return problems
 
 
@@ -485,6 +515,17 @@ def parse_sec_headings(spec: str) -> list[tuple[str, str, str]]:
 def parse_disclaimer(spec: str) -> list[str]:
     """§3.5「この4行を必ず含める」の固定文をバッククォートから取る。"""
     body = spec.split("### 3.5 ")[1].split("### 3.6")[0]
+    out = []
+    for line in body.splitlines():
+        mm = re.match(r"^\d+\. `(.+?)`", line.strip())
+        if mm:
+            out.append(mm.group(1))
+    return out
+
+
+def parse_growth_note(spec: str) -> list[str]:
+    """§3.7「節の先頭に次の1文を逐語で置く」の固定文をバッククォートから取る。"""
+    body = spec.split("### 3.7 ")[1].split("## 4. ")[0]
     out = []
     for line in body.splitlines():
         mm = re.match(r"^\d+\. `(.+?)`", line.strip())
@@ -554,6 +595,12 @@ def check_spec18_literals(html: str) -> list[str]:
                 problems.append(
                     f"18章§3.5の免責固定文が逐語で入っていません: [{frag}]"
                     f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
+
+    for line in parse_growth_note(spec):
+        if _literal_missing(html, line):
+            problems.append(
+                f"18章§3.7 SEC-17 の免責固定文が逐語で入っていません: [{line}]"
+                f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
 
     for label, phrase in parse_fixed_phrases(spec):
         for frag in [f for f in re.split(r"\{[^}]+\}", phrase) if f.strip()]:

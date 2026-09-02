@@ -20,7 +20,7 @@ Option Explicit
 '   build/modules.json への登録と tests_expected の更新は modTestsPure5 の
 '   ヘッダに記した3点セットのとおり(本ファイル29本)。
 '
-' テスト本数: 29本 = G40 10 / G40K 2 / G41 7 / G41K 1 / G42 4 / G43 5
+' テスト本数: 34本 = G40 10 / G40K 2 / G41 7 / G41K 1 / G42 4 / G43 5 / G32G 5
 '   (K付きはID実在検査を通る群。裁定書7 A-1/A-2 で一覧テキストは Check系の
 '    引数になったので、本モジュールが15章の1行書式で自給する Wl* を渡す。
 '    modKnowledge には触れない)
@@ -54,7 +54,7 @@ Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
 
-    For i = 1 To 6
+    For i = 1 To 7
         grpName = "G?" & i
         On Error Resume Next
         Err.Clear
@@ -98,6 +98,9 @@ Private Sub RunGroup(ByVal grpNo As Long, ByRef grpName As String)
     Case 6
         grpName = "G43 SanitizeFileName"
         T_FileName
+    Case 7
+        grpName = "G32G CheckS3 growth_ideas"
+        T_S3Growth
     End Select
 End Sub
 
@@ -450,3 +453,82 @@ Private Sub T_FileName()
         Left$(res, 12), "浜松スイーツファクトリー"
 End Sub
 
+' ============================
+' 判定の共通形(modTestsPure5 と同じ作法。テスト名の先頭が15章§11のケースID)
+' ============================
+Private Function CaseIdOf(ByVal nm As String) As String
+    Dim p As Long
+    p = InStr(nm, "_")
+    If p > 1 Then
+        CaseIdOf = Left$(nm, p - 1)
+    Else
+        CaseIdOf = nm
+    End If
+End Function
+
+' 1ケース1本の共通形: 壊した素材で発火し、素材のままでは発火しないこと。
+Private Sub ChkFire(ByVal nm As String, ByVal ngOut As String, ByVal okOut As String)
+    modTestRunner.Check nm, _
+        (HasCase(ngOut, CaseIdOf(nm)) And Not HasCase(okOut, CaseIdOf(nm))), _
+        "壊した素材の結果=[" & HeadOf(ngOut) & "] 素材のままの結果=[" & HeadOf(okOut) & "]"
+End Sub
+
+' ============================
+' G32G CheckS3 の growth_ideas(攻めの保険活用。15章§4 V-S3-14 ～ V-S3-18)
+' ----------------------------
+'   素材は MK-S3(growth_ideas 4件)。5ケースそれぞれに対し「壊した素材で発火し、
+'   素材のままでは発火しない」を張る(modTestsPure5 の G32 と同じ形)。
+'   growth_ideas の配列は本群だけで自給し(GIdea/WithGrowth)、他の3キーには
+'   触れない = 既存 V-S3-01 ～ V-S3-13 の素材を汚さない。
+' ============================
+Private Sub T_S3Growth()
+    Dim s3 As String
+    Dim s2r As String
+    Dim okOut As String
+    Dim baseArr As String
+
+    s3 = MockJson(MK_S3)
+    s2r = MockJson(MK_S2R)
+    okOut = modValidate.CheckS3(s3, s2r)
+    baseArr = "[" & GIdea("成長案A", "5", "low") & "," & GIdea("成長案B", "4", "mid") & _
+              "," & GIdea("成長案C", "3", "high") & "," & GIdea("成長案D", "2", "mid") & "]"
+
+    ' 件数が4未満(3件)。
+    ChkFire "V-S3-14_growth_ideasが4件未満_15章§11", _
+        modValidate.CheckS3(WithGrowth(s3, "[" & GIdea("成長案A", "5", "low") & "," & _
+            GIdea("成長案B", "4", "mid") & "," & GIdea("成長案C", "3", "high") & "]"), s2r), okOut
+
+    ChkFire "V-S3-15_growth_ideasのeffectが1から5の外_15章§11", _
+        modValidate.CheckS3(WithGrowth(s3, Replace(baseArr, """effect"":5", """effect"":6")), s2r), okOut
+
+    ChkFire "V-S3-16_growth_ideasのdifficultyがenum外_15章§11", _
+        modValidate.CheckS3(WithGrowth(s3, Replace(baseArr, """difficulty"":""low""", _
+            """difficulty"":""medium""")), s2r), okOut
+
+    ChkFire "V-S3-17_growth_ideasのtitleが30字超か重複_15章§11", _
+        modValidate.CheckS3(WithGrowth(s3, Replace(baseArr, "成長案B", "成長案A")), s2r), okOut
+
+    ' stories 先頭の headline と同じ文言を title に置く(同じ案を2箇所に出さない)。
+    ChkFire "V-S3-18_growth_ideasのtitleがstoriesのheadlineと重複_15章§11", _
+        modValidate.CheckS3(WithGrowth(s3, Replace(baseArr, "成長案A", _
+            "PL保険のリコール費用特約拡充")), s2r), okOut
+End Sub
+
+' growth_ideas の1件(15章§4 Schema-S3 の6キー)。
+Private Function GIdea(ByVal titleText As String, ByVal effectText As String, _
+                       ByVal diffText As String) As String
+    GIdea = "{""title"":""" & titleText & """,""what"":""何をするのか""," & _
+            """why"":""なぜこの会社に効くのか"",""insurance_fit"":""保険との接点""," & _
+            """effect"":" & effectText & ",""difficulty"":""" & diffText & """}"
+End Function
+
+' S3 JSON の growth_ideas 配列だけを差し替える(他の3キーは1字も触らない)。
+Private Function WithGrowth(ByVal js As String, ByVal arrText As String) As String
+    Dim p As Long
+    p = InStr(js, ",""growth_ideas"":")
+    If p = 0 Then
+        WithGrowth = js
+        Exit Function
+    End If
+    WithGrowth = Left$(js, p - 1) & ",""growth_ideas"":" & arrText & "}"
+End Function

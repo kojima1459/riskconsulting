@@ -123,6 +123,9 @@ Public Function EnumPairsCsv() As String
     s = s & "proposal_kind,upsell,補償拡大" & vbLf
     s = s & "proposal_kind,cross_sell,新種目提案" & vbLf
     s = s & "proposal_kind,scheme,座組提案" & vbLf
+    s = s & "growth_difficulty,low,低" & vbLf
+    s = s & "growth_difficulty,mid,中" & vbLf
+    s = s & "growth_difficulty,high,高" & vbLf
     s = s & "location_type,工場,工場" & vbLf
     s = s & "location_type,本社,本社" & vbLf
     s = s & "location_type,店舗,店舗" & vbLf

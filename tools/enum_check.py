@@ -98,6 +98,9 @@ REQUIRED: dict[str, str] = {
     "source": "evidence_source",
     "gap_type": "gap_type",
     "proposal_kind": "proposal_kind",
+    # v3.2(裁定書21): 攻めの保険活用 growth_ideas[].difficulty。18章 SEC-17 が
+    #   日本語ラベル(低/中/高)で描くため、ラベルの正を19章§3に一本化する。
+    "growth.difficulty": "growth_difficulty",
     "locations.type": "location_type",
     "input_quality.aspect": "input_quality_aspect",
     "input_quality.status": "input_quality_status",
