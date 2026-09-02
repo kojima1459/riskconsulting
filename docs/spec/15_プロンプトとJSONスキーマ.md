@@ -1,4 +1,6 @@
-# 15. プロンプトとJSONスキーマ v2.5（本製品の核心）
+# 15. プロンプトとJSONスキーマ v2.6（本製品の核心）
+
+> v2.6（W7・裁定書25「W7センターピン整合」）: UC案v0.1＋髙橋FB（8/26-27）へ核を合わせた。**S1**: 新規案件でも付保ギャップを立てられるようにした（§1.2b `BLOCK_NEW_S2` 新設・CheckS2 の V-S2-12 を廃止し V-S2-12b を新設・Schema-S1 `current_coverage[].certainty`〔confirmed/assumed〕追加・V-S1-04 の発火条件を訂正・V-S1-12 新設）。**S2**: Schema-S3 へ `talk_script`（opening/flow/closing/taboo）を required で追加し、S3 system 第12ルールと V-S3-19〜21 を新設した（描画は18章 SEC-18）。**S3**: Schema-S1 へ `financials`（fiscal_year/net_assets/sales/operating_profit/source/note）を required で追加、S1 system 第10ルールと S1 user の【決算・財務】ブロックを新設し、V-S1-13 を追加。S2 systemルール11を「純資産との対比を必ず出す」へ改訂し V-S2-18 を新設した。**S4**: §1.2c `BLOCK_ROUND2_FOCUS` を新設し S2/S3 user へ挿入した。**S5**: `insurability.line_note` を `line_note`（想定種目）と `gap_note`（確認点）へ分離した。**S6**: S2 user へ `{{incidentsText}}`（事故事例）の注入枠を新設し、§0.7 の切詰め表へ加えた。**S7**: `emerging_risks` を0～5件へ（V-S2-16 の閾値5）。**S9**: §5 S4 system の「PowerPoint骨子」を「提案書骨子」へ改めた。§10.2 へ `BlockNewS2()` / `BlockRound2Focus()` を追加（Block* は9関数・対応表は33関数）。§11 は**計75件**（CheckS1 13 / CheckS2 18 / CheckS3 21）。
 
 > v2.5（裁定書21・11章v3.2 利用者回答3「攻めの保険活用A〜Hを1回の出力で」）: **S3に4本目のキー `growth_ideas[]` を追加**した。§4 user の末尾に生成指示1行と出力JSON例1件分・※3行を追記し（既存の「商談用の提案ストーリー3本を」以下3キーの文言は1字も変えていない）、Schema-S3 に `growth_ideas`（`title`≤30字 / `what`≤100字 / `why`≤100字 / `insurance_fit` / `effect` 1〜5 / `difficulty` enum `low`/`mid`/`high`・`minItems` 4・`maxItems` 8・`additionalProperties` false）を足し、CheckS3 へ V-S3-14〜V-S3-18 の5件（件数4〜8 / effect範囲 / difficulty enum / title長と重複 / stories[].headline との重複）を追加して**計69件**へ更新した。`difficulty` の日本語ラベル（低 / 中 / 高）は19章§3に登記。§8.1 の MK-S3 にも `growth_ideas` を4件足した。描画は18章 SEC-17。
 
@@ -64,7 +66,7 @@
 
 1プロンプトの文字数上限は、案件の `dossier_tier` に応じて `max_context_chars`（t1_quick）または `t2_max_context_chars`（t2_full / t3_sparring）を選ぶ（13章§2.3）。上限超過の検知と打切りの責務は modPipeline にある。
 
-**予算配分**: 上限のうち**ナレッジ注入（riskLibText / menusText / linesText / schemesText / casesText / patternsText / rulesText / researchingText / mechs）の合計は3割まで**とし、残る7割を貼付入力（HP・有報・現契約サマリ等）に充てる。ナレッジ側が3割を超える場合、下の順で削る。
+**予算配分**: 上限のうち**ナレッジ注入（riskLibText / incidentsText / menusText / linesText / schemesText / casesText / patternsText / rulesText / researchingText / mechs）の合計は3割まで**とし、残る7割を貼付入力（HP・有報・現契約サマリ等）に充てる。ナレッジ側が3割を超える場合、下の順で削る。
 
 **貼付入力側の打切り**（先に切る順・16章 E-03 が正）: 追加ドシエ→前回更新メモ→有報→営業メモ→HP。**打切らない**: 現契約サマリ・現場メモ・付保の見立て・ヒアリング回答（いずれも他で代替できない一次情報。これらだけで上限を超える場合は E0102 で実行前に警告し、利用者に削減を求める）。
 
@@ -73,12 +75,13 @@
 | 順 | 対象 | 行数上限（config） | 切詰め方 | 下限 |
 |---|---|---|---|---|
 | 1 | 成功事例 casesText | kb_case_rows（既定5） | 行数を半減（端数切上げ） | 0行まで可 |
-| 2 | 型ライブラリ schemesText | kb_scheme_rows（既定10） | 同上 | 0行まで可 |
-| 3 | メニュー menusText | kb_menu_rows（既定60） | 同上 | 5行（S3のID実在制約が成立しなくなるため） |
-| 4 | 種目 linesText | （全行） | 同上 | 5行（同上） |
-| 5 | リスクライブラリ riskLibText | kb_risk_rows（既定20） | 同上 | 5行（業種プライアが消えると§0.5 第2層が崩れる） |
+| 2 | 事故事例 incidentsText（v2.6・裁定書25 S6） | kb_incident_rows（既定5） | 同上 | 0行まで可 |
+| 3 | 型ライブラリ schemesText | kb_scheme_rows（既定10） | 同上 | 0行まで可 |
+| 4 | メニュー menusText | kb_menu_rows（既定60） | 同上 | 5行（S3のID実在制約が成立しなくなるため） |
+| 5 | 種目 linesText | （全行） | 同上 | 5行（同上） |
+| 6 | リスクライブラリ riskLibText | kb_risk_rows（既定20） | 同上 | 5行（業種プライアが消えると§0.5 第2層が崩れる） |
 
-1～5を順に1段ずつ適用し、そのつど総量を再計算する。5まで適用してなお超過する場合は、各行を先頭400字で切り「…」を付す。それでも超過する場合は E0102 で実行前警告とし、勝手にStepを中止しない。（適用点は modKnowledgeFmt の整形最終段。全整形行が必ず通る）
+1～6を順に1段ずつ適用し、そのつど総量を再計算する。6まで適用してなお超過する場合は、各行を先頭400字で切り「…」を付す。それでも超過する場合は E0102 で実行前警告とし、勝手にStepを中止しない。（適用点は modKnowledgeFmt の整形最終段。全整形行が必ず通る）
 
 **記録**: 切詰めが発生したら run_log の detail に `truncated:cases=3,schemes=2` の形式（対象=削った行数）で記録する。`modKnowledge.LastInjectedIds()` には**切詰め後に実際に注入したIDのみ**を載せる（run_log.injected_kb_ids が「見せていない知識」を含まないようにするため）。黙って削らない。
 
@@ -120,6 +123,31 @@ BLOCK_RENEWAL_S3:
 提案3本は gaps を最優先の材料とし、proposal_kind を必ず使い分けること
 （upsell=既存契約の限度額・範囲の拡大、cross_sell=未付保種目の新規提案、scheme=型ライブラリの座組適用）。
 「昨年同条件・保険料は下げて」の商談を、リスクの話に引き戻す構成にする。
+```
+
+### 1.2b 新規案件の付保ギャップ指示ブロック（BLOCK_NEW_S2。case_type=new のとき S2 の user に挿入。v2.6・裁定書25 S1）
+
+**なぜ必要か**: UC案 Process「保険との紐付け→未充足・ニューリスク抽出」と Output「保険カバレッジ表・未充足リスク一覧」は、新規開拓先でこそ提案の軸になる（合意済み出力見本の題材である春華堂も新規先である）。v2.5 までは新規案件で `gaps` を空配列に強制していたため、この2つが構造的に出なかった。
+
+```
+【新規案件の追加指示】
+現契約サマリが無くても gaps を空にしないこと。企業プロファイルの current_coverage と
+【付保の見立て】から推定される付保状態に対し、未充足のリスクを gaps に立てる。
+新規案件では gap_type は uninsured のみを使う。
+coverage_evidence には「該当契約なし」または【付保の見立て】からの引用を書く。
+確度が低い推定であること（見立てに基づくこと）を description に必ず明記する。
+```
+
+### 1.2c 第2ラウンドの深掘りブロック（BLOCK_ROUND2_FOCUS。round_no が2以上のとき S2 と S3 の user に挿入。v2.6・裁定書25 S4）
+
+初回ラウンドで採用された提案の保険種目に絞って各論へ入る（髙橋FB「STEP1総合提案 → STEP2個別提案」の接続。種目特化AIは作らず、第2ラウンドの絞り込みで宣言と実体を一致させる）。値源は案件一覧の `focus_line_ids`（13章§2.1）。
+
+```
+【第2ラウンドの深掘り指示】
+初回ラウンドで採用された提案の保険種目: {{focus_line_ids ※空なら「指定なし」と埋める。1行属性・SanitizeInput適用}}
+上記の種目に絞って各論を深掘りすること（補償範囲・限度額・免責・特約・引受上の確認事項を
+具体化する）。「指定なし」のときは絞り込まず全体を扱う。絞り込みは深掘りの指示であって、
+リスク仮説の網羅性（10分類の検討）を減らしてよいという意味ではない。
 ```
 
 ### 1.3 データ境界規律（BLOCK_GUARD。S1/S2/S3/S4/PF/S2C/S3Cの**7本のsystem末尾**に挿入）
@@ -249,6 +277,13 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 9. 【付保の見立て】は営業の伝聞であり確度が低い。事実として断定せず、
    current_coverage や本文の値に反映する場合は値の先頭に「(見立て)」を付す。
    ただし input_quality の insurance_ctx 観点の充足度評価には算入する。
+   現契約サマリから読み取った契約は certainty="confirmed"、【付保の見立て】等からの推定は
+   certainty="assumed" とする。
+10. 【決算・財務】から financials を組み立てる。読み取れない項目は文字列 "不明" とする。
+   決算公告は貸借対照表の要旨だけの掲載が多く、純資産と当期純利益しか読み取れないことがある。
+   その場合も残りを推測で埋めず "不明" とする。単位（円・千円・百万円）は原文の表記を保つ。
+   source は出所を1つ選ぶ(yuho=有価証券報告書 / kessan_kokoku=決算公告 /
+   tdb=帝国データバンク等の信用調査 / view=VIEW情報 / memo=営業メモ / unknown=不明)。
 ```
 （末尾に BLOCK_GUARD を連結）
 
@@ -290,6 +325,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 
 【前回訪問のヒアリング回答（第2ラウンド以降。未提供の場合は「なし」）】
 {{hearingAnswersText}}
+
+【決算・財務（決算公告・有価証券報告書・信用調査等の数値。未提供の場合は「なし」）】
+{{financeText}}
 ■■■企業情報ここまで■■■
 
 出力するJSONの形式（この構造・キー名に厳密に従うこと）:
@@ -309,7 +347,12 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
                        "aspirations": ["いま力を入れている事業・やろうとしていること(1項目1文)"],
                        "market_context": "置かれた市場環境の要約(なければ\"不明\")"},
   "current_coverage": [{"line_name": "種目名(現契約サマリの表記のまま)", "coverage_summary": "補償内容の要約",
-                        "limit_note": "限度額・保険金額(不明なら\"不明\")", "special_note": "主要特約・免責等(なければ\"不明\")"}],
+                        "limit_note": "限度額・保険金額(不明なら\"不明\")", "special_note": "主要特約・免責等(なければ\"不明\")",
+                        "certainty": "confirmed/assumed"}],
+  "financials": {"fiscal_year": "決算期(例: 2025年3月期。不明なら\"不明\")",
+                 "net_assets": "純資産(原文の単位のまま。不明なら\"不明\")",
+                 "sales": "売上高(不明なら\"不明\")", "operating_profit": "営業利益(不明なら\"不明\")",
+                 "source": "yuho/kessan_kokoku/tdb/view/memo/unknown", "note": "補足(なければ\"不明\")"},
   "field_insights": [{"note": "現場メモの原文(要約しない)", "tag": "risk_clue/relationship/competitor/constraint/opportunity/other"}],
   "missing_info": [{"item": "知りたい情報", "why_needed": "なぜリスク分析に必要か(1文)"}],
   "input_quality": {
@@ -320,7 +363,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   "research_requests": [{"purpose": "何を埋めるための調査か(対象aspectを含め1文)",
                          "prompt_text": "調査AIアプリにそのまま貼れるプロンプト全文(企業名・拠点等の固有情報を埋め込む)"}]
 }
-※新規案件（現契約サマリが「なし」）の場合、current_coverage は [] とする。
+※現契約サマリが「なし」でも、【付保の見立て】から付保状態が読み取れる場合は certainty="assumed" として current_coverage に出す（読み取れなければ [] とする）。
+※【決算・財務】が「なし」の場合も financials は必ず出力し、全項目を "不明"（source は "unknown"）とする。
 ※input_quality.coverage は14観点(profile, business, sites, history, news, hr, finance_risk, sales_memo, sns, competitors, market, finance, insurance_ctx, hazard)を必ず各1回出力する。
 ※全観点が ok の場合、research_requests は [] とする。
 ```
@@ -361,8 +405,17 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
       "line_name": {"type": "string"},
       "coverage_summary": {"type": "string"},
       "limit_note": {"type": "string"},
-      "special_note": {"type": "string"}
-    }, "required": ["line_name", "coverage_summary", "limit_note", "special_note"], "additionalProperties": false}},
+      "special_note": {"type": "string"},
+      "certainty": {"type": "string", "enum": ["confirmed", "assumed"]}
+    }, "required": ["line_name", "coverage_summary", "limit_note", "special_note", "certainty"], "additionalProperties": false}},
+    "financials": {"type": "object", "properties": {
+      "fiscal_year": {"type": "string"},
+      "net_assets": {"type": "string"},
+      "sales": {"type": "string"},
+      "operating_profit": {"type": "string"},
+      "source": {"type": "string", "enum": ["yuho", "kessan_kokoku", "tdb", "view", "memo", "unknown"]},
+      "note": {"type": "string"}
+    }, "required": ["fiscal_year", "net_assets", "sales", "operating_profit", "source", "note"], "additionalProperties": false},
     "field_insights": {"type": "array", "items": {"type": "object", "properties": {
       "note": {"type": "string"},
       "tag": {"type": "string", "enum": ["risk_clue", "relationship", "competitor", "constraint", "opportunity", "other"]}
@@ -386,7 +439,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   },
   "required": ["company_name", "business_summary", "main_products", "processes", "locations",
                "supply_chain", "customers", "workforce_notes", "management_notes", "strategy_outlook",
-               "current_coverage", "field_insights", "missing_info", "input_quality", "research_requests"],
+               "current_coverage", "financials", "field_insights", "missing_info", "input_quality", "research_requests"],
   "additionalProperties": false
 }
 ```
@@ -395,10 +448,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 
 | ケースID | 対象キー | 条件（これに該当したら発火） | 判定 | エラー文テンプレ |
 |---|---|---|---|---|
-| V-S1-01 | ルート | required 15キーのいずれかが欠落 | 不合格 | `[V-S1-01] 必須キー {key} がありません` |
+| V-S1-01 | ルート | required 16キーのいずれかが欠落 | 不合格 | `[V-S1-01] 必須キー {key} がありません` |
 | V-S1-02 | locations[].type | enum（工場/本社/店舗/倉庫/その他）以外 | 不合格 | `[V-S1-02] locations[{i}].type が不正です: {value}` |
 | V-S1-03 | current_coverage | case_type=renewal で 0件 | 不合格 | `[V-S1-03] 更新案件ですが current_coverage が0件です` |
-| V-S1-04 | current_coverage | case_type=new で 1件以上 | 警告 | `[V-S1-04] 新規案件ですが current_coverage が{n}件あります` |
+| V-S1-04 | current_coverage | case_type=new で `certainty="confirmed"` の要素が1件以上（**全件が `assumed` のときは発火しない**。v2.6・裁定書25 S1） | 警告 | `[V-S1-04] 新規案件ですが確認済みの current_coverage が{n}件あります` |
 | V-S1-05 | missing_info | 0件 | 警告 | `[V-S1-05] missing_info が0件です` |
 | V-S1-06 | input_quality.coverage | 件数が14でない | 不合格 | `[V-S1-06] input_quality.coverage が{n}件です(14件必要)` |
 | V-S1-07 | input_quality.coverage[].aspect | 14 aspect のいずれかが欠落、または重複 | 不合格 | `[V-S1-07] input_quality.coverage の aspect に欠落または重複があります: {aspect}` |
@@ -406,6 +459,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 | V-S1-09 | research_requests[].prompt_text | 1,800字超（文字数はCP932ではなく文字単位で数える） | 不合格 | `[V-S1-09] research_requests[{i}].prompt_text が{n}字です(1800字以内)` |
 | V-S1-10 | research_requests | 7件以上 | 不合格 | `[V-S1-10] research_requests が{n}件です(6件以内)` |
 | V-S1-11 | field_insights | 現場メモ提供ありで 0件 | 警告 | `[V-S1-11] 現場メモがありますが field_insights が0件です` |
+| V-S1-12 | current_coverage[].certainty | enum（confirmed/assumed）以外（v2.6・裁定書25 S1） | 不合格 | `[V-S1-12] current_coverage[{i}].certainty が不正です: {value}` |
+| V-S1-13 | financials.source | enum（yuho/kessan_kokoku/tdb/view/memo/unknown）以外（v2.6・裁定書25 S3） | 不合格 | `[V-S1-13] financials.source が不正です: {value}` |
 
 **充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。research_requests は案件入力シートの「追加収集」欄に一覧表示し、各行に「コピー」操作を付ける（営業は調査AIアプリへ貼るだけ。11章）。
 補足: 現場メモ未提供時は field_insights=[]（V-S1-11 は現場メモ提供時のみ判定する）。field_insights は s1Json に含まれるため、S2/S4・壁打ちへは追加配線なしで原文のまま届く（蒸留しないパススルー。docs/09 F-01）。S3へは s1Json 全体ではなく要約（{{s1SummaryJson}}。§4）で届くが、field_insights は要約の対象キーに含めるため原文のまま渡る。
@@ -450,20 +505,22 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 10. 各リスクに insurability(保険による移転可能性)を付ける。
    transferability: cover=既存の保険で比較的移転しやすい / partial=条件付き・部分的 /
    hard=保険化困難(価格変動・需要減・技能喪失など保険事故に当たらないもの)。
-   line_note には想定される既存種目の一般名称と主な確認点(免責・限度額・トリガー)を、
-   control_note には保険以外の管理策(回避・低減・保有)を、各50字以内で書く。
+   line_note には想定される既存種目の一般名称を、gap_note にはその補償で確認すべき点
+   (免責・限度額・トリガー・対象外になりやすい損害)を、control_note には保険以外の
+   管理策(回避・低減・保有)を、各50字以内で書く。
    hard のリスクも省略しない。「保険で解決できないが経営上重要」と示すこと自体が
    リスクコンサルティングの価値である。
-11. loss_scale_note には損害規模の目安を書く。入力に財務データ(売上・純資産等)がある場合は
-   「純資産◯億円に対し損害◯億円規模」のような財務体力との対比を書く(概算と明記)。
-   数字の材料が無い場合は空文字 "" とする。数字の創作は重大な誤りである。
+11. loss_scale_note には損害規模の目安を書く。企業プロファイルの financials.net_assets が
+   "不明" 以外のときは、必ず「純資産◯億円に対し損害◯億円規模(概算)」という財務体力との
+   対比の形で書く(単位は financials の表記に合わせる)。
+   財務データが無い(net_assets が "不明")場合は空文字 "" とする。数字の創作は重大な誤りである。
 12. status は初回生成では必ず "proposed" とする。■■■前回ラウンドのリスク仮説とヒアリング回答■■■が
    提供されている再実行(第2ラウンド以降)では、前回の各リスクを引き継いだうえで、回答により
    裏づけられたものを "confirmed"、否定されたものを "rejected"(削除はしない。理由を scenario
    末尾に追記)、回答から新たに発見したリスクを "new" とする。提案書が訪問のたびに成長する。
    これが本製品の中核思想である。
 13. リスクユニバース10分類の定番類型に加え、新種・新興のリスク(サイバー・気候変動・規制変化・
-   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0～3件
+   技術転換・サプライチェーン地政学等)のうちこの企業に実際に関係するものを0～5件
    emerging_risks に挙げる。一般論の羅列は禁止。当てはまりの根拠を書く。
    該当が薄ければ空配列とする(無理に埋めない)。
 ```
@@ -474,6 +531,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 ```
 {{BLOCK_CTX}}
 {{BLOCK_RENEWAL_S2 ※renewalのみ}}
+{{BLOCK_NEW_S2 ※newのみ}}
+{{BLOCK_ROUND2_FOCUS ※round_noが2以上のときのみ}}
 
 ■■■企業プロファイル(Step1の結果・人による修正済み)ここから■■■
 {{s1Json}}
@@ -482,6 +541,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 ■■■社内リスク知識(この業種の典型リスク。参考情報)ここから■■■
 {{riskLibText ※0行時は「(この業種の登録知識はまだありません)」}}
 ■■■社内リスク知識ここまで■■■
+
+■■■社内の事故事例(この業種で実際に起きた事故。参考情報)ここから■■■
+{{incidentsText ※0行時は「(この業種の登録事例はまだありません)」}}
+■■■社内の事故事例ここまで■■■
 
 ■■■当社メニュー一覧(要約。preventionsのrelated_menu_idはこの中からのみ)ここから■■■
 {{menusText}}
@@ -511,7 +574,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
       "impact_score": 4,
       "evidence": {"quote": "根拠となる原文の短い引用", "source": "hp/yuho/memo/contract/prev_renewal/knowledge/inference"},
       "insurability": {"transferability": "cover/partial/hard",
-                       "line_note": "想定既存種目の一般名称と主な確認点(50字以内)",
+                       "line_note": "想定される既存種目の一般名称(50字以内)",
+                       "gap_note": "その補償で確認すべき点=免責・限度額・トリガー等(50字以内)",
                        "control_note": "保険以外の管理策=回避・低減・保有(50字以内)"},
       "loss_scale_note": "損害規模の目安・財務体力との対比(概算と明記。材料が無ければ\"\")",
       "check_points": ["現地・ヒアリングでの確認点"],
@@ -541,9 +605,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
   ],
   "open_questions": ["リスク評価の精度向上のため顧客に確認すべき事項"]
 }
-※新規案件では gaps は [] とする。
+※新規案件では gap_type は uninsured のみを使い、coverage_evidence は「該当契約なし」または【付保の見立て】からの引用とする。
 ※horizon は already=既に顕在化 / near=1～3年 / mid_long=3年超 とする。
-※この企業に当てはまる新種・新興リスクが無ければ emerging_risks は [] とする。
+※emerging_risks は0～5件とする。この企業に当てはまる新種・新興リスクが無ければ [] とする。
 ```
 
 **プレースホルダのデータ源**:
@@ -552,6 +616,8 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 |---|---|---|
 | {{s1Json}} | case_data の `s1_edited > s1_json`（13章§2.2の参照優先） | （必須。空なら実行不可） |
 | {{riskLibText}} | `modKnowledge.RiskLibFor(industryCode)` | `(この業種の登録知識はまだありません)` |
+| {{incidentsText}} | `modKnowledge.IncidentsFor(industryCode)`（ナレッジブック `事故事例` シート。13章§3.11） | `(この業種の登録事例はまだありません)` |
+| {{focus_line_ids}} | 案件一覧の `focus_line_ids`（13章§2.1。`;` 区切り。1行属性・SanitizeInput適用） | `指定なし` |
 | {{menusText}} | `modKnowledge.MenusSummaryFor(industryCode)`（S2用の**要約**版。下の整形参照） | `(登録なし)` |
 | {{prevS2Json}} | case_data の `s2_prev_json`（前ラウンドのリスク仮説。ラウンド確定時に `modCaseStore.FreezeRound` が edited 優先で解決した1本を退避。13章§2.2） | `なし` |
 | {{hearingAnswersText}} | case_data の `input_hearing_answers`（13章§2.2） | `なし` |
@@ -560,6 +626,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 ```
 [RL-09-003] カテゴリ:manufacturing_quality リスク:アレルゲン表示誤り 典型シナリオ:… 典型頻度:mid 典型影響:large 確認点:表示チェック体制;製造ライン分離
 [M-0012] 食品工場リスク診断サービス | 対応カテゴリ:manufacturing_quality;supply_chain
+[IC-09-004] カテゴリ:manufacturing_quality 見出し:菓子工場でのアレルゲン表示誤りによる自主回収 原因:… 損害規模:… 教訓:… 出所:…
 ```
 S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリのみ**の要約版、S3の {{menusText}}（MenusFor。§4整形）は**概要を加えた版**であり、別テキストである（S2は related_menu_id の候補提示が目的なので短くてよい）。
 
@@ -586,8 +653,9 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
       "insurability": {"type": "object", "properties": {
         "transferability": {"type": "string", "enum": ["cover", "partial", "hard"]},
         "line_note": {"type": "string"},
+        "gap_note": {"type": "string"},
         "control_note": {"type": "string"}
-      }, "required": ["transferability", "line_note", "control_note"], "additionalProperties": false},
+      }, "required": ["transferability", "line_note", "gap_note", "control_note"], "additionalProperties": false},
       "loss_scale_note": {"type": "string"},
       "check_points": {"type": "array", "items": {"type": "string"}},
       "preventions": {"type": "array", "items": {"type": "object", "properties": {
@@ -637,14 +705,18 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 | V-S2-09 | risks[].status | 初回ラウンド（prevS2Json が「なし」）で `proposed` 以外がある | 不合格 | `[V-S2-09] 初回実行ですが risk_no {no} の status が {value} です` |
 | V-S2-10 | risks | 第2ラウンド以降で risks 件数が前ラウンドより減少（rejected の削除） | 警告 | `[V-S2-10] risks が前ラウンド{n0}件から{n}件に減りました(rejected の削除禁止)` |
 | V-S2-11 | gaps | case_type=renewal で 0件 | 警告 | `[V-S2-11] 更新案件ですが gaps が0件です` |
-| V-S2-12 | gaps | case_type=new で 1件以上 | 不合格 | `[V-S2-12] 新規案件ですが gaps が{n}件あります` |
+| V-S2-12 | （廃止・欠番） | 旧「case_type=new で gaps が1件以上→不合格」。**v2.6・裁定書25 S1 で撤回**（新規案件でこそ未充足リスク一覧が要る）。番号は欠番とし再利用しない | - | - |
+| V-S2-12b | gaps[].gap_type | case_type=new で `uninsured` 以外がある（v2.6・裁定書25 S1） | 不合格 | `[V-S2-12b] 新規案件ですが gap_no {no} の gap_type が {value} です(uninsured のみ)` |
 | V-S2-13 | gaps[] | gap_no の重複、または gap_type が enum 外 | 不合格 | `[V-S2-13] gaps の {key} が不正です: {value}` |
 | V-S2-14 | risks[].evidence.source | `inference` の比率が50%超 | 警告 | `[V-S2-14] inference 比率が{p}%です(50%以下が目安)` |
 | V-S2-15 | insurability.transferability | `hard` が0件 | 警告 | `[V-S2-15] transferability=hard のリスクが0件です` |
-| V-S2-16 | emerging_risks | 件数が3超 | 不合格 | `[V-S2-16] emerging_risks が{n}件です(0～3件)` |
+| V-S2-16 | emerging_risks | 件数が5超（v2.6・裁定書25 S7で3→5） | 不合格 | `[V-S2-16] emerging_risks が{n}件です(0～5件)` |
 | V-S2-17 | emerging_risks[] の enum 各キー | category / horizon / evidence_source のいずれかが enum 外 | 不合格 | `[V-S2-17] emerging_risks[{i}] の {key} が不正です: {value}` |
+| V-S2-18 | risks[].loss_scale_note | 企業プロファイルの `financials.net_assets` が `"不明"` 以外なのに、全リスクで `loss_scale_note` が空文字（v2.6・裁定書25 S3） | 警告 | `[V-S2-18] 純資産が判明していますが loss_scale_note が全リスクで空です` |
 
 補足: V-S2-15 は「保険で解けないリスクを明示すること」が分析の信頼性の証であるという方針に基づく警告（docs/20 高橋FB①）。V-S2-11 は真にギャップの無い優良契約がありうるため警告に留める。
+補足（新規案件のギャップ。v2.6・裁定書25 S1）: 新規案件でも `gaps` を出す。根拠は現契約サマリではなく `current_coverage`（`certainty=assumed` を含む）と【付保の見立て】であり、`gap_type` は `uninsured` のみ、`coverage_evidence` は「該当契約なし」または見立ての引用とする（確度が低いことは `description` に書かせる。§1.2b `BLOCK_NEW_S2`）。`underinsured` / `overlap` は契約の中身が分からなければ判定できないため新規では使わせない（V-S2-12b）。旧 V-S2-12 は撤回し欠番とした。
+補足（V-S2-18）: 判定を**警告**に留めるのは、`net_assets` が判明していても損害額を数字で置けないリスク（風評・技能喪失など）が正当に存在し、そこで空文字を選ぶこと自体は誤りではないためである。**全リスクが空**のときだけ「対比を出していない」として警告する。
 補足（emerging_risks＝ニューリスク）: `emerging_risks` は「サイバー・気候変動のような新種・新興リスク」を保持する専用配列であり、**0件（空配列）を正常とする**（当てはまりの薄い企業に一般論を書かせないため。V-S2-16 は上限3件の超過のみを不合格とし、0件は発火させない）。`risks[].status = "new"`（第2ラウンドで新たに浮上した仮説）とは**別概念**であり、両者を相互に検査しない（18章 SEC-09 と SEC-16 が別セクションとして描き分ける）。`evidence_quote` / `evidence_source` は `risks[].evidence` と同じ根拠設計（50字以内の原文引用＋出所enum）である。V-S2-17 は `category` / `horizon` / `evidence_source` の3キーを見る（direct経路はstrictスキーマが一次で弾くが、ribbon経路はスキーマ強制が無いためVBA側検査を省略しない）。
 
 ## 4. Step3 提案マッチング（S3）
@@ -684,6 +756,15 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 11. 企業プロファイル(要約)の current_coverage は、proposal_kind の判定に使う。
    既にある契約の限度額・範囲を広げる提案は upsell、current_coverage に無い種目の提案は
    cross_sell とする(新規案件では current_coverage が空配列なので upsell は使わない)。
+12. talk_script は、経営層(社長・役員)との商談でそのまま声に出せるトークの筋書きである。
+   opening は冒頭の一言(80字以内)で、保険の話から入らず経営のアジェンダから入る。
+   flow は話す順序を3～5文で書き、各要素は1文とする。順序は
+   (1)守る対象を再定義 (2)止まり方を可視化 (3)保有と移転を最適化 (4)保険を成長に使う
+   の流れに相当させる(4文に満たない場合もこの順序を崩さない)。
+   closing は次の一歩を促す1文。
+   taboo には、企業プロファイルの field_insights のうちタグが constraint のもの
+   (避けるべき表現・提案)を、商談で触れてはいけない事項として短く言い換えて列挙する。
+   constraint が無ければ空配列とする(創作しない)。
 ```
 （末尾に BLOCK_GUARD）
 
@@ -692,6 +773,7 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 ```
 {{BLOCK_CTX}}
 {{BLOCK_RENEWAL_S3 ※renewalのみ}}
+{{BLOCK_ROUND2_FOCUS ※round_noが2以上のときのみ}}
 
 ■■■企業プロファイル(要約: business_summary / strategy_outlook / current_coverage / field_insights)ここから■■■
 {{s1SummaryJson}}
@@ -719,6 +801,7 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 
 商談用の提案ストーリー3本を、指定のJSON形式で出力してください。
 あわせて、保険を本業の拡大に使うアイデア(攻めの保険活用)を4～8件、growth_ideas に出してください。
+あわせて、経営層向けのトークスクリプトを talk_script に1本出してください。
 
 出力するJSONの形式:
 {
@@ -754,13 +837,21 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
       "effect": 4,
       "difficulty": "low/mid/high"
     }
-  ]
+  ],
+  "talk_script": {
+    "opening": "冒頭の一言(経営のアジェンダから入る・80字以内)",
+    "flow": ["話す順序を1文ずつ(3～5文)"],
+    "closing": "次の一歩を促す1文",
+    "taboo": ["商談で触れてはいけない事項(field_insights の constraint 由来。無ければ空配列)"]
+  }
 }
 ※target_gap_nos は該当ギャップが無ければ [] とする(新規案件では常に [])。
 ※do_not_propose は該当が無ければ [] とする(水増し禁止)。
 ※growth_ideas は目の前のリスクへの打ち手(stories)ではなく、顧客の事業機会を広げる発想である。
 ※growth_ideas に menu_ids / line_ids は持たせない。保険との接点は insurance_fit の自由文で書く。
 ※growth_ideas の title は stories の headline と同じ文言にしない(同じ案を2箇所に出さない)。
+※talk_script の flow は3～5要素とし、各要素は1文にする。
+※talk_script の taboo は field_insights の constraint タグに根拠を持たせる。該当が無ければ [] とする。
 ```
 
 **{{s1SummaryJson}} の生成規則（modPipeline）**: `s1_edited > s1_json` で解決した企業プロファイルから、次の4キーだけを抜き出した JSON オブジェクトを組み立てる。他のキーは含めない（S3のuserが肥大するのを避けるため）。§4.6 S3C の {{s1SummaryJson}} も同一の生成規則を使う。
@@ -827,9 +918,15 @@ linesText の `| 市場環境:…` は種目マスタの `market_note`（管理�
       "effect": {"type": "integer", "minimum": 1, "maximum": 5},
       "difficulty": {"type": "string", "enum": ["low", "mid", "high"]}
     }, "required": ["title", "what", "why", "insurance_fit", "effect", "difficulty"],
-       "additionalProperties": false}}
+       "additionalProperties": false}},
+    "talk_script": {"type": "object", "properties": {
+      "opening": {"type": "string", "maxLength": 80},
+      "flow": {"type": "array", "minItems": 3, "maxItems": 5, "items": {"type": "string"}},
+      "closing": {"type": "string"},
+      "taboo": {"type": "array", "items": {"type": "string"}}
+    }, "required": ["opening", "flow", "closing", "taboo"], "additionalProperties": false}
   },
-  "required": ["stories", "unmatched_risks", "do_not_propose", "growth_ideas"],
+  "required": ["stories", "unmatched_risks", "do_not_propose", "growth_ideas", "talk_script"],
   "additionalProperties": false
 }
 ```
@@ -856,6 +953,11 @@ linesText の `| 市場環境:…` は種目マスタの `market_note`（管理�
 | V-S3-16 | growth_ideas[].difficulty | enum（low/mid/high）以外 | 不合格 | `[V-S3-16] growth_ideas の difficulty が不正です: {value}` |
 | V-S3-17 | growth_ideas[].title | 30字を超える、または title が重複 | 不合格 | `[V-S3-17] growth_ideas の title が30字超か重複です: {value}` |
 | V-S3-18 | growth_ideas[].title | stories[].headline と完全一致（同じ案を2箇所に出す） | 不合格 | `[V-S3-18] growth_ideas の title が stories の headline と重複です: {value}` |
+| V-S3-19 | talk_script.flow | 件数が3未満または5超（v2.6・裁定書25 S2） | 不合格 | `[V-S3-19] talk_script.flow が{n}件です(3～5件)` |
+| V-S3-20 | talk_script.opening | 空文字、または80字超（文字数はCP932ではなく文字単位で数える） | 不合格 | `[V-S3-20] talk_script.opening が{n}字です(1～80字)` |
+| V-S3-21 | talk_script.taboo | s1SummaryJson の field_insights に `tag="constraint"` が1件以上あるのに taboo が0件 | 警告 | `[V-S3-21] field_insights に constraint が{n}件ありますが talk_script.taboo が0件です` |
+
+**talk_script（経営層向けトークスクリプト。v2.6・裁定書25 S2）**: UC案 Output 7点の1つ。**S4（提案書骨子）を待たずに S3 が持つ**（18章§1.1「HTMLはS1+S2+S3から」を守るため。S4未実行でもレポートに出る）。雛形は合意済み出力見本の08節「統合ストーリー＋STEP1-4」であり、`flow` の4段はこの STEP1-4 に相当する。`taboo` の値源は `field_insights` の `constraint` タグであり、**根拠のない禁止事項を創作させない**（V-S3-21 は根拠があるのに空のときだけ警告する）。描画は18章 SEC-18。
 
 **growth_ideas（攻めの保険活用。v3.2で追加。11章§3.8.2b・§9-9）**: `stories[]` が「目の前のリスクへの打ち手」であるのに対し、`growth_ideas[]` は「保険を本業の拡大に使う事業機会」である。**同じ1回のS3呼出で生成**し（待ち時間を増やさない）、`menu_ids` / `line_ids` を持たせない（実在しないIDを引く経路を作らない）。V-S3-14～V-S3-18 はこの4本目のキーだけを見る検証であり、既存の V-S3-01～V-S3-13（`stories` / `unmatched_risks` / `do_not_propose`）の条件・エラー文は1字も変えていない。18章 SEC-17 がこの配列を描く。
 
@@ -1111,7 +1213,7 @@ deep時のフロー: S2生成 → **S2C批判（本節・別呼び出し）** �
 
 ```
 あなたは大手損害保険グループの提案書づくりが上手いコンサルタントです。
-分析結果を、商談用のPowerPoint骨子とヒアリング質問リストにまとめます。
+分析結果を、商談用の提案書骨子とヒアリング質問リストにまとめます。
 
 必ず守るルール:
 1. スライドは基本5枚(クイック案件は5枚固定/フルドシエ案件は5～{{pptMaxSlidesT2}}枚まで拡張可。
@@ -1413,11 +1515,11 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 | # | mock ID | step | バリアント | 内容の要点 |
 |---|---|---|---|---|
-| 1 | MK-S1-NEW | s1 | new | current_coverage=[] ／ input_quality.coverage 14件（overall=mid）／ research_requests 2件（各1,800字以内）／ field_insights 3件 |
-| 2 | MK-S1-RNW | s1 | renewal | current_coverage 3件 ／ overall=high ／ research_requests=[] |
-| 3 | MK-S2-NEW | s2 | new | risks 8件（10分類のうち6分類・status は全て proposed・transferability=hard を1件以上含む）／ gaps=[] ／ **emerging_risks 1件**（`category=facility_bcp` / `horizon=mid_long` / 気候変動による原料(果実・乳製品)調達難と浜松2工場の高温化。`proposal_hint` 非空） |
-| 4 | MK-S2-RNW | s2 | renewal | risks 8件 ／ gaps 3件（uninsured / underinsured / overlap 各1） ／ **emerging_risks=[]**（空配列が合格であること〈V-S2-16 が0件で発火しないこと〉を mock で兼ねて担保する） |
-| 5 | MK-S3 | s3 | 共通 | stories 3件（upsell / cross_sell / scheme 各1）／ unmatched_risks 1件 ／ do_not_propose 1件 |
+| 1 | MK-S1-NEW | s1 | new | current_coverage 1件（**`certainty=assumed`**。【付保の見立て】由来。V-S1-04 が発火しないこと〈全件 assumed〉を mock で担保する）／ **financials 全項目 "不明"・source="unknown"** ／ input_quality.coverage 14件（overall=mid）／ research_requests 2件（各1,800字以内）／ field_insights 3件（うち `tag=constraint` 1件） |
+| 2 | MK-S1-RNW | s1 | renewal | current_coverage 3件（全て `certainty=confirmed`）／ **financials（fiscal_year / net_assets / sales / operating_profit が具体値・source="kessan_kokoku"）** ／ overall=high ／ research_requests=[] |
+| 3 | MK-S2-NEW | s2 | new | risks 8件（10分類のうち6分類・status は全て proposed・transferability=hard を1件以上含む）／ **gaps 2件（`gap_type` は2件とも `uninsured`・`coverage_evidence` は「該当契約なし」と【付保の見立て】の引用。V-S2-12b が発火しないこと、および新規案件で未充足リスク一覧が出ることを mock で担保する）** ／ 全risksの `insurability` に `line_note` と `gap_note` を別々に持つ ／ `loss_scale_note` は全件空（MK-S1-NEW の net_assets が "不明" のため V-S2-18 は発火しない） ／ **emerging_risks 1件**（`category=facility_bcp` / `horizon=mid_long` / 気候変動による原料(果実・乳製品)調達難と浜松2工場の高温化。`proposal_hint` 非空） |
+| 4 | MK-S2-RNW | s2 | renewal | risks 8件（`loss_scale_note` は「純資産◯億円に対し…（概算）」の対比形を1件以上含む＝V-S2-18 が発火しない） ／ gaps 3件（uninsured / underinsured / overlap 各1） ／ **emerging_risks=[]**（空配列が合格であること〈V-S2-16 が0件で発火しないこと〉を mock で兼ねて担保する） |
+| 5 | MK-S3 | s3 | 共通 | stories 3件（upsell / cross_sell / scheme 各1）／ unmatched_risks 1件 ／ do_not_propose 1件 ／ growth_ideas 4件 ／ **talk_script 1本**（opening 80字以内・flow 4文〔STEP1-4 相当〕・closing 1文・taboo 1件〔MK-S1-NEW の `constraint` に対応〕） |
 | 6 | MK-S4 | s4 | 共通 | slides 5枚（slide_no=1..5）／ hearing_questions 8問。proposal / alliance のどちらでも同一応答 |
 | 7 | MK-PF | pf | 共通 | principle_checks 5件 ／ grammar_checks 4件 ／ duplicates 1件 ／ rework_suggestions 2件 ／ survival=mid |
 | 8 | MK-S2C-HIT | s2c | issues非空 | issues 3件（missing / generic / insurability_error 各1）／ additional_risks 1件 → 改訂パスへ進む |
@@ -1498,6 +1600,8 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 |---|---|---|
 | §1.1 案件コンテキストブロック | `BlockCtx()` | modPromptsBlocks |
 | §1.2 更新指示ブロック | `BlockRenewalS1()` / `BlockRenewalS2()` / `BlockRenewalS3()` | modPromptsBlocks |
+| §1.2b 新規案件の付保ギャップ指示ブロック | `BlockNewS2()` | modPromptsBlocks |
+| §1.2c 第2ラウンドの深掘りブロック | `BlockRound2Focus()` | modPromptsBlocks |
 | §1.3 データ境界規律 | `BlockGuard()` | modPromptsBlocks |
 | §2 system | `BuildS1System()` | modPromptsCore |
 | §2 user | `BuildS1User()` | modPromptsCore |
@@ -1520,9 +1624,9 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | §7 修復リトライ | `RepairSuffix()` | modPromptsOps |
 | §9 WT / FG（Phase 1.5） | `SchemaWT()` / `SchemaFG()` | modSchemas ※本節はまだコードフェンスを持たず要旨のみのため、**Phase 1.5の全文昇格（T-50）まで `prompt_diff.py` の突合対象外**とする |
 
-`Block*` の7関数（`BlockCtx` / `BlockRenewalS1` / `BlockRenewalS2` / `BlockRenewalS3` / `BlockGuard` / `BlockS4Proposal` / `BlockS4Alliance`）は14章§6に宣言のない modPromptsBlocks 内部の関数であり、いずれも**引数なしでテンプレート文字列（`{{...}}` を含んだまま）を返す**。
+`Block*` の9関数（`BlockCtx` / `BlockRenewalS1` / `BlockRenewalS2` / `BlockRenewalS3` / `BlockNewS2` / `BlockRound2Focus` / `BlockGuard` / `BlockS4Proposal` / `BlockS4Alliance`）は14章§6に宣言のない modPromptsBlocks 内部の関数であり、いずれも**引数なしでテンプレート文字列（`{{...}}` を含んだまま）を返す**。
 
-**本表の31関数はすべて無引数のテンプレート関数である**（14章§6の二層分離）。プレースホルダの埋め込みとブロックの差し込みは、テンプレート関数の中ではなく **`modPromptsOps` の組立層（`Fill` / `Asm*`）が行う**。理由: `prompt_diff.py` の評価器は「文字列リテラルと `vbLf` 等の組込定数の連結」だけを評価するため、テンプレート関数の中に置換・分岐を書くと本文を突き合わせられなくなり、逆に引数を宣言だけして使わないと「引数を受け取るのに1つも使わない関数」という欺瞞が残る（W2aで実際に発生した）。テンプレート関数は本文の**写し**に徹し、実値の埋め込みは組立層に一元化する。組立層は15章の本文を1文字も持たない（本文を2箇所に書かない）。
+**本表の33関数はすべて無引数のテンプレート関数である**（14章§6の二層分離）。プレースホルダの埋め込みとブロックの差し込みは、テンプレート関数の中ではなく **`modPromptsOps` の組立層（`Fill` / `Asm*`）が行う**。理由: `prompt_diff.py` の評価器は「文字列リテラルと `vbLf` 等の組込定数の連結」だけを評価するため、テンプレート関数の中に置換・分岐を書くと本文を突き合わせられなくなり、逆に引数を宣言だけして使わないと「引数を受け取るのに1つも使わない関数」という欺瞞が残る（W2aで実際に発生した）。テンプレート関数は本文の**写し**に徹し、実値の埋め込みは組立層に一元化する。組立層は15章の本文を1文字も持たない（本文を2箇所に書かない）。
 
 ## 11. 検証ルール ケースID一覧
 
@@ -1530,14 +1634,14 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 | Check関数 | ケースID | 不合格 | 警告 | 合格判定 |
 |---|---|---|---|---|
-| CheckS1 | V-S1-01 ～ V-S1-11（11件） | 01/02/03/06/07/09/10 | 04/05/08/11 | - |
-| CheckS2 | V-S2-01 ～ V-S2-17（17件） | 01/02/03/04/05/06/07/08/09/12/13/16/17（06は一覧未提供時も不合格） | 10/11/14/15 | - |
-| CheckS3 | V-S3-01 ～ V-S3-18（18件） | 01/02/03/04/05/06/07/08/09/10/11/12/14/15/16/17/18（03から06は一覧未提供時も不合格） | 13 | - |
+| CheckS1 | V-S1-01 ～ V-S1-13（13件） | 01/02/03/06/07/09/10/12/13 | 04/05/08/11 | - |
+| CheckS2 | V-S2-01 ～ V-S2-18（**18件**。V-S2-12 は廃止・欠番、V-S2-12b を新設） | 01/02/03/04/05/06/07/08/09/12b/13/16/17（06は一覧未提供時も不合格） | 10/11/14/15/18 | - |
+| CheckS3 | V-S3-01 ～ V-S3-21（21件） | 01/02/03/04/05/06/07/08/09/10/11/12/14/15/16/17/18/19/20（03から06は一覧未提供時も不合格） | 13/21 | - |
 | CheckS4 | V-S4-01 ～ V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
 | CheckPF | V-PF-01 ～ V-PF-07（7件） | 01/02/03/04/05/06/07（03は一覧未提供時も不合格） | - | - |
 | CheckS2C | V-S2C-01 ～ V-S2C-05（5件） | 01/02/03（03は審査対象S2の未提供時も不合格） | 04 | 05（issues 0件=改訂スキップ） |
 | CheckS3C | V-S3C-01 ～ V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
 
-**合計69件**（不合格57件 / 警告10件 / 合格判定2件）。ケースIDは欠番を作らず、削除する場合も番号を再利用しない（追番のみ）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
+**合計75件**（不合格61件 / 警告12件 / 合格判定2件）。ケースIDは削除する場合も番号を再利用しない（追番のみ）。**v2.6・裁定書25 S1 で V-S2-12 を廃止したため、CheckS2 には欠番が1つある**（`V-S2-12` は永久欠番。その位置には枝番の `V-S2-12b` を置いた。これは「番号を再利用しない」規約を守りつつ、旧番号が何であったかを表から消さないための書き方である）。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
 
 **「一覧未提供時も不合格」（ID実在検査の fail-closed。裁定書7 A-2）**: ID実在を見るケース（V-S2-06 / V-S3-03..06 / V-PF-03 と、審査対象S2の番号実在を見る V-S2C-03）は、**検査対象のキーが非空のIDを持つのに対応する一覧テキストが渡されていない**とき、当該ケースIDで不合格とし `[ケースID] ID実在検査が実行できません（ID一覧未提供）` を返す。一覧が空でも合格にしていた旧規約（fail-open）は、引数の渡し忘れ1つで幻覚IDの検問が無言で消えるため廃止した（16章E-07のKPI「S3実在チェックのすり抜け0件」）。値が `""` のID（`scheme_id` / `similar_case_id` の空許容など）は従来どおり検査対象外であり、15章§6.1 の `(登録なし)` は空文字ではないので通常の実在検査が走る。一覧テキストの供給元は14章§6（呼出側＝modPipeline / modPlayOps が modKnowledge から取得して渡す）。
