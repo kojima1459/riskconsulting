@@ -54,6 +54,16 @@ MAX_MODULE_CHARS = 30000
 # 残り2,000字を切ったら警告する(バグ修正1件ぶんの余裕がある状態を保つため)。
 MODULE_WARN_CHARS = 28000
 
+# 1物理行のCP932バイト長上限(W5.3 H7 / 裁定書19)。
+# VBE の1物理行の上限 1,023 は**文字数ではなくCP932エンコード後のバイト数**で
+# 数える。日本語1字=2バイトのため、733字でも1,047バイトになり上限を超える。
+# 超えるとVBEが行を勝手に分断し、実機では「SubまたはFunctionが定義されて
+# いません」という原因の分からないコンパイルエラーになる(W5.3実機事故:
+# modMockLlm.BuildS1NewJson の282行=1,047バイト。テストモジュールは実行時に
+# しかコンパイルされないため起動では出なかった)。
+# 余白を残して 1,000 バイトで止める(残り23バイトは _ 行継続の追記ぶん)。
+MAX_LINE_CP932_BYTES = 1000
+
 # 18章§4.4「テンプレモジュールの分割規約」: modHtmlTemplate* は**25,000字**を
 # 超えたら次番のモジュールへ関数単位で切り出す(30,000字の契約に対して余白を
 # 持たせる)。17章 T-35 のDoDがこの検査を本ツールへ委ねているため、共通の
@@ -852,6 +862,36 @@ def check_basics(info: ModuleInfo) -> None:
             "ERROR", 1,
             f"テンプレモジュールが{n}字で18章§4.4の上限{TEMPLATE_MAX_CHARS}字を超過"
             f"(次番の modHtmlTemplateN へ**関数単位で**切り出すこと。関数名は変えない)",
+        )
+
+
+# 行長バイト検査の実行痕跡(骨抜き防止)。check_line_cp932_bytes が実際に
+# 走ったモジュールを記録し、run_lint の最後で全モジュール分そろっているかを
+# 照合する。run_lint の呼び出し行を消すと「1件も走っていない」が検出され、
+# lint は緑にならずERRORで落ちる(検査を外して赤を消す抜け道を塞ぐ)。
+LINE_BYTES_SCANNED: set[str] = set()
+
+
+def check_line_cp932_bytes(info: ModuleInfo) -> None:
+    """1物理行のCP932バイト長 <= MAX_LINE_CP932_BYTES(ERROR)。
+
+    12章§2の30,000字契約が「文字数」なのに対し、こちらは**バイト**である点が
+    肝(裁定書19 H7)。CP932へ変換できない文字は check_cp932_safe が別途ERROR
+    で捕捉済みのため、ここでは errors="replace" で1バイトに丸めて数えるだけに
+    留める(同じ文字で2つのERRORを出して本命を埋もれさせない)。
+    コメント行も対象: VBEの行分断はコメントでも同じように起きる。
+    """
+    LINE_BYTES_SCANNED.add(info.relpath.as_posix())
+    for lineno, line in enumerate(info.raw_text.splitlines(), 1):
+        nbytes = len(line.encode("cp932", errors="replace"))
+        if nbytes <= MAX_LINE_CP932_BYTES:
+            continue
+        info.add(
+            "ERROR", lineno,
+            f"1物理行が{nbytes}バイト(CP932)で上限{MAX_LINE_CP932_BYTES}バイトを超過"
+            f"(文字数は{len(line)}字)。VBEの1行上限1,023は文字数ではなくバイト数です。"
+            f"VBEが行を分断し「SubまたはFunctionが定義されていません」になります。"
+            f"文字列リテラルの境界で s = s & \"...\" を複数行へ分けてください",
         )
 
 
@@ -2484,6 +2524,7 @@ def run_lint(src_root: Path) -> int:
         check_basics(info)
         check_module_registry(info)
         check_cp932_safe(info)
+        check_line_cp932_bytes(info)
         check_dim_type_drop_and_integer(info)
         check_name_shadowing(info)
         check_declaration_position(info)
@@ -2513,6 +2554,11 @@ def run_lint(src_root: Path) -> int:
     check_array_arg_variant_mismatch(modules)
     check_qualified_arg_count(modules)
 
+    # 骨抜き防止の自己検査(裁定書19 H7): 行長バイト検査が全モジュールを
+    # 実際に走ったか。呼び出しを消す/条件で握り潰すと、ここが赤で止まる。
+    _bytes_unscanned = [i.relpath.as_posix() for i in modules
+                        if i.relpath.as_posix() not in LINE_BYTES_SCANNED]
+
     implemented_names = set(known_modules.keys())
     not_yet = sorted(set(CONTRACT.keys()) - implemented_names)
 
@@ -2534,6 +2580,14 @@ def run_lint(src_root: Path) -> int:
         for f in sorted(info.findings,
                         key=lambda x: (x.level != "ERROR", x.level != "WARN", x.line)):
             print(f"  {f.level:<5} L{f.line}: {f.message}")
+
+    if _bytes_unscanned:
+        print("\n[行長バイト検査の自己検査 - 検査が走っていないモジュール]")
+        for rel in _bytes_unscanned:
+            print(f"  ERROR L1: [{rel}] 1物理行CP932バイト長検査"
+                  f"(<= {MAX_LINE_CP932_BYTES}バイト)が実行されていません"
+                  f"(run_lint の check_line_cp932_bytes 呼び出しを復活させてください)")
+        total_error += len(_bytes_unscanned)
 
     # 仕様側(15章・docs/08)のプロンプト本文の検問(裁定書6 A-2)。
     docs_bad = check_docs_prompt_cp932(REPO_ROOT)
