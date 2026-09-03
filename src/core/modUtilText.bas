@@ -31,6 +31,12 @@ Option Explicit
 ' 1セルへ書ける最大字数(16章 E-22。物理上限32,767字の手前で止める)。
 Private Const CELL_MAX_CHARS As Long = 32000
 
+' UTF-8 BOM(EF BB BF)。18章§5.3(3)がレポートに要求する。
+Private Const UTF8_BOM_B1 As Long = 239
+Private Const UTF8_BOM_B2 As Long = 187
+Private Const UTF8_BOM_B3 As Long = 191
+Private Const UTF8_REPLACEMENT As Long = 65533     ' U+FFFD
+
 ' 15章のデータ境界記号。貼付テキスト本文がこれを騙るのを防ぐ(16章 E-04)。
 Private Const BOUNDARY_MARK As String = "■■■"
 Private Const BOUNDARY_ALT As String = "[境界記号]"
@@ -552,4 +558,135 @@ End Sub
 
 Private Function U32ToHex8(ByVal bits As Long) As String
     U32ToHex8 = LCase$(Right$("00000000" & Hex$(bits), 8))
+End Function
+
+' ============================================================================
+' UTF-8 バイト列化(裁定書27 W9-B2)
+' ----------------------------------------------------------------------------
+' なぜ純VBAで書くのか:
+'   HTMLレポートと[中身を見る]の書き出しは ADODB.Stream(Charset="utf-8")で
+'   行っていたが、社内AVのAMSIが ADODB.Stream の生成をマクロ型マルウェアの
+'   「形」として重く見る(2026-09-02 の実測。裁定書27 事実)。機能は保ったまま
+'   その形を配布物から消すため、UTF-8 の符号化を自前の純関数で持ち、書き出し
+'   本体は modUtil の `Open For Binary` に閉じる。
+'
+' 符号化の規則(RFC 3629。VBAの String は UTF-16 なのでサロゲートを組み直す):
+'   U+0000-U+007F   -> 1バイト 0xxxxxxx
+'   U+0080-U+07FF   -> 2バイト 110xxxxx 10xxxxxx
+'   U+0800-U+FFFF   -> 3バイト 1110xxxx 10xxxxxx 10xxxxxx(CP932外の文字もここ)
+'   U+10000-U+10FFFF-> 4バイト 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+'                      (上位サロゲート D800-DBFF + 下位 DC00-DFFF の組)
+'   対にならない孤立サロゲートは U+FFFD(置換文字)の3バイトへ落とす
+'   (不正なバイト列を書き出さない=fail-closed)。
+'
+' AscW は 0x8000 以上を負のIntegerで返すため、必ず +65536 して符号なしへ戻す。
+' 整数除算演算子 `\` は使えない(裁定書23 C-3)ので Fix(a / b) で桁を落とす。
+' ============================================================================
+
+' 符号化本体。buf へ書き、有効バイト数を返す(0=1バイトも無い)。
+Private Function Utf8Encode(ByVal s As String, ByVal withBom As Boolean, _
+                            ByRef buf() As Byte) As Long
+    Dim cap As Long
+    cap = (Len(s) * 3) + 8                  ' 1文字あたり最大3バイト(4バイトは2文字ぶん)
+    ReDim buf(0 To cap)
+
+    Dim n As Long
+    n = 0
+    If withBom Then
+        buf(n) = CByte(UTF8_BOM_B1): n = n + 1
+        buf(n) = CByte(UTF8_BOM_B2): n = n + 1
+        buf(n) = CByte(UTF8_BOM_B3): n = n + 1
+    End If
+
+    Dim i As Long
+    Dim cp As Long
+    Dim lowUnit As Long
+    i = 1
+    Do While i <= Len(s)
+        cp = CodeUnitAt(s, i)
+        If cp >= 55296 And cp <= 56319 Then          ' D800-DBFF 上位サロゲート
+            lowUnit = -1
+            If i < Len(s) Then lowUnit = CodeUnitAt(s, i + 1)
+            If lowUnit >= 56320 And lowUnit <= 57343 Then   ' DC00-DFFF
+                cp = 65536 + ((cp - 55296) * 1024) + (lowUnit - 56320)
+                i = i + 1
+            Else
+                cp = UTF8_REPLACEMENT
+            End If
+        ElseIf cp >= 56320 And cp <= 57343 Then      ' 孤立した下位サロゲート
+            cp = UTF8_REPLACEMENT
+        End If
+        n = AppendUtf8Cp(buf, n, cp)
+        i = i + 1
+    Loop
+    Utf8Encode = n
+End Function
+
+' 1つの符号位置を UTF-8 として buf へ足し、次の書込位置を返す。
+Private Function AppendUtf8Cp(ByRef buf() As Byte, ByVal atPos As Long, _
+                              ByVal cp As Long) As Long
+    Dim n As Long
+    n = atPos
+    If cp < 128 Then
+        buf(n) = CByte(cp): n = n + 1
+    ElseIf cp < 2048 Then
+        buf(n) = CByte(192 + CLng(Fix(cp / 64))): n = n + 1
+        buf(n) = CByte(128 + (cp - (CLng(Fix(cp / 64)) * 64))): n = n + 1
+    ElseIf cp < 65536 Then
+        buf(n) = CByte(224 + CLng(Fix(cp / 4096))): n = n + 1
+        buf(n) = CByte(128 + (CLng(Fix(cp / 64)) - (CLng(Fix(cp / 4096)) * 64))): n = n + 1
+        buf(n) = CByte(128 + (cp - (CLng(Fix(cp / 64)) * 64))): n = n + 1
+    Else
+        buf(n) = CByte(240 + CLng(Fix(cp / 262144))): n = n + 1
+        buf(n) = CByte(128 + (CLng(Fix(cp / 4096)) - (CLng(Fix(cp / 262144)) * 64))): n = n + 1
+        buf(n) = CByte(128 + (CLng(Fix(cp / 64)) - (CLng(Fix(cp / 4096)) * 64))): n = n + 1
+        buf(n) = CByte(128 + (cp - (CLng(Fix(cp / 64)) * 64))): n = n + 1
+    End If
+    AppendUtf8Cp = n
+End Function
+
+' 位置 idx の UTF-16 コード単位を符号なし(0-65535)で返す。
+Private Function CodeUnitAt(ByVal s As String, ByVal idx As Long) As Long
+    Dim u As Long
+    u = AscW(Mid$(s, idx, 1))
+    If u < 0 Then u = u + 65536
+    CodeUnitAt = u
+End Function
+
+' 公開: UTF-8 のバイト列。書き出しは modUtil.WriteBytesFile が受ける。
+'   **戻り値が0バイトのときは未割当の配列を返す**(LBound を呼ばないこと。
+'   長さは Utf8Len で先に取る)。
+Public Function Utf8Bytes(ByVal s As String, ByVal withBom As Boolean) As Byte()
+    Dim buf() As Byte
+    Dim n As Long
+    n = Utf8Encode(s, withBom, buf)
+    If n <= 0 Then
+        Dim emptyBuf() As Byte
+        Utf8Bytes = emptyBuf
+        Exit Function
+    End If
+    ReDim Preserve buf(0 To n - 1)
+    Utf8Bytes = buf
+End Function
+
+' 公開: UTF-8 にしたときのバイト数(0なら書くものが無い)。
+Public Function Utf8Len(ByVal s As String, ByVal withBom As Boolean) As Long
+    Dim buf() As Byte
+    Utf8Len = Utf8Encode(s, withBom, buf)
+End Function
+
+' 公開: UTF-8 バイト列の16進表現(小文字・区切り無し)。**純層テストの期待値を
+'   手計算のバイト列で固定するための逐語表現**であり、製品動作には使わない。
+Public Function Utf8Hex(ByVal s As String, ByVal withBom As Boolean) As String
+    Dim buf() As Byte
+    Dim n As Long
+    n = Utf8Encode(s, withBom, buf)
+    If n <= 0 Then Exit Function
+
+    Dim sb As String
+    Dim i As Long
+    For i = 0 To n - 1
+        sb = sb & Right$("0" & LCase$(Hex$(buf(i))), 2)
+    Next i
+    Utf8Hex = sb
 End Function

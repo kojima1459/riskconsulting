@@ -49,7 +49,8 @@ Private Const U6_MSG_MISMATCH As String = _
 Private Const U6_MSG_PII As String = _
     "個人のお名前らしい記述が見つかったため保存しませんでした。" & _
     "該当の行を消してから、もう一度保存してください。"
-Private Const U6_MSG_NOTEPAD_NG As String = _
+' 11章§3.3.5: [中身を見る]が開けなかったときの2文(逐語は変えない)。
+Private Const U6_MSG_VIEW_NG As String = _
     "中身を開けませんでした。貼った文章はちゃんと保存されていますので、そのまま先へ進んでください。"
 Private Const U6_MSG_FOOTER As String = "（末尾のシステムの表示は取り除きました）"
 Private Const U6_MSG_NOT_YET As String = "まだ貼っていません"
@@ -63,10 +64,6 @@ Private Const U6_MSG_MEMO_ROWS As String = _
     "現場メモが枠に入りきりませんでした。いちばん下の余った行を切り取って、" & _
     "別の見出しの下へ貼ってください。"
 Private Const U6_MSG_SAVE_NG As String = "保存できませんでした"
-
-' 一時ファイル(11章§3.3.4(2))。7日より古いものは起動時に消す。
-Private Const U6_TMP_PREFIX As String = "rpn_view_"
-Private Const U6_TMP_KEEP_DAYS As Long = 7
 
 ' 7欄の定義(13章§2.11(a)。v2.6・裁定書25 S3 で6→7欄・data_key は10本)。
 ' 現場メモだけはプレビューを持たない(実体の入力枠そのものが画面)。
@@ -361,7 +358,10 @@ Private Function AppendToFieldNotes(ByVal body As String) As Boolean
     AppendToFieldNotes = WriteFieldNotesArea(modNavText.JoinFieldNotes(memoText, othersText))
 End Function
 
-' ShowArea - [中身を見る](11章§3.3.4(2))。読むだけ。メモ帳で開く。
+' ShowArea - [中身を見る](11章§3.3.4(2))。読むだけ。ブック内の「中身」シートで開く。
+'   裁定書27 W9-B3: `Shell "notepad.exe"` と %TEMP% への一時ファイル書き出しを
+'   撤去した(外部プロセスの起動と ADODB.Stream は社内AVが重く見る形であり、
+'   一時ファイルは本文を端末に残す)。表示の実体は modUICase7.ShowBodySheet。
 Public Sub ShowArea(ByVal areaKey As String)
     On Error GoTo Failed
 
@@ -386,57 +386,19 @@ Public Sub ShowArea(ByVal areaKey As String)
         Exit Sub
     End If
 
-    Dim pathText As String
-    pathText = WriteTempUtf8(dataKey, body)
-    If LenB(pathText) = 0 Then
-        modUIToast.ShowToast U6_MSG_NOTEPAD_NG, "warn"
+    If Not modUICase7.ShowBodySheet(labelText, body) Then
+        modUIToast.ShowToast U6_MSG_VIEW_NG, "warn"
         Exit Sub
     End If
 
-    Shell "notepad.exe """ & pathText & """", 1      ' 1 = vbNormalFocus
-    modUIToast.ShowToast "中身をメモ帳で開きました。読むだけの画面です。" & _
-                         "直したいときは、直した文章を[ここに貼る]で貼り直してください。", "info"
+    modUIToast.ShowToast "中身を「中身」タブに出しました。読むだけの画面です。" & _
+                         "直したいときは、直した文章を[ここに貼る]で貼り直してください。" & _
+                         "見終わったら[閉じる]を押してください。", "info"
     Exit Sub
 
 Failed:
     modLog.LogError "E0603", U6_SRC & ".ShowArea", "show_failed:" & areaKey, Err.Number
-    modUIToast.ShowToast U6_MSG_NOTEPAD_NG, "warn"
-End Sub
-
-' 一時ファイルへ UTF-8 BOM 付きで書き、そのパスを返す(失敗は "")。
-Private Function WriteTempUtf8(ByVal dataKey As String, ByVal body As String) As String
-    On Error GoTo Failed
-    Dim pathText As String
-    pathText = Environ$("TEMP") & "\" & U6_TMP_PREFIX & dataKey & "_" & _
-               Format$(Now, "yyyymmddhhnnss") & ".txt"
-
-    Dim st As Object
-    Set st = CreateObject("ADODB.Stream")
-    st.Type = 2                                       ' 2 = adTypeText
-    st.Charset = "UTF-8"
-    st.Open
-    st.WriteText body
-    st.SaveToFile pathText, 2                         ' 2 = adSaveCreateOverWrite
-    st.Close
-    WriteTempUtf8 = pathText
-    Exit Function
-Failed:
-    WriteTempUtf8 = vbNullString
-End Function
-
-' 7日より古い一時ファイルを消す(11章§3.3.4(2))。起動時に modBoot から呼ぶ。
-Public Sub SweepTempViews()
-    On Error Resume Next
-    Dim dirText As String
-    dirText = Environ$("TEMP") & "\"
-    Dim nameText As String
-    nameText = Dir$(dirText & U6_TMP_PREFIX & "*.txt")
-    Do While LenB(nameText) > 0
-        If DateDiff("d", FileDateTime(dirText & nameText), Now) > U6_TMP_KEEP_DAYS Then
-            Kill dirText & nameText
-        End If
-        nameText = Dir$
-    Loop
+    modUIToast.ShowToast U6_MSG_VIEW_NG, "warn"
 End Sub
 
 ' ClearArea - [消す](11章§3.3.4(3))。押す前に必ず止める。

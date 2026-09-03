@@ -35,6 +35,16 @@ Private Const MS_PER_DAY_UTIL As Double = 86400000#
 ' 注入ナレッジID等を1セルに連結するときの区切り(13章§2.4 injected_kb_ids)。
 Private Const ID_LIST_SEP As String = ";"
 
+' ファイル属性のディレクトリビット(vbDirectory)。定数名を書かず数値で持つ
+' (LibreOffice側の構文チェックで未定義名にしないための既存の流儀と同じ)。
+Private Const ATTR_DIRECTORY As Long = 16
+
+' 保存先(data_dir)の解決で使う環境変数名と最後の逃げ場(裁定書27 W9-C2)。
+Private Const DD_VAR_COMMERCIAL As String = "%OneDriveCommercial%"
+Private Const DD_VAR_ONEDRIVE As String = "%OneDrive%"
+Private Const DD_VAR_PROFILE As String = "%USERPROFILE%"
+Private Const DD_LAST_RESORT_TAIL As String = "\Documents\RPN出力"
+
 ' ============================================================================
 ' SafeLeft - 先頭n字で切り詰める。ただし末尾に単独の高位サロゲートを残さない。
 ' ----------------------------------------------------------------------------
@@ -365,4 +375,250 @@ NotReady:
     lo = 0
     hi = -1
     ArrayBounds = False
+End Function
+
+' ============================================================================
+' ファイルとフォルダ(裁定書27 W9-B2)
+' ----------------------------------------------------------------------------
+' なぜ core の汎用道具に置くのか:
+'   HTMLレポート(app層 modExportHtml)と[中身を見る]・企業ファイル(ui/app層)が
+'   同じ「UTF-8で書く」「無ければフォルダを作る」を必要とする。従来は
+'   ADODB.Stream と Scripting.FileSystemObject を各所で生成していたが、この
+'   2つのCOM生成は社内AVのAMSIがマクロ型マルウェアの特徴として重く見るため
+'   配布物から消す(裁定書27 W9-B2)。代替は **純VBA**(`Open For Binary` と
+'   `MkDir`)で、符号化は modUtilText.Utf8Bytes が唯一持つ。
+'
+' R4(12章§4): Excelトークンは1つも使わない。ファイル操作はVBAの組み込み文で
+'   あってExcelのオブジェクトモデルではないため、core層に置いてよい。
+' ============================================================================
+
+' フォルダが在るか(ファイルは False)。
+Public Function FolderExists(ByVal dirText As String) As Boolean
+    On Error GoTo Failed
+    If LenB(dirText) = 0 Then Exit Function
+    Dim attrVal As Long
+    attrVal = GetAttr(dirText)
+    FolderExists = ((attrVal And ATTR_DIRECTORY) = ATTR_DIRECTORY)
+    Exit Function
+Failed:
+    FolderExists = False
+End Function
+
+' ファイルが在るか(フォルダは False)。
+Public Function FileExistsAt(ByVal pathText As String) As Boolean
+    On Error GoTo Failed
+    If LenB(pathText) = 0 Then Exit Function
+    Dim attrVal As Long
+    attrVal = GetAttr(pathText)
+    FileExistsAt = ((attrVal And ATTR_DIRECTORY) <> ATTR_DIRECTORY)
+    Exit Function
+Failed:
+    FileExistsAt = False
+End Function
+
+' 無ければ作る(途中の階層もまとめて作る)。作れたら True。
+'   UNC(\\server\share)とURL(OneDriveの "https://...")は階層を作りに行かず、
+'   在るかどうかだけを見る(作成の権限が無い場所で例外を積まないため)。
+Public Function EnsureFolder(ByVal dirText As String) As Boolean
+    On Error GoTo Failed
+    Dim t As String
+    t = TrimTrailingSep(dirText)
+    If LenB(t) = 0 Then Exit Function
+    If FolderExists(t) Then
+        EnsureFolder = True
+        Exit Function
+    End If
+    If InStr(1, t, "://", vbBinaryCompare) > 0 Then Exit Function
+    If Left$(t, 2) = "\\" Then Exit Function
+
+    Dim parts() As String
+    parts = Split(t, "\")
+    If UBound(parts) < LBound(parts) Then Exit Function
+
+    Dim built As String
+    Dim i As Long
+    built = parts(LBound(parts))
+    For i = LBound(parts) + 1 To UBound(parts)
+        If LenB(parts(i)) > 0 Then
+            built = built & "\" & parts(i)
+            If Not FolderExists(built) Then MkDir built
+        End If
+    Next i
+    EnsureFolder = FolderExists(t)
+    Exit Function
+Failed:
+    EnsureFolder = False
+End Function
+
+' 末尾の "\" と "/" を落とす(パスの連結を1箇所に保つための小道具)。
+Public Function TrimTrailingSep(ByVal pathText As String) As String
+    Dim t As String
+    t = Trim$(pathText)
+    Do While Len(t) > 0
+        If Right$(t, 1) = "\" Or Right$(t, 1) = "/" Then
+            t = Left$(t, Len(t) - 1)
+        Else
+            Exit Do
+        End If
+    Loop
+    TrimTrailingSep = t
+End Function
+
+' UTF-8 でファイルへ書く(withBom=True で EF BB BF を先頭に置く)。
+'   既存ファイルは消してから作り直す(Binary は上書きで前の残骸が残るため)。
+Public Function WriteUtf8File(ByVal pathText As String, ByVal bodyText As String, _
+                              ByVal withBom As Boolean) As Boolean
+    Dim fileNo As Long
+    On Error GoTo Failed
+    If LenB(pathText) = 0 Then Exit Function
+
+    Dim n As Long
+    n = modUtilText.Utf8Len(bodyText, withBom)
+
+    If FileExistsAt(pathText) Then Kill pathText
+
+    Dim buf() As Byte
+    fileNo = FreeFile
+    Open pathText For Binary Access Write As #fileNo
+    If n > 0 Then
+        buf = modUtilText.Utf8Bytes(bodyText, withBom)
+        Put #fileNo, 1, buf
+    End If
+    Close #fileNo
+    WriteUtf8File = True
+    Exit Function
+Failed:
+    CloseQuiet fileNo
+    WriteUtf8File = False
+End Function
+
+' 開いたままのファイル番号を黙って閉じる(ハンドラ稼働中に On Error Resume Next
+'   を書けないため、後始末は別Subへ切り出す)。
+Private Sub CloseQuiet(ByVal fileNo As Long)
+    On Error Resume Next
+    If fileNo > 0 Then Close #fileNo
+End Sub
+
+' ============================================================================
+' 保存先(data_dir)の解決(裁定書27 W9-C2)
+' ----------------------------------------------------------------------------
+' なぜ要るのか:
+'   会社PCの `D:` はシャットダウンで消える。`%USERPROFILE%\Documents` が残るか
+'   はOneDriveのリダイレクト設定次第で、未測定である(裁定書27 事実)。企業
+'   ファイル・HTMLレポート・ヒアリングシートを既定で **OneDrive(会社)** の下
+'   へ置き、そこが無いときだけ Documents へ落とす。落ちたことは黙らせず、
+'   ナビのお知らせで警告する(11章§8.6 禁忌: 黙って別の場所へ書かない)。
+'
+' 解決の順(裁定書27 W9-C2):
+'   (1) config `data_dir` を展開したもの(既定 %OneDriveCommercial%\...)
+'   (2) (1)が %OneDriveCommercial% を含むときだけ、それを %OneDrive% に
+'       読み替えたもの(個人用OneDriveしか無い端末の救済)
+'   (3) %USERPROFILE%\Documents\RPN出力
+'   環境変数が空の候補は最初から並べない(展開できない "%" を残さない)。
+'
+' 候補の並べ方は純関数 DataDirCandidates が唯一持ち(層(a)でテストする)、
+' 実在確認とフォルダ作成だけを ResolveDataDir が行う(modBoot.ResolveKbPath と
+' 同じ「純部+実在確認」の切り分け)。
+' ============================================================================
+
+' 候補の並び(vbLf 区切り。純関数)。env は Environ$ の値をそのまま渡す。
+Public Function DataDirCandidates(ByVal configRaw As String, _
+                                  ByVal envCommercial As String, _
+                                  ByVal envOneDrive As String, _
+                                  ByVal envUserProfile As String) As String
+    Dim outText As String
+    Dim raw As String
+    raw = TrimTrailingSep(configRaw)
+
+    If LenB(raw) > 0 Then
+        outText = AppendCandidate(outText, _
+            ExpandDirVars(raw, envCommercial, envOneDrive, envUserProfile))
+        If InStr(1, raw, DD_VAR_COMMERCIAL, vbTextCompare) > 0 Then
+            outText = AppendCandidate(outText, ExpandDirVars( _
+                Replace(raw, DD_VAR_COMMERCIAL, DD_VAR_ONEDRIVE, 1, -1, vbTextCompare), _
+                envCommercial, envOneDrive, envUserProfile))
+        End If
+    End If
+
+    If LenB(envUserProfile) > 0 Then
+        outText = AppendCandidate(outText, _
+            TrimTrailingSep(envUserProfile) & DD_LAST_RESORT_TAIL)
+    End If
+    DataDirCandidates = outText
+End Function
+
+' 候補を1つ足す(空・"%"が残っているもの・既出は足さない)。
+Private Function AppendCandidate(ByVal listText As String, ByVal candidate As String) As String
+    AppendCandidate = listText
+    If LenB(candidate) = 0 Then Exit Function
+    If InStr(1, candidate, "%", vbBinaryCompare) > 0 Then Exit Function
+    Dim probe As String
+    probe = vbLf & listText & vbLf
+    If InStr(1, probe, vbLf & candidate & vbLf, vbTextCompare) > 0 Then Exit Function
+    If LenB(listText) = 0 Then
+        AppendCandidate = candidate
+    Else
+        AppendCandidate = listText & vbLf & candidate
+    End If
+End Function
+
+' 3つの環境変数だけを展開する(未知の "%..%" は残し、候補から外す材料にする)。
+Private Function ExpandDirVars(ByVal pathText As String, ByVal envCommercial As String, _
+                               ByVal envOneDrive As String, _
+                               ByVal envUserProfile As String) As String
+    Dim t As String
+    t = pathText
+    If LenB(envCommercial) > 0 Then
+        t = Replace(t, DD_VAR_COMMERCIAL, TrimTrailingSep(envCommercial), 1, -1, vbTextCompare)
+    End If
+    If LenB(envOneDrive) > 0 Then
+        t = Replace(t, DD_VAR_ONEDRIVE, TrimTrailingSep(envOneDrive), 1, -1, vbTextCompare)
+    End If
+    If LenB(envUserProfile) > 0 Then
+        t = Replace(t, DD_VAR_PROFILE, TrimTrailingSep(envUserProfile), 1, -1, vbTextCompare)
+    End If
+    ExpandDirVars = TrimTrailingSep(t)
+End Function
+
+' 解決した保存先がOneDriveの下かどうか(純関数)。ナビの警告の要否はこれで決める。
+Public Function IsUnderOneDrive(ByVal dirText As String, ByVal envCommercial As String, _
+                                ByVal envOneDrive As String) As Boolean
+    If LenB(dirText) = 0 Then Exit Function
+    If LenB(envCommercial) > 0 Then
+        If InStr(1, dirText, TrimTrailingSep(envCommercial), vbTextCompare) = 1 Then
+            IsUnderOneDrive = True
+            Exit Function
+        End If
+    End If
+    If LenB(envOneDrive) > 0 Then
+        If InStr(1, dirText, TrimTrailingSep(envOneDrive), vbTextCompare) = 1 Then
+            IsUnderOneDrive = True
+        End If
+    End If
+End Function
+
+' 実在確認つきの解決。使える(作れた)最初の候補を返す。どれも駄目なら ""。
+Public Function ResolveDataDir(ByVal configRaw As String) As String
+    Dim listText As String
+    listText = DataDirCandidates(configRaw, Environ$("OneDriveCommercial"), _
+                                 Environ$("OneDrive"), Environ$("USERPROFILE"))
+    If LenB(listText) = 0 Then Exit Function
+
+    Dim cands() As String
+    cands = Split(listText, vbLf)
+
+    Dim i As Long
+    For i = LBound(cands) To UBound(cands)
+        If EnsureFolder(cands(i)) Then
+            ResolveDataDir = cands(i)
+            Exit Function
+        End If
+    Next i
+End Function
+
+' 解決した保存先がOneDriveの下でないとき True(ナビのお知らせに warn を出す)。
+Public Function DataDirNotOneDrive(ByVal resolvedDir As String) As Boolean
+    If LenB(resolvedDir) = 0 Then Exit Function
+    DataDirNotOneDrive = Not IsUnderOneDrive(resolvedDir, Environ$("OneDriveCommercial"), _
+                                             Environ$("OneDrive"))
 End Function

@@ -634,6 +634,11 @@ R4_EXCEL_ALLOWED_MODULES = {
     # modGatewayRPN: R3 の Application.Run("ChatGPT", ...) の唯一の置き場
     #   (14章§2。core層だがリボン呼び出しの責務上ここだけは Application. が要る)。
     "modGatewayRPN",
+    # modGatewayDirect: 裁定書27 W9-B4 が kernel32 `Sleep`(`Declare PtrSafe`)の
+    #   撤去と `Application.Wait` への置換を命じたため、バックオフ待ちの1行だけ
+    #   Excelトークンが要る。**許可の幅はその1行**であり、シート・ブックには
+    #   触れない(direct経路は 裁定書27 W9-B5 で配布ビルドからも外れ dev専用)。
+    "modGatewayDirect",
     # modConfig: config シートの読み書きが責務そのもの(13章§2.3)。
     "modConfig",
     # modLog: err_log / usage_log / run_log シートへの記録が責務(13章§2.4)。
@@ -2299,7 +2304,14 @@ MSVBAL_RESERVED_NAMES = {
         "CStr CVar CVErr Date Debug DoEvents Fix Int Len LenB Me PSet Scale "
         "Sgn String "
         "Array Circle Input InputB LBound Scale UBound "
-        "Point"
+        "Point "
+        # 裁定書27 W9-B7(b) で追加した主要語。MS-VBAL 3.3.5.x の
+        # <reserved-name> / <statement-keyword> / <rem-keyword> に現れ、
+        # 実機Excel VBA が識別子として拒否する(LibreOffice Basic は通すため
+        # LOゲートでは検出できない=同じ死角)。既存コードに該当は無かった。
+        "Name Type Select Time Left Right Mid Format Error Object Property "
+        "Step Text Value Width Height Circle Line Print Put Get Write Close "
+        "Open Seek Lock Unlock Reset"
     ).split()
 }
 
@@ -2307,7 +2319,11 @@ MSVBAL_DECL_PATTERNS = (
     re.compile(r"\b(?:Dim|Static|ReDim(?:\s+Preserve)?|Private|Public|Global)\s+"
                r"([A-Za-z_]\w*)\s*(?:\(|\bAs\b|$|,)", re.IGNORECASE),
     re.compile(r"\bConst\s+([A-Za-z_]\w*)\b", re.IGNORECASE),
-    re.compile(r"\b(?:ByVal|ByRef|Optional|ParamArray)\s+([A-Za-z_]\w*)\b",
+    # `Optional ByVal name As String` のように修飾子が続く形は、finditer が
+    # 「Optional ByVal」を1回で食べて name を見落とす。修飾子の並びをまとめて
+    # 読み飛ばしてから識別子を捕まえる(裁定書27 W9-B7(b))。
+    re.compile(r"\b(?:ByVal|ByRef|Optional|ParamArray)"
+               r"(?:\s+(?:ByVal|ByRef|ParamArray))*\s+([A-Za-z_]\w*)\b",
                re.IGNORECASE),
     re.compile(r"\b(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+([A-Za-z_]\w*)\b",
                re.IGNORECASE),
@@ -2451,6 +2467,233 @@ def _selftest_integer_division_operator() -> list[str]:
         check_integer_division_operator(probe)
         if not probe.findings:
             problems.append(f"負例が検知されませんでした: {src!r}")
+    return problems
+
+
+# ==============================================================================
+# (a) AV表面積: 配布物から消すAPIの「形」(裁定書27 W9-B7(a))
+# ------------------------------------------------------------------------------
+# 2026-09-02、同じ社内環境でマクロ型マルウェアの「形」が社内AVのAMSIに検知され、
+# VDIが強制停止して情シスチケットになった(裁定書27 事実)。AVが重く見るのは
+# **何をしたか**ではなく**どう書いてあるか**なので、機能を保ったまま形だけを
+# 配布物から消す。消したものが戻ってこないよう、ここで機械的に止める。
+#
+# 検査対象は「コメントを除いたコード」であり、**文字列リテラルの中も見る**。
+# `CreateObject("ADODB.Stream")` や `GetObject("New:{CLSID}")` のように、
+# 危険な形はまさに文字列の中に書かれるためである(文字列を伏せたら空振りする)。
+# 説明のためのコメントは対象外(コメントは配布binのソースにも残るが、AMSIが
+# 見るのは実行される形であり、記録として残す価値のほうが大きい)。
+#
+# 許可リスト:
+#   ・src/test/ 配下 … 実機層(b)のテストは「危険な形が消えていること」を
+#     確かめるために語そのものを持つことがある。配布ビルドの ship 判定は
+#     tools/ship_check.py が vbaProject.bin を直接見るので、ここを緩めても
+#     配布物の検査は緩まない。
+#   ・modGatewayDirect … direct経路は 裁定書27 W9-B5 で**配布ビルドから外れ
+#     dev専用**になった(build/modules.json の ship:false)。dev専用モジュール
+#     に配布物の基準を課すと、開発用の経路を維持できなくなる。
+FORBIDDEN_API_ALLOW_MODULES = {"modGatewayDirect"}
+FORBIDDEN_API_ALLOW_LAYER_DIRS = ("test",)
+FORBIDDEN_API_PATTERNS = (
+    (re.compile(r"\bVBComponents\b", re.IGNORECASE),
+     "VBComponents(VBAプロジェクトへの書込。自己インストーラの形)"),
+    (re.compile(r"\bVBProject\b", re.IGNORECASE),
+     "VBProject(VBAプロジェクトへの参照。自己インストーラの形)"),
+    (re.compile(r"\bAddFromString\b", re.IGNORECASE),
+     "AddFromString(ソースの実行時注入)"),
+    (re.compile(r"\bExecuteExcel4Macro\b", re.IGNORECASE),
+     "ExecuteExcel4Macro(XLM経由の実行)"),
+    (re.compile(r"WScript\s*\.\s*Shell", re.IGNORECASE),
+     "WScript.Shell(外部コマンドの実行)"),
+    (re.compile(r"\bADSystemInfo\b", re.IGNORECASE),
+     "ADSystemInfo(ドメイン情報の収集)"),
+    (re.compile(r"\bADODB\s*\.\s*Stream\b", re.IGNORECASE),
+     "ADODB.Stream(ファイル書出。modUtil.WriteUtf8File へ寄せること)"),
+    (re.compile(r"Scripting\s*\.\s*FileSystemObject", re.IGNORECASE),
+     "Scripting.FileSystemObject(ファイル操作。modUtil.EnsureFolder 等へ寄せること)"),
+    (re.compile(r"\bGetObject\s*\(\s*\"[Nn][Ee][Ww]\s*:"),
+     'GetObject("New:{CLSID}")(参照設定なしのCOM生成)'),
+    (re.compile(r"[Nn][Ee][Ww]\s*:\s*\{"),
+     "new:{CLSID}(参照設定なしのCOM生成)"),
+    (re.compile(r"\bDeclare\s+PtrSafe\b", re.IGNORECASE),
+     "Declare PtrSafe(Win32 APIの宣言)"),
+    (re.compile(r"\bDeclare\s+(?:Sub|Function)\b", re.IGNORECASE),
+     "Declare Sub/Function(Win32 APIの宣言)"),
+    (re.compile(r"\bHyperlinks\s*\.\s*Add\b", re.IGNORECASE),
+     "Hyperlinks.Add(11章§8.6 禁忌1: 図形のOnActionを殺す)"),
+)
+
+
+def _forbidden_api_exempt(info: ModuleInfo) -> bool:
+    if module_name_for_display(info) in FORBIDDEN_API_ALLOW_MODULES:
+        return True
+    parts = info.relpath.as_posix().split("/")
+    return len(parts) > 1 and parts[0] in FORBIDDEN_API_ALLOW_LAYER_DIRS
+
+
+def check_forbidden_api_tokens(info: ModuleInfo) -> None:
+    """裁定書27 W9-B7(a): 社内AVが重く見るAPIの形を配布ソースから禁止する。"""
+    if _forbidden_api_exempt(info):
+        return
+    for lineno, raw in merge_continuations(info.raw_text.split("\n")):
+        code = strip_comment(raw)
+        if not code.strip():
+            continue
+        for pat, why in FORBIDDEN_API_PATTERNS:
+            if pat.search(code):
+                info.add(
+                    "ERROR", lineno,
+                    f"裁定書27 W9-B7(a) 禁止API: {why}。"
+                    f"社内AVのAMSIがマクロ型マルウェアの特徴として検知するため、"
+                    f"配布ソースには書けません: 「{code.strip()[:80]}」",
+                )
+
+
+# ==============================================================================
+# (d) Workbooks.Open の前に DisplayAlerts を退避しているか(裁定書27 W9-B7(d))
+# ------------------------------------------------------------------------------
+# `Workbooks.Open` は、ファイルが他者にロックされている・読取専用推奨・リンクの
+# 更新確認・修復の確認といった**モーダルダイアログ**を出す。無人の起動シーケンス
+# や一括実行の途中でこれが出ると、画面は固まったように見えて誰も操作できない
+# (16章 E-51 の「モーダルを出さない」に反する)。開く前に `DisplayAlerts` を
+# 退避して False にし、開いた後で必ず戻すこと。
+# 「直前5行」に退避があるかだけを見る(構文解析はしない。5行は Dim と存在確認を
+#  挟む現実の書き方に足りる幅)。
+WORKBOOKS_OPEN_PATTERN = re.compile(r"\bWorkbooks\s*\.\s*Open\b", re.IGNORECASE)
+DISPLAY_ALERTS_PATTERN = re.compile(r"\bDisplayAlerts\b", re.IGNORECASE)
+WORKBOOKS_OPEN_LOOKBACK = 5
+
+
+def check_workbooks_open_alerts(info: ModuleInfo) -> None:
+    """裁定書27 W9-B7(d): Workbooks.Open の直前5行に DisplayAlerts 退避が要る。"""
+    lines = [(n, strip_comment(s)) for n, s in merge_continuations(info.raw_text.split("\n"))]
+    for idx, (lineno, code) in enumerate(lines):
+        if not WORKBOOKS_OPEN_PATTERN.search(code):
+            continue
+        window = [c for _, c in lines[max(0, idx - WORKBOOKS_OPEN_LOOKBACK):idx]]
+        if any(DISPLAY_ALERTS_PATTERN.search(c) for c in window):
+            continue
+        info.add(
+            "ERROR", lineno,
+            f"裁定書27 W9-B7(d): Workbooks.Open の直前{WORKBOOKS_OPEN_LOOKBACK}行に "
+            f"DisplayAlerts の退避がありません。ロック・読取専用推奨・リンク更新の"
+            f"モーダルが無人実行を固めます(開く前に退避して False にし、"
+            f"開いた後で必ず戻すこと): 「{code.strip()[:80]}」",
+        )
+
+
+# ------------------------------------------------------------------------------
+# 上の2ルールの自己テスト(骨抜き防止)。正例=findingが出てはいけない書き方、
+# 負例=必ずERRORが出なければならない書き方。run_lint の末尾で毎回走らせる。
+# ------------------------------------------------------------------------------
+_FORBIDDEN_API_SELFTEST_OK = [
+    '    Set st = CreateObject("MSXML2.ServerXMLHTTP.6.0")',
+    "    ' ADODB.Stream は 裁定書27 W9-B2 で撤去した(この行はコメント)",
+    '    ok = modUtil.WriteUtf8File(pathText, bodyText, True)',
+    '    ws.Shapes(shapeKey).OnAction = "modUINav.BackToNav"',
+]
+_FORBIDDEN_API_SELFTEST_NG = [
+    '    Set st = CreateObject("ADODB.Stream")',
+    '    Set fso = CreateObject("Scripting.FileSystemObject")',
+    '    Set dobj = GetObject("New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")',
+    "    ThisWorkbook.VBProject.VBComponents.Add(1)",
+    '    md.CodeModule.AddFromString srcText',
+    '    ExecuteExcel4Macro "CALL(...)"',
+    '    Set sh = CreateObject("WScript.Shell")',
+    '    Set inf = CreateObject("ADSystemInfo")',
+    '    Private Declare PtrSafe Function Foo Lib "user32" () As Long',
+    '    ws.Hyperlinks.Add anchor, "https://example.invalid"',
+]
+_WBOPEN_SELFTEST_OK = [
+    ["    prevAlerts = Application.DisplayAlerts",
+     "    Application.DisplayAlerts = False",
+     "    Set wb = Application.Workbooks.Open(pathText, 0, readOnlyMode)"],
+]
+_WBOPEN_SELFTEST_NG = [
+    ["    If Not FileExists(pathText) Then Exit Function",
+     "    Set wb = Application.Workbooks.Open(pathText, 0, readOnlyMode)"],
+]
+
+
+def _probe_module(lines: list[str]) -> ModuleInfo:
+    src = "\n".join(lines)
+    return ModuleInfo(path=Path("selftest.bas"), relpath=Path("selftest.bas"),
+                      raw_text=src, vb_name="selftest", filename_stem="selftest",
+                      statements=list(iter_statements(src.split("\n"))))
+
+
+def _selftest_forbidden_api_tokens() -> list[str]:
+    problems: list[str] = []
+    for src in _FORBIDDEN_API_SELFTEST_OK:
+        probe = _probe_module([src])
+        check_forbidden_api_tokens(probe)
+        if probe.findings:
+            problems.append(f"禁止API検査: 正例が誤検知されました: {src!r}")
+    for src in _FORBIDDEN_API_SELFTEST_NG:
+        probe = _probe_module([src])
+        check_forbidden_api_tokens(probe)
+        if not probe.findings:
+            problems.append(f"禁止API検査: 負例が検知されませんでした: {src!r}")
+    # 許可リストが効くこと(効かないと dev専用モジュールが直せなくなる)。
+    exempt = _probe_module([_FORBIDDEN_API_SELFTEST_NG[0]])
+    exempt.vb_name = "modGatewayDirect"
+    check_forbidden_api_tokens(exempt)
+    if exempt.findings:
+        problems.append("禁止API検査: modGatewayDirect の許可リストが効いていません")
+    return problems
+
+
+def _selftest_workbooks_open_alerts() -> list[str]:
+    problems: list[str] = []
+    for lines in _WBOPEN_SELFTEST_OK:
+        probe = _probe_module(lines)
+        check_workbooks_open_alerts(probe)
+        if probe.findings:
+            problems.append(f"Workbooks.Open検査: 正例が誤検知されました: {lines!r}")
+    for lines in _WBOPEN_SELFTEST_NG:
+        probe = _probe_module(lines)
+        check_workbooks_open_alerts(probe)
+        if not probe.findings:
+            problems.append(f"Workbooks.Open検査: 負例が検知されませんでした: {lines!r}")
+    return problems
+
+
+def _selftest_msvbal_reserved_names() -> list[str]:
+    """(b) MS-VBAL 予約名の識別子使用(裁定書27 W9-B7(b))の正負例。"""
+    problems: list[str] = []
+    ok_cases = ["Dim widthPt As Double", "ByVal formatName As String",
+                "Public Function TextOf(ByVal s As String) As String"]
+    ng_cases = ["Dim name As String", "Optional ByVal format As String",
+                "Public Function Value(ByVal s As String) As String",
+                "Private Const Step As Long = 1", "Dim height As Double"]
+    for src in ok_cases:
+        probe = _probe_module([src])
+        check_msvbal_reserved_names(probe)
+        if probe.findings:
+            problems.append(f"MS-VBAL予約名検査: 正例が誤検知されました: {src!r}")
+    for src in ng_cases:
+        probe = _probe_module([src])
+        check_msvbal_reserved_names(probe)
+        if not probe.findings:
+            problems.append(f"MS-VBAL予約名検査: 負例が検知されませんでした: {src!r}")
+    return problems
+
+
+def _selftest_hex_literal_suffix() -> list[str]:
+    """(c) &H8000-&HFFFF の Long接尾辞(裁定書8 A-5 / 裁定書27 W9-B7(c))の正負例。"""
+    problems: list[str] = []
+    ok_cases = ["cp = &H9FFF&", "cp = &H7FFF", "s = \"&H9FFF\""]
+    ng_cases = ["cp = &H8000", "cp = &H9FFF", "cp = &HFFFF"]
+    for src in ok_cases:
+        probe = _probe_module([src])
+        check_hex_literal_suffix(probe)
+        if [f for f in probe.findings if f.level == "ERROR"]:
+            problems.append(f"16進接尾辞検査: 正例が誤検知されました: {src!r}")
+    for src in ng_cases:
+        probe = _probe_module([src])
+        check_hex_literal_suffix(probe)
+        if not [f for f in probe.findings if f.level == "ERROR"]:
+            problems.append(f"16進接尾辞検査: 負例が検知されませんでした: {src!r}")
     return problems
 
 
@@ -2830,6 +3073,8 @@ def run_lint(src_root: Path) -> int:
         check_hex_literal_suffix(info)
         check_integer_division_operator(info)
         check_excel_tokens(info)
+        check_forbidden_api_tokens(info)
+        check_workbooks_open_alerts(info)
         check_application_run_whitelist(info)
         check_cell_write_guard(info)
         check_html_embed_guard(info)
@@ -2883,6 +3128,18 @@ def run_lint(src_root: Path) -> int:
         for msg in intdiv_selftest:
             print(f"  ERROR L1: {msg}")
         total_error += len(intdiv_selftest)
+
+    # 裁定書27 W9-B7 の4ルール(a)(b)(c)(d)の自己テスト。正負例を毎回通し、
+    # ルールを空振りさせる改変(語の削除・パターンの緩和)をここで赤にする。
+    w9_selftest = (_selftest_forbidden_api_tokens()
+                   + _selftest_msvbal_reserved_names()
+                   + _selftest_hex_literal_suffix()
+                   + _selftest_workbooks_open_alerts())
+    if w9_selftest:
+        print("\n[裁定書27 W9-B7 の4ルールの自己テスト]")
+        for msg in w9_selftest:
+            print(f"  ERROR L1: {msg}")
+        total_error += len(w9_selftest)
 
     if _bytes_unscanned:
         print("\n[行長バイト検査の自己検査 - 検査が走っていないモジュール]")

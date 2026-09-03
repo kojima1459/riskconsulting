@@ -39,7 +39,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 | ③ | `modPii` 走査（14章§6・16章 E-05）。検知しても**生成はブロックせず**、`hm_warning` へ警告を出し run_log の detail に検知種別と箇所のみを記録する（本文は記録しない=NFR-S3）。出力先が利用者ローカルであり、レポートは人が確認したうえで配布するため | 走査自体の失敗は警告のみで続行 |
 | ④ | DATA（§2）を1本のJSON文字列として組み立てる | 組立失敗は E0502 |
 | ⑤ | `modHtmlTemplate1.BuildDocument(themeName, dataJson, coverFields)` でHTML全文を組み立てる | 組立失敗は E0502 |
-| ⑥ | `ADODB.Stream`（Charset="utf-8"・BOMあり）で書き出す（§5.3） | 書込失敗は E0502。出力先不存在は先に16章 E-21 のフォールバックを試す |
+| ⑥ | **UTF-8（BOMあり）で書き出す**（§5.3。実体は `modUtil.WriteUtf8File`） | 書込失敗は E0502。出力先不存在は先に16章 E-21 のフォールバックを試す |
 | ⑦ | 確定パスを案件一覧の `report_path` に記録する（13章§2.1）。ファイル名は `modUtilText.SanitizeFileName` を通す（14章§6） | 記録失敗は警告のみ。生成済みファイルは残す |
 
 - 出力先は config `html_out_dir`、テーマは config `html_theme`（13章§2.3）。この2キー以外にHTMLレポート用のconfigキーを増やさない。**セクションの取捨・並びはconfigではなく§4の登録表で行う**（設定項目を増やすとテーマ差替の単位が壊れるため）。
@@ -470,7 +470,7 @@ Public Function ThemeCss(ByVal themeName As String) As String
 
 **(2) HTML本文への差し込み**: §4.1の3箇所（`<title>` ・表紙の会社名/案件ID/生成日時・`<noscript>`）は `modUtilText.HtmlSafe`（`& < > " '` のエンティティ化）を通す。JS側の描画は `textContent` と `setAttribute` のみを使うためエスケープ不要であり、逆に `innerHTML` 系を使わないことがエスケープ規約そのものである（§4.1）。
 
-**(3) 文字コード**: 書き出しは `ADODB.Stream`（`Charset = "utf-8"`・**BOMあり**・`SaveToFile` は上書き指定）で行う。VBAの `Open ... For Output` / `Print #` はCP932で書き、非CP932文字（絵文字・環境依存字・一部の丸数字）が `?` へ落ちるため**使わない**。`<head>` の**最初の要素**として `<meta charset="utf-8">` を置く（BOMを見ないブラウザ設定でも文字化けしないようにするための二重化）。
+**(3) 文字コード**: 書き出しは **UTF-8・BOMあり**で行う。実体は `modUtil.WriteUtf8File`（`Open For Binary` ＋ 純関数 `modUtilText.Utf8Bytes` の自前エンコード。既存ファイルは消してから作り直す）。**v3.4・裁定書27 W9-B2 で `ADODB.Stream` を撤去した**: このCOM生成は社内AVのAMSIがマクロ型マルウェアの特徴として重く見る形であり（2026-09-02 実測）、機能を保ったまま形だけを配布物から消した。符号化の正しさ（BOM・ASCII・2/3バイト・サロゲートペアの4バイト・CP932外文字・孤立サロゲート→U+FFFD）は層(a)が**手計算のバイト列**で固定し、`Open For Binary` が実際に書いたバイトは層(b)（`T47-W9-03`）が確かめる。VBAの `Open ... For Output` / `Print #` はCP932で書き、非CP932文字（絵文字・環境依存字・一部の丸数字）が `?` へ落ちるため**使わない**。`<head>` の**最初の要素**として `<meta charset="utf-8">` を置く（BOMを見ないブラウザ設定でも文字化けしないようにするための二重化）。
 
 **(4) 数式インジェクション**: HTMLでは先頭の `=` `+` `-` `@` は無害なため `SetCellSafe` 相当の無害化は行わない。HTML経路のガードは (1)(2) と `innerHTML` 禁止で構成する（16章 E-46 の但し書きと同じ扱い）。
 

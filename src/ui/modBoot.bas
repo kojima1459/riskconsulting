@@ -56,22 +56,17 @@ Option Explicit
 '   [7]の宣言突合。build/ 配下の変更は本タスクの範囲外のため別途対応)。
 ' ============================================================================
 
-' DisableProcessWindowsGhosting(16章E-50(b)): リボンApplication.Runの同期
-' 待機中にWindowsが画面を「応答なし」と誤判定して白くゴースト化するのを
-' 抑止する、姉妹PoC実証済みの唯一の例外的採用API(表示系・引数なし・
-' user32限定)。プロセス単位で一度呼べば以後の全呼出しに効くため、
-' 呼出のたびではなく起動時に1回だけ呼ぶ。ui層に置く32/64bit両対応宣言。
-#If VBA7 Then
-    Private Declare PtrSafe Function DisableProcessWindowsGhosting _
-        Lib "user32" () As Long
-#Else
-    Private Declare Function DisableProcessWindowsGhosting _
-        Lib "user32" () As Long
-#End If
-
 Private Const BOOT_SRC As String = "modBoot"
 Private Const BOOT_GUARD_SHEET As String = "はじめにお読みください"
 Private Const BOOT_DATA_SHEET As String = "case_data"
+' 保存先(裁定書27 W9-C2)。既定は会社のOneDrive。html_out_dir に値が入って
+' いればそちらを優先する(分けたい管理者向け)。
+Private Const BOOT_DATA_DIR_KEY As String = "data_dir"
+Private Const BOOT_OUT_DIR_KEY As String = "html_out_dir"
+Private Const BOOT_DATA_DIR_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
+' 逐語(裁定書27 W9-C2)。1字も変えない。
+Private Const BOOT_MSG_NOT_ONEDRIVE As String = _
+    "保存先がOneDriveではありません。シャットダウンで消える可能性があります。"
 Private Const BOOT_ENUM_SHEET As String = "enum_hidden"
 Private Const BOOT_NAME_DATA_KEY As String = "enum_data_key"
 Private Const BOOT_DATA_SCAN_COLS As Long = 20
@@ -194,9 +189,11 @@ Private Sub BootStep(ByVal stepNo As Long)
         ' 画面の用意(図形ボタン+OnAction の配線とナビの初期表示。11章§5・T-30)。
         ' EnsureScreens の末尾が RefreshHome -> modUINav.DrawNav まで通す。
         modUIHome.EnsureScreens
-        ' [中身を見る]が %TEMP% へ書いた一時ファイルの後始末(11章§3.3.4(2))。
-        ' 7日より古いものだけを消す(開いている最中のものは消せないため)。
-        modUICase6.SweepTempViews
+        ' 裁定書27 W9-B3: [中身を見る]は %TEMP% へ一時ファイルを書かなくなった
+        ' (ブック内の「中身」シートへ流し込む)ため、後始末の掃除も撤去した。
+        ' 保存先がOneDriveでないときのお知らせ(裁定書27 W9-C2)。画面を描いた
+        ' 後に出す(hm_warning とトーストの両方へ出るため描画済みが要る)。
+        NoticeDataDir
     Case 11
         ' フォーカス退避(16章E-51(c))。実装は ui層 modUIProgress が唯一持つ。
         modUIProgress.ParkFocus
@@ -284,7 +281,10 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "json_repair_retry", "1"
     modConfig.RegisterDefault "ppt_out_dir", "%USERPROFILE%\Documents\RPN出力"
     modConfig.RegisterDefault "ppt_template_path", vbNullString
-    modConfig.RegisterDefault "html_out_dir", "%USERPROFILE%\Documents\RPN出力"
+    ' 裁定書27 W9-C2: 成果物の保存先は data_dir が正。html_out_dir は空を既定に
+    ' して「data_dir に従う」を既定動作にし、分けたい管理者だけが値を入れる。
+    modConfig.RegisterDefault "data_dir", "%OneDriveCommercial%\リスク提案ナビ\データ"
+    modConfig.RegisterDefault "html_out_dir", vbNullString
     modConfig.RegisterDefault "html_theme", "standard"
     modConfig.RegisterDefault "mock_fault", vbNullString
     modConfig.RegisterDefault "keep_window_alive", "TRUE"
@@ -317,11 +317,21 @@ End Sub
 ' ----------------------------------------------------------------------------
 ' 画面ゴースト化抑止(16章E-50(b))。config keep_window_alive でオプトアウト可。
 ' ----------------------------------------------------------------------------
+' ----------------------------------------------------------------------------
+' ApplyGhostingGuard - 画面ゴースト化への備え(16章 E-50(b)。裁定書27 W9-B4)
+'   撤去したもの: user32 の `DisableProcessWindowsGhosting`(`Declare PtrSafe`)。
+'     Win32 APIの宣言は社内AVのAMSIがマクロ型マルウェアの特徴として重く見る形
+'     であり、配布物から消す(2026-09-02 実測。裁定書27 事実)。
+'   代替: **事前描画カード + DoEvents**。E-50(a) の確定表示(modUIProgress.SetStage
+'     が呼出の**前**に書き切るカード)が主役であり、ここでは起動時に一度
+'     `DoEvents` を通してメッセージキューを空にし、以後の待機に入る前の画面を
+'     描き切らせる。config `keep_window_alive`(既定TRUE)の意味は変えない
+'     (FALSE ならこの手当てもしない)。
+' ----------------------------------------------------------------------------
 Private Sub ApplyGhostingGuard()
     If modConfig.GetBool("keep_window_alive", True) Then
         On Error Resume Next
-        DisableProcessWindowsGhosting
-        On Error GoTo 0
+        DoEvents
     End If
 End Sub
 
@@ -439,6 +449,28 @@ Private Sub ResolveKbPath()
 
     modConfig.SetValue BOOT_KB_KEY, candidate
     gKbAutoFound = True
+End Sub
+
+' ----------------------------------------------------------------------------
+' NoticeDataDir - 保存先がOneDriveでないときだけ、ナビのお知らせへ warn を出す
+'   (裁定書27 W9-C2)。会社PCの `D:` はシャットダウンで消え、Documents が残るか
+'   はOneDriveのリダイレクト設定次第で未測定であるため、**黙って Documents へ
+'   書かない**。解決そのものは modUtil.ResolveDataDir が唯一持つ。
+' ----------------------------------------------------------------------------
+Private Sub NoticeDataDir()
+    On Error Resume Next
+
+    Dim raw As String
+    raw = Trim$(modConfig.GetStr(BOOT_OUT_DIR_KEY, vbNullString))
+    If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(BOOT_DATA_DIR_KEY, BOOT_DATA_DIR_DEFAULT))
+    If LenB(raw) = 0 Then raw = BOOT_DATA_DIR_DEFAULT
+
+    Dim dirText As String
+    dirText = modUtil.ResolveDataDir(raw)
+    If LenB(dirText) = 0 Then Exit Sub
+    If Not modUtil.DataDirNotOneDrive(dirText) Then Exit Sub
+
+    modUIHome.ShowWarning BOOT_MSG_NOT_ONEDRIVE, "warn"
 End Sub
 
 ' ----------------------------------------------------------------------------

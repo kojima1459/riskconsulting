@@ -18,7 +18,8 @@ Option Explicit
 '       run_log/err_log には検知種別と箇所のみを記録する(本文は残さない=NFR-S3)。
 '   (4) DATA(18章§2)を1本のJSON文字列として組み立てる。失敗は E0502。
 '   (5) modHtmlTemplate1.BuildDocument でHTML全文を組み立てる。失敗は E0502。
-'   (6) ADODB.Stream(Charset="utf-8"・BOMあり)で書き出す。失敗は E0502。
+'   (6) UTF-8(BOMあり)で書き出す。失敗は E0502。書き出しの実体は純VBAの
+'       modUtil.WriteUtf8File(裁定書27 W9-B2 で ADODB.Stream を撤去した)。
 '       出力先不存在は先に16章 E-21 のフォールバック(自動作成 -> Documents直下)。
 '   (7) 確定パスを案件一覧の report_path に記録する。失敗は警告のみ。
 '
@@ -39,7 +40,10 @@ Private Const EX_WARN_SEP As String = vbLf
 Private Const EX_PH_COMPANY As String = "{{COMPANY}}"
 Private Const EX_PH_POLICY As String = "{{POLICY_NO}}"
 Private Const EX_THEME_DEFAULT As String = "standard"
-Private Const EX_OUT_DEFAULT As String = "%USERPROFILE%\Documents\RPN出力"
+' 保存先(裁定書27 W9-C2)。html_out_dir が空なら data_dir に従い、data_dir も
+' 空なら13章§2.3 の既定を使う。解決(実在確認・作成・OneDrive無しの逃げ場)は
+' modUtil.ResolveDataDir が唯一持つ。
+Private Const EX_OUT_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
 Private Const EX_VER_DEFAULT As String = "2.0.0"
 Private Const EX_CODE_FAIL As String = "E0502"
 
@@ -125,7 +129,7 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
 
     ' (6) 書き出し。出力先不存在は先に E-21 のフォールバックを試す。
     Dim dirText As String
-    dirText = ResolveOutDir(modConfig.GetStr("html_out_dir", EX_OUT_DEFAULT))
+    dirText = ResolveOutDir(OutDirRaw())
     If LenB(dirText) = 0 Then
         modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "no_out_dir"
         GenerateHtmlReport = "出力先フォルダを用意できませんでした。"
@@ -404,22 +408,39 @@ Private Function OrNull(ByVal jsonText As String) As String
     OrNull = body
 End Function
 
-' 出力先の解決(16章 E-21)。環境変数を展開し、無ければ作る。作れなければ
-'   Documents 直下へフォールバックする。どちらも駄目なら "" を返す。
+' 出力先の設定値(裁定書27 W9-C2)。html_out_dir を優先し、空なら data_dir。
+Private Function OutDirRaw() As String
+    Dim t As String
+    t = Trim$(modConfig.GetStr("html_out_dir", vbNullString))
+    If LenB(t) = 0 Then t = Trim$(modConfig.GetStr("data_dir", EX_OUT_DEFAULT))
+    If LenB(t) = 0 Then t = EX_OUT_DEFAULT
+    OutDirRaw = t
+End Function
+
+' 出力先の解決(16章 E-21・裁定書27 W9-C2)。候補の並べ方と実在確認は
+'   modUtil.ResolveDataDir が唯一持つ(会社OneDrive -> 個人OneDrive ->
+'   %USERPROFILE%\Documents\RPN出力)。第1候補以外へ落ちたら記録を残す。
 Private Function ResolveOutDir(ByVal rawDir As String) As String
     Dim dirText As String
-    dirText = TrimTrailingSep(ExpandEnvText(rawDir))
-    If EnsureDir(dirText) Then
-        ResolveOutDir = dirText
-        Exit Function
-    End If
-
-    Dim fallbackDir As String
-    fallbackDir = TrimTrailingSep(ExpandEnvText("%USERPROFILE%\Documents"))
-    If EnsureDir(fallbackDir) Then
+    dirText = modUtil.ResolveDataDir(rawDir)
+    If LenB(dirText) = 0 Then Exit Function
+    If StrComp(dirText, FirstCandidate(rawDir), vbTextCompare) <> 0 Then
         modLog.LogError "E0501", EX_SRC & ".ResolveOutDir", "out_dir_fallback"
-        ResolveOutDir = fallbackDir
     End If
+    ResolveOutDir = dirText
+End Function
+
+' 第1候補(config が指した場所そのもの)。取れないときは ""。
+Private Function FirstCandidate(ByVal rawDir As String) As String
+    On Error GoTo Failed
+    Dim listText As String
+    listText = modUtil.DataDirCandidates(rawDir, Environ$("OneDriveCommercial"), _
+                                         Environ$("OneDrive"), Environ$("USERPROFILE"))
+    If LenB(listText) = 0 Then Exit Function
+    FirstCandidate = Split(listText, vbLf)(0)
+    Exit Function
+Failed:
+    FirstCandidate = vbNullString
 End Function
 
 Private Function ExpandEnvText(ByVal pathText As String) As String
@@ -437,49 +458,23 @@ Private Function ExpandEnvText(ByVal pathText As String) As String
     ExpandEnvText = t
 End Function
 
+' 末尾の区切りを落とす。答えを2箇所に持たないため modUtil へ委ねる
+'   (裁定書27 W9-B2 で modUtil.TrimTrailingSep を新設した)。
 Private Function TrimTrailingSep(ByVal pathText As String) As String
-    Dim t As String
-    t = Trim$(pathText)
-    Do While Len(t) > 0
-        If Right$(t, 1) = "\" Or Right$(t, 1) = "/" Then
-            t = Left$(t, Len(t) - 1)
-        Else
-            Exit Do
-        End If
-    Loop
-    TrimTrailingSep = t
+    TrimTrailingSep = modUtil.TrimTrailingSep(pathText)
 End Function
 
+' フォルダの用意。裁定書27 W9-B2 で Scripting.FileSystemObject を撤去し、
+'   MkDir だけで階層を作る modUtil.EnsureFolder へ寄せた(実装は1箇所)。
 Private Function EnsureDir(ByVal dirText As String) As Boolean
-    On Error GoTo Failed
-    If LenB(dirText) = 0 Then Exit Function
-    Dim fso As Object
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    If fso.FolderExists(dirText) Then
-        EnsureDir = True
-        Exit Function
-    End If
-    fso.CreateFolder dirText
-    EnsureDir = fso.FolderExists(dirText)
-    Exit Function
-Failed:
-    EnsureDir = False
+    EnsureDir = modUtil.EnsureFolder(dirText)
 End Function
 
 ' UTF-8(BOMあり)で書き出す(18章§5.3(3)・16章 E-47(3))。VBAの Open/Print # は
 '   CP932で書かれ非CP932文字が "?" 化するため使わない。
+'   裁定書27 W9-B2: ADODB.Stream を撤去し、**純VBA**(`Open For Binary` +
+'   modUtilText.Utf8Bytes の自前エンコード)の modUtil.WriteUtf8File へ寄せた。
+'   符号化の正しさ(BOM・3バイト・サロゲート・CP932外)は層(a)で固定してある。
 Private Function WriteUtf8Bom(ByVal pathText As String, ByVal bodyText As String) As Boolean
-    On Error GoTo Failed
-    Dim st As Object
-    Set st = CreateObject("ADODB.Stream")
-    st.Type = 2
-    st.Charset = "utf-8"
-    st.Open
-    st.WriteText bodyText
-    st.SaveToFile pathText, 2
-    st.Close
-    WriteUtf8Bom = True
-    Exit Function
-Failed:
-    WriteUtf8Bom = False
+    WriteUtf8Bom = modUtil.WriteUtf8File(pathText, bodyText, True)
 End Function

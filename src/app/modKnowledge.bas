@@ -332,6 +332,7 @@ End Function
 
 ' kb_path のブックを開く。失敗は Nothing。
 Private Function OpenKbBook(ByVal readOnlyMode As Boolean) As Object
+    Dim prevAlerts As Boolean
     On Error GoTo Failed
     Dim pathText As String
     pathText = Trim$(modConfig.GetStr("kb_path", vbNullString))
@@ -341,11 +342,23 @@ Private Function OpenKbBook(ByVal readOnlyMode As Boolean) As Object
     If InStr(1, pathText, "://", vbBinaryCompare) = 0 Then
         If LenB(Dir$(pathText)) = 0 Then Exit Function
     End If
+    ' 裁定書27 W9-B7(d): 開く前に DisplayAlerts を退避して False にする
+    ' (他者ロック・読取専用推奨・リンク更新のモーダルで起動が固まらないように)。
+    prevAlerts = Application.DisplayAlerts
+    Application.DisplayAlerts = False
     Set OpenKbBook = Application.Workbooks.Open(pathText, 0, readOnlyMode)
+    Application.DisplayAlerts = prevAlerts
     Exit Function
 Failed:
+    RestoreAlerts prevAlerts
     Set OpenKbBook = Nothing
 End Function
+
+' ハンドラ稼働中に On Error Resume Next は書けないので、戻しは別Subへ切り出す。
+Private Sub RestoreAlerts(ByVal prevAlerts As Boolean)
+    On Error Resume Next
+    Application.DisplayAlerts = prevAlerts
+End Sub
 
 Private Sub CloseKbBook(ByVal wb As Object)
     On Error GoTo Ignore0
