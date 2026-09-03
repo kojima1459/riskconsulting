@@ -124,6 +124,16 @@ def check_book(book: Path) -> list[str]:
     want = expected_sources(is_dev)
     doc_names = {n for n, info in ovba_write.read_modules(vba_bin).items()
                  if info["type"] == "document"}
+    # 配布方式Bで焼く document module は ThisWorkbook のみ(build_rpn.py
+    # build_baked_vba_project)。Sheet1 等の他の document module は焼かない
+    # (openpyxl 製の成果物ワークシートに codeName="Sheet1" が無く、焼くと
+    # 名前だけの孤児モジュールになるため)。ここで document 集合が
+    # {"ThisWorkbook"} ちょうどであることを確かめる(集合一致条件は緩めない)。
+    if doc_names != {"ThisWorkbook"}:
+        errors.append(
+            f"{book.name}: document module 集合が {{'ThisWorkbook'}} と不一致"
+            f"(実際: {sorted(doc_names)})。配布方式Bは ThisWorkbook 以外の "
+            "document module を焼かない設計です。")
     std_got = {n: v for n, v in got.items() if n not in doc_names}
 
     for name, want_src in sorted(want.items()):

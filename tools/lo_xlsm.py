@@ -38,11 +38,21 @@ lo_xlsm.py - 配布 .xlsm を LibreOffice に開かせて VBA を読み込ませ
     「実Excelでは通るのに毎回赤」になって検問として使えない。
     したがって [3] は run_lo_tests の実装をそのまま呼ぶ(二重実装を作らない)。
 
+前提環境:
+    LibreOffice 24.2 系 + **libreoffice-calc**(xlsm の import フィルタを持つ
+    パッケージ)が入っていること。soffice 本体だけが入っていて libreoffice-calc
+    が欠けている環境では、xlsm を開こうとすると Calc の import フィルタが
+    無いため BasicLibraries が「ライブラリ0本」のまま静かに開き、[1] が
+    偽陰性の PASS に見えかねない。そのためこのゲートは**起動時に calc フィルタ
+    の有無を検出し、無ければ理由を明示して環境不備(exit 2)で止める**
+    (「ライブラリ0本」を緑にしない)。
+
 使い方:
     python3 tools/lo_xlsm.py                     # dist/ の配布ブック
     python3 tools/lo_xlsm.py --book dist/リスク提案ナビ_dev.xlsm
     python3 tools/lo_xlsm.py --skip-compile      # [1][2] のみ(デバッグ用)
-    exit code: 0 = 全PASS / 1 = いずれか失格 / 2 = 環境不備(soffice不在等)
+    exit code: 0 = 全PASS / 1 = いずれか失格 / 2 = 環境不備(soffice不在・
+               libreoffice-calc不在等)
 ================================================================================
 """
 
@@ -114,6 +124,32 @@ Emit:
   If Not IsNull(oDoc) Then oDoc.close(False)
 End Sub
 '''
+
+
+def check_calc_available(soffice: str, verbose: bool = False) -> str | None:
+    """libreoffice-calc(xlsm の import フィルタ)が入っているか検出する。
+
+    soffice 本体だけがあって libreoffice-calc パッケージが欠けていると、
+    xlsm を開こうとしても Calc の import フィルタが無いため
+    BasicLibraries が「ライブラリ0本」のまま静かに開いてしまい、[1] が
+    偽陰性の PASS に見えかねない(soffice の exit code も 0 のまま)。
+    そのため soffice の実体ディレクトリに Calc 本体(scalc)があるかを
+    先に確かめ、無ければここで理由を返す(呼び出し側は緑にせず環境不備で
+    止めること)。
+
+    戻り値: 問題が無ければ None、問題があれば理由の文字列。
+    """
+    real = Path(soffice).resolve()
+    prog_dir = real.parent
+    calc_bin = prog_dir / "scalc"
+    if calc_bin.exists():
+        if verbose:
+            print(f"    calc フィルタ検出: {calc_bin}")
+        return None
+    return (f"libreoffice-calc が見つかりません({calc_bin} が存在しない)。"
+           "soffice 本体のみがインストールされ、xlsm の import フィルタを持つ "
+           "libreoffice-calc パッケージが欠けている疑いがあります"
+           "(前提: LibreOffice 24.2系 + libreoffice-calc)。")
 
 
 def read_bin_modules(book: Path) -> dict:
@@ -190,13 +226,27 @@ def main() -> int:
     print("=== lo_xlsm.py (配布binをLibreOfficeに読み込ませる検問) ===")
     print(f"ブック: {book}")
 
-    bin_mods = read_bin_modules(book)
-    print(f"配布binのモジュール: {len(bin_mods)}本"
-          f"(うち document module "
-          f"{sum(1 for v in bin_mods.values() if v['type'] == 'document')}本)")
+    # calc フィルタ(libreoffice-calc)不在は「ライブラリ0本」の偽陰性PASSに
+    # つながるため、他の検査より前に fail-closed で止める(環境不備)。
+    soffice = R.find_soffice()
+    reason = check_calc_available(soffice, args.verbose)
+    if reason:
+        print(f"ERROR: {reason}", file=sys.stderr)
+        return 2
 
+    bin_mods = read_bin_modules(book)
+    doc_names = {n for n, v in bin_mods.items() if v["type"] == "document"}
+    print(f"配布binのモジュール: {len(bin_mods)}本"
+          f"(うち document module {len(doc_names)}本: {sorted(doc_names)})")
+    # 配布方式Bで焼く document module は ThisWorkbook のみ(build_rpn.py
+    # build_baked_vba_project)。Sheet1 等が焼かれていたら集合一致を緩めず失格に
+    # する(openpyxl 製の成果物ワークシートには codeName="Sheet1" が無いため、
+    # 焼くと名前だけの孤児モジュールになる)。
     work = Path(tempfile.mkdtemp(prefix="rpn_lo_xlsm_"))
     failures: list[str] = []
+    if doc_names != {"ThisWorkbook"}:
+        failures.append(f"document module 集合が {{'ThisWorkbook'}} と不一致"
+                        f"(実際: {sorted(doc_names)})")
     try:
         # --- [1] LOで開けるか -------------------------------------------------
         print("\n[1] LibreOffice が配布 .xlsm を読み込み、Basicライブラリを列挙できること")
@@ -253,7 +303,8 @@ def main() -> int:
             all_modules: dict[str, Path] = {}
             for name, info in sorted(bin_mods.items()):
                 if info["type"] == "document":
-                    # document module(ThisWorkbook / Sheet1)は隔離ライブラリでは
+                    # document module(配布方式Bでは ThisWorkbook のみ焼く。
+                    # build_rpn.build_baked_vba_project 参照)は隔離ライブラリでは
                     # Workbook_Open などのイベント宣言が解決できない。実Excel側の
                     # 契約は最小ThisWorkbookで、中身は bin_roundtrip がバイト比較
                     # しているため、ここでは対象外にする(理由を明示して除外)。

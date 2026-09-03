@@ -448,10 +448,12 @@ def patch_installer(vba_bin: bytes, installer_src: bytes) -> bytes:
 # 何を template から写し、何を作るか:
 #   写す: PROJECTINFORMATION(SysKind・LCID・CodePage932・Name・HelpFile・Constants)
 #         と REFERENCE 群(stdole/Office/Excel/VBA 等)/ PROJECT の
-#         ID・CMG・DPB・GC・Name・HelpContextID・VersionCompatible32 /
-#         document module(ThisWorkbook・Sheet1)のストリーム構成 /
+#         ID・CMG・DPB・GC(プロジェクトの保護状態・パスワード・可視性の暗号化値。
+#         モジュール数とは無関係)・Name・HelpContextID・VersionCompatible32 /
 #         _VBA_PROJECT(ただし下の無害化を当てる)。
-#   作る: PROJECTMODULES(全モジュールの台帳)/ 各モジュールストリーム /
+#   作る: PROJECTMODULES(全モジュールの台帳)/ 各モジュールストリーム
+#         (document module は ThisWorkbook のみ焼く。Sheet1 等の他の
+#         document module は焼かない。build_baked_vba_project 参照)/
 #         PROJECT の Document=/Module=/Class= 行と [Workspace] / PROJECTwm。
 #
 # p-code を持たせない理由:
@@ -544,13 +546,12 @@ def build_baked_vba_project(template_bin, shipped_modules, root):
 
     mods = [ovba_write.VbaModule("ThisWorkbook", build_baked_thisworkbook(),
                                  "document")]
-    # ThisWorkbook 以外の document module(Sheet1 等)は template の構成を写す。
-    # openpyxl が作るシートは workbook.xml に codeName を持たないため、Excel は
-    # 開いたときに不足分のシートモジュールを自分で作る(現行の配布物と同じ挙動)。
-    for nm, info in docs:
-        if nm == "ThisWorkbook":
-            continue
-        mods.append(ovba_write.VbaModule(nm, info["source"], "document"))
+    # ThisWorkbook 以外の document module(Sheet1 等)は焼かない。
+    # openpyxl が作る成果物のワークシートは workbook.xml に codeName="Sheet1" を
+    # 持たない(openpyxl は codeName を書かない)。もし template の Sheet1 モジュールを
+    # そのまま焼くと、dir ストリームには Sheet1 module が存在するのに workbook.xml 側に
+    # 対応する codeName が無い=名前だけの孤児モジュールになり、[MS-OVBA] の整合性を欠く。
+    # 不足分のシートモジュールは Excel が開封時に自動生成するため、焼かなくても実害はない。
 
     baked = []
     for m in shipped_modules:
