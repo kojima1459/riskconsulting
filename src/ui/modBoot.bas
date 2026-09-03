@@ -120,6 +120,12 @@ Private Const BOOT_KB_FILE As String = "ナレッジブック.xlsx"
 Private Const BOOT_KB_PLACEHOLDER As String = "\\...\"
 Private Const BOOT_KB_AUTO_NOTE As String = "同じフォルダのナレッジブックを読み込みました。"
 
+' W9.2 N9: 起動手順のどれかが E0603 を記録したときに出す1枚(逐語)。
+' 生ダイアログの代わりに「次に何をすればよいか」を必ず書く(11章§0.1 原則③)。
+Private Const BOOT_MSG_PARTIAL As String = _
+    "起動の一部が完了しませんでした。使い方タブの[記録を見る]を押してください。" & _
+    vbLf & "err_log の最後の行を開発担当へお送りください。"
+
 ' 自動発見でパスを書いたか(HOMEのナレッジ欄が KbAutoNote で読む)。永続しない
 ' 画面制御変数であり、14章§6「状態保持の例外」には当たらない。
 Private gKbAutoFound As Boolean
@@ -129,17 +135,32 @@ Private gKbAutoFound As Boolean
 '   ThisWorkbook に依存しないので焼き付け済みファイルでも効く。
 Private gAppEvents As clsAppEvents
 
+' 起動手順のどれかが失敗した(=E0603 を記録した)か。W9.2 N9 のトーストの条件。
+'   永続しない画面制御変数であり、14章§6「状態保持の例外」には当たらない。
+Private gBootPartial As Boolean
+
 ' ============================================================================
 ' Boot - 起動シーケンス本体(12章§2.1の7手順をこの順で1回ずつ実行する)。
 ' ============================================================================
 Public Sub Boot()
+    ' W9.2 N1: **起動経路の最外周の網**。Boot 自身が未捕捉の実行時エラーを外へ
+    ' 出すと、Excel が生のダイアログ(「実行時エラー 5」など・[OK]のみ)を出す。
+    ' 利用者は何も分からず、記録も残らない。ここで必ず受け止める。
+    On Error Resume Next
+
     ' 裁定書9 B21(12章§2.1): 各手順を**個別のエラーハンドラ**で包む。途中の
     ' 手順が未捕捉の実行時エラーを投げても、以降の手順(EnableSelectionの毎起動
     ' 適用=16章E-51(b)・ボタン配線・ParkFocus)まで必ず到達させる。
     Dim i As Long
+    gBootPartial = False
     For i = 1 To BOOT_STEP_COUNT
         BootStep i
     Next i
+
+    ' W9.2 N9: 起動の途中で1つでも E0603 を記録していたら、黙って進まずに
+    ' 「一部が完了しなかった」ことを利用者へ1枚出す(生ダイアログは出さない)。
+    If gBootPartial Then modUIToast.ShowToast BOOT_MSG_PARTIAL, "warn"
+    Err.Clear
 End Sub
 
 ' 起動手順1本ぶん。失敗しても記録して次へ進む(起動を止めない。12章§2.1)。
@@ -210,7 +231,20 @@ Private Sub BootStep(ByVal stepNo As Long)
     Exit Sub
 
 Failed:
-    modLog.LogError "E0603", BOOT_SRC & ".Boot", "boot_step_failed:" & CStr(stepNo), Err.Number
+    ' W9.2 N2: **ハンドラの中で起きた失敗も外へ出さない**。VBAはエラーハンドラ内で
+    ' 発生したエラーを同じハンドラでは受けられない(On Error Resume Next を書いても
+    ' 効かず、呼び出し元=Boot へ飛ぶ。tools/vba_lint.py の同名ルール)。したがって
+    ' 記録は**別のプロシージャ**へ切り出し、そちらで網を張る。
+    gBootPartial = True
+    LogBootStepFailure stepNo, Err.Number
+End Sub
+
+' BootStep の Failed: から呼ぶ記録専用(W9.2 N2)。**ハンドラの外**なので
+'   On Error Resume Next が効き、記録そのものが失敗しても呼び出し元へ飛ばない。
+Private Sub LogBootStepFailure(ByVal stepNo As Long, ByVal errNo As Long)
+    On Error Resume Next
+    modLog.LogError "E0603", BOOT_SRC & ".Boot", _
+                    "boot_step_failed:" & CStr(stepNo), errNo
 End Sub
 
 ' ----------------------------------------------------------------------------
@@ -443,12 +477,19 @@ Private Sub ResolveKbPath()
         ' OneDrive同期フォルダ。Dir$ では見えないので確かめずに書く。
         candidate = baseDir & "/" & BOOT_KB_FILE
     Else
-        candidate = baseDir & "\" & BOOT_KB_FILE
+        ' 区切りは決め打ちにしない(Mac の実Excel は "/")。W9.2。
+        candidate = baseDir & Application.PathSeparator & BOOT_KB_FILE
         If LenB(Dir$(candidate)) = 0 Then Exit Sub
     End If
 
     modConfig.SetValue BOOT_KB_KEY, candidate
     gKbAutoFound = True
+
+    ' W9.2 N3: On Error Resume Next が握りつぶした失敗を記録だけは残す。
+    If Err.Number <> 0 Then
+        modLog.LogError "E0603", BOOT_SRC & ".ResolveKbPath", "kb_resolve_failed", Err.Number
+        Err.Clear
+    End If
 End Sub
 
 ' ----------------------------------------------------------------------------

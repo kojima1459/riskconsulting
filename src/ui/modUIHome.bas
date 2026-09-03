@@ -58,6 +58,13 @@ Public Sub EnsureScreens()
     modUIGuide.EnsureFooterButton
 
     RefreshHome
+
+    ' W9.2 N3: On Error Resume Next が握りつぶした失敗を記録だけは残す
+    ' (起動経路の最外周の網。黙って画面が半分だけ出た状態を作らない)。
+    If Err.Number <> 0 Then
+        modLog.LogError "E0603", UH_SRC & ".EnsureScreens", "ensure_screens_failed", Err.Number
+        Err.Clear
+    End If
 End Sub
 
 ' ============================================================================
@@ -65,11 +72,27 @@ End Sub
 '   ナビを描き直す(状態が変われば帯の1文と強調枠も変わるため)。
 ' ============================================================================
 Public Sub RefreshHome()
+    ' W9.2 N8: 起動シーケンス(EnsureScreens)から呼ばれる。ここが未捕捉の
+    ' 実行時エラーを外へ出すと、起動直後に生ダイアログが出る。必ず受け止めて
+    ' err_log へ残す(画面が古いままでも業務は止めない)。
+    On Error GoTo Failed
+
     RefreshState
     ' 状態が変われば帯の1文・進捗ドット・強調枠の位置も変わる。**状態を書いた
     ' あとに必ず描き直す**ことで、「画面と状態が食い違ったまま」を作らない。
     ' (DrawNav は本モジュールを SelectedCaseId でしか呼ばないので再帰しない)
     modUINav.DrawNav
+    Exit Sub
+
+Failed:
+    ' ハンドラ稼働中は On Error Resume Next が効かないので、記録は別Subへ。
+    LogRefreshFailure Err.Number
+End Sub
+
+' RefreshHome の Failed: から呼ぶ記録専用(W9.2 N8)。ハンドラの外なので網が張れる。
+Private Sub LogRefreshFailure(ByVal errNo As Long)
+    On Error Resume Next
+    modLog.LogError "E0603", UH_SRC & ".RefreshHome", "refresh_home_failed", errNo
 End Sub
 
 ' 状態表示の書き込みだけを行う(描画は呼び出し側の RefreshHome が続けて行う)。

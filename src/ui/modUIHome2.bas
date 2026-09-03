@@ -25,6 +25,9 @@ Option Explicit
 ' (配線は modUICase2.EnsureStepButtons)。
 ' ============================================================================
 
+'  err_log の src 欄に書く自モジュール名(W9.2)。
+Private Const UH2_SRC As String = "modUIHome2"
+
 ' 13章§2.10 の名前付きレンジ(本モジュールが読むぶん)。
 Private Const UH_QUALITY As String = "hm_quality_mode"
 
@@ -77,8 +80,11 @@ End Sub
 ' ============================================================================
 
 Public Sub HomeRunAll()
-    If Not modUIProgress.TryEnterUiLock("一括実行") Then Exit Sub
+    ' W9.2 N6: 網は TryEnterUiLock より**前**に張る。ロックの取得自体が実行時
+    ' エラーを投げると、旧配置(取得の後で On Error GoTo Done)ではハンドラが
+    ' まだ効いておらず、生ダイアログが出てしまう。
     On Error GoTo Done
+    If Not modUIProgress.TryEnterUiLock("一括実行") Then Exit Sub
 
     modUIProgress.ParkFocus
     modUIHome.ShowWarning vbNullString
@@ -144,23 +150,43 @@ Public Function StageNameOf(ByVal stepNo As Long) As String
 End Function
 
 Public Sub HomeRunS1()
+    ' W9.2 N6: 網は TryEnterUiLock より**前**に張る(HomeRunAll と同じ理由)。
+    On Error GoTo Done
     If Not modUIProgress.TryEnterUiLock("Step1") Then Exit Sub
     RunStepUi 1
+    Exit Sub
+Done:
+    LockEnterFailed "HomeRunS1", Err.Number
 End Sub
 
 Public Sub HomeRunS2()
+    ' W9.2 N6: 網は TryEnterUiLock より**前**に張る(HomeRunAll と同じ理由)。
+    On Error GoTo Done
     If Not modUIProgress.TryEnterUiLock("Step2") Then Exit Sub
     RunStepUi 2
+    Exit Sub
+Done:
+    LockEnterFailed "HomeRunS2", Err.Number
 End Sub
 
 Public Sub HomeRunS3()
+    ' W9.2 N6: 網は TryEnterUiLock より**前**に張る(HomeRunAll と同じ理由)。
+    On Error GoTo Done
     If Not modUIProgress.TryEnterUiLock("Step3") Then Exit Sub
     RunStepUi 3
+    Exit Sub
+Done:
+    LockEnterFailed "HomeRunS3", Err.Number
 End Sub
 
 Public Sub HomeRunS4()
+    ' W9.2 N6: 網は TryEnterUiLock より**前**に張る(HomeRunAll と同じ理由)。
+    On Error GoTo Done
     If Not modUIProgress.TryEnterUiLock("Step4") Then Exit Sub
     RunStepUi 4
+    Exit Sub
+Done:
+    LockEnterFailed "HomeRunS4", Err.Number
 End Sub
 
 ' 1Stepの実行(ロックは呼び出し元のハンドラが取得済み)。
@@ -196,8 +222,26 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     modUIHome.RefreshHome
 
 Done:
+    ' W9.2 N7: ハンドラの中で起きた失敗を呼び出し元へ投げない。VBAはエラー
+    ' ハンドラ内のエラーを同じハンドラで受けられない(On Error Resume Next は
+    ' 効かない)ため、後始末そのものを**別Sub**へ切り出してそちらで網を張る。
+    CleanupAfterRun
+End Sub
+
+' RunStepUi / HomeRunS1..S4 の後始末(W9.2 N6/N7)。ハンドラの外なので
+'   On Error Resume Next が効く。ExitUiLock は冪等なので二重に呼んでも害は無い。
+Private Sub CleanupAfterRun()
+    On Error Resume Next
     modUIProgress.ExitUiLock
     modUIProgress.ParkFocus
+End Sub
+
+' HomeRunS1..S4 で TryEnterUiLock 自体が実行時エラーを投げたときの後始末
+'   (W9.2 N6)。記録を残してロックを解く。
+Private Sub LockEnterFailed(ByVal procName As String, ByVal errNo As Long)
+    On Error Resume Next
+    modLog.LogError "E0603", UH2_SRC & "." & procName, "lock_enter_failed", errNo
+    modUIProgress.ExitUiLock
 End Sub
 
 ' 上流Stepのシート編集を確定する(11章「編集はSN+1へ進むと下流に反映」)。
@@ -586,7 +630,13 @@ End Function
 
 ' 企業ファイルの書出先(裁定書27 W9-C2)。html_out_dir が空なら data_dir に従い、
 '   OneDrive が無ければ Documents へ落ちる(落ちたことは NoticeDataDir が出す)。
+'   **ハンドラを持つ**(W9.2)。ResolveDataDir は Environ$ / Dir$ を通るため、
+'   環境によっては実行時エラーを投げうる。ここで捨てずに err_log へ残し、
+'   解決前の raw をそのまま返して呼び出し側を止めない(modExportHtml.ResolveOutDir
+'   と同じ E0501 out_dir_fallback の系列)。
 Private Function OutDir() As String
+    On Error GoTo Failed
+
     Dim raw As String
     raw = Trim$(modConfig.GetStr(UH_DIR_KEY, vbNullString))
     If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(UH_DATA_DIR_KEY, UH_DIR_DEFAULT))
@@ -596,6 +646,11 @@ Private Function OutDir() As String
     dirText = modUtil.ResolveDataDir(raw)
     If LenB(dirText) = 0 Then dirText = raw
     OutDir = dirText
+    Exit Function
+
+Failed:
+    modLog.LogError "E0501", UH2_SRC & ".OutDir", "out_dir_fallback", Err.Number
+    OutDir = raw
 End Function
 
 ' ============================================================================

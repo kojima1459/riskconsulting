@@ -429,25 +429,74 @@ Public Function EnsureFolder(ByVal dirText As String) As Boolean
         Exit Function
     End If
     If InStr(1, t, "://", vbBinaryCompare) > 0 Then Exit Function
-    If Left$(t, 2) = "\\" Then Exit Function
+
+    ' 分割・連結の規則は純関数 SplitPathParts が唯一持つ(W9.2)。区切り文字を
+    ' "\" 決め打ちにしない(Mac の実Excel は "/")。
+    Dim stepsText As String
+    stepsText = SplitPathParts(t, PathSep())
+    If LenB(stepsText) = 0 Then Exit Function
 
     Dim parts() As String
-    parts = Split(t, "\")
-    If UBound(parts) < LBound(parts) Then Exit Function
+    parts = Split(stepsText, vbLf)
 
-    Dim built As String
     Dim i As Long
-    built = parts(LBound(parts))
-    For i = LBound(parts) + 1 To UBound(parts)
-        If LenB(parts(i)) > 0 Then
-            built = built & "\" & parts(i)
-            If Not FolderExists(built) Then MkDir built
-        End If
+    For i = LBound(parts) To UBound(parts)
+        If Not FolderExists(parts(i)) Then MkDir parts(i)
     Next i
     EnsureFolder = FolderExists(t)
     Exit Function
 Failed:
     EnsureFolder = False
+End Function
+
+' ============================================================================
+' PathSep - このプラットフォームのパス区切り("\" か "/")。
+'   core層は Application. を参照できない規約(12章§2の層規約)のため
+'   Application.PathSeparator は使えない。**CurDir$ の先頭で判定する**
+'   (Mac の実Excel は "/Users/..." を返す)。取れなければ Windows 既定の "\"。
+'   **環境依存の分岐なので純層では検査できない**。検査できる形の「分割と連結」は
+'   下の SplitPathParts が持ち、純層はそちらを見る(W9.2)。
+' ============================================================================
+Public Function PathSep() As String
+    On Error GoTo FallbackSep
+    If Left$(CurDir$, 1) = "/" Then
+        PathSep = "/"
+    Else
+        PathSep = "\"
+    End If
+    Exit Function
+FallbackSep:
+    PathSep = "\"
+End Function
+
+' ============================================================================
+' SplitPathParts - EnsureFolder が MkDir する「親から順の一覧」を作る純関数。
+'   区切り sep で分割し、先頭要素(ドライブ名など。単独では作らない)から
+'   1つずつ足した経路を vbLf 区切りで返す。空の要素は飛ばす。
+'   **区切り2つで始まる経路(UNC \\server\share)は空文字を返す**
+'   (共有名の途中まで MkDir できないため、EnsureFolder はそこで諦める)。
+' ============================================================================
+Public Function SplitPathParts(ByVal t As String, ByVal sep As String) As String
+    If LenB(t) = 0 Then Exit Function
+    If LenB(sep) = 0 Then Exit Function
+    If Left$(t, 2) = sep & sep Then Exit Function
+
+    Dim parts() As String
+    parts = Split(t, sep)
+    If UBound(parts) < LBound(parts) Then Exit Function
+
+    Dim built As String
+    Dim out As String
+    Dim i As Long
+    built = parts(LBound(parts))
+    For i = LBound(parts) + 1 To UBound(parts)
+        If LenB(parts(i)) > 0 Then
+            built = built & sep & parts(i)
+            If LenB(out) > 0 Then out = out & vbLf
+            out = out & built
+        End If
+    Next i
+    SplitPathParts = out
 End Function
 
 ' 末尾の "\" と "/" を落とす(パスの連結を1箇所に保つための小道具)。

@@ -461,6 +461,15 @@ def patch_installer(vba_bin: bytes, installer_src: bytes) -> bytes:
 #   することで、Excel/LO は「キャッシュを使わずソースから再コンパイル」する。
 #   これは従来の外科パッチが到達していた状態と同じであり、幽霊コンパイル
 #   エラー(PoC R23c-F1)の再発を防ぐ。
+#
+# Workbook_Open が modBoot.Boot を **直接呼ぶ**理由(W9.2・実機第3報):
+#   旧実装は `Application.Run "'" & ThisWorkbook.Name & "'!modBoot.Boot"` だった。
+#   Mac の実Excel で配布物を開いた直後に「実行時エラー 5: プロシージャの呼び出し、
+#   または引数が無効です」の生ダイアログ([OK]のみ)が出た。Application.Run は
+#   **ホスト側が第1引数の文字列を解決する**ため、ブック名に非ASCII(日本語)を含む
+#   配布物では解決に失敗しうる。呼び先は同一プロジェクト内の Public Sub であり、
+#   文字列で名前解決する必要がそもそも無い。直接呼出にすると VBA のコンパイル時
+#   解決になり、ホストの文字列解決を1経路まるごと消せる。
 # ===========================================================================
 _BAKED_THISWORKBOOK_TEXT = '''Attribute VB_Name = "ThisWorkbook"
 Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
@@ -471,7 +480,7 @@ Attribute VB_Exposed = True
 Option Explicit
 Private Sub Workbook_Open()
   On Error Resume Next
-  Application.Run "'" & ThisWorkbook.Name & "'!modBoot.Boot"
+  modBoot.Boot
 End Sub
 '''
 

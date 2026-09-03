@@ -441,7 +441,19 @@ Cleanup:
         modLog.LogError "E0101", UN_SRC & ".DrawNav", "draw_failed", Err.Number
         Err.Clear
     End If
+    ' W9.2 N3: ハンドラの中(この Cleanup)で起きた失敗は同じハンドラでは受けられず
+    ' 呼び出し元へ投げてしまう。画面更新の復帰と記録は**別Sub**へ切り出す。
+    RestoreScreenUpdating
+End Sub
+
+' DrawNav の Cleanup: から呼ぶ後始末(W9.2 N3)。ハンドラの外なので網が張れる。
+Private Sub RestoreScreenUpdating()
+    On Error Resume Next
     Application.ScreenUpdating = True
+    If Err.Number <> 0 Then
+        modLog.LogError "E0603", UN_SRC & ".DrawNav", "draw_nav_tail", Err.Number
+        Err.Clear
+    End If
 End Sub
 
 ' 直近の DrawNav が描き切ったか(呼び出し側の保存ブロック判定に使う。B15)。

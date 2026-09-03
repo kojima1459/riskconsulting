@@ -278,7 +278,16 @@ Public Function FileExistsAt(ByVal pathText As String) As Boolean  ' フォル�
 Public Function TrimTrailingSep(ByVal pathText As String) As String  ' 末尾の "\" "/" を落とす
 Public Function EnsureFolder(ByVal dirText As String) As Boolean
 ' 無ければ作る（**途中の階層もまとめて `MkDir` で作る**）。UNC（`\\server\share`）とURL（`://` を含む）は
-' 階層を作りに行かず**在るかどうかだけ**を見る（作成権限の無い場所で例外を積まないため）
+' 階層を作りに行かず**在るかどうかだけ**を見る（作成権限の無い場所で例外を積まないため）。
+' **分割と連結の規則は下の `SplitPathParts` が唯一持つ**（区切り文字を `\` に決め打ちしない。v3.4・W9.2）
+Public Function PathSep() As String
+' このプラットフォームのパス区切り（`"\"` か `"/"`）。**core層は `Application.` を参照できない規約**のため
+' `Application.PathSeparator` は使えず、`CurDir$` の先頭が `"/"` かで判定する（Mac の実Excel は `/Users/...`）。
+' 取れなければ `"\"`。**環境依存の分岐なので純層では検査できない**（v3.4・W9.2）
+Public Function SplitPathParts(ByVal t As String, ByVal sep As String) As String
+' **純関数**（層(a)テスト対象）。`EnsureFolder` が `MkDir` する「親から順の一覧」を vbLf 区切りで返す。
+' 先頭要素（ドライブ名など）は単独では作らない。空の要素は飛ばす。**区切り2つで始まる経路（UNC）は ""**
+' （共有名の途中まで `MkDir` できないため）。純層は `\` / `/` / UNC先頭 の3本（`modTestsPure18` W92）
 Public Function WriteUtf8File(ByVal pathText As String, ByVal bodyText As String, _
                               ByVal withBom As Boolean) As Boolean
 ' UTF-8 でファイルへ書く（`Open For Binary`）。**既存ファイルは消してから作り直す**（Binary の上書きは
@@ -1395,7 +1404,7 @@ Public Function RunExcelTests2() As Long
   | - | `modUISheet.EnsureButtonEx(ws, shapeKey, caption, anchorRow, anchorCol, widthPt, onActionName, kind)` / `modUISheet.CellLeft(ws, rowNo, colNo)` | 公開関数（ui層内部ヘルパ） | 本章§6・13章§2.10 | 種別つき図形ボタン（`kind` = `primary` / `plain` / `danger`）と、列アンカーの実測左端の読み口。`EnsureButton` は `plain` の薄い包みになり**呼出側のシグネチャは不変**。ボタン高は26ptで、アンカー行の行高をボタンが収まる高さまで広げてから置く（縦の重なりを構造的に潰す）。`CellLeft` は HOMEの横並びの幾何計算（直前のボタンの右端＋8pt より右の列だけをアンカーにする）に使う（v2.5.5・裁定書14 裁定7＋追補1） |
   | - | HOMEの主要動線4本のキャプション（[① 案件を作る] / [② 一括実行] / [③ レポートを出す] / [④ ヒアリングシート]） | 図形ボタンのキャプション | 13章§2.10 | 番号つき動線への再レイアウト。図形名（`btn_hm_newcase` / `btn_hm_runall` / `btn_hm_html` / `btn_hm_hearing`）と OnAction は不変で、キャプションだけを改めた。`操作ガイド`③の早見表（`build/build_rpn.py` の `GUIDE_HOME_BUTTONS`）と逐語一致させる（v2.5.5・裁定書14 追補1） |
 
-  | - | **`modUIToast`**（`ShowToast(messageText, [kind])` / `ShowNext(stepNo)` / `HideToast()` / `CancelToast()` / `WarnLine(messageText, kind) As String`） | 公開関数（ui層。`modUIHome` からの結線先と `Application.OnTime` のコールバック） | 本章§6・11章§4 | **トースト**（アクティブシート右上の角丸カード。Shape接頭辞 `ts_`・Yu Gothic UI 11pt・`kind` = `info`（白地／緑枠）/ `warn`（黄地）/ `error`（赤地・白字）。いずれもコントラスト比4.5:1以上）。`Application.OnTime Now + <表示秒数>` で `HideToast` を予約し、予約は常に1本（`ShowToast` が張り替え前に `CancelToast` を呼ぶ）。**表示秒数は固定6秒をやめ `modUIGeom.ToastSecondsFor(text)`（3 + 字数/20 を3〜9秒でクリップ）で決める**（v3.2.1・裁定書22 m9）。**`HideToast` は対象図形が無ければ何もしない**（ブックを閉じたあとに残った予約が発火しても無害）。`CancelToast` はブックの終了処理からの取り消し口（現在の `ThisWorkbook` は終了イベントを持たないため未結線）。`ShowNext` は主要4ボタンの成功経路に出す「次の一手」1行の唯一の値源。`WarnLine` は `hm_warning` へ書く1行を組み立て、`kind="error"` のときだけ末尾に「（err_logタブの最後の行を開発担当へ送ってください）」を足す。**`ShowResearchPrompts` は v3.2.1（裁定書22）で廃止**（v3.2 で HOME そのものが無くなり、調べる文はナビ区画①にその場で出るため押す口が消えていた。名前付きレンジ `gd_ch7_head` は使い方タブ⑦の飛び先として残る）。**文言はすべて本モジュールが持つ**（`modUIHome` に残量が無いため。v2.5.6・裁定書17 H2/H4＋司令塔追補） |
+  | - | **`modUIToast`**（`ShowToast(messageText, [kind])` / `ShowNext(stepNo)` / `HideToast()` / `CancelToast()` / `WarnLine(messageText, kind) As String`） | 公開関数（ui層。`modUIHome` からの結線先と `Application.OnTime` のコールバック） | 本章§6・11章§4 | **トースト**（アクティブシート右上の角丸カード。Shape接頭辞 `ts_`・Yu Gothic UI 11pt・`kind` = `info`（白地／緑枠）/ `warn`（黄地）/ `error`（赤地・白字）。いずれもコントラスト比4.5:1以上）。`Application.OnTime Now + <表示秒数>` で `HideToast` を予約し、予約は常に1本（`ShowToast` が張り替え前に `CancelToast` を呼ぶ）。**表示秒数は固定6秒をやめ `modUIGeom.ToastSecondsFor(text)`（3 + 字数/20 を3〜9秒でクリップ）で決める**（v3.2.1・裁定書22 m9）。**`HideToast` は対象図形が無ければ何もしない**（ブックを閉じたあとに残った予約が発火しても無害）。`CancelToast` はブックの終了処理からの取り消し口で、**`clsAppEvents.App_WorkbookBeforeClose` が `RestoreScreen` の前に呼ぶ**（v3.4・W9.2 で結線。11章§8.5(d)「ブックを閉じるときは予約を全て取り消す」の唯一の実装）。**`Application.OnTime` の手続き名はブック名で修飾しない**（`"modUIToast.HideToast"`）: 修飾するとホスト（Excel）が非ASCIIのブック名を文字列で解決することになり、Mac の実Excel では「実行時エラー 5」の生ダイアログが出た。`tools/vba_lint.py` の `check_workbook_qualified_proc` が修飾へ戻す変更を ERROR で止める。`ShowNext` は主要4ボタンの成功経路に出す「次の一手」1行の唯一の値源。`WarnLine` は `hm_warning` へ書く1行を組み立て、`kind="error"` のときだけ末尾に「（err_logタブの最後の行を開発担当へ送ってください）」を足す。**`ShowResearchPrompts` は v3.2.1（裁定書22）で廃止**（v3.2 で HOME そのものが無くなり、調べる文はナビ区画①にその場で出るため押す口が消えていた。名前付きレンジ `gd_ch7_head` は使い方タブ⑦の飛び先として残る）。**文言はすべて本モジュールが持つ**（`modUIHome` に残量が無いため。v2.5.6・裁定書17 H2/H4＋司令塔追補） |
 
 
   **W6第1弾（1画面ナビ・17章 T-49）で新設した公開名（v3.2）**。11章§8.2 の登記表が根拠であり、**公開シグネチャの変更は無い**（既存の口はすべて不変）。

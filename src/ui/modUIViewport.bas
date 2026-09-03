@@ -56,6 +56,12 @@ Public Sub ApplyFullScreen()
     If win.DisplayGridlines Then win.DisplayGridlines = False
     If win.DisplayHeadings Then win.DisplayHeadings = False
     ' シートタブは**触らない**(裁定書26 B。ナビと使い方を行き来する導線)。
+
+    ' W9.2 N3: On Error Resume Next が握りつぶした失敗を記録だけは残す。
+    If Err.Number <> 0 Then
+        modLog.LogError "E0603", VP_SRC & ".ApplyFullScreen", "fullscreen_failed", Err.Number
+        Err.Clear
+    End If
 End Sub
 
 ' ============================================================================

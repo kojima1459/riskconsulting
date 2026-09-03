@@ -111,6 +111,84 @@ def split_template_dir(dir_dec: bytes) -> bytes:
     raise OvbaWriteError("template の dir に PROJECTMODULES(0x000F)がありません")
 
 
+# --- MSForms 参照の除去(W9.2) ------------------------------------------------
+# [MS-OVBA] 2.3.4.2.2 PROJECTREFERENCES の REFERENCE レコード群のうち、
+# **MSForms(fm20.tlb)への参照だけ**を単位ごと落とす。
+#   なぜ落とすのか:
+#     (1) W9-B で DataObject の遅延バインドを撤去したので、配布物はもう
+#         MSForms を1行も使わない。使わない型ライブラリへの参照が残っていると、
+#         開き手の環境に fm20.tlb が無い/場所が違うときに「参照不可」となり、
+#         VBA はプロジェクト全体をコンパイルするため**起動直後に生ダイアログ**が
+#         出る(Mac の実機で実行時エラー5)。
+#     (2) template を作った開発者の絶対パス(/Users/...)が REFERENCECONTROL の
+#         LibidExtended に焼き込まれており、配布物に個人情報が載る。
+#   REFERENCE の単位([MS-OVBA] 2.3.4.2.2):
+#     [REFERENCENAME(0x0016 + 0x003E)] +
+#       REFERENCEORIGINAL(0x0033) + REFERENCECONTROL(0x002F)
+#         [+ NameRecordExtended(0x0016 + 0x003E)] + Reserved3(0x0030)
+#     | REFERENCEREGISTERED(0x000D) | REFERENCEPROJECT(0x000E)
+#   **1レコードだけ抜くと後続が読めなくなる**ので、必ずこの単位で落とす。
+REC_REFERENCENAME = 0x0016
+REC_REFERENCENAME_UNI = 0x003E
+REC_REFERENCEORIGINAL = 0x0033
+REC_REFERENCECONTROL = 0x002F
+REC_REFERENCECONTROL_EXT = 0x0030
+REC_REFERENCEREGISTERED = 0x000D
+REC_REFERENCEPROJECT = 0x000E
+
+MSFORMS_GUID = b"{0D452EE1-E08F-101A-852E-02608C4D0BB4}"
+MSFORMS_NAME = b"MSForms"
+
+
+def _reference_blocks(prefix: bytes):
+    """dir の先頭ブロックを (start, end, is_reference) の並びへ切り分ける。
+
+    参照でないレコード(PROJECTINFORMATION 群)は 1レコード=1ブロックで返す。
+    """
+    recs = list(iter_dir_records(prefix))
+    spans = [(off, off + 6 + len(body)) for off, _rid, _sz, body in recs]
+    ids = [rid for _off, rid, _sz, _body in recs]
+    i = 0
+    n = len(recs)
+    while i < n:
+        if ids[i] != REC_REFERENCENAME:
+            yield (spans[i][0], spans[i][1], False)
+            i += 1
+            continue
+        j = i + 1                                   # REFERENCENAME
+        if j < n and ids[j] == REC_REFERENCENAME_UNI:
+            j += 1
+        if j < n and ids[j] == REC_REFERENCEORIGINAL:
+            j += 1
+        if j < n and ids[j] == REC_REFERENCECONTROL:
+            j += 1
+            if j < n and ids[j] == REC_REFERENCENAME:
+                j += 1
+                if j < n and ids[j] == REC_REFERENCENAME_UNI:
+                    j += 1
+            if j < n and ids[j] == REC_REFERENCECONTROL_EXT:
+                j += 1
+        elif j < n and ids[j] in (REC_REFERENCEREGISTERED, REC_REFERENCEPROJECT):
+            j += 1
+        else:
+            raise OvbaWriteError(
+                "dir の REFERENCE レコードの並びが [MS-OVBA] 2.3.4.2.2 と"
+                "一致しません(id=0x%04X)" % (ids[j] if j < n else 0,))
+        yield (spans[i][0], spans[j - 1][1], True)
+        i = j
+
+
+def strip_msforms_reference(prefix: bytes) -> bytes:
+    """dir の先頭ブロックから MSForms への REFERENCE を単位ごと落として返す。"""
+    out = bytearray()
+    for start, end, is_ref in _reference_blocks(prefix):
+        blob = prefix[start:end]
+        if is_ref and (MSFORMS_GUID in blob or MSFORMS_NAME in blob):
+            continue
+        out += blob
+    return bytes(out)
+
+
 def template_project_cookie(dir_dec: bytes) -> bytes:
     """template の PROJECTCOOKIE(0x0013)の2バイトを返す。"""
     for _off, rid, _size, body in iter_dir_records(dir_dec):
@@ -546,6 +624,8 @@ def build_vba_project(template_bin: bytes, modules,
     skel = ovba.CFBReader(template_bin)
     tmpl_dir = ovba.ovba_decompress(skel.read("dir"))
     prefix = split_template_dir(tmpl_dir)
+    # 使わない MSForms 参照(と、そこに焼き込まれた開発者の絶対パス)を落とす。W9.2。
+    prefix = strip_msforms_reference(prefix)
     cookie = template_project_cookie(tmpl_dir)
 
     dir_dec = prefix + build_modules_section(modules, cookie)

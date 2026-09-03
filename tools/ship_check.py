@@ -458,17 +458,42 @@ def check_item6(dist_dir: Path) -> tuple[bool, list[str]]:
     # --- vbaProject.bin の禁止文字列 ------------------------------------------
     sys.path.insert(0, str(REPO_ROOT / "build"))
     import build_rpn      # 禁止文字列の表と判定は build 側の1実装を共有する
+    vba_bin = b""
     with zipfile.ZipFile(book) as z:
         if "xl/vbaProject.bin" not in z.namelist():
             problems.append("配布物に xl/vbaProject.bin がありません")
             hits = []
         else:
-            hits = build_rpn.forbidden_strings_in_bin(z.read("xl/vbaProject.bin"))
+            vba_bin = z.read("xl/vbaProject.bin")
+            hits = build_rpn.forbidden_strings_in_bin(vba_bin)
     print(f"  bin の禁止文字列   : {hits if hits else 'なし'}"
           f"  (表: {list(build_rpn.FORBIDDEN_BIN_STRINGS)})")
     if hits:
         problems.append("vbaProject.bin に配布禁止の文字列があります: "
                         + ", ".join(hits))
+
+    # --- dir ストリームの中身(W9.2) -------------------------------------------
+    # (1) 開発者の絶対パス(/Users/...)が焼き込まれていないこと
+    # (2) 使っていない MSForms(fm20.tlb)への参照が残っていないこと
+    #     どちらも template の PROJECTREFERENCES を丸写ししていた副作用であり、
+    #     build/ovba_write.strip_msforms_reference が落とす。落とし忘れを毎回ここで
+    #     止める(bin は圧縮されているので、必ず解凍してから見る)。
+    dir_hits: list[str] = []
+    if vba_bin:
+        import ovba       # noqa: E402  (build/ を sys.path へ入れた後に読む)
+        try:
+            dir_dec = ovba.ovba_decompress(ovba.CFBReader(vba_bin).read("dir"))
+        except Exception as e:                                   # pragma: no cover
+            problems.append(f"vbaProject.bin の dir を読めません: {e}")
+            dir_dec = b""
+        if b"/Users/" in dir_dec:
+            dir_hits.append("/Users/(個人の絶対パス)")
+        if b"MSForms" in dir_dec or b"{0D452EE1-E08F-101A-852E-02608C4D0BB4}" in dir_dec:
+            dir_hits.append("MSForms 参照")
+    print(f"  dir の残留物       : {dir_hits if dir_hits else 'なし'}")
+    if dir_hits:
+        problems.append("vbaProject.bin の dir に残ってはいけないものがあります: "
+                        + ", ".join(dir_hits))
 
     if problems:
         print(f"  FAIL: {len(problems)} 件")
@@ -476,7 +501,7 @@ def check_item6(dist_dir: Path) -> tuple[bool, list[str]]:
             print(f"    - {p}")
         return False, problems
     print("  PASS: llm_transport=ribbon / direct_api_base 不在 / mock 不在 / "
-          "vba_src 不在 / 禁止文字列 不在")
+          "vba_src 不在 / 禁止文字列 不在 / dir に /Users/ とMSForms参照 不在")
     return True, []
 
 

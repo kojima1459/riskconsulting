@@ -256,6 +256,10 @@ End Sub
 '   specText の1件 = "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。
 Public Sub PlaceButtonRow(ByVal ws As Object, ByVal rowNo As Long, _
                           ByVal specText As String, ByVal kind As String)
+    ' W9.2 N8: 起動時の描画経路(EnsureScreens -> DrawNav -> DrawSections)の末端。
+    ' ここで投げると起動直後に生ダイアログが出るので、必ず受け止めて記録する。
+    On Error GoTo Failed
+
     If rowNo <= 0 Then Exit Sub
     If LenB(specText) = 0 Then Exit Sub
 
@@ -282,6 +286,18 @@ Public Sub PlaceButtonRow(ByVal ws As Object, ByVal rowNo As Long, _
             minLeft = modUISheet.CellLeft(ws, rowNo, col) + widthPt + UD_BTN_GAP
         End If
     Next i
+    Exit Sub
+
+Failed:
+    ' ハンドラ稼働中は On Error Resume Next が効かないので、記録は別Subへ。
+    LogPlaceFailure rowNo, Err.Number
+End Sub
+
+' PlaceButtonRow の Failed: から呼ぶ記録専用(W9.2 N8)。
+Private Sub LogPlaceFailure(ByVal rowNo As Long, ByVal errNo As Long)
+    On Error Resume Next
+    modLog.LogError "E0603", UD_SRC & ".PlaceButtonRow", _
+                    "place_button_row_failed:" & CStr(rowNo), errNo
 End Sub
 
 ' 左端が minLeft 以上になる最初のアンカー列(0=範囲内に無い)。

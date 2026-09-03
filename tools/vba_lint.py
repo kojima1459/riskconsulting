@@ -2974,6 +2974,40 @@ def _paren_args(s: str, open_idx: int):
     return None
 
 
+# ------------------------------------------------------------------------------
+# W9.2: ブック名で修飾した手続き名を組み立てない
+# ------------------------------------------------------------------------------
+# `Application.OnTime Procedure:="'" & ThisWorkbook.Name & "'!modX.Foo"` や
+# `Application.Run "'" & ThisWorkbook.Name & "'!modBoot.Boot"` は、**ホスト側
+# (Excel)が実行時に文字列でブックと手続きを引き当てる**形である。ブック名に
+# 非ASCII(日本語)が入る配布物では、この解決が環境によって失敗し、利用者には
+# 「実行時エラー 5: プロシージャの呼び出し、または引数が無効です」の生ダイアログ
+# しか出ない(2026-09 Mac実機・W9.2)。呼び先が**自分のプロジェクト内**にある
+# 限り、修飾する必要はまったく無い(VBA が自分で名前解決する)。
+# したがって「ブック名 + '!' で手続き名を組み立てる」書き方そのものを禁じる。
+WORKBOOK_QUALIFIED_NAME = "ThisWorkbook.Name"
+ptn_bang_in_literal = re.compile(r'"[^"]*!')
+
+
+def check_workbook_qualified_proc(info: ModuleInfo) -> None:
+    """`ThisWorkbook.Name` と `!` を含む文字列リテラルの連結を ERROR にする。"""
+    for lineno, stmt in info.statements:
+        if WORKBOOK_QUALIFIED_NAME not in stmt:
+            continue
+        if not ptn_bang_in_literal.search(stmt):
+            continue
+        info.add(
+            "ERROR", lineno,
+            "ブック名で修飾した手続き名を組み立てています"
+            "(`\"'\" & ThisWorkbook.Name & \"'!modX.Foo\"` の形)。"
+            "Application.OnTime / Application.Run はこの文字列を**ホスト側が**"
+            "解決するため、ブック名に日本語が入る配布物では解決に失敗し、利用者に"
+            "は「実行時エラー 5」の生ダイアログしか出ません(W9.2・Mac実機)。"
+            "呼び先が自プロジェクト内なら修飾は不要です。"
+            f"モジュール名だけを書いてください: 「{stmt.strip()[:80]}」",
+        )
+
+
 def check_find_lookin(info: ModuleInfo) -> None:
     """`.Find(` で LookIn を省略していたらERRORにする。
 
@@ -3084,6 +3118,7 @@ def run_lint(src_root: Path) -> int:
         check_contract(info)
         check_raw_activate(info)
         check_find_lookin(info)
+        check_workbook_qualified_proc(info)
 
     # モジュールをまたいだ検査は、全モジュールの宣言を集め終わってから1回だけ。
     check_module_level_refs(modules)

@@ -37,6 +37,13 @@ Attribute App.VB_VarHelpID = -1
 Private Sub App_WorkbookActivate(ByVal Wb As Workbook)
     On Error Resume Next
     If Wb Is ThisWorkbook Then modUIViewport.ApplyFullScreen
+    ' 起動経路の最外周の網(W9.2 N5)。ここで捨てた失敗を err_log に残す
+    ' (On Error Resume Next は黙って握りつぶすため、記録だけは必ず残す)。
+    If Err.Number <> 0 Then
+        modLog.LogError "E0603", "clsAppEvents.App_WorkbookActivate", _
+                        "activate_failed", Err.Number
+        Err.Clear
+    End If
 End Sub
 
 ' 本ブックから離れた: 退避した元の値へ戻す(他のブックを全画面のままにしない)。
@@ -46,7 +53,12 @@ Private Sub App_WorkbookDeactivate(ByVal Wb As Workbook)
 End Sub
 
 ' 本ブックを閉じる: 同上。閉じたあとのExcelを全画面のままにしない。
+'   **画面を戻す前にトーストの OnTime 予約を取り消す**(W9.2)。予約が残ったまま
+'   閉じると、発火時に Excel が本ブックを開き直そうとする経路ができる
+'   (11章§8.5(d)「ブックを閉じるときは予約を全て取り消す」の唯一の結線先)。
 Private Sub App_WorkbookBeforeClose(ByVal Wb As Workbook, Cancel As Boolean)
     On Error Resume Next
-    If Wb Is ThisWorkbook Then modUIViewport.RestoreScreen
+    If Not (Wb Is ThisWorkbook) Then Exit Sub
+    modUIToast.CancelToast
+    modUIViewport.RestoreScreen
 End Sub

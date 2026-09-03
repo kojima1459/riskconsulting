@@ -164,6 +164,20 @@ def check_book(book: Path) -> list[str]:
             f"{book.name}: vbaProject.bin に配布禁止の文字列があります"
             f"(裁定書27 W9-B 6): {', '.join(hits)}")
 
+    # --- [4b] 起動スタブの形(W9.2) ------------------------------------------
+    # ThisWorkbook の Workbook_Open は modBoot.Boot を直接呼ぶ。ブック名で
+    # 修飾した Application.Run(非ASCIIブック名をExcel側に解決させる形)は
+    # Mac実機で Err 5 の生ダイアログを出した(裁定書27 W9.2)。スタブ本体は
+    # bin-roundtrip の「ソース一致」では検出できない(スタブ自体が値源)ため、
+    # ここで意味として禁じる。
+    tw = ovba_write.read_modules(vba_bin).get("ThisWorkbook", {}).get("source", b"")
+    tw_text = tw.decode("cp932", errors="replace") if isinstance(tw, (bytes, bytearray)) else str(tw)
+    bad_stub = [k for k in ("ThisWorkbook.Name", "Application.Run", "VBProject") if k in tw_text]
+    print(f"[4b] ThisWorkbook スタブの禁止形: {bad_stub if bad_stub else 'なし'}")
+    if bad_stub:
+        errors.append(
+            f"{book.name}: ThisWorkbook スタブに禁止の形があります(W9.2): {', '.join(bad_stub)}")
+
     # --- [5] MODULEOFFSET=0 ---------------------------------------------------
     import struct
     import ovba

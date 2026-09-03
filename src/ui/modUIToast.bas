@@ -22,8 +22,8 @@ Option Explicit
 '   4. 予約は常に1本(ShowToast のたびに前の予約を取り消してから張り直す)。
 '   5. **HideToast は対象図形が無ければ何もしない**。ブックを閉じたあとに予約が
 '      残って発火しても、消すものが無ければ黙って戻る(Excelが本ブックを開き直す
-'      経路を作らない。CancelToast は終了処理から呼ぶための取り消し口として
-'      用意してあるが、現在の ThisWorkbook には終了イベントが無いため未結線)。
+'      経路を作らない)。**CancelToast は終了処理から呼ぶ**
+'      (clsAppEvents.App_WorkbookBeforeClose が RestoreScreen の前に呼ぶ。W9.2)。
 '   6. 自ブックがアクティブなときだけ描く(他人のブックへ図形を作らない)。
 '
 ' 文言はここが唯一の値源(modUIHome は残量が少ないため文言定数を持たない。
@@ -159,8 +159,8 @@ End Sub
 
 ' ============================================================================
 ' CancelToast - 未消化の OnTime 予約を取り消す。ShowToast が張り替えの前に
-'   呼ぶほか、ブックの終了処理から呼べるように Public にしてある
-'   (現在の ThisWorkbook は終了イベントを持たないため未結線。裁定書17 H2)。
+'   呼ぶほか、ブックの終了処理からも呼ぶ(裁定書17 H2・W9.2)。終了時の呼び口は
+'   clsAppEvents.App_WorkbookBeforeClose ただ1本で、RestoreScreen より前に呼ぶ。
 ' ============================================================================
 Public Sub CancelToast()
     On Error Resume Next
@@ -250,8 +250,13 @@ Private Sub ScheduleHide()
 End Sub
 
 ' 予約と取り消しで必ず同じ文字列になるように1箇所で組む。
+'   **ブック名で修飾しない**(W9.2・実機第3報)。呼び先は自ブック内の Public Sub
+'   であり、ブック名で修飾すると Application.OnTime の予約・取り消しの両方で
+'   **ホスト側が非ASCII(日本語)のブック名を文字列解決する**経路ができる。Mac の
+'   実Excel では起動直後に「実行時エラー 5」の生ダイアログが出た。修飾を外すと
+'   VBA が自分のプロジェクト内で解決するので、その経路が消える。
 Private Function HideProcName() As String
-    HideProcName = "'" & ThisWorkbook.Name & "'!modUIToast.HideToast"
+    HideProcName = "modUIToast.HideToast"
 End Function
 
 Private Function FillOf(ByVal kind As String) As Long

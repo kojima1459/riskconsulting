@@ -16,8 +16,11 @@ Option Explicit
 '   なので、両方を読んで seq 昇順に1本の表へ組み直す(13章§2.17「物理行は seq 昇順
 '   の追記型」)。11章の「新しい順」表示は最終行へスクロールして実現する。
 '
-' 絵文字(11章§5): `.bas` に絵文字リテラルを書かない。「受信箱へ」ボタンの電球は
-'   ChrW のサロゲートペアで組み立てる(VBEのCP932保持で '?' 化しないため)。
+' 絵文字(11章§5・§8.6): `.bas` に絵文字リテラルを書かない。**W9.2 で
+'   サロゲートペア組立(ChrW(&HD83D&) & ChrW(&HDCA1&))も撤去した**。禁止の趣旨は
+'   「ソースに絵文字を持ち込まない」であって「別の書き方で持ち込んでよい」では
+'   ない。ChrW にサロゲートの片割れを渡す形は環境によって扱いが割れ(Mac の実Excel
+'   では起動直後に実行時エラー5が出た)、ボタン名は絵文字が無くても意味が通る。
 ' ============================================================================
 
 Private Const US2_SRC As String = "modUISparring"
@@ -37,20 +40,15 @@ Public Sub EnsureSparringButtons()
     Set ws = modUISheet.SheetOf(US2_SHEET)
     If ws Is Nothing Then Exit Sub
 
-    modUISheet.EnsureButton ws, "btn_sp_resume", BulbText() & "壁打ちを開始/再開", _
+    modUISheet.EnsureButton ws, "btn_sp_resume", "壁打ちを開始/再開", _
                             1, 8, 160#, "modUISparring.SparringResume"
     modUISheet.EnsureButton ws, "btn_sp_send", "送信", 2, 8, 72#, _
                             "modUISparring.SparringSend"
-    modUISheet.EnsureButton ws, "btn_sp_inbox", BulbText() & "受信箱へ", 3, 8, 120#, _
+    modUISheet.EnsureButton ws, "btn_sp_inbox", "受信箱へ", 3, 8, 120#, _
                             "modUISparring.SparringToInbox"
     modUISheet.EnsureButton ws, "btn_sp_s3", "S3を開く", 4, 8, 92#, _
                             "modUISparring.SparringOpenS3"
 End Sub
-
-' 電球(U+1F4A1)のサロゲートペア。11章§5: ソースに絵文字リテラルを書かない。
-Private Function BulbText() As String
-    BulbText = ChrW(&HD83D&) & ChrW(&HDCA1&) & " "
-End Function
 
 ' ============================================================================
 ' OpenSparring - HOMEから開く(ロックは呼び出し側が保持している)。

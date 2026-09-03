@@ -34,6 +34,13 @@ Option Explicit
 '       08 Utf8Len  "A"+BOM     -> 4
 '   W9C2 DataDirCandidates 3本 裁定書27 W9-C2 の解決順(1)(2)(3)。
 '     環境変数の有無だけで並びが決まることを、値を手で与えて固定する。
+'   W92 SplitPathParts 3本  W9.2(実機第3報)。modUtil.EnsureFolder が MkDir する
+'     「親から順の一覧」を作る純関数。**区切り文字を引数で受ける**ので
+'     Windows と Mac の両方を1本の実装で書ける(区切りの判定そのものは
+'     modUtil.PathSep が環境から取り、環境依存なので純層では検査できない)。
+'       01 "\"     C:\a\b\c        -> C:\a / C:\a\b / C:\a\b\c(先頭の C: 単独は作らない)
+'       02 "/"     /Users/u/d    -> /Users / /Users/u / /Users/u/d
+'       03 UNC先頭 \\srv\share\d  -> 空文字(共有名の途中まで MkDir できない)
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -67,6 +74,9 @@ WD:
 WE:
     On Error GoTo FE
     T_W9C2_DataDirCandidates
+WF:
+    On Error GoTo FF
+    T_W92_SplitPathParts
 WDone:
     Exit Sub
 FA:
@@ -83,6 +93,9 @@ FD:
     Resume WE
 FE:
     GroupFail "W9C2 DataDirCandidates(裁定書27 W9-C2)"
+    Resume WF
+FF:
+    GroupFail "W92 SplitPathParts(W9.2)"
     Resume WDone
 End Sub
 
@@ -234,4 +247,21 @@ Private Sub T_W9C2_DataDirCandidates()
     ChkS "Test_W9C2_03_OneDriveが無ければDocumentsだけ_裁定書27W9C2", _
         modUtil.DataDirCandidates(P18_DD_RAW, vbNullString, vbNullString, "C:\Users\u"), _
         "C:\Users\u" & P18_DD_LAST
+End Sub
+
+' ============================================================================
+' W92 SplitPathParts(W9.2)。期待値は「区切りで割って左から1つずつ足す」という
+'   規則の文だけから手で書き出した(実装の出力は見ていない)。
+' ============================================================================
+Private Sub T_W92_SplitPathParts()
+    ChkS "Test_W92_01_円記号区切りは親から順に並ぶ_W9.2", _
+        modUtil.SplitPathParts("C:\a\b\c", "\"), _
+        "C:\a" & vbLf & "C:\a\b" & vbLf & "C:\a\b\c"
+
+    ChkS "Test_W92_02_斜線区切りは先頭の空要素を飛ばす_W9.2", _
+        modUtil.SplitPathParts("/Users/u/d", "/"), _
+        "/Users" & vbLf & "/Users/u" & vbLf & "/Users/u/d"
+
+    ChkS "Test_W92_03_区切り2つで始まるUNCは空文字_W9.2", _
+        modUtil.SplitPathParts("\\srv\share\d", "\"), vbNullString
 End Sub

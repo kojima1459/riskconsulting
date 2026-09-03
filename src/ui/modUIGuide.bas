@@ -33,6 +33,9 @@ Private Const UG_PREFIX As String = "gt_"
 Private Const UG_FLAG As String = "guide_tour_done"
 Private Const UG_STEPS As Long = 4
 Private Const UG_LOCK_NAME As String = "はじめの案内"
+' 13章§2.3 kb_path の既定値に入る「配置前のプレースホルダ」の目印(modBoot の
+' BOOT_KB_PLACEHOLDER と同値。W9.2)。この形は Dir$ に掛けない。
+Private Const UG_KB_PLACEHOLDER As String = "\\...\"
 
 ' 13章§2.10 の名前付きレンジ(カードの位置の基準。セル番地は書かない)。
 Private Const UG_ANCHOR As String = "nv_sec1"
@@ -587,6 +590,10 @@ Private Sub NoticeKbMissingOnce()
     pathText = Trim$(modConfig.GetStr("kb_path", vbNullString))
     If LenB(pathText) = 0 Then Exit Sub
     If InStr(1, pathText, "://", vbBinaryCompare) > 0 Then Exit Sub
+    ' 配置前の既定プレースホルダ(13章§2.3 kb_path の既定値)を Dir$ に掛けない
+    ' (W9.2)。"\\...\" は不正なUNCで、Mac の実Excel では Dir$ が実行時エラー5
+    ' (プロシージャの呼び出し、または引数が無効です)を投げる。
+    If InStr(1, pathText, UG_KB_PLACEHOLDER, vbBinaryCompare) > 0 Then Exit Sub
     If LenB(Dir$(pathText)) > 0 Then Exit Sub
 
     MsgBox "ナレッジブックが見つかりません。管理者にご連絡ください" & _
