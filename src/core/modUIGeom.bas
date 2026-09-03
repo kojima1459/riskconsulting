@@ -27,6 +27,9 @@ Private Const UG_HALF_RATIO As Double = 0.5
 ' 省略記号(1文字ぶんの幅を持つ)。
 Private Const UG_ELLIPSIS As String = "…"
 
+' コーチ帯の1行目で「STEP n/6」と進捗ドットを隔てる空白(裁定書26 A の逐語)。
+Private Const UG_BAND_GAP As String = "  "
+
 ' ============================================================================
 ' SumSpan - 「幅1;幅2;...」の合計に、区切りの余白を (件数-1) 個ぶん足した幅。
 '   空文字は 0。数値でない項は 0 として数える(壊れた指定で例外にしない)。
@@ -182,6 +185,25 @@ Public Function StepDots(ByVal current As Long, ByVal total As Long) As String
         End If
     Next i
     StepDots = outText
+End Function
+
+' ============================================================================
+' CoachBandText - コーチ帯の図形の中に書く文字(裁定書26 A)。
+' ----------------------------------------------------------------------------
+' なぜ図形の中に持たせるのか: 図形は色や重ね順に関わらず**常にセルの上**に
+'   描かれる。帯の地(不透明グラデーション)を敷くと、その下のセルへ書いた
+'   STEP番号・進捗ドット・次の一手が実機(Windows Excel)で1文字も見えない
+'   (11章§8.5 の禁忌)。文字を図形の中に持たせれば必ず見える。
+' 組立て(裁定書26 A の逐語):
+'   1行目 = "STEP <n>/<count>" + 空白2つ + 進捗ドット(StepDots と同一の値)
+'   2行目 = 次の一手(hm_next_action の逐語。1字も変えない)
+' セル(nv_step_no / nv_step_dots / hm_next_action)への書込みは従来どおり
+'   維持する(層(b)・純層の読取値源であり、ここはその写しである)。
+' ============================================================================
+Public Function CoachBandText(ByVal stepNo As Long, ByVal stepCount As Long, _
+                              ByVal actionText As String) As String
+    CoachBandText = "STEP " & CStr(stepNo) & "/" & CStr(stepCount) & _
+                    UG_BAND_GAP & StepDots(stepNo, stepCount) & vbLf & actionText
 End Function
 
 ' ============================================================================

@@ -32,10 +32,16 @@ Option Explicit
 Public Sub RunAll()
     On Error GoTo FA
     T_W7G_TrimPlan6
+WB:
+    On Error GoTo FB
+    modTestsPure18.RunAll
 WDone:
     Exit Sub
 FA:
     GroupFail "W7G TrimPlan(15章§0.7 の6段)"
+    Resume WB
+FB:
+    GroupFail "modTestsPure18(W8.1・裁定書26)"
     Resume WDone
 End Sub
 

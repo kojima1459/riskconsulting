@@ -1385,6 +1385,16 @@ Public Function RunExcelTests2() As Long
   | - | `modBoot.KbAutoNote() As String` | 公開関数（ui層。読み出し専用） | 本章§6・13章§2.3 | 起動時の**ナレッジブック自動発見**（config `kb_path` が空／プレースホルダ `\\...\`／`Dir$` で不在のとき、`ThisWorkbook.Path & "\ナレッジブック.xlsx"` を探して `kb_path` へ書く）で実際に書いたときだけ「同じフォルダのナレッジブックを読み込みました。」を返す。**探索そのものは `modBoot` の Private 1本**（`ResolveKbPath`。起動処理を modBoot 以外へ散らさない）で、読むのは `modUIHome.KbStatusText` だけ（v2.5.6・裁定書17 H1） |
   | - | `modUISheet.EnsureButtonEx` の `kind="primary"` の高さ | 図形ボタンの寸法規約 | 13章§2.10 | 主要動線だけボタン高を**30pt**にする（他は従来どおり26pt）。高さを決める場所は `modUISheet.BtnHeightOf` の1本で、`AddShape` と行高の確保が同じ値を読む。**公開シグネチャは不変**（v2.5.6・裁定書17 H3(a)） |
 
+  **W8.1（実機第1報の反映・裁定書26）で新設した公開名（v3.3）**。
+
+  | # | 新設した口 | 種別 | 定義の正 | 契約 |
+  |---|---|---|---|---|
+  | - | **`modUIGeom.CoachBandText(stepNo, stepCount, actionText) As String`** | 公開関数（core層。**純関数**） | 本章§6・11章§3.1・§8.5 #16 | コーチ帯の**図形の中に書く文字**の唯一の組立て口。`STEP n/6` ＋空白2つ＋進捗ドットで1行、次の一手で1行の計2行。セル（`nv_step_no` / `nv_step_dots` / `hm_next_action`）への書込みは従来どおり続ける（層(b)・純層の値源） |
+  | - | **`modUIViewport`**（`ApplyFullScreen()` / `RestoreScreen()`） | 公開関数（ui層） | 本章§6・11章§3.1・13章§2.3 | 全画面表示（`DisplayFullScreen`・数式バー・罫線・行列見出し）。**シートタブは触らない**。本ブックが前面のときだけ触り、変える前の値を1度だけ退避する。config `ui_fullscreen`（既定 `TRUE`）が `FALSE` なら何もしない。適用は `modBoot` の起動シーケンスの**最後**（ナビを描いた後）に1回。`RestoreScreen` は退避した値へ戻す唯一の口 |
+  | - | **`modUIResearch.OpenDrFull()` / `OpenDrQuick()` / `DrUrlOf(kind, cfgText) As String` / `DrUrlDefaultOf(kind) As String`** ＋ 図形 **`btn_nv_dr_full` / `btn_nv_dr_quick`** | 公開関数・図形（ui層。`DrUrlOf` / `DrUrlDefaultOf` は**純関数**） | 本章§6・11章§3.2・13章§2.3・§2.10 | 区画①の見出しの直下の2本。`DrUrlOf` は config が空・欠落のとき `DrUrlDefaultOf` の既定URLへ倒す（設定を消しただけで導線が死なない）。開く手段は `ThisWorkbook.FollowHyperlink` で、**`Hyperlinks.Add` は使わない**。[コピー]の直後にも `dr_url_full` を開く（config `dr_open_after_copy`） |
+  | - | **`modUINav.NavRowSec1B() As String` / `NavRowFooter() As String` / `FooterCaption() As String` / `DrawNavFooter()` / `OpenPortal()`** ＋ **`modUIGuide.EnsureFooterButton()`** ＋ **`modUISheet.EnsureFooterButton(ws, shapeKey, caption, anchorRow, anchorCol, widthPt, onActionName) As Boolean`** ＋ 図形 **`btn_nv_footer` / `btn_gd_footer`** | 公開関数・図形（ui層） | 本章§6・11章§3.1・13章§2.10 | 最下部のフッター[© リスクコンサルティング支援部]（淡色・枠なし・中央）。キャプションの値源は `FooterCaption()` 1本で、丸C は CP932 に無いため `ChrW(169)` で組む。押すと config `portal_url` を既定ブラウザで開く。`modUISheet.EnsureFooterButton` が唯一の描き口 |
+  | - | config `ui_fullscreen` / `dr_url_menu` / `dr_url_quick` / `dr_url_full` / `dr_open_after_copy` / `portal_url` | configキー | 13章§2.3・19章§4 | 既定値と意味は13章§2.3が正 |
+
   **登記の移設（v3.0・17章§7 Z-13の30,000字契約分割）**: 下表は**新機能ではなく移設**である。移設した公開名は移設先モジュールへ読み替える（挙動・シグネチャ・文言は1字も変えていない）。
 
   | # | 名前 | 種別 | 正 | 内容 |

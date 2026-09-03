@@ -247,6 +247,11 @@ PURE_ALLOWLIST = [
     # modTestsPure17: W7(17章 T-57・統合班)の純層。15章§0.7 の切詰め6段化
     #   (modPipeline4.TrimPlan)だけを根拠に叩く。modTestsPure16.RunAll の末尾から呼ぶ。
     "modTestsPure17",
+    # modTestsPure18: W8.1(裁定書26)の純層5本。11章§3.1/§3.1.1・§8.5 #16 と
+    #   13章§2.3 だけを根拠に、modUIGeom.CoachBandText(帯の図形の中の文字。3本)と
+    #   modUIResearch.DrUrlOf(config欠落時の既定URL。2本)を叩く。
+    #   modTestsPure17.RunAll の末尾から呼ぶ。
+    "modTestsPure18",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
 

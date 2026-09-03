@@ -53,6 +53,9 @@ Public Sub EnsureScreens()
     modUISparring.EnsureSparringButtons
     ' 使い方タブの[テストを実行][ツアーをもう一度見る][記録を見る][表示する]
     modUIGuide.EnsureGuideButtons
+    ' 使い方タブの最下部のフッター(裁定書26 D)。ui_advanced=FALSE のときも
+    ' 置くので EnsureGuideButtons とは別に呼ぶ。
+    modUIGuide.EnsureFooterButton
 
     RefreshHome
 End Sub

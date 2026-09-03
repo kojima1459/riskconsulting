@@ -422,6 +422,13 @@
       "wave": "T-30"
     },
     {
+      "name": "modUIViewport",
+      "path": "src/ui/modUIViewport.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "W8.1"
+    },
+    {
       "name": "modUIToast",
       "path": "src/ui/modUIToast.bas",
       "role": "ui",
@@ -588,6 +595,13 @@
       "role": "test",
       "type": "std",
       "wave": "T-57"
+    },
+    {
+      "name": "modTestsPure18",
+      "path": "src/test/modTestsPure18.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W8.1"
     },
     {
       "name": "modTestsExcel",

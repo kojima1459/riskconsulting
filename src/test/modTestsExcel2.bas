@@ -30,6 +30,12 @@ Private Const T2_CASE As String = "C-97990102-903"
 Private Const T2_COMPANY As String = "T47検査用商事"
 Private Const T2_SHEET As String = "ナビ"
 
+' 裁定書26 A/D の層(b)検査で使う図形名と次の一手(11章§3.1.1 STEP3)。
+Private Const T2_BAND_SHAPE As String = "nv_band_bg"
+Private Const T2_FOOTER_SHAPE As String = "btn_nv_footer"
+Private Const T2_BAND_ACTION As String = _
+    "返ってきた文章を、②の枠へ貼ってください。長くても分けなくて大丈夫です。"
+
 ' case_data の1セル上限(modUtil.SplitForCells の分割幅・13章§2.2)。ここを超えた
 ' 本文は seq を進めて次の行へ回る。**往復一致はこの境界で壊れやすい**ので、
 ' Q9N は 32,000+1,000 字でまたがせる(v3.1 の「続き欄」は撤去済み)。
@@ -60,6 +66,7 @@ Public Function RunExcelTests2() As Long
     TestV5DraftRowNotCounted
     TestW61NavPaste
     TestW7FinanceRoundTrip
+    TestW81BandAndFooter
     RunExcelTests2 = m2Run
 End Function
 
@@ -402,6 +409,66 @@ Crashed:
     detText = "Err=" & CStr(Err.Number) & " " & Err.Description
     Resume Report
 End Sub
+
+' W81 = 帯の図形の中の文字とフッター図形の存在(裁定書26 A/D・11章§8.5 #16)。
+'   図形の描画は LibreOffice で確かめられず実機でしか見えない欠陥だった。
+'   期待値は純関数 modUIGeom.CoachBandText との一致だけを見る(逐語は層(a))。
+Private Sub TestW81BandAndFooter()
+    Dim ws As Object
+    Dim okText As Boolean
+    Dim okFooter As Boolean
+    Dim detText As String
+    Dim detFooter As String
+    Dim wantText As String
+    Dim gotText As String
+    On Error GoTo Crashed
+
+    detText = "前提不成立"
+    detFooter = "前提不成立"
+
+    Set ws = modUISheet.SheetOf(T2_SHEET)
+    If ws Is Nothing Then GoTo Report
+
+    wantText = modUIGeom.CoachBandText(2, 6, T2_BAND_ACTION)
+    modUINavDraw.DrawCoachBar 2, 6, T2_BAND_ACTION
+    gotText = ShapeTextOf(ws, T2_BAND_SHAPE)
+    okText = (StrComp(gotText, wantText, vbBinaryCompare) = 0)
+    detText = "期待=[" & wantText & "] 実際=[" & gotText & "]"
+
+    modUINav.DrawNavFooter
+    okFooter = HasShape(ws, T2_FOOTER_SHAPE)
+    detFooter = "図形 " & T2_FOOTER_SHAPE & " の有無"
+
+Report:
+    ECheck "T47B-W81-01_コーチ帯の図形の中にCoachBandTextと同じ文字がある", _
+           okText, detText
+    ECheck "T47B-W81-02_ナビの最下部にフッターの図形がある", okFooter, detFooter
+
+    ' 画面をふだんの状態へ戻す。
+    On Error Resume Next
+    modUINav.DrawNav
+    Exit Sub
+Crashed:
+    okText = False
+    okFooter = False
+    detText = "Err=" & CStr(Err.Number) & " " & Err.Description
+    detFooter = detText
+    Resume Report
+End Sub
+
+' 図形の中の文字(無ければ空文字)。
+Private Function ShapeTextOf(ByVal ws As Object, ByVal shapeName As String) As String
+    On Error Resume Next
+    ShapeTextOf = ws.Shapes(shapeName).TextFrame.Characters.Text
+End Function
+
+' その名前の図形があるか。
+Private Function HasShape(ByVal ws As Object, ByVal shapeName As String) As Boolean
+    On Error Resume Next
+    Dim shp As Object
+    Set shp = ws.Shapes(shapeName)
+    HasShape = Not (shp Is Nothing)
+End Function
 
 Private Sub TestW61NavPaste()
     Dim wsCases As Object

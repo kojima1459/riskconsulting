@@ -198,6 +198,9 @@ Private Sub BootStep(ByVal stepNo As Long)
         ' 初回ガイドツアー(裁定書14 裁定6)。実装は modUIGuide が唯一持ち、
         ' 起動シーケンスからの結線はこの1行だけにする(2回目以降は何もしない)。
         modUIGuide.StartTourIfFirstRun
+        ' 全画面表示(裁定書26 B)。**起動シーケンスの最後・ナビを描いた後**に
+        ' 1回だけ当てる(先に当てると窓の作り直しで幾何が古い窓のまま決まる)。
+        modUIViewport.ApplyFullScreen
     End Select
     Exit Sub
 
@@ -270,6 +273,18 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "feature_judgelog", "TRUE"
     ' 裁定書14 裁定6: 初回ガイドツアーを見終えたか("1"=済)。既定は "0"。
     modConfig.RegisterDefault "guide_tour_done", "0"
+    ' 裁定書26 B/C/D(13章§2.3): 全画面表示・社内ディープリサーチのURL3本と
+    ' [コピー]直後に開くか・部のポータル。
+    modConfig.RegisterDefault "ui_fullscreen", "TRUE"
+    modConfig.RegisterDefault "dr_url_menu", "https://app.hdtech.jp/research/menu"
+    modConfig.RegisterDefault "dr_url_quick", _
+        "https://app.hdtech.jp/research/quick-search"
+    modConfig.RegisterDefault "dr_url_full", _
+        "https://app.hdtech.jp/research/instructions"
+    modConfig.RegisterDefault "dr_open_after_copy", "TRUE"
+    modConfig.RegisterDefault "portal_url", _
+        "http://www.portal.s1.ms-ad-ins.co.jp/loader/hp/OpenContents/" & _
+        "A201203280048/toppage.html"
 End Sub
 
 ' ----------------------------------------------------------------------------

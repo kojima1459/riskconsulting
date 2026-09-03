@@ -34,6 +34,92 @@ Private Const UR_MSG_COPY_NG As String = _
 Private Const UR_MSG_NO_COMPANY As String = _
     "先に①の会社名を入れてください。会社名が空のままでは、調べる文を写せません。"
 
+' ============================================================================
+' 調べる場所(社内ディープリサーチ)のURL(裁定書26 C・13章§2.3)
+' ----------------------------------------------------------------------------
+' config の3キーが正で、空・欠落のときだけ下の既定へ倒す(**設定を消した
+' だけで導線が死なない**ようにする)。既定値の逐語は13章§2.3 と同じ。
+' 種別: "menu"=入口メニュー / "quick"=急ぎのとき / "full"=しっかり調査。
+' ============================================================================
+Private Const UR_DR_KIND_MENU As String = "menu"
+Private Const UR_DR_KIND_QUICK As String = "quick"
+Private Const UR_DR_KIND_FULL As String = "full"
+Private Const UR_DR_URL_MENU As String = "https://app.hdtech.jp/research/menu"
+Private Const UR_DR_URL_QUICK As String = "https://app.hdtech.jp/research/quick-search"
+Private Const UR_DR_URL_FULL As String = "https://app.hdtech.jp/research/instructions"
+Private Const UR_DR_OPEN_KEY As String = "dr_open_after_copy"
+Private Const UR_LOCK_DR As String = "調査ページを開く"
+
+' DrUrlDefaultOf - 種別ごとの既定URL(純関数・層(a)テスト対象)。
+Public Function DrUrlDefaultOf(ByVal kind As String) As String
+    Select Case kind
+    Case UR_DR_KIND_MENU
+        DrUrlDefaultOf = UR_DR_URL_MENU
+    Case UR_DR_KIND_QUICK
+        DrUrlDefaultOf = UR_DR_URL_QUICK
+    Case UR_DR_KIND_FULL
+        DrUrlDefaultOf = UR_DR_URL_FULL
+    End Select
+End Function
+
+' DrUrlOf - config の値(cfgText)が空なら既定へ倒す(純関数・層(a)テスト対象)。
+Public Function DrUrlOf(ByVal kind As String, ByVal cfgText As String) As String
+    Dim s As String
+    s = Trim$(cfgText)
+    If LenB(s) = 0 Then
+        DrUrlOf = DrUrlDefaultOf(kind)
+    Else
+        DrUrlOf = s
+    End If
+End Function
+
+' 種別ごとの config キー名。
+Private Function DrUrlKeyOf(ByVal kind As String) As String
+    DrUrlKeyOf = "dr_url_" & kind
+End Function
+
+' いま使うURL(config を読んで DrUrlOf へ通す)。
+Private Function DrUrlNow(ByVal kind As String) As String
+    DrUrlNow = DrUrlOf(kind, modConfig.GetStr(DrUrlKeyOf(kind), vbNullString))
+End Function
+
+' 既定ブラウザで開く(Hyperlinks.Add は使わない。11章§8.6 禁忌1)。
+'   開けたら True。EDR等で開けないことがあるので、呼び出し側は必ず
+'   「開けなかったとき」の案内を出す。
+Private Function OpenUrl(ByVal url As String) As Boolean
+    On Error GoTo Failed
+    ThisWorkbook.FollowHyperlink url
+    OpenUrl = True
+    Exit Function
+Failed:
+    Err.Clear
+    OpenUrl = False
+End Function
+
+' ============================================================================
+' OpenDrFull / OpenDrQuick - 区画①の見出し行の直下の2本(裁定書26 C)。
+' ============================================================================
+Public Sub OpenDrFull()
+    OpenDrPage UR_DR_KIND_FULL
+End Sub
+
+Public Sub OpenDrQuick()
+    OpenDrPage UR_DR_KIND_QUICK
+End Sub
+
+Private Sub OpenDrPage(ByVal kind As String)
+    If Not modUIProgress.TryEnterUiLock(UR_LOCK_DR) Then Exit Sub
+    On Error Resume Next
+    Dim url As String
+    url = DrUrlNow(kind)
+    If OpenUrl(url) Then
+        modUIToast.ShowToast "ブラウザで調査ページを開きました。", "info"
+    Else
+        modUIToast.ShowToast "ブラウザで " & url & " を開いてください。", "warn"
+    End If
+    modUIProgress.ExitUiLock
+End Sub
+
 ' 8本の見出し(11章§3.2 の逐語)。
 Private Function TitleOfPrompt(ByVal n As Long) As String
     Select Case n
@@ -278,6 +364,17 @@ Public Sub CopyPrompt(ByVal n As Long)
     modUISheet.WriteNamed "dr_copied_seq", "つぎは " & CStr(n + 1) & "本目です"
     MarkNextFrame n + 1
     modUIToast.ShowToast CopiedTextOf(n), "info"
+
+    ' 写した直後に調査ページを開く(裁定書26 C)。開けなかった(EDR等)ときは
+    ' URLを逐語で案内する。**写せたこと自体は取り消さない**。
+    If modConfig.GetBool(UR_DR_OPEN_KEY, True) Then
+        Dim url As String
+        url = DrUrlNow(UR_DR_KIND_FULL)
+        If Not OpenUrl(url) Then
+            modUIToast.ShowToast "コピーしました。ブラウザで " & url & _
+                                 " を開いて貼り付けてください。", "warn"
+        End If
+    End If
     Exit Sub
 
 Failed:

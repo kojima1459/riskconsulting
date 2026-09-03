@@ -55,6 +55,10 @@ Private Const US_BTN_FONT_SIZE_SM As Double = 8.5
 ' 主要動線(kind="primary")だけ高さを30ptにする(裁定書17 H3(a): HOMEの2列×3行(主要動線5本)配置)。
 Private Const US_BTN_HEIGHT_PRIMARY As Double = 30#
 Private Const US_LABEL_HEIGHT As Double = 16#
+' フッター(裁定書26 D)。淡色・枠なし・中央。
+Private Const US_FOOTER_HEIGHT As Double = 20#
+Private Const US_FOOTER_FONT_SIZE As Double = 9#
+Private Const US_COLOR_FOOTER_TEXT As Long = 10066329&  ' 淡色(RGB 153,153,153)
 Private Const US_SRC As String = "modUISheet"
 
 ' 見出し行を読む既定の探索幅(列番号ではなく「この幅までを見出しとして読む」)。
@@ -473,6 +477,47 @@ Public Function EnsureButtonEx(ByVal ws As Object, ByVal shapeKey As String, _
     Exit Function
 Failed:
     EnsureButtonEx = False
+End Function
+
+' ============================================================================
+' EnsureFooterButton - 最下部のフッター(裁定書26 D)。
+' ----------------------------------------------------------------------------
+' 見た目だけが EnsureButtonEx と違う(淡色の文字・枠なし・中央・小さめ)。
+' 押したときの作法(OnAction・図形名・置き直し)は同じで、ナビと使い方の
+' 両方から同じ1本を使う(2箇所で違う見た目を作らない)。
+' ============================================================================
+Public Function EnsureFooterButton(ByVal ws As Object, ByVal shapeKey As String, _
+                                   ByVal caption As String, ByVal anchorRow As Long, _
+                                   ByVal anchorCol As Long, ByVal widthPt As Double, _
+                                   ByVal onActionName As String) As Boolean
+    On Error GoTo Failed
+    If ws Is Nothing Then Exit Function
+    If anchorRow <= 0 Or anchorCol <= 0 Then Exit Function
+
+    DropShape ws, shapeKey
+
+    Dim anchor As Object
+    Set anchor = ws.Cells(anchorRow, anchorCol)
+
+    Dim shp As Object
+    Set shp = ws.Shapes.AddShape(US_SHAPE_ROUNDED, anchor.Left, anchor.Top, _
+                                 widthPt, US_FOOTER_HEIGHT)
+    If shp Is Nothing Then Exit Function
+
+    shp.Name = shapeKey
+    shp.Placement = US_PLACEMENT_FREE
+    shp.Fill.Visible = False
+    shp.Line.Visible = False
+    shp.TextFrame.Characters.Text = caption
+    shp.TextFrame.HorizontalAlignment = US_ALIGN_CENTER
+    shp.TextFrame.Characters.Font.Name = US_BTN_FONT
+    shp.TextFrame.Characters.Font.Size = US_FOOTER_FONT_SIZE
+    shp.TextFrame.Characters.Font.Color = US_COLOR_FOOTER_TEXT
+    shp.OnAction = onActionName
+    EnsureFooterButton = True
+    Exit Function
+Failed:
+    EnsureFooterButton = False
 End Function
 
 ' ボタンの高さ(kind別)。主要動線だけ 30pt(裁定書17 H3(a))で、他は従来どおり

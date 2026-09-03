@@ -61,6 +61,10 @@ Private Const UD_COLOR_FOCUS As Long = 47359&       ' RGB(255,184,0) 橙(強調�
 Private Const UD_COLOR_HEAD_BG As Long = 15461355&
 Private Const UD_FONT As String = "Yu Gothic UI"
 
+' コーチ帯の文字(裁定書26 A)。白・太字・左寄せ・上下中央、内側余白12pt。
+Private Const UD_BAND_FONT_PT As Double = 13#
+Private Const UD_BAND_PAD As Double = 12#
+
 ' 強調枠(11章§3.1.1)。枠線のみ・塗りなし・線幅2.25pt・**点滅させない**。
 Private Const UD_FOCUS_WEIGHT As Double = 2.25
 Private Const UD_FOCUS_PAD As Double = 4#
@@ -122,6 +126,21 @@ Public Sub DrawCoachBar(ByVal stepNo As Long, ByVal stepCount As Long, _
         band.Line.Visible = UD_FALSE
         modUISheet.ApplyBandGradient band, UD_COLOR_BRAND, UD_COLOR_BRAND_DK
         modUISheet.ApplyLightShadow band
+        ' 帯の文字は**図形の中に持たせる**(裁定書26 A・11章§8.5 の禁忌)。
+        ' 図形は色や重ね順に関わらず常にセルの上へ描かれるため、セルへ書いた
+        ' STEP・ドット・次の一手は帯の下に隠れて実機で1文字も見えない。
+        band.TextFrame.Characters.Text = _
+            modUIGeom.CoachBandText(stepNo, stepCount, actionText)
+        band.TextFrame.HorizontalAlignment = UD_ALIGN_LEFT
+        band.TextFrame.VerticalAlignment = UD_ANCHOR_MIDDLE
+        band.TextFrame.MarginLeft = UD_BAND_PAD
+        band.TextFrame.MarginRight = UD_BAND_PAD
+        band.TextFrame.MarginTop = UD_BAND_PAD
+        band.TextFrame.MarginBottom = UD_BAND_PAD
+        band.TextFrame.Characters.Font.Name = UD_FONT
+        band.TextFrame.Characters.Font.Size = UD_BAND_FONT_PT
+        band.TextFrame.Characters.Font.Bold = True
+        band.TextFrame.Characters.Font.Color = UD_COLOR_WHITE
         band.ZOrder UD_ZORDER_BACK
     End If
 
@@ -169,6 +188,11 @@ Public Sub DrawSections()
     DrawOnePanel ws, "nv_sec4", vbNullString
 
     ' 区画①③④のボタン(区画②の18本は modUICase6 の表が値源)。
+    ' 区画①の見出し行の直下=調べる場所の案内1行(裁定書26 C)。
+    Dim r1b As Long
+    r1b = modUISheet.BlockRow("nv_sec1")
+    If r1b > 0 Then PlaceButtonRow ws, r1b + 1, modUINav.NavRowSec1B(), "plain"
+
     Dim r1 As Long
     r1 = modUISheet.BlockRow("dr_copied_seq")
     If r1 > 0 Then PlaceButtonRow ws, r1, modUINav.NavRowSec1(), "plain"

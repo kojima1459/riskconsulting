@@ -46,6 +46,10 @@ Private Const UG_BTN_ADV As String = "gd_btn_adv"
 '   "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。並びは build_rpn.py の
 '   GUIDE_ADVANCED_ACTIONS と同順であり、tools/caption_check.py が逐語照合する。
 Private Const UG_BTN_ADV_ACT As String = "gd_btn_adv_act"
+' フッター(裁定書26 D)。⑦上級の動作ボタン3行の**2行下**へ置く。
+Private Const UG_BTN_FOOTER As String = "btn_gd_footer"
+Private Const UG_ADV_ACT_ROWS As Long = 3
+Private Const UG_FOOTER_GAP_ROWS As Long = 2
 Private Const UG_ROW_ADV_ACT As String = _
     "btn_gd_round2;第2ラウンドを始める;modUIHome2.HomeFreezeRound;180" & vbLf & _
     "btn_gd_cfsave;企業ファイルへ保存;modUIHome2.HomeCompanySave;180" & vbLf & _
@@ -212,6 +216,34 @@ Public Sub EnsureGuideButtons()
             modUISheet.EnsureButtonEx ws, f(0), f(1), r + k, c, Val(f(3)), f(2), "plain"
         End If
     Next k
+End Sub
+
+' ============================================================================
+' EnsureFooterButton - 使い方タブの最下部のフッター(裁定書26 D)。
+'   最終ブロック(⑦上級の動作ボタン3行)の2行下へ、ナビと同じ1本を置く。
+'   キャプションとOnActionの値源は modUINav.NavRowFooter()(2箇所で別の名前を
+'   持たない)。図形名だけ使い方タブ用に btn_gd_footer とする。
+' ============================================================================
+Public Sub EnsureFooterButton()
+    On Error Resume Next
+
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(UG_GUIDE_SHEET)
+    If ws Is Nothing Then Exit Sub
+
+    Dim r As Long
+    Dim c As Long
+    r = modUISheet.BlockRow(UG_BTN_ADV_ACT)
+    c = modUISheet.BlockCol(UG_BTN_ADV_ACT)
+    If r <= 0 Or c <= 0 Then Exit Sub
+
+    Dim flds() As String
+    flds = Split(modUINav.NavRowFooter(), ";")
+    If UBound(flds) - LBound(flds) < 3 Then Exit Sub
+
+    modUISheet.EnsureFooterButton ws, UG_BTN_FOOTER, flds(1), _
+                                  r + UG_ADV_ACT_ROWS + UG_FOOTER_GAP_ROWS, c, _
+                                  Val(flds(3)), flds(2)
 End Sub
 
 ' ============================================================================

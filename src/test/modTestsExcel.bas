@@ -59,7 +59,11 @@ Private Const TE_BAND_SEQ As Long = 100001
 '  持たない(跡地の理由は modTestsExcel2 の「跡地」節が持つ))
 ' (裁定書25 S3 / T-56: 7欄目 input_finance の往復1本を modTestsExcel2 へ
 '  追加し 45 -> 46。内訳 = 本モジュール34本 + modTestsExcel2 12本)
-Private Const TE_EXPECTED As Long = 46
+' (裁定書26 A/D / W8.1: コーチ帯の図形の中の文字とフッター図形の存在の2本を
+'  modTestsExcel2 へ追加し 46 -> 48。内訳 = 本モジュール34本 +
+'  modTestsExcel2 14本。図形の描画は LibreOffice で確かめられないため、
+'  この2本は層(b)にしか置けない)
+Private Const TE_EXPECTED As Long = 48
 
 Private mRun As Long    ' ECheck が数える実行本数
 

@@ -34,6 +34,30 @@ Private gShownCaseId As String
 Private gDrewOnce As Boolean
 
 ' ============================================================================
+' フッター(裁定書26 D)。ナビと使い方の最下部に1本ずつ置く同じボタンで、
+'   押すと部のポータルをブラウザで開く。
+' ----------------------------------------------------------------------------
+' キャプションの先頭の丸C(U+00A9)は**CP932に無い**ため、ソースへ直接書くと
+'   VBEへの注入時に "?" へ化ける(tools/vba_lint.py の CP932検査が ERROR に
+'   する)。lint の指示どおり ChrW() で組み立て、定数には残りの語だけを置く。
+'   13章§2.10 のフッター行との逐語照合は tools/caption_check.py (G) が行う。
+' ============================================================================
+Private Const UN_FOOTER_TEXT As String = " リスクコンサルティング支援部"
+Private Const UN_FOOTER_CHAR As Long = 169      ' U+00A9(丸C)
+Private Const UN_FOOTER_NAME As String = "btn_nv_footer"
+Private Const UN_FOOTER_ACTION As String = "modUINav.OpenPortal"
+Private Const UN_FOOTER_WIDTH As String = "240"
+' ナビの最終ブロック(区画④の最終行)と、そこから何行下へ置くか。
+Private Const UN_FOOTER_ANCHOR As String = "hm_transport_banner"
+Private Const UN_FOOTER_GAP_ROWS As Long = 2
+Private Const UN_FOOTER_COL As Long = 2
+' ポータルのURL(13章§2.3 `portal_url`)。config が空のときの既定。
+Private Const UN_PORTAL_KEY As String = "portal_url"
+Private Const UN_PORTAL_DEFAULT As String = _
+    "http://www.portal.s1.ms-ad-ins.co.jp/loader/hp/OpenContents/" & _
+    "A201203280048/toppage.html"
+
+' ============================================================================
 ' 図形ボタンの配置表(13章§2.10(f))
 ' ----------------------------------------------------------------------------
 ' 1件 = "図形名;キャプション;OnAction;幅pt" を vbLf 区切り。
@@ -47,6 +71,10 @@ Private Const UN_ROW_COACH As String = _
     "btn_nv_next;次へ →;modUINav.NavNext;96" & vbLf & _
     "btn_nv_kb;ナレッジを読み直す;modUIHome2.HomeReloadKnowledge;140" & vbLf & _
     "btn_nv_guide;使い方を開く;modUIGuide.OpenGuide;116"
+' 区画①の見出し行の直下(裁定書26 C)。調べる場所への導線2本。
+Private Const UN_ROW_SEC1B As String = _
+    "btn_nv_dr_full;調査ページを開く;modUIResearch.OpenDrFull;168" & vbLf & _
+    "btn_nv_dr_quick;クイック調査を開く;modUIResearch.OpenDrQuick;168"
 Private Const UN_ROW_SEC1 As String = _
     "btn_nv_more;＋ もっと調べる（あと5本）;modUIResearch.ToggleMore;200"
 Private Const UN_ROW_SEC2 As String = _
@@ -66,6 +94,10 @@ Public Function NavRowSec1() As String
     NavRowSec1 = UN_ROW_SEC1
 End Function
 
+Public Function NavRowSec1B() As String
+    NavRowSec1B = UN_ROW_SEC1B
+End Function
+
 Public Function NavRowSec2() As String
     NavRowSec2 = UN_ROW_SEC2
 End Function
@@ -77,6 +109,59 @@ End Function
 Public Function NavRowSec4() As String
     NavRowSec4 = UN_ROW_SEC4
 End Function
+
+Public Function FooterCaption() As String
+    FooterCaption = ChrW(UN_FOOTER_CHAR) & UN_FOOTER_TEXT
+End Function
+
+' 「図形名;キャプション;OnAction;幅pt」1本(配置表と同じ書式)。
+Public Function NavRowFooter() As String
+    NavRowFooter = UN_FOOTER_NAME & ";" & FooterCaption() & ";" & _
+                   UN_FOOTER_ACTION & ";" & UN_FOOTER_WIDTH
+End Function
+
+' DrawNavFooter - ナビ最下部へフッターを置く(区画④の最終行の2行下)。
+'   図形名は btn_nv_ 接頭辞なので、描き直しのたび DropNavShapes が落とす。
+Public Sub DrawNavFooter()
+    On Error Resume Next
+
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(UN_SHEET)
+    If ws Is Nothing Then Exit Sub
+
+    Dim r As Long
+    r = modUISheet.BlockRow(UN_FOOTER_ANCHOR)
+    If r <= 0 Then Exit Sub
+
+    Dim flds() As String
+    flds = Split(NavRowFooter(), ";")
+    If UBound(flds) - LBound(flds) < 3 Then Exit Sub
+
+    modUISheet.EnsureFooterButton ws, flds(0), flds(1), r + UN_FOOTER_GAP_ROWS, _
+                                  UN_FOOTER_COL, Val(flds(3)), flds(2)
+End Sub
+
+' OpenPortal - フッターのOnAction。部のポータルを既定ブラウザで開く。
+'   Hyperlinks.Add は使わない(OnActionを殺す禁忌。11章§8.6)。開けなかった
+'   ときはURLを逐語でトーストに出し、利用者が手で開けるようにする。
+Public Sub OpenPortal()
+    If Not modUIProgress.TryEnterUiLock("ポータルを開く") Then Exit Sub
+    On Error GoTo Failed
+
+    Dim url As String
+    url = modConfig.GetStr(UN_PORTAL_KEY, UN_PORTAL_DEFAULT)
+    If LenB(Trim$(url)) = 0 Then url = UN_PORTAL_DEFAULT
+
+    ThisWorkbook.FollowHyperlink url
+    modUIToast.ShowToast "ブラウザで開きました。", "info"
+    modUIProgress.ExitUiLock
+    Exit Sub
+
+Failed:
+    Err.Clear
+    modUIToast.ShowToast "ブラウザで " & url & " を開いてください。", "warn"
+    modUIProgress.ExitUiLock
+End Sub
 
 ' ============================================================================
 ' STEPの文(11章§3.1.1 の逐語表)。**7つ目を作らない**。
@@ -335,6 +420,9 @@ Public Sub DrawNav()
     gShownStep = stepNo
     modUINavDraw.DrawCoachBar stepNo, UN_STEP_COUNT, actionText
     modUINavDraw.MoveFocusFrame StepAnchor(stepNo)
+
+    ' 最下部のフッター(裁定書26 D)。
+    DrawNavFooter
 
     ' 13章§2.11(e): 案件が選ばれていなければ**新規モードの固定マーカー**を書く
     ' (空のままにすると[貼ったものを保存する]が1欄も書かずに止まり、新しい案件を

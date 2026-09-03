@@ -120,6 +120,11 @@ MODULE_REGISTRY = {
     #                  直貼り枠の取り込みと、その失敗の理由分け(はみ出し/表の線・
     #                  画像/個人情報)。
     "modUINav", "modUINavDraw", "modUIResearch", "modUICase6", "modUICase7",
+    # W8.1(実機第1報・裁定書26 B)で新設。12章§2のモジュール一覧に追記済み。
+    #   modUIViewport = 全画面表示(DisplayFullScreen・数式バー・罫線・行列見出し。
+    #                   シートタブは触らない)。modBoot の起動シーケンスの最後で
+    #                   1回だけ適用し、退避した元の値へ戻す口を1本持つ。
+    "modUIViewport",
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -533,6 +538,12 @@ CONTRACT: dict[str, dict] = {
     # (MODULE_REGISTRY⇔CONTRACT)を満たすために required=[] で登録する。
     # closed=False なので追加 Public は許容する。
     "modUISheet": {"closed": False, "required": []},
+    # modUIViewport: 裁定書26 B。modBoot からの結線先(ApplyFullScreen)と、
+    # 退避値へ戻す唯一の口(RestoreScreen)を required で固定する。
+    "modUIViewport": {
+        "closed": False,
+        "required": ["ApplyFullScreen", "RestoreScreen"],
+    },
     # modUIGuide: 裁定書14 裁定6。起動の入口 StartTourIfFirstRun と再視聴の
     # RestartTour、操作ガイドのボタン EnsureGuideButtons を required で固定する
     # (modBoot / modUIHome / 図形の OnAction の結線先そのものであり、改名・

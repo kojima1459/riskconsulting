@@ -410,7 +410,7 @@
       "freeze_panes": "A9",
       "sections": [
         {
-          "title": "コーチ帯（ここから上はスクロールしても動きません）",
+          "title": "",
           "fields": [
             {
               "range": "nv_step_no",
@@ -453,6 +453,9 @@
           "title": "① 会社のこと",
           "anchor": "nv_sec1",
           "fields": [
+            {
+              "text": "調べる場所: しっかり調査(レポート) → [調査ページを開く]　急ぎのとき → [クイック調査を開く]"
+            },
             {
               "text": "入れるのは4つだけです。入れると、社内のディープリサーチに貼る文がすぐ下に出ます。"
             },
@@ -2826,6 +2829,36 @@
           "name": "ui_advanced",
           "value": true,
           "note": "使い方タブ⑦「上級」の5行を出すか。FALSEのとき上級の図形を生成しない(導線の有無だけを制御する)"
+        },
+        {
+          "name": "ui_fullscreen",
+          "value": true,
+          "note": "全画面表示(数式バー・罫線・行列見出しを消す)。シートタブは消さない。FALSEでふだんのExcelの見た目のまま"
+        },
+        {
+          "name": "dr_url_menu",
+          "value": "https://app.hdtech.jp/research/menu",
+          "note": "社内ディープリサーチの入口メニュー"
+        },
+        {
+          "name": "dr_url_quick",
+          "value": "https://app.hdtech.jp/research/quick-search",
+          "note": "社内ディープリサーチの急ぎのとき(クイック調査)"
+        },
+        {
+          "name": "dr_url_full",
+          "value": "https://app.hdtech.jp/research/instructions",
+          "note": "社内ディープリサーチのしっかり調査(レポート)。[コピー]の直後に開く先"
+        },
+        {
+          "name": "dr_open_after_copy",
+          "value": true,
+          "note": "[コピー]の直後に dr_url_full をブラウザで開くか。FALSEで開かない(コピーだけ)"
+        },
+        {
+          "name": "portal_url",
+          "value": "http://www.portal.s1.ms-ad-ins.co.jp/loader/hp/OpenContents/A201203280048/toppage.html",
+          "note": "フッター[© リスクコンサルティング支援部]を押したときに開く部のポータル"
         }
       ]
     },

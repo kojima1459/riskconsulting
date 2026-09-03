@@ -72,7 +72,8 @@ SRC_SPEC = os.path.join("docs", "spec", "13_データ設計.md")
 
 # (A) の配置表を持つ定数名(この並びが画面上の並び順でもある)。
 ROW_CONSTS_COACH = ["UN_ROW_COACH"]
-ROW_CONSTS_SEC = ["UN_ROW_SEC1", "UN_ROW_SEC2", "UN_ROW_SEC3", "UN_ROW_SEC4"]
+ROW_CONSTS_SEC = ["UN_ROW_SEC1B", "UN_ROW_SEC1", "UN_ROW_SEC2",
+                  "UN_ROW_SEC3", "UN_ROW_SEC4"]
 
 # 早見(B)だけに許す集約表記 -> 展開後のキャプション。いまは1件も無い。
 AGGREGATES: dict = {}
@@ -405,6 +406,62 @@ def check_field_texts():
     return len(spec)
 
 
+# (G) フッター(裁定書26 D)。キャプションの先頭の丸C(U+00A9)は CP932 に無いので
+# 実装は ChrW() で組み立てる(定数には残りの語だけが入る)。したがって (A) の
+# 配置表からは読めない。実装の UN_FOOTER_TEXT と 13章§2.10 のフッター行を
+# 直接突き合わせる。**ナビと使い方に同じ1本を置く**ので (A) の集合には入れない
+# (同じ語が2枚に出るため、配置表に載せると重複検査で赤になる)。
+FOOTER_MARK = "©"
+FOOTER_SHAPE = "btn_nv_footer"
+
+
+def footer_caption_from_nav():
+    """(G1) 実装のフッターのキャプション。"""
+    text = read(SRC_NAV)
+    if text is None:
+        return None
+    m = re.search(r'^\s*Private\s+Const\s+UN_FOOTER_TEXT\s+As\s+String\s*=\s*"([^"]*)"',
+                  text, re.M)
+    if not m:
+        fail("%s に定数 UN_FOOTER_TEXT が見つからない(フッターの値源が変わった可能性)"
+             % SRC_NAV)
+        return None
+    return FOOTER_MARK + m.group(1)
+
+
+def footer_caption_from_spec():
+    """(G2) 13章§2.10 のフッター行に書かれたキャプション。"""
+    text = read(SRC_SPEC)
+    if text is None:
+        return None
+    m = re.search(r"^### 2\.10 .*?$(.*?)^### 2\.11 ", text, re.M | re.S)
+    if not m:
+        fail("%s に §2.10 の節が見つからない" % SRC_SPEC)
+        return None
+    for line in m.group(1).split("\n"):
+        if FOOTER_SHAPE not in line:
+            continue
+        caps = BRACKET.findall(line)
+        if not caps:
+            fail("%s §2.10 のフッター行に [～] のキャプションが無い" % SRC_SPEC)
+            return None
+        return caps[0].strip()
+    fail("%s §2.10 に図形名 %s を書いたフッターの行が無い" % (SRC_SPEC, FOOTER_SHAPE))
+    return None
+
+
+def check_footer():
+    """(G) フッターのキャプションの逐語照合。戻り値=照合したキャプション。"""
+    impl = footer_caption_from_nav()
+    spec = footer_caption_from_spec()
+    if impl is None or spec is None:
+        return None
+    if impl != spec:
+        fail("フッターのキャプションが13章§2.10と逐語一致しない:\n"
+             "      実装 = %r\n      13章 = %r" % (impl, spec))
+    return impl
+
+
 def compare_sets(label, impl, other):
     missing = sorted(set(impl) - set(other))
     extra = sorted(set(other) - set(impl))
@@ -470,6 +527,9 @@ def main():
     # (F) 区画②の7欄の説明1行・例文2行(11章§3.3.3(a)。v2.6・T-56)。
     n_fields = check_field_texts()
 
+    # (G) フッター(裁定書26 D)。
+    footer = check_footer()
+
     if errors:
         print("[caption_check] ナビのボタン名の逐語照合")
         for e in errors:
@@ -483,6 +543,7 @@ def main():
     print("使い方タブ⑦の動作ボタン: %d本(キャプション＋OnActionを build と 13章§2.18 へ照合)"
           % len(adv_impl))
     print("区画②の欄の説明・例文: %d欄を11章§3.3.3(a)と逐語照合" % n_fields)
+    print("フッター: [%s] を13章§2.10と逐語照合" % (footer or ""))
     print("OK: 全%d本のキャプションが3系統と一致しました（コーチ帯%d / 4区画%d）"
           % (len(impl), len(main_caps), len(sub_caps)))
     return 0
