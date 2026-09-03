@@ -120,7 +120,7 @@ End Function
 '   任意だが、非空なら13章§2.7のenum(won/lost/pending)のみ受け付ける。
 '   保存直前に situation・key_reason を modPii へ通す(16章E-05(4))。検知
 '   したら1列も書かず E0103 を記録する。
-Public Function NewJudgement(ByVal rec As TJudgement) As String
+Public Function NewJudgement(ByRef rec As TJudgement) As String
     On Error GoTo Failed
 
     If LenB(Trim$(rec.line_id)) = 0 Or LenB(Trim$(rec.situation)) = 0 _

@@ -369,7 +369,7 @@ Public Function Fill(ByVal tpl As String, ByRef names() As String, ByRef vals() 
 End Function
 
 ' AsmS1User - 15章§2 user(9貼付ブロック + 更新指示ブロック BLOCK_RENEWAL_S1)。
-Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
+Public Function AsmS1User(ByRef ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
                           ByVal memoTxt As String, ByVal contractTxt As String, _
                           ByVal prevRenewalTxt As String, ByVal dossierTxt As String, _
                           ByVal fieldNotes As String, ByVal coverageNote As String, _
@@ -398,7 +398,7 @@ End Function
 
 ' AsmS2User - 15章§3 user。menus=MenusSummaryFor()(related_menu_id の候補一覧)。
 '   prevS2Json / hearingAnswers は初回ラウンドでは "なし"(FR-35)。
-Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
+Public Function AsmS2User(ByRef ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
                           ByVal menus As String, ByVal prevS2Json As String, _
                           ByVal hearingAnswers As String, ByVal incidents As String, _
                           ByVal focusIds As String, ByVal roundNo As Long) As String
@@ -424,7 +424,7 @@ Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal r
 End Function
 
 ' AsmS3User - 15章§4 user(貼付ブロックの出現順 menus/lines/schemes/cases)。
-Public Function AsmS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
+Public Function AsmS3User(ByRef ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
                           ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
                           ByVal cases As String, ByVal focusIds As String, _
                           ByVal roundNo As Long) As String
@@ -478,7 +478,7 @@ End Function
 
 ' AsmS4User - 15章§5 user。slideCountHint は ctx.dossier_tier から決める
 '   (t1_quick=5枚固定 / それ以外=5から config ppt_max_slides_t2 枚)。
-Public Function AsmS4User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, _
+Public Function AsmS4User(ByRef ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, _
                           ByVal s3Json As String) As String
     Dim vals(0 To 5) As String
     vals(0) = CtxBlockText(ctx)
@@ -506,7 +506,7 @@ Public Function AsmS2CriticUser(ByVal s1Json As String, ByVal s2Json As String, 
 End Function
 
 ' AsmS3CriticUser - 15章§4.6 批判user。
-Public Function AsmS3CriticUser(ByVal ctx As TCaseCtx, ByVal s1Summary As String, _
+Public Function AsmS3CriticUser(ByRef ctx As TCaseCtx, ByVal s1Summary As String, _
                                 ByVal s2Json As String, ByVal s3Json As String) As String
     Dim vals(0 To 3) As String
     vals(0) = CtxBlockText(ctx)
@@ -561,7 +561,7 @@ End Function
 ' 15章§1.1 BLOCK_CTX を ctx で埋めた本文。other_insurers は1行属性なので改行を
 '   空白へ畳み、空なら「情報なし」を埋める(15章§0 原則9。SanitizeInput そのものは
 '   外部送信の直前に呼出側が通す)。
-Private Function CtxBlockText(ByVal ctx As TCaseCtx) As String
+Private Function CtxBlockText(ByRef ctx As TCaseCtx) As String
     Dim vals(0 To 5) As String
     vals(0) = ctx.case_type
     vals(1) = ctx.channel

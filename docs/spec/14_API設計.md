@@ -598,7 +598,7 @@ Public Function Fill(ByVal tpl As String, ByRef names() As String, ByRef vals() 
 ' プレースホルダを名乗って別の値を奪うのを防ぐ＝16章E-04と同じ考え方）。
 ' unresolved には**置換後になお残っている `{{` の個数**を返す（0が正常。呼び出し側は
 ' run_log の detail に記録する）。省略可能な出口なので `Fill(tpl, n, v)` でも動く。
-Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
+Public Function AsmS1User(ByRef ctx As TCaseCtx, ByVal hpTxt As String, ByVal yuhoTxt As String, _
                           ByVal memoTxt As String, ByVal contractTxt As String, ByVal prevRenewalTxt As String, _
                           ByVal dossierTxt As String, ByVal fieldNotes As String, ByVal coverageNote As String, _
                           ByVal hearingAnswers As String, ByVal financeTxt As String) As String
@@ -611,7 +611,7 @@ Public Function AsmS1User(ByVal ctx As TCaseCtx, ByVal hpTxt As String, ByVal yu
 ' 伝聞情報だが insurance_ctx 観点の充足度評価に算入するため省略不可）。
 ' **条件ブロック**: ctx.case_type="renewal" のとき `{{BLOCK_RENEWAL_S1}}` の行を BlockRenewalS1() の
 ' 本文へ差し替え、それ以外では**その行ごと削除する**（空行を残さない。15章§10.1(d)）
-Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
+Public Function AsmS2User(ByRef ctx As TCaseCtx, ByVal s1Json As String, ByVal riskLib As String, _
                           ByVal menus As String, ByVal prevS2Json As String, _
                           ByVal hearingAnswers As String, ByVal incidents As String, _
                           ByVal focusIds As String, ByVal roundNo As Long) As String
@@ -627,7 +627,7 @@ Public Function AsmS2User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal r
 ' focusIds / roundNo（v2.6・裁定書25 S4。同上）: 15章§1.2c `BLOCK_ROUND2_FOCUS` の
 '   `{{focus_line_ids}}` と `{{round_no}}`。**roundNo<=1 のときは行ごと削除**（§10.1(d)）。
 '   focusIds は1行属性なので改行・タブを空白へ畳む（`modPipeline3.FocusLineIdsAttr`）。空は「指定なし」
-Public Function AsmS3User(ByVal ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
+Public Function AsmS3User(ByRef ctx As TCaseCtx, ByVal s1Summary As String, ByVal s2Json As String, _
                           ByVal menus As String, ByVal lines As String, ByVal schemes As String, _
                           ByVal cases As String, ByVal focusIds As String, _
                           ByVal roundNo As Long) As String
@@ -646,13 +646,13 @@ Public Function AsmS4System(ByVal variantName As String, ByVal tier As String, _
 ' 呼び出し側=modPipeline が行う。黙って既定に落とさない）。
 ' tier=t1_quick / t2_full / t3_sparring（t3_sparring は t2_full と同じ扱い）。
 ' `{{pptMaxSlidesT2}}` は modConfig の `ppt_max_slides_t2`（既定10）を展開する
-Public Function AsmS4User(ByVal ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, _
+Public Function AsmS4User(ByRef ctx As TCaseCtx, ByVal s1Json As String, ByVal s2Json As String, _
                           ByVal s3Json As String) As String
 ' 15章§5 user。`{{slideCountHint}}` は ctx.dossier_tier から決める（t1_quick は "5"、
 ' それ以外は "5～" & ppt_max_slides_t2）。`{{company}}` は ctx.company
 Public Function AsmS2CriticUser(ByVal s1Json As String, ByVal s2Json As String, _
                                 ByVal riskLib As String) As String               ' 15章§4.5 批判user
-Public Function AsmS3CriticUser(ByVal ctx As TCaseCtx, ByVal s1Summary As String, _
+Public Function AsmS3CriticUser(ByRef ctx As TCaseCtx, ByVal s1Summary As String, _
                                 ByVal s2Json As String, ByVal s3Json As String) As String  ' 15章§4.6 批判user
 Public Function AsmSparringSystem(ByVal dossierSummary As String, ByVal s1s2s3Json As String, _
                                   ByVal schemes As String, ByVal patterns As String, _
@@ -1153,7 +1153,7 @@ Public Function InterestSummaryOf(ByVal themeLines As String) As String
 '   載せる（1件は「重複投函」ではない） (4)上限は既定3件 (5)区切りは半角空白。
 '   同一視の粒度は `InterestKeyOf`、1件ぶんの表示は `FmtInterestLine` が唯一の値源。
 '   空・全行が空テーマなら ""（空の集計をでっち上げない）
-Public Function NewJudgement(ByVal rec As TJudgement) As String
+Public Function NewJudgement(ByRef rec As TJudgement) As String
 ' UW判断を1件起票して judge_id（13章§1 `J-YYYYMM-NNN`）を返す（裁定書8 B-8）。当月の
 '   使用済み最大連番の次から採り、衝突は E0605 を記録して次番号へ（999で枯渇）。失敗は ""。
 '   `TJudgement`（modAppTypes）は13章§2.7の11列から `judge_id`/`judged_at` を除いた9列。

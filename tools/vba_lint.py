@@ -1842,6 +1842,115 @@ def check_qualified_arg_count(infos: list[ModuleInfo]) -> None:
                     )
 
 
+# ==============================================================================
+# W9.4: UDT(ユーザー定義型)・配列を ByVal で渡す禁止(実機事故)
+# ------------------------------------------------------------------------------
+# 実機Mac Excelで[テストを実行]を押すと modPromptsOps.AsmS1User(ByVal ctx As
+# TCaseCtx, ...) で「ユーザー定義型を ByVal で渡すことはできません」の
+# コンパイルエラーになった。VBAの規則: ユーザー定義型(Type宣言した型)と配列は
+# 手続き引数として ByVal で渡せない(ByRef 必須)。LibreOffice Basic はこれを
+# 許すため lo-compile(層(c))が見逃す — 17章 T-58 W9.4。
+#
+# 検査の作り: src 全体から Type 宣言名(Public/Private 問わず)を集めてから、
+# 全モジュールの「ByVal <name> As <型>」を当たり、型名がその集合にあれば
+# ERROR。「ByVal <name>() As ...」(配列引数)は型を問わず常にERROR(VBAは
+# どんな要素型の配列も ByVal で渡せない)。
+# ==============================================================================
+TYPE_DECL_PATTERN = re.compile(
+    r"^(?:Public\s+|Private\s+)?Type\s+([A-Za-z_]\w*)", re.IGNORECASE
+)
+BYVAL_PARAM_PATTERN = re.compile(
+    r"\bByVal\s+(\w+)\s*(\(\s*\))?\s+As\s+(\w+)", re.IGNORECASE
+)
+
+
+def _collect_type_names(infos: list[ModuleInfo]) -> set[str]:
+    names: set[str] = set()
+    for info in infos:
+        for _lineno, stmt in info.statements:
+            m = TYPE_DECL_PATTERN.match(stmt)
+            if m:
+                names.add(m.group(1).lower())
+    return names
+
+
+def check_udt_byval_param(infos: list[ModuleInfo]) -> None:
+    """VBAが禁止する「UDT/配列の ByVal 引数」を全モジュールから検出する。"""
+    type_names = _collect_type_names(infos)
+    for info in infos:
+        for lineno, stmt in info.statements:
+            masked = _blank_string_literals(stmt)
+            for m in BYVAL_PARAM_PATTERN.finditer(masked):
+                pname, arr_mark, tname = m.group(1), m.group(2), m.group(3)
+                if arr_mark:
+                    info.add(
+                        "ERROR", lineno,
+                        f"配列引数「{pname}()」を ByVal で宣言しています。VBAは配列を"
+                        f"ByVal で渡せません(実機Excelでコンパイルエラー。LibreOffice"
+                        f"はこれを許すため lo-compile では検出できません)。"
+                        f"ByRef へ直してください: 「{stmt.strip()[:80]}」",
+                    )
+                elif tname.lower() in type_names:
+                    info.add(
+                        "ERROR", lineno,
+                        f"ユーザー定義型「{tname}」の引数「{pname}」を ByVal で宣言"
+                        f"しています。VBAは Type 宣言した型(UDT)を ByVal で渡せません"
+                        f"(実機Excelで「ユーザー定義型を ByVal で渡すことはできません」の"
+                        f"コンパイルエラー。LibreOffice はこれを許すため lo-compile では"
+                        f"検出できません)。ByRef へ直してください: 「{stmt.strip()[:80]}」",
+                    )
+
+
+# 上のルールの自己テスト(骨抜き防止)。正例=ByRef(UDT)/ByVal(非UDTスカラー)は
+# findingが出てはいけない。負例=ByVal(UDT)/ByVal(配列、型は問わない)は必ず
+# ERRORが出なければならない。run_lint の冒頭で毎回走らせる。
+_UDT_BYVAL_TYPE_SRC = "Public Type TFoo\n    x As Long\nEnd Type\n"
+_UDT_BYVAL_SELFTEST_OK = [
+    "Public Function Bar(ByRef f As TFoo) As String\nEnd Function",
+    "Public Function Baz(ByVal n As Long, ByVal s As String) As String\nEnd Function",
+]
+_UDT_BYVAL_SELFTEST_NG = [
+    "Public Function Bar(ByVal f As TFoo) As String\nEnd Function",
+    "Public Function Arr(ByVal xs() As Long) As String\nEnd Function",
+    "Public Function ArrUdt(ByVal fs() As TFoo) As String\nEnd Function",
+]
+
+
+def _udt_byval_probe(type_src: str, proc_src: str) -> list[ModuleInfo]:
+    type_info = ModuleInfo(
+        path=Path("selftest_types.bas"), relpath=Path("selftest_types.bas"),
+        raw_text=type_src, vb_name="selftest_types", filename_stem="selftest_types",
+        statements=iter_statements(type_src.splitlines()),
+    )
+    proc_info = ModuleInfo(
+        path=Path("selftest_proc.bas"), relpath=Path("selftest_proc.bas"),
+        raw_text=proc_src, vb_name="selftest_proc", filename_stem="selftest_proc",
+        statements=iter_statements(proc_src.splitlines()),
+    )
+    return [type_info, proc_info]
+
+
+def _selftest_udt_byval_param() -> list[str]:
+    """正例/負例を check_udt_byval_param に通し、食い違いを文字列で返す。"""
+    problems: list[str] = []
+    for src in _UDT_BYVAL_SELFTEST_OK:
+        infos = _udt_byval_probe(_UDT_BYVAL_TYPE_SRC, src)
+        check_udt_byval_param(infos)
+        found = [f for i in infos for f in i.findings if f.level == "ERROR"]
+        if found:
+            problems.append(
+                f"UDT/配列ByVal禁止ルールの正例を誤検知しました: {src!r} -> "
+                f"{[f.message for f in found]}"
+            )
+    for src in _UDT_BYVAL_SELFTEST_NG:
+        infos = _udt_byval_probe(_UDT_BYVAL_TYPE_SRC, src)
+        check_udt_byval_param(infos)
+        found = [f for i in infos for f in i.findings if f.level == "ERROR"]
+        if not found:
+            problems.append(f"UDT/配列ByVal禁止ルールの負例を検出できませんでした: {src!r}")
+    return problems
+
+
 def check_module_level_refs(infos: list[ModuleInfo]) -> None:
     """他モジュールのモジュールレベル定数・変数を、宣言せずに参照していないか。
 
@@ -3121,6 +3230,7 @@ def run_lint(src_root: Path) -> int:
     check_msgbox_nonbmp(modules)
     check_array_arg_variant_mismatch(modules)
     check_qualified_arg_count(modules)
+    check_udt_byval_param(modules)
 
     # 骨抜き防止の自己検査(裁定書19 H7): 行長バイト検査が全モジュールを
     # 実際に走ったか。呼び出しを消す/条件で握り潰すと、ここが赤で止まる。
@@ -3169,6 +3279,15 @@ def run_lint(src_root: Path) -> int:
         for msg in w9_selftest:
             print(f"  ERROR L1: {msg}")
         total_error += len(w9_selftest)
+
+    # W9.4(17章 T-58): UDT/配列 ByVal 禁止ルールの自己テスト。正負例が期待どおり
+    # 判定できているか。ルールを空振りさせる改変はここが赤で止める。
+    udt_byval_selftest = _selftest_udt_byval_param()
+    if udt_byval_selftest:
+        print("\n[W9.4: UDT/配列ByVal禁止ルールの自己テスト]")
+        for msg in udt_byval_selftest:
+            print(f"  ERROR L1: {msg}")
+        total_error += len(udt_byval_selftest)
 
     if _bytes_unscanned:
         print("\n[行長バイト検査の自己検査 - 検査が走っていないモジュール]")
