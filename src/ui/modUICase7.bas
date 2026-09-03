@@ -37,6 +37,20 @@ Private Const U7_MSG_PII As String = _
     "に個人のお名前らしい記述が見つかったため保存しませんでした。" & _
     "該当の行を消してから、もう一度保存してください。"
 
+' [中身を見る]の表示シート(裁定書27 W9-B3。詳細は本モジュール末尾の節を参照)。
+Private Const U7_BODY_SHEET As String = "中身"
+Private Const U7_BODY_CHUNK As Long = 32000
+Private Const U7_BODY_ROW0 As Long = 3
+Private Const U7_BODY_MAX_ROWS As Long = 2000
+
+' クリップボードの受け皿(裁定書27 W9-B1。詳細は本モジュール末尾の節を参照)。
+Private Const U7_BUF_SHEET As String = "paste_buf"
+Private Const U7_FMT_JA As String = "Unicode テキスト"
+Private Const U7_FMT_EN As String = "Unicode Text"
+Private Const U7_SHEET_VISIBLE As Long = -1        ' xlSheetVisible
+Private Const U7_BUF_MAX_ROWS As Long = 20000
+Private Const U7_BUF_MAX_COLS As Long = 50
+
 ' ============================================================================
 ' ImportDirectPastes - 直貼り枠を case_data へ取り込む(SaveNav から1回だけ)。
 '   戻り値: ブロックした欄の案内文(理由ごとに1文ずつ。何も無ければ "")。
@@ -206,4 +220,251 @@ End Function
 Private Sub ClearDirectPaste(ByVal rawRange As String)
     On Error Resume Next
     ThisWorkbook.Names(rawRange).RefersToRange.ClearContents
+End Sub
+
+' ============================================================================
+' クリップボード(裁定書27 W9-B1。11章§3.3 の挙動は変えない)
+' ----------------------------------------------------------------------------
+' 撤去したもの: CLSID指定のCOM生成(GetObject の "New" 形式)による MSForms.DataObject の
+'   遅延生成。参照設定なしでクリップボードを読める定番手だったが、CLSIDでの
+'   COM生成は社内AVのAMSIがマクロ型マルウェアの特徴として重く見る形であり
+'   (2026-09-02 実測)、配布物から消す。
+'
+' 代わりに使うもの: **Excel自身の貼り付けとコピー**。
+'   読む: veryHidden の受け皿シート `paste_buf` を作り、A1へ
+'         `PasteSpecial Format:="Unicode テキスト"` で貼る。**書式名は数値定数を
+'         使わない**(数値のFormatは他の形式を指す)。日本語Excelと英語Excelで
+'         名前が違うので "Unicode テキスト" -> "Unicode Text" の順に試す。
+'         貼り付いたセルは modNavText.JoinPasteCells で1本のテキストへ戻し、
+'         受け皿シートは消す。
+'   書く: 同じ受け皿シートへ1行1セルで書き、その範囲を `Copy` する。
+'         **範囲Copyはクリップボードへの参照**なので、受け皿シートは消さずに
+'         veryHidden のまま残す(消すと貼り付け先で空になる)。
+'
+' 受け皿シートは実行時生成の作業シートであり、13章§2.9 の `enum_hidden` と
+'   同じ扱い(仕様上のシートではないので照合対象外・配布ビルドに焼かない)。
+'
+' PasteSpecial は**対象シートがアクティブでないと使えない**ため、読むときだけ
+'   受け皿を一瞬可視にして戻す。ちらつきは ScreenUpdating を落として抑える。
+' ============================================================================
+
+' ClipPasteText - クリップボードのテキストを読む(書式・画像は持ち込まない)。
+'   戻り値: 本文。okFlag=False のときは呼び出し側が Ctrl+V の代替枠へ落とす。
+Public Function ClipPasteText(ByRef okFlag As Boolean) As String
+    Dim prevSheet As Object
+    Dim prevUpdate As Boolean
+    Dim prevAlerts As Boolean
+    Dim ws As Object
+    okFlag = False
+    On Error GoTo Failed
+
+    Set prevSheet = ThisWorkbook.ActiveSheet
+    prevUpdate = Application.ScreenUpdating
+    prevAlerts = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    Set ws = modUISheet.EnsureHiddenSheet(U7_BUF_SHEET)
+    If ws Is Nothing Then GoTo Cleanup
+    ws.Cells.Clear
+    ws.Visible = U7_SHEET_VISIBLE
+    ws.Activate
+    ws.Cells(1, 1).Select
+
+    Dim pasted As Boolean
+    pasted = TryPasteFormat(ws, U7_FMT_JA)
+    If Not pasted Then pasted = TryPasteFormat(ws, U7_FMT_EN)
+    If Not pasted Then GoTo Cleanup
+
+    Dim bodyText As String
+    bodyText = ReadPasteBuf(ws)
+    If LenB(bodyText) > 0 Then
+        okFlag = True
+        ClipPasteText = bodyText
+    End If
+
+Cleanup:
+    DropPasteBuf ws, prevSheet, prevUpdate, prevAlerts
+    Exit Function
+Failed:
+    okFlag = False
+    ClipPasteText = vbNullString
+    Resume Cleanup
+End Function
+
+' 1つの書式名で貼ってみる(名前が通らなければ False)。
+Private Function TryPasteFormat(ByVal ws As Object, ByVal formatName As String) As Boolean
+    On Error GoTo Failed
+    ws.Cells(1, 1).PasteSpecial Format:=formatName
+    TryPasteFormat = True
+    Exit Function
+Failed:
+    TryPasteFormat = False
+End Function
+
+' 貼り付いた範囲を1本のテキストへ戻す(連結の規則は modNavText が唯一持つ)。
+Private Function ReadPasteBuf(ByVal ws As Object) As String
+    On Error GoTo Failed
+    Dim usedR As Object
+    Set usedR = ws.UsedRange
+    If usedR Is Nothing Then Exit Function
+
+    Dim rowCount As Long
+    Dim colCount As Long
+    rowCount = usedR.Rows.count
+    colCount = usedR.Columns.count
+    If rowCount <= 0 Or colCount <= 0 Then Exit Function
+    If rowCount > U7_BUF_MAX_ROWS Then rowCount = U7_BUF_MAX_ROWS
+    If colCount > U7_BUF_MAX_COLS Then colCount = U7_BUF_MAX_COLS
+
+    Dim buf() As String
+    ReDim buf(0 To (rowCount * colCount) - 1)
+
+    Dim r As Long
+    Dim c As Long
+    For r = 1 To rowCount
+        For c = 1 To colCount
+            buf(((r - 1) * colCount) + (c - 1)) = CellTextOf(usedR, r, c)
+        Next c
+    Next r
+    ReadPasteBuf = modNavText.JoinPasteCells(buf, rowCount, colCount)
+    Exit Function
+Failed:
+    ReadPasteBuf = vbNullString
+End Function
+
+' 1セルの文字列(エラー値・空セルは "")。
+Private Function CellTextOf(ByVal rng As Object, ByVal r As Long, ByVal c As Long) As String
+    On Error GoTo Failed
+    CellTextOf = CStr(rng.Cells(r, c).Value)
+    Exit Function
+Failed:
+    CellTextOf = vbNullString
+End Function
+
+' 受け皿を消して画面を元へ戻す(読み取りの後始末。11章§0.2 タブを増やさない)。
+Private Sub DropPasteBuf(ByVal ws As Object, ByVal prevSheet As Object, _
+                         ByVal prevUpdate As Boolean, ByVal prevAlerts As Boolean)
+    On Error Resume Next
+    Application.CutCopyMode = False
+    If Not prevSheet Is Nothing Then prevSheet.Activate
+    If Not ws Is Nothing Then ws.Delete
+    Application.DisplayAlerts = prevAlerts
+    Application.ScreenUpdating = prevUpdate
+End Sub
+
+' ClipCopyText - テキストをクリップボードへ入れる(11章§3.2 の[コピー])。
+'   1行1セルで受け皿へ書き、その範囲を Copy する。**受け皿は消さない**
+'   (範囲Copyはクリップボードへの参照であり、消すと貼り付け先が空になる)。
+'   `"` とタブを含む行があるときは False を返して呼び出し側の
+'   「セルを選ぶので Ctrl+C してください」へ落とす: Excelのテキスト形式は
+'   その2文字を含むセルを引用符で包み直すため、黙って中身を変えてしまう。
+Public Function ClipCopyText(ByVal payloadText As String) As Boolean
+    On Error GoTo Failed
+    If LenB(payloadText) = 0 Then Exit Function
+
+    Dim bodyText As String
+    bodyText = modNavText.NormalizeEol(payloadText)
+    If InStr(1, bodyText, """", vbBinaryCompare) > 0 Then Exit Function
+    If InStr(1, bodyText, vbTab, vbBinaryCompare) > 0 Then Exit Function
+
+    Dim lineList() As String
+    lineList = Split(bodyText, vbLf)
+
+    Dim n As Long
+    n = UBound(lineList) - LBound(lineList) + 1
+    If n <= 0 Or n > U7_BUF_MAX_ROWS Then Exit Function
+
+    Dim ws As Object
+    Set ws = modUISheet.EnsureHiddenSheet(U7_BUF_SHEET)
+    If ws Is Nothing Then Exit Function
+    ws.Cells.Clear
+
+    Dim i As Long
+    For i = LBound(lineList) To UBound(lineList)
+        modUtilText.SetCellSafe ws.Cells(i - LBound(lineList) + 1, 1), lineList(i), _
+                                U7_SRC & "/clip_copy"
+    Next i
+
+    ws.Range(ws.Cells(1, 1), ws.Cells(n, 1)).Copy
+    ClipCopyText = True
+    Exit Function
+Failed:
+    ClipCopyText = False
+End Function
+
+' ============================================================================
+' [中身を見る]の表示先シート(裁定書27 W9-B3。11章§3.3.5)
+' ----------------------------------------------------------------------------
+' 撤去したもの: `Shell "notepad.exe ..."` と、そのための %TEMP% への一時ファイル
+'   書き出し(ADODB.Stream)。外部プロセスの起動は社内AVが重く見る形であり、
+'   一時ファイルは「消し忘れると本文が端末に残る」問題も抱えていた。
+'
+' 代わりに使うもの: **ブック内のシート「中身」**。保管庫の全文を行分割して
+'   流し込み、可視にして見せる。[閉じる]で本文を消して非表示へ戻す
+'   (本文をブックに残さない)。読むだけの面なので入力させない。
+'
+' 1セルの契約は 32,000字(13章§2.2・16章 E-22)。長い本文はその境界で複数セルへ
+'   分け、modUtil.SplitForCells が分け方の唯一の持ち主である(切り口が
+'   サロゲートペアを割らない)。
+'
+' シートは実行時生成の作業シート(13章§2.9 の `enum_hidden` と同じ扱い。仕様上の
+'   シートではないので照合対象外・配布ビルドには焼かない)。**利用者が既定で
+'   見るタブは2枚**(11章§0.2)なので、閉じたら veryHidden へ戻す。
+' ============================================================================
+
+' ShowBodySheet - 全文を「中身」シートへ流し込んで見せる(成功で True)。
+Public Function ShowBodySheet(ByVal titleText As String, ByVal bodyText As String) As Boolean
+    On Error GoTo Failed
+    If LenB(bodyText) = 0 Then Exit Function
+
+    Dim ws As Object
+    Set ws = modUISheet.EnsureHiddenSheet(U7_BODY_SHEET)
+    If ws Is Nothing Then Exit Function
+    ws.Cells.Clear
+
+    modUtilText.SetCellSafe ws.Cells(1, 2), titleText, U7_SRC & "/body_title"
+
+    Dim parts() As String
+    parts = modUtil.SplitForCells(bodyText, U7_BODY_CHUNK)
+
+    Dim i As Long
+    Dim rowNo As Long
+    rowNo = U7_BODY_ROW0
+    For i = LBound(parts) To UBound(parts)
+        If rowNo - U7_BODY_ROW0 >= U7_BODY_MAX_ROWS Then Exit For
+        modUtilText.SetCellSafe ws.Cells(rowNo, 2), parts(i), U7_SRC & "/body_text"
+        rowNo = rowNo + 1
+    Next i
+
+    ' 読むだけの面なので、折り返して上詰めで置く(横スクロールさせない)。
+    ws.Columns(2).ColumnWidth = 110
+    ws.Range(ws.Cells(U7_BODY_ROW0, 2), ws.Cells(rowNo, 2)).WrapText = True
+
+    modUISheet.EnsureBackButton ws
+    modUISheet.EnsureButton ws, "btn_body_close", "閉じる", 1, 4, 100#, _
+                            "modUICase7.CloseBodySheet"
+
+    If Not modUISheet.ShowSheet(U7_BODY_SHEET) Then Exit Function
+    ShowBodySheet = True
+    Exit Function
+Failed:
+    ShowBodySheet = False
+End Function
+
+' CloseBodySheet - [閉じる](図形のOnAction)。本文を消して非表示へ戻し、ナビへ。
+Public Sub CloseBodySheet()
+    If Not modUIProgress.TryEnterUiLock("中身を閉じる") Then Exit Sub
+    On Error GoTo Done
+    Dim ws As Object
+    Set ws = modUISheet.SheetOf(U7_BODY_SHEET)
+    If Not ws Is Nothing Then
+        ws.Cells.Clear
+        modUISheet.EnsureHiddenSheet U7_BODY_SHEET
+    End If
+    ' ナビへ戻す。**modUINav.BackToNav は呼ばない**(あちらも同じ関所を取るので
+    ' 二重取得で弾かれ、行き止まりになる)。表示だけを直接動かす。
+    modUISheet.ShowSheet U7_SHEET
+Done:
+    modUIProgress.ExitUiLock
 End Sub

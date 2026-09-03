@@ -64,7 +64,11 @@ Private Const TE_BAND_SEQ As Long = 100001
 '  ため、この2本は層(b)にしか置けない)
 ' (裁定書26追補 b: ブックイベントのクラス(gAppEvents)の結線1本を追加し
 '  48 -> 49。内訳 = 本モジュール34本 + modTestsExcel2 15本)
-Private Const TE_EXPECTED As Long = 49
+' (裁定書27 W9-B1/B2 / W9: Windowsでしか確かめられない3本を追加し 49 -> 52。
+'  内訳 = 本モジュール37本 + modTestsExcel2 15本。層(a)は「連結の規則」と
+'  「UTF-8のバイト列」を固定できるが、**Excel自身の貼り付け・コピーが実機で
+'  何を返すか**と **Open For Binary が実際に書いたバイト**は層(b)にしか置けない)
+Private Const TE_EXPECTED As Long = 52
 
 Private mRun As Long    ' ECheck が数える実行本数
 
@@ -80,6 +84,8 @@ Public Sub RunAllExcelTests()
     TestB12AnswerMemo
     TestB13TwoPhase
     TestC1DraftRow
+    TestW9ClipRoundTrip
+    TestW9WriteUtf8File
     ' 裁定書11 Q9/Q1: 30,000字契約による分割先(modTestsExcel2)の本数を足す
     ' (wintest からの入口は本モジュールの1本のままにする=14章§6)。
     mRun = mRun + modTestsExcel2.RunExcelTests2()
@@ -660,3 +666,100 @@ Private Function TempFilePath(ByVal fileName As String) As String
     If Right$(d, 1) = "\" Then d = Left$(d, Len(d) - 1)
     TempFilePath = d & "\" & fileName
 End Function
+
+' ============================================================================
+' W9-CLIP: クリップボードの往復(裁定書27 W9-B1)
+' ----------------------------------------------------------------------------
+' なぜ層(b)にしか置けないのか: 経路の中身は **Excel自身のコピーと貼り付け**
+'   (受け皿シート `paste_buf` への `Copy` / `PasteSpecial Format:="Unicode テキスト"`)
+'   であり、クリップボードの実装も書式名も実機Excelのものである。LibreOffice
+'   では同じ結果にならず、層(a)では確かめられない。
+' 何を固定するのか: **複数行のテキストが1字も変わらずに往復すること**。
+'   Excelのテキスト形式はセルの中身によって引用符で包み直すことがあり、
+'   そこが崩れると[コピー]した調べる文が黙って別の文になる(いちばん怖い壊れ方)。
+' クリップボードを使えない環境(RDP・EDR)では往復そのものができないので、
+'   その場合は SKIP 扱いで**緑にする**(既存の modTestsExcel2 の作法と同じ)。
+' ============================================================================
+Private Sub TestW9ClipRoundTrip()
+    On Error GoTo Crashed
+
+    Dim srcText As String
+    srcText = "1行目です。" & vbLf & vbLf & "3行目です（空行をはさむ）。" & vbLf & "終わり。"
+
+    Dim okFlag As Boolean
+    Dim backText As String
+    If modUISheet.CopyToClipboard(srcText) Then
+        backText = modUISheet.PasteFromClipboard(okFlag)
+        ECheck "T47-W9-01_複数行テキストがクリップボードを往復して一致する(裁定書27 W9-B1)", _
+            (okFlag And StrComp(backText, srcText, vbBinaryCompare) = 0), _
+            "戻り=[" & modUtil.SafeLeft(backText, 120) & "]"
+    Else
+        ECheck "T47-W9-01_複数行テキストがクリップボードを往復して一致する(裁定書27 W9-B1)", _
+            True, "SKIP: クリップボードへ書けない環境"
+    End If
+
+    ' 受け皿シートは**読んだあとに消える**(11章§0.2 タブを増やさない)。
+    ECheck "T47-W9-02_読み取りのあと受け皿シートが残っていない(裁定書27 W9-B1)", _
+        (modUISheet.SheetOf("paste_buf") Is Nothing) Or (okFlag = False), _
+        "paste_buf の後始末"
+    Exit Sub
+Crashed:
+    ECheck "T47-W9-01_複数行テキストがクリップボードを往復して一致する(裁定書27 W9-B1)", _
+        False, "実行時エラー: " & Err.Description
+End Sub
+
+' ============================================================================
+' W9-UTF8: 純VBAのUTF-8書き出し(裁定書27 W9-B2)
+' ----------------------------------------------------------------------------
+' なぜ層(b)にしか置けないのか: 層(a)は `Utf8Bytes` の**バイト列**を固定できるが、
+'   `Open For Binary` が**実際にディスクへ書いたバイト**は確かめられない。
+'   ADODB.Stream を撤去した以上、ここが「本当に書けているか」の最後の砦である。
+' 期待値は RFC 3629 から手計算: BOM(EF BB BF) + "A"(41) + U+3042(E3 81 82)。
+' ============================================================================
+Private Sub TestW9WriteUtf8File()
+    Dim pathText As String
+    Dim fileNo As Long
+    On Error GoTo Crashed
+
+    pathText = Environ$("TEMP") & "\rpn_t47_utf8.txt"
+    If Not modUtil.WriteUtf8File(pathText, "A" & ChrW(&H3042&), True) Then
+        ECheck "T47-W9-03_UTF8書出のバイト列がBOM+41+E38182(裁定書27 W9-B2)", _
+            False, "WriteUtf8File が False"
+        Exit Sub
+    End If
+
+    Dim buf() As Byte
+    Dim n As Long
+    fileNo = FreeFile
+    Open pathText For Binary Access Read As #fileNo
+    n = LOF(fileNo)
+    If n > 0 Then
+        ReDim buf(0 To n - 1)
+        Get #fileNo, 1, buf
+    End If
+    Close #fileNo
+    fileNo = 0
+
+    Dim hexText As String
+    Dim i As Long
+    For i = 0 To n - 1
+        hexText = hexText & Right$("0" & LCase$(Hex$(buf(i))), 2)
+    Next i
+
+    ECheck "T47-W9-03_UTF8書出のバイト列がBOM+41+E38182(裁定書27 W9-B2)", _
+        (hexText = "efbbbf41e38182"), "実際=[" & hexText & "]"
+
+    Kill pathText
+    Exit Sub
+Crashed:
+    CloseQuietT47 fileNo
+    ECheck "T47-W9-03_UTF8書出のバイト列がBOM+41+E38182(裁定書27 W9-B2)", _
+        False, "実行時エラー: " & Err.Description
+End Sub
+
+' 開いたままのファイル番号を黙って閉じる(ハンドラ稼働中に On Error Resume Next
+'   を書けないため、後始末は別Subへ切り出す)。
+Private Sub CloseQuietT47(ByVal fileNo As Long)
+    On Error Resume Next
+    If fileNo > 0 Then Close #fileNo
+End Sub

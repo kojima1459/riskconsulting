@@ -35,7 +35,10 @@ Private Const UH_MSG_NO_CASE As String = "案件が選ばれていません。�
 ' 企業ドシエファイルの保存先。13章§2.3 に専用キーが無いため、出力の共通
 ' フォルダ(html_out_dir)を使う(17章の裁定事項として申し送り)。
 Private Const UH_DIR_KEY As String = "html_out_dir"
-Private Const UH_DIR_DEFAULT As String = "%USERPROFILE%\Documents\RPN出力"
+' 裁定書27 W9-C2: 保存先の正は config data_dir(既定は会社のOneDrive)。
+' html_out_dir に値が入っていればそちらを優先する(分けたい管理者向け)。
+Private Const UH_DATA_DIR_KEY As String = "data_dir"
+Private Const UH_DIR_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
 
 ' HOMEの品質上書き(13章§2.10 hm_quality_mode)。日本語ラベル -> 機械値。
 '   空(未選択)は "" のまま返し、config・ティア連動の解決へ委ねる。
@@ -581,8 +584,18 @@ Cancelled:
     AskCompanyFile = vbNullString
 End Function
 
+' 企業ファイルの書出先(裁定書27 W9-C2)。html_out_dir が空なら data_dir に従い、
+'   OneDrive が無ければ Documents へ落ちる(落ちたことは NoticeDataDir が出す)。
 Private Function OutDir() As String
-    OutDir = modConfig.GetStr(UH_DIR_KEY, UH_DIR_DEFAULT)
+    Dim raw As String
+    raw = Trim$(modConfig.GetStr(UH_DIR_KEY, vbNullString))
+    If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(UH_DATA_DIR_KEY, UH_DIR_DEFAULT))
+    If LenB(raw) = 0 Then raw = UH_DIR_DEFAULT
+
+    Dim dirText As String
+    dirText = modUtil.ResolveDataDir(raw)
+    If LenB(dirText) = 0 Then dirText = raw
+    OutDir = dirText
 End Function
 
 ' ============================================================================

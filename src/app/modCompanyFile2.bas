@@ -64,14 +64,29 @@ Failed:
 End Function
 
 ' 既存ファイルだけを開く(不在・失敗は Nothing)。
+'   裁定書27 W9-B7(d): 開く前に DisplayAlerts を退避して False にする。
+'   他者ロック・読取専用推奨・リンク更新の**モーダル**が出ると、無人で進む
+'   一括実行がそこで固まる(16章 E-51「モーダルを出さない」)。戻しは成功でも
+'   失敗でも必ず通す。
 Public Function DossierOpen(ByVal pathText As String, ByVal readOnlyMode As Boolean) As Object
+    Dim prevAlerts As Boolean
     On Error GoTo Failed
     If Not FileExists(pathText) Then Exit Function
+    prevAlerts = Application.DisplayAlerts
+    Application.DisplayAlerts = False
     Set DossierOpen = Application.Workbooks.Open(pathText, 0, readOnlyMode)
+    Application.DisplayAlerts = prevAlerts
     Exit Function
 Failed:
+    RestoreAlerts prevAlerts
     Set DossierOpen = Nothing
 End Function
+
+' ハンドラ稼働中に On Error Resume Next は書けないので、戻しは別Subへ切り出す。
+Private Sub RestoreAlerts(ByVal prevAlerts As Boolean)
+    On Error Resume Next
+    Application.DisplayAlerts = prevAlerts
+End Sub
 
 ' 上書き確認を出さずにマクロ無し.xlsxとして保存して閉じる。
 '   裁定書9 B8・N3(14章§6): SaveAs の失敗を握り潰さず Boolean で返す

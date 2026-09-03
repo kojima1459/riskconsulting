@@ -706,26 +706,18 @@ End Sub
 ' ============================================================================
 ' クリップボード(11章 追加収集ブロックの[コピー]。17章 T-31 DoD)
 ' ----------------------------------------------------------------------------
-' UserFormは使わないため参照設定を足さず、MSForms.DataObject を遅延生成して
-' 使う(GUIDによる New: 生成。参照設定なしで動く定番手)。失敗したら戻り値
-' False を返し、呼び出し側が「セルを選ぶのでCtrl+Cしてください」へ落とす。
+' 14章§6 の公開契約は本モジュールの2本(PasteFromClipboard / CopyToClipboard)
+' のままにし、**中身だけ** modUICase7 の Excel自身の貼り付け・コピーへ移した
+' (裁定書27 W9-B1)。移した理由は2つある。
+'   (1) MSForms.DataObject の遅延生成(CLSID指定のCOM生成)は社内AVの
+'       AMSIが重く見る形であり、配布物から消す必要がある。
+'   (2) 代替の受け皿シート方式は modUICase6/7 が持つ「貼り付けの扱い」と
+'       同じ関心事であり、30,000字契約の残量も modUICase7 側にある。
+' 失敗したら False / okFlag=False を返し、呼び出し側が「セルを選ぶので
+' Ctrl+Cしてください」「Ctrl+V の代替枠」へ落とす(挙動は11章§3.3のまま)。
 ' ============================================================================
 Public Function PasteFromClipboard(ByRef okFlag As Boolean) As String
-    okFlag = False
-    On Error GoTo Failed
-    Dim dobj As Object
-    Set dobj = GetObject("New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
-    If dobj Is Nothing Then Exit Function
-    dobj.GetFromClipboard
-    Dim s As String
-    s = dobj.GetText(1)                     ' 1 = テキスト形式だけを読む
-    If LenB(s) = 0 Then Exit Function
-    okFlag = True
-    PasteFromClipboard = s
-    Exit Function
-Failed:
-    okFlag = False
-    PasteFromClipboard = vbNullString
+    PasteFromClipboard = modUICase7.ClipPasteText(okFlag)
 End Function
 
 ' 名前付きレンジが指す範囲の行数・先頭行・列。取れないときは0(呼び出し側が諦める)。
@@ -738,15 +730,5 @@ NoRows:
 End Function
 
 Public Function CopyToClipboard(ByVal payloadText As String) As Boolean
-    On Error GoTo Failed
-    If LenB(payloadText) = 0 Then Exit Function
-    Dim dobj As Object
-    Set dobj = GetObject("New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
-    If dobj Is Nothing Then Exit Function
-    dobj.SetText payloadText
-    dobj.PutInClipboard
-    CopyToClipboard = True
-    Exit Function
-Failed:
-    CopyToClipboard = False
+    CopyToClipboard = modUICase7.ClipCopyText(payloadText)
 End Function

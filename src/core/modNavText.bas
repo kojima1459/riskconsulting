@@ -387,3 +387,72 @@ Public Function TrimTrailingBlankLines(ByVal bodyText As String) As String
     Next i
     TrimTrailingBlankLines = Join(outArr, vbLf)
 End Function
+
+' ============================================================================
+' JoinPasteCells - 受け皿シートに貼り付いたセルを1本のテキストへ戻す
+'   (裁定書27 W9-B1。11章§3.3 の挙動は変えない)
+' ----------------------------------------------------------------------------
+' なぜ必要か:
+'   [ここに貼る]は MSForms.DataObject の遅延生成(CLSID指定のCOM生成)で
+'   クリップボードを読んでいたが、この形は社内AVのAMSIがマクロ型マルウェアの
+'   特徴として重く見る(裁定書27 事実)。撤去して **Excel自身の貼り付け**
+'   (受け皿シートへの PasteSpecial)へ替えたため、貼り付いた「表」を元の
+'   1本のテキストへ戻す変換が要る。それがこの純関数である。
+'
+' Excelの貼り付けの性質(この関数が前提にする):
+'   ・改行で行が分かれる  -> 行を vbLf で戻す
+'   ・タブで列が分かれる  -> 列を vbTab で戻す
+'   ・1セルの上限は32,767字。**この関数は上限で切らない**(連結後の長さは
+'     呼び出し側が 16章 E-22 の切詰めで扱う)
+'
+' 引数: cells は行優先の1次元配列(添字 (r * colCount) + c。r,c は0起点)。
+'   2次元配列を跨いで渡さないのは、層(a)のテストが配列を組み立てやすい形に
+'   するため(vba_lint の配列引数検査も1次元のほうが素直)。
+'
+' 規則:
+'   1. 各行は、**末尾の空セルを落として**から vbTab で連結する
+'      (貼り付け範囲が矩形なので、短い行の右側は空セルで埋まる)。
+'   2. 行は vbLf で連結する。**途中の空行は残す**(元の本文の空行である)。
+'   3. **末尾の空行はすべて落とす**(元の本文の末尾改行と、貼り付け範囲の
+'      余りを区別できないため。落としても本文は失われない)。
+'   4. 有効な行が1つも無ければ "" を返す。
+' ============================================================================
+Public Function JoinPasteCells(ByRef cells() As String, ByVal rowCount As Long, _
+                               ByVal colCount As Long) As String
+    If rowCount <= 0 Then Exit Function
+    If colCount <= 0 Then Exit Function
+
+    Dim rowTexts() As String
+    ReDim rowTexts(0 To rowCount - 1)
+
+    Dim lastRow As Long
+    lastRow = -1
+
+    Dim r As Long, c As Long
+    Dim lastCol As Long
+    Dim lineText As String
+    For r = 0 To rowCount - 1
+        lastCol = -1
+        For c = 0 To colCount - 1
+            If LenB(cells((r * colCount) + c)) > 0 Then lastCol = c
+        Next c
+
+        lineText = vbNullString
+        For c = 0 To lastCol
+            If c > 0 Then lineText = lineText & vbTab
+            lineText = lineText & cells((r * colCount) + c)
+        Next c
+
+        rowTexts(r) = lineText
+        If LenB(lineText) > 0 Then lastRow = r
+    Next r
+
+    If lastRow < 0 Then Exit Function
+
+    Dim sb As String
+    For r = 0 To lastRow
+        If r > 0 Then sb = sb & vbLf
+        sb = sb & rowTexts(r)
+    Next r
+    JoinPasteCells = sb
+End Function

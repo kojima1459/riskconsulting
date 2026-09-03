@@ -37,7 +37,8 @@ Option Explicit
 '                          ResolveMaxTokensDirect / IsOSeriesModel / FormatTemperature
 '   (c) キーファイルのパース: ParseKeyLine / ExpandAppDataToken
 '   HTTP実体(CreateObject("MSXML2.ServerXMLHTTP.6.0"))とファイルI/O(Open/Close)・
-'   Sleepは上記の外側にあるPrivateの薄い手続きへ閉じ込め、純関数からは呼ばない。
+'   待ち(Application.Wait)は上記の外側にあるPrivateの薄い手続きへ閉じ込め、
+'   純関数からは呼ばない(裁定書27 W9-B4 で kernel32 Sleep から替えた)。
 '
 ' schemaJson引数について: modSchemas(15章)は未実装のため、本モジュールはJSON
 '   スキーマ本文を丸ごと文字列で受け取るだけで、スキーマの妥当性検査はしない
@@ -62,13 +63,6 @@ Private Const RETRY_TIMEOUT_WAIT_MS As Long = 2000
 ' receiveはconfig direct_http_timeout_ms。13章§2.3既定120000)。
 Private Const HTTP_RESOLVE_TIMEOUT_MS As Long = 5000
 Private Const HTTP_CONNECT_TIMEOUT_MS As Long = 10000
-
-' Sleep(kernel32)。32bit/64bit両対応(#If VBA7)。LongLongは使わない(タスク制約)。
-#If VBA7 Then
-    Private Declare PtrSafe Sub WinApiSleep Lib "kernel32" Alias "Sleep" (ByVal dwMilliseconds As Long)
-#Else
-    Private Declare Sub WinApiSleep Lib "kernel32" Alias "Sleep" (ByVal dwMilliseconds As Long)
-#End If
 
 ' ==============================================
 ' CallDirect - direct経路の唯一の入口(14章§3・§6)。
@@ -446,8 +440,16 @@ Failed:
     Resume Cleanup
 End Sub
 
-' バックオフ待ち。kernel32 Sleepを使う(Excel Application.Waitは秒未満を
-' 扱えずR4のExcelトークン禁止にも抵触するため使わない)。
+' バックオフ待ち(裁定書27 W9-B4)。kernel32 の `Sleep`(`Declare PtrSafe`)は
+'   社内AVのAMSIが重く見る形なので撤去し、`Application.Wait` へ替えた。
+'   Application.Wait の分解能は1秒なので、待ち時間は**切り上げて秒**にする
+'   (429/408の再試行間隔は2秒であり、切り上げても方針は変わらない)。
+'   待っている間にリボンの応答が返ってもよいので、待ちの前後は触らない。
 Private Sub SleepMs(ByVal ms As Long)
-    If ms > 0 Then WinApiSleep ms
+    On Error Resume Next
+    If ms <= 0 Then Exit Sub
+    Dim secs As Long
+    secs = CLng(Fix((ms + 999) / 1000))
+    If secs < 1 Then secs = 1
+    Application.Wait Now + TimeSerial(0, 0, secs)
 End Sub
