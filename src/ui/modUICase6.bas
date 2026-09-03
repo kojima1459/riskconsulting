@@ -22,9 +22,11 @@ Option Explicit
 Private Const U6_SRC As String = "modUICase6"
 Private Const U6_SHEET As String = "ナビ"
 Private Const U6_PREVIEW_LINES As Long = 5
-' 裁定書22 i1: プレビューの見出し「┈┈┈ 先頭だけお見せします ┈┈┈」の値源は
+' 裁定書22 i1: プレビューの見出し「(点線) 先頭だけお見せします (点線)」の値源は
 '   build/sheets_main.json の ci_prev_* の label だけである(ビルドがセルへ焼く)。
 '   VBA側の定数は使われないまま二重の値源になっていたので撤去した。
+'   見出しに使う点線の罫線文字はCP932に無いため、ここへ書き写さない
+'   (VBAのモジュールはCP932で保存される。裁定書27 W9-A)。
 Private Const U6_LOCK_PASTE As String = "貼り付け"
 Private Const U6_LOCK_SHOW As String = "中身の表示"
 Private Const U6_LOCK_CLEAR As String = "貼ったものの取り消し"

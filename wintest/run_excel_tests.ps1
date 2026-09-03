@@ -17,7 +17,10 @@
 # 何をするか:
 #   1. レジストリでVBA信頼設定(AccessVBOM/マクロ許可)を現ユーザーに設定
 #   2. dist\リスク提案ナビ_dev.xlsm (または prod版) をCOMで開く
-#      -> 初回起動の自己インストーラが走り、vba_srcから全モジュールが組み上がる
+#      -> v3.4(裁定書27 W9-A)以降、モジュールは vbaProject.bin に最初から
+#         入っている(配布方式B)。起動時の自己インストール/焼き付けは無い。
+#         レジストリのVBA信頼設定(AccessVBOM)は、このスクリプト自身が
+#         COMでVBAへ触れるために要るのであって、配布物の要件ではない。
 #   3. wintest\tests_expected.txt を読んで modTestRunner.SetExpectedCount へ渡す
 #      (17章§4-1 ランナー要件(2)。0件実行の「全緑」を成立させない)
 #   4. modTestRunner.RunAllPureTests を実行し PASS/FAIL/SKIP を取得

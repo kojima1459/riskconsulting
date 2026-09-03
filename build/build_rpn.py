@@ -69,6 +69,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import ovba  # noqa: E402  (自己完結モジュール。ThisWorkbook外科パッチに使う)
+import ovba_write  # noqa: E402  (MS-OVBA ライター。完成品binの生成に使う)
 
 DEFAULT_ROOT = os.path.dirname(SCRIPT_DIR)
 DEFAULT_MODULES_JSON = os.path.join(SCRIPT_DIR, "modules.json")
@@ -432,6 +433,176 @@ def patch_installer(vba_bin: bytes, installer_src: bytes) -> bytes:
     return buf.read()
 
 
+# ===========================================================================
+# 配布方式B: 完成品 vbaProject.bin の生成(裁定書27 W9-A)
+# ---------------------------------------------------------------------------
+# なぜ差し替えたか(履歴として残す):
+#   上の自己インストーラ方式(隠しシート vba_src + VBComponents.Add +
+#   AddFromString)は 2026-09-02 に社内AVの AMSI で検知され(VDI強制停止・
+#   情シスチケット)、採用禁止になった。焼き付け(開発PCで1回開く)でも同じ
+#   ループが走るため、方式そのものを止める。
+#   代わりに **モジュールが最初から入った正規の vbaProject.bin を Linux 上で
+#   生成**する(build/ovba_write.py)。配布物からは vba_src シートも注入コードも
+#   消える。--vba-mode=installer は1リリースだけ残す開発用フォールバック。
+#
+# 何を template から写し、何を作るか:
+#   写す: PROJECTINFORMATION(SysKind・LCID・CodePage932・Name・HelpFile・Constants)
+#         と REFERENCE 群(stdole/Office/Excel/VBA 等)/ PROJECT の
+#         ID・CMG・DPB・GC・Name・HelpContextID・VersionCompatible32 /
+#         document module(ThisWorkbook・Sheet1)のストリーム構成 /
+#         _VBA_PROJECT(ただし下の無害化を当てる)。
+#   作る: PROJECTMODULES(全モジュールの台帳)/ 各モジュールストリーム /
+#         PROJECT の Document=/Module=/Class= 行と [Workspace] / PROJECTwm。
+#
+# p-code を持たせない理由:
+#   MODULEOFFSET=0・PerformanceCache 無し・_VBA_PROJECT の Version=0xFFFF に
+#   することで、Excel/LO は「キャッシュを使わずソースから再コンパイル」する。
+#   これは従来の外科パッチが到達していた状態と同じであり、幽霊コンパイル
+#   エラー(PoC R23c-F1)の再発を防ぐ。
+# ===========================================================================
+_BAKED_THISWORKBOOK_TEXT = '''Attribute VB_Name = "ThisWorkbook"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+Private Sub Workbook_Open()
+  On Error Resume Next
+  Application.Run "'" & ThisWorkbook.Name & "'!modBoot.Boot"
+End Sub
+'''
+
+# 配布物(vbaProject.bin)に現れてはいけない文字列(裁定書27 W9-B 6)。
+# AVが重く見る書き方そのもの。ビルド自己検証・tools/bin_roundtrip.py・
+# tools/ship_check.py が同じ表を使う(二重実装を作らない)。
+FORBIDDEN_BIN_STRINGS = ("VBProject", "AddFromString", "ExecuteExcel4Macro",
+                         "WScript.Shell", "new:{")
+
+
+def build_baked_thisworkbook() -> bytes:
+    """最小 ThisWorkbook(VBProject・vba_src への言及ゼロ)を CP932/CRLF で返す。"""
+    try:
+        _BAKED_THISWORKBOOK_TEXT.encode("ascii")
+    except UnicodeEncodeError as e:
+        raise BuildError(f"ThisWorkbook のソースはASCIIのみで書いてください: {e}")
+    return _BAKED_THISWORKBOOK_TEXT.replace("\n", "\r\n").encode("cp932")
+
+
+def _shipped_modules(present_modules, is_dev):
+    """この配布に載せるモジュールだけを返す(裁定書27 W9-B 5)。
+
+    台帳の ship=false は「dev には残すが prod の配布物からは外す」印
+    (modGatewayDirect などの direct 専用モジュール)。
+    """
+    out = []
+    for m in present_modules:
+        if not is_dev and m.get("ship") is False:
+            continue
+        out.append(m)
+    return out
+
+
+def _check_dropped_module_references(shipped, dropped, root):
+    """配布から外したモジュールを、載せるモジュールが名前で参照していないか検査する。
+
+    VBAは**プロジェクト全体**をコンパイルするので、到達しない行であっても
+    存在しないモジュールを `modXxx.Foo` の形で参照していればコンパイルエラーに
+    なる。ship=false を入れた瞬間に配布物が壊れるのを、ここで止める。
+    """
+    if not dropped:
+        return
+    names = {m["name"] for m in dropped}
+    problems = []
+    for m in shipped:
+        path = os.path.join(root, m["path"])
+        try:
+            with open(path, encoding="utf-8-sig") as fp:
+                text = fp.read()
+        except OSError:
+            continue
+        for i, line in enumerate(text.replace("\r\n", "\n").split("\n"), 1):
+            code = line.split("'", 1)[0]
+            for nm in names:
+                if re.search(r"\b%s\s*\." % re.escape(nm), code):
+                    problems.append(f"{m['path']}:{i} が {nm} を参照しています")
+    if problems:
+        raise BuildError(
+            "配布から外したモジュール(ship=false)を、配布に載せるモジュールが参照して"
+            "います。VBAはプロジェクト全体をコンパイルするため、この配布物は実機で"
+            "コンパイルエラーになります(%d件):\n  %s"
+            % (len(problems), "\n  ".join(problems[:20])))
+
+
+def build_baked_vba_project(template_bin, shipped_modules, root):
+    """完成品 vbaProject.bin を組み立てて (bin, 焼込モジュール名リスト) を返す。"""
+    tmpl = ovba_write.read_modules(template_bin)
+    docs = [(nm, info) for nm, info in tmpl.items() if info["type"] == "document"]
+    if not any(nm == "ThisWorkbook" for nm, _ in docs):
+        raise BuildError("template_skeleton.xlsm の dir に ThisWorkbook の "
+                         "document module がありません")
+
+    mods = [ovba_write.VbaModule("ThisWorkbook", build_baked_thisworkbook(),
+                                 "document")]
+    # ThisWorkbook 以外の document module(Sheet1 等)は template の構成を写す。
+    # openpyxl が作るシートは workbook.xml に codeName を持たないため、Excel は
+    # 開いたときに不足分のシートモジュールを自分で作る(現行の配布物と同じ挙動)。
+    for nm, info in docs:
+        if nm == "ThisWorkbook":
+            continue
+        mods.append(ovba_write.VbaModule(nm, info["source"], "document"))
+
+    baked = []
+    for m in shipped_modules:
+        body = _vba_src_text(root, m)          # 整形規則は vba_src と同一の1実装
+        if len(body) > MODULE_CONTRACT_LIMIT:
+            raise BuildError(
+                f"{m['name']} は{len(body)}字で12章§2のモジュール契約上限"
+                f"({MODULE_CONTRACT_LIMIT}字)を超過しています")
+        mtype = "class" if m.get("type") == "class" else "std"
+        src = ovba_write.module_stream_source(m["name"], body, mtype)
+        mods.append(ovba_write.VbaModule(m["name"], src, mtype))
+        baked.append(m["name"])
+
+    vba_bin = ovba_write.build_vba_project(
+        template_bin, mods,
+        vba_project_stream=_neutralize_vba_project(
+            ovba.CFBReader(template_bin).read("_VBA_PROJECT")))
+    hits = forbidden_strings_in_bin(vba_bin)
+    if hits:
+        print("  WARNING: vbaProject.bin に配布禁止の文字列があります"
+              "(裁定書27 W9-B 6。出荷を止めるのは tools/bin_roundtrip.py と "
+              "tools/ship_check.py): " + ", ".join(hits), file=sys.stderr)
+    return vba_bin, baked
+
+
+def _decompressed_bin_text(vba_bin):
+    """binの全モジュールソース+PROJECT/PROJECTwm を1本のテキストにして返す。
+    (圧縮されたままの生バイト列を grep しても中身は見えないため、必ず解凍する)"""
+    parts = []
+    for nm, info in ovba_write.read_modules(vba_bin).items():
+        parts.append(nm)
+        parts.append(info["source"].decode("cp932", errors="replace"))
+    cfb = ovba.CFBReader(vba_bin)
+    for extra in ("PROJECT", "PROJECTwm"):
+        if extra in cfb.entries:
+            parts.append(cfb.read(extra).decode("cp932", errors="replace"))
+    return "\n".join(parts)
+
+
+def forbidden_strings_in_bin(vba_bin):
+    """完成品binに現れた配布禁止文字列を返す(裁定書27 W9-B 6)。
+
+    **判定の唯一の実装**。tools/bin_roundtrip.py と tools/ship_check.py が
+    これを import して fail-closed に使う(ビルド側は警告を出すだけ。
+    出荷を止めるのはゲートの役目であり、ビルドを止めると他の検問まで
+    連鎖で回らなくなるため)。
+    """
+    dec = _decompressed_bin_text(vba_bin)
+    low = dec.lower()
+    return [w for w in FORBIDDEN_BIN_STRINGS if w.lower() in low]
+
+
 # ---------------------------------------------------------------------------
 # 台帳の読み込みと検証
 # ---------------------------------------------------------------------------
@@ -637,8 +808,10 @@ class BuildCtx:
     """シート生成中に持ち回る文脈。生成しながら「後で検証すべき期待値」を溜める。
     期待値をビルド時に組み立てておくことで、自己検証が台帳を二度解釈せずに済む。"""
 
-    def __init__(self, wb, data, mock_llm, app_version, present_modules, root):
+    def __init__(self, wb, data, mock_llm, app_version, present_modules, root,
+                 is_dev=True):
         self.wb = wb
+        self.is_dev = bool(is_dev)
         self.enums = data.get("enums") or {}
         self.policy = data.get("protection_policy") or {}
         self.text_fmt = data.get("text_number_format", "@")
@@ -813,6 +986,11 @@ def _make_guard(wb, spec, ctx):
     return ws
 
 
+# prod(配布)ビルドの config シートへ載せないキー(裁定書27 W9-B 5)。
+# tools/sheet_check.py と tools/ship_check.py が同じ表を参照する。
+PROD_OMITTED_CONFIG_KEYS = ("direct_api_base",)
+
+
 def _make_config(wb, spec, ctx):
     ws = wb.create_sheet(spec["name"])
     ws.protection.sheet = False
@@ -824,11 +1002,19 @@ def _make_config(wb, spec, ctx):
 
     row = 2
     for item in spec.get("defaults") or []:
+        # 裁定書27 W9-B 5: direct経路は配布(prod)から外すので、その入口である
+        # direct_api_base を prod の config へ載せない(AV表面積の縮小)。
+        # dev ビルドには残す(開発中は direct 経路を使うため)。
+        if not ctx.is_dev and item["name"] in PROD_OMITTED_CONFIG_KEYS:
+            continue
         value = item.get("value")
         if item["name"] == "mock_llm":
             value = bool(ctx.mock_llm)
         if item["name"] == "app_version":
             value = ctx.app_version
+        if item["name"] == "tests_expected":
+            # 値源は wintest/tests_expected.txt(裁定書14 裁定5・裁定書27 W9-A)。
+            value = ctx.tests_expected
         ws.cell(row=row, column=1, value=item["name"]).protection = LOCKED
         ws.cell(row=row, column=2, value=value).protection = LOCKED
         ws.cell(row=row, column=3, value=_clean(item.get("note", ""))).protection = LOCKED
@@ -1593,13 +1779,13 @@ def read_tests_expected(root):
     if not os.path.exists(path):
         raise BuildError(
             f"{TESTS_EXPECTED_PATH} が見つかりません({path})。"
-            "ブック内テストの期待本数(vba_src!E2)を焼き込めないためビルドを中止します。")
+            "ブック内テストの期待本数(config!tests_expected)を焼き込めないためビルドを中止します。")
     with open(path, encoding="utf-8-sig") as fp:
         first = fp.readline().strip()
     if not re.fullmatch(r"[0-9]+", first):
         raise BuildError(
             f"{TESTS_EXPECTED_PATH} の1行目が整数ではありません: {first!r}。"
-            "ブック内テストの期待本数(vba_src!E2)として使えないためビルドを中止します。")
+            "ブック内テストの期待本数(config!tests_expected)として使えないためビルドを中止します。")
     return int(first)
 
 
@@ -2055,9 +2241,68 @@ def _verify_installer_patch(vba_bin, installer_src):
     return errors
 
 
+def _verify_baked_bin(vba_bin, baked_names, present_modules, root):
+    """完成品 vbaProject.bin を**別実装で読み戻して**検証する(裁定書27 W9-A ①)。
+
+    (1) 各モジュールのソースが src/ の .bas(整形規則適用後・CRLF・CP932)と
+        バイト一致すること
+    (2) モジュール集合が台帳と一致すること(document module を除く)
+    (3) 禁止文字列("VBProject" 等)が現れないこと
+    (4) 全モジュールの MODULEOFFSET が 0(p-code を持たない)であること
+    """
+    errors = []
+    try:
+        got = ovba_write.read_modules(vba_bin)
+    except Exception as e:
+        return [f"完成品binの読み戻しに失敗: {e}"]
+
+    doc_names = {nm for nm, info in got.items() if info["type"] == "document"}
+    if "ThisWorkbook" not in doc_names:
+        errors.append("完成品binに ThisWorkbook の document module がありません")
+    std_names = sorted(set(got) - doc_names)
+    if std_names != sorted(baked_names):
+        errors.append(
+            f"完成品binのモジュール集合が台帳と不一致: 期待={sorted(baked_names)} "
+            f"実際={std_names}")
+
+    by_name = {m["name"]: m for m in present_modules}
+    for nm in std_names:
+        m = by_name.get(nm)
+        if m is None:
+            errors.append(f"完成品bin '{nm}' に対応する台帳エントリがありません")
+            continue
+        try:
+            want_body = _vba_src_text(root, m)
+        except Exception as e:
+            errors.append(f"完成品bin本文検査: '{nm}' のソースを読めません: {e}")
+            continue
+        want = want_body.replace("\n", "\r\n").encode("cp932")
+        if not want.endswith(b"\r\n"):
+            want += b"\r\n"
+        actual = ovba_write.strip_attribute_lines(got[nm]["source"])
+        if actual != want:
+            errors.append(
+                f"完成品binの本文が src/ と不一致: '{nm}' "
+                f"(期待{len(want)}バイト / 実際{len(actual)}バイト)")
+
+    # ThisWorkbook は最小(VBProject・vba_src への言及ゼロ)であること。
+    tw = got.get("ThisWorkbook", {}).get("source", b"")
+    if tw != build_baked_thisworkbook():
+        errors.append("完成品binの ThisWorkbook が最小版と一致しません")
+
+
+    dir_dec = ovba.ovba_decompress(ovba.CFBReader(vba_bin).read("dir"))
+    for _off, rid, _sz, body in ovba_write.iter_dir_records(dir_dec):
+        if rid == ovba_write.REC_MODULEOFFSET and struct.unpack("<I", body)[0] != 0:
+            errors.append("完成品binに MODULEOFFSET≠0 のモジュールがあります"
+                          "(p-codeキャッシュが混入しています)")
+            break
+    return errors
+
+
 def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
                  app_version, present_modules, root, has_vba_project, ctx=None,
-                 installer_src=None):
+                 installer_src=None, baked_names=None):
     errors = []
     try:
         wb2 = openpyxl.load_workbook(out_path, keep_vba=True)
@@ -2095,7 +2340,11 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
                     f"シート'{name}'のタブ色不一致: 期待={want_tab} 実際={got_tab!r}")
 
     vba_spec = next((s for s in sheets if s.get("role") == "vba_src"), None)
-    if vba_spec and vba_spec["name"] in wb2.sheetnames:
+    if baked_names is not None:
+        # 配布方式B: vba_src シートは**存在してはならない**(裁定書27 W9-A)。
+        if any(n == "vba_src" for n in wb2.sheetnames):
+            errors.append("baked ビルドなのに vba_src シートが残っています")
+    elif vba_spec and vba_spec["name"] in wb2.sheetnames:
         ws = wb2[vba_spec["name"]]
         got_names = []
         r = 2
@@ -2149,7 +2398,8 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
             if not (ws.cell(row=r, column=3).value or "").strip():
                 errors.append(f"config '{key}' の説明列が空です(13章§2.3は全キーに説明を持つ)")
             r += 1
-        want_keys = [d["name"] for d in cfg_spec.get("defaults") or []]
+        want_keys = [d["name"] for d in cfg_spec.get("defaults") or []
+                     if mock_llm_expected or d["name"] not in PROD_OMITTED_CONFIG_KEYS]
         if got_keys != want_keys:
             errors.append(
                 f"config のキー列が台帳と不一致(順序含む): 期待={want_keys} 実際={got_keys}")
@@ -2161,6 +2411,17 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
             errors.append(
                 f"config!app_version が台帳と不一致: 期待={app_version} "
                 f"実際={got_values['app_version']}")
+        # 裁定書14 裁定5 / 裁定書27 W9-A: ブック内テストの期待本数。
+        # 旧 vba_src!E2 の値源をここへ移した(fail-closed の担保先も config)。
+        if ctx is not None:
+            got_te = got_values.get("tests_expected")
+            ok_te = (isinstance(got_te, (int, float)) and not isinstance(got_te, bool)
+                     and int(got_te) == ctx.tests_expected)
+            if not ok_te:
+                errors.append(
+                    f"config!tests_expected(ブック内テストの期待本数)が "
+                    f"{TESTS_EXPECTED_PATH} と不一致: 期待={ctx.tests_expected} "
+                    f"実際={got_te!r}")
 
     if ctx is not None:
         errors.extend(_verify_layout(wb2, ctx))
@@ -2189,6 +2450,10 @@ def verify_build(out_path, expected_vba_src_names, sheets, mock_llm_expected,
                     # 自己インストーラ外科パッチの読み戻し検証(3項目。PoC由来)。
                     if installer_src is not None:
                         errors.extend(_verify_installer_patch(vba_bin, installer_src))
+                    # 配布方式B: 完成品binの読み戻し検証(裁定書27 W9-A ①)。
+                    if baked_names is not None:
+                        errors.extend(_verify_baked_bin(
+                            vba_bin, baked_names, present_modules, root))
             elif "xl/vbaProject.bin" in names:
                 errors.append(
                     "テンプレート無しのビルドなのに xl/vbaProject.bin が混入しています")
@@ -2258,6 +2523,10 @@ def main():
     ap.add_argument("--out", default=None,
                     help="出力先パス(既定: <root>/dist/リスク提案ナビ[_dev].xlsm。"
                          "--kb 指定時は <root>/dist/ナレッジブック.xlsx)")
+    ap.add_argument("--vba-mode", choices=("baked", "installer"), default="baked",
+                    help="VBAの積み方(既定: baked=完成品vbaProject.binを生成。"
+                         "installer=旧方式の vba_src シート+自己インストーラ。"
+                         "裁定書27 W9-A。installer は1リリース限りの開発用フォールバック)")
     ap.add_argument("--allow-missing", action="store_true",
                     help="modules.jsonに列挙されたファイルの欠落をエラーでなく警告にする")
     args = ap.parse_args()
@@ -2299,6 +2568,17 @@ def main():
 
     app_version = sheets_data.get("app_version", "0.0.0")
     print(f"app_version (sheets_main.json): {app_version}")
+
+    # 配布方式B(baked)では vba_src シートを作らない(裁定書27 W9-A)。
+    # 台帳(sheets_main.json)には installer フォールバック用に残してあるので、
+    # ここで落とす。以降 `sheets` を見る処理(生成・自己検証)はすべて同じ
+    # フィルタ後のリストを見るので、二重の真実は生じない。
+    baked = (args.vba_mode == "baked")
+    if baked:
+        sheets = [sp for sp in sheets if sp.get("role") != "vba_src"]
+    print(f"VBAの積み方: {args.vba_mode}"
+          + ("(完成品 vbaProject.bin を生成・vba_src シート無し)" if baked
+             else "(旧方式: vba_src シート + 自己インストーラ)"))
     print()
 
     present, missing = validate_modules(modules, root, args.allow_missing)
@@ -2331,7 +2611,8 @@ def main():
             (WHITE, BRAND_DARK, "シート1行目のタイトル帯"),
             (WHITE, BRAND_MID, "操作ガイドの章内見出し・手順番号バッジ"),
         ])
-        ctx = BuildCtx(wb, sheets_data, mock_llm, app_version, present, root)
+        ctx = BuildCtx(wb, sheets_data, mock_llm, app_version, present, root,
+                       is_dev=is_dev)
         for spec in sheets:
             role = spec.get("role")
             builder = SHEET_BUILDERS.get(role)
@@ -2345,7 +2626,7 @@ def main():
         sys.exit(f"ERROR: {e}")
     print("  白字面のコントラスト比(4.5:1以上を機械検算): "
           + " / ".join(f"{w} {r:.1f}:1" for _, _, w, r in checked))
-    print(f"  ブック内テストの期待本数(vba_src!E2 へ焼込): {ctx.tests_expected} "
+    print(f"  ブック内テストの期待本数(config!tests_expected へ焼込): {ctx.tests_expected} "
           f"({TESTS_EXPECTED_PATH})")
 
     injected = ctx.injected
@@ -2359,7 +2640,10 @@ def main():
               f"Excelのリスト上限{DV_INLINE_LIMIT}字超。最終形はW3の隠しレンジ方式):")
         for sh, tgt, key, ln in ctx.dv_skipped:
             print(f"    {sh}!{tgt} enums.{key} ({ln}字)")
-    print(f"  vba_src: {len(injected)}モジュールを格納 ({injected})")
+    if baked:
+        print("  vba_src: (baked のため作りません)")
+    else:
+        print(f"  vba_src: {len(injected)}モジュールを格納 ({injected})")
     print(f"  シート最終構成({len(wb.sheetnames)}件): {wb.sheetnames}")
     if wb.sheetnames != [s["name"] for s in sheets]:
         sys.exit(f"ERROR: シート構成が sheets_main.json と不一致: {wb.sheetnames}")
@@ -2379,7 +2663,30 @@ def main():
     print(f"  vbaProject.bin: {'あり' if has_vba_project else 'なし'}")
 
     installer_src = None
-    if has_vba_project:
+    baked_names = None
+    if has_vba_project and baked:
+        # 配布方式B: template から情報を写しつつ、完成品の vbaProject.bin を作る。
+        try:
+            with zipfile.ZipFile(args.template) as _z:
+                if "xl/vbaProject.bin" not in _z.namelist():
+                    sys.exit("ERROR: template_skeleton.xlsm に xl/vbaProject.bin が"
+                             "ありません(配布方式B の情報源が取れません)")
+                template_bin = _z.read("xl/vbaProject.bin")
+            shipped = _shipped_modules(present, is_dev)
+            dropped = [m for m in present if m not in shipped]
+            _check_dropped_module_references(shipped, dropped, root)
+            baked_bin, baked_names = build_baked_vba_project(
+                template_bin, shipped, root)
+        except BuildError as e:
+            sys.exit(f"ERROR: {e}")
+        parts["xl/vbaProject.bin"] = baked_bin
+        if dropped:
+            print(f"  配布から外したモジュール(ship=false・prodのみ): "
+                  f"{[m['name'] for m in dropped]}")
+        print(f"  完成品 vbaProject.bin を生成: {len(baked_names)}モジュール"
+              f"(+ document module)/ {len(baked_bin):,} bytes"
+              "(自己インストーラ・vba_src・p-code いずれも無し)")
+    elif has_vba_project:
         # テンプレート由来の本物の vbaProject.bin に、ThisWorkbook自己インストーラを
         # 外科パッチする(dir MOFFSET=0・_VBA_PROJECT無害化を含む)。バイト長は不変。
         try:
@@ -2403,15 +2710,27 @@ def main():
     _out_base, _out_ext = os.path.splitext(out_path)
     staging_path = f"{_out_base}.building{_out_ext}"
     failed_path = f"{_out_base}.failed{_out_ext}"
+    # OPCの慣例どおり [Content_Types].xml を先頭に置く(裁定書27 W9-A)。
+    # openpyxl の保存結果は辞書順で、[Content_Types].xml が途中に来ることがある。
+    # 実Excelは順序を気にしないが、**LibreOffice の型判定は先頭付近を見る**ため、
+    # 順序が崩れていると `soffice` はブックを開けない("type detection failed")。
+    # 新ゲート lo-xlsm(配布binをLOに読み込ませる検問)を成立させるには順序が要る。
+    _ordered = ["[Content_Types].xml", "_rels/.rels"]
     with zipfile.ZipFile(staging_path, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for n in _ordered:
+            if n in parts:
+                zout.writestr(n, parts[n])
         for n, data in parts.items():
+            if n in _ordered:
+                continue
             zout.writestr(n, data)
     os.unlink(tmp_path)
     print(f"  一時出力: {staging_path} ({os.path.getsize(staging_path):,} bytes)")
 
     print("\nStage 6: ビルド後自己検証...")
     errors = verify_build(staging_path, injected, sheets, mock_llm, app_version,
-                          present, root, has_vba_project, ctx, installer_src)
+                          present, root, has_vba_project, ctx, installer_src,
+                          baked_names)
     if errors:
         print("自己検証 失敗:")
         for e in errors:
@@ -2434,19 +2753,28 @@ def main():
         except OSError:
             pass
     print(f"  出力: {out_path} ({os.path.getsize(out_path):,} bytes)")
-    print("自己検証 OK: シート集合と順序・可視性 / ガードシートが先頭かつアクティブ / "
-          "vba_srcモジュール集合一致 / 各ソース<=30,000字かつ<32,000字 / "
-          "各物理行<=1,000バイト(CP932) / "
-          "vba_src本文がsrc/と完全一致 / vba_src D列(期待行数)がsrc由来の計算値と一致 / "
-          "configキー列(順序含む)と全キーの説明・mock_llm・app_version / "
-          "名前付きレンジの本数と参照先 / 1行目ヘッダとブロックアンカー先ヘッダ行 / "
-          "タブ色 / vba_src!E2(ブック内テストの期待本数) / vba_src!E3(焼き付けマーカーが空) / "
-          "パッケージ content type")
-    if has_vba_project:
-        print("  自己インストーラ外科パッチ検証(4項目): "
-              "ThisWorkbook復元確認 / dir MOFFSET=0 / "
-              "_VBA_PROJECT無害化(Version=0xFFFF・PerformanceCacheゼロ埋め・3,061B不変) / "
-              "焼き付け(baked)経路の存在")
+    common = ("自己検証 OK: シート集合と順序・可視性 / ガードシートが先頭かつアクティブ / "
+              "各ソース<=30,000字 / 各物理行<=1,000バイト(CP932) / "
+              "configキー列(順序含む)と全キーの説明・mock_llm・app_version / "
+              "config!tests_expected(ブック内テストの期待本数) / "
+              "名前付きレンジの本数と参照先 / 1行目ヘッダとブロックアンカー先ヘッダ行 / "
+              "タブ色 / パッケージ content type")
+    if baked:
+        print(common + " / vba_src シートが存在しないこと")
+        if has_vba_project:
+            print("  完成品vbaProject.bin 読み戻し検証(5項目): "
+                  "モジュール集合が台帳と一致 / 各モジュール本文が src/ とバイト一致 / "
+                  "ThisWorkbookが最小版と一致 / 全MODULEOFFSET=0(p-code無し) / "
+                  "VBA/dir と VBA/ThisWorkbook の実在")
+    else:
+        print(common + " / vba_srcモジュール集合一致 / vba_src本文がsrc/と完全一致 / "
+              "vba_src D列(期待行数)がsrc由来の計算値と一致 / "
+              "vba_src!E3(焼き付けマーカーが空)")
+        if has_vba_project:
+            print("  自己インストーラ外科パッチ検証(4項目): "
+                  "ThisWorkbook復元確認 / dir MOFFSET=0 / "
+                  "_VBA_PROJECT無害化(Version=0xFFFF・PerformanceCacheゼロ埋め・3,061B不変) / "
+                  "焼き付け(baked)経路の存在")
     print("  ※13章との突合(シート名・列名・順序・configキー・名前付きレンジ)は "
           "tools/sheet_check.py が行う。")
     print("\nDone.")

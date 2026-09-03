@@ -49,6 +49,13 @@ GATES = [
      r"OK: 全\d+項目一致"),
     ("ship",         [sys.executable, "tools/ship_check.py"],
      r"結果: .*PASS"),
+    # 裁定書27 W9-A: 配布 vbaProject.bin を「別実装で読み戻す」2本。
+    #   bin-roundtrip = olevba で解凍して src/ とバイト比較(中身の検問)
+    #   lo-xlsm       = LibreOffice に配布xlsmを開かせる(入れ物の検問)
+    ("bin-roundtrip", [sys.executable, "tools/bin_roundtrip.py"],
+     r"結果: OK .*5条件"),
+    ("lo-xlsm",      [sys.executable, "tools/lo_xlsm.py"],
+     r"結果: OK 3条件"),
     ("prompt-diff",  [sys.executable, "tools/prompt_diff.py", "--strict"],
      r"一致: \d+件"),
     ("validate",     [sys.executable, "tools/validate_check.py"],

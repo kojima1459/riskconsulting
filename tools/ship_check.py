@@ -381,8 +381,107 @@ def check_item3() -> tuple[bool, list[str]]:
     return True, []
 
 
+# ==============================================================================
+# ⑥ 配布物のAV表面積と経路の固定(裁定書27 W9-B 6)
+# ------------------------------------------------------------------------------
+# 2026-09-02 に社内AVのAMSIが自己インストーラ(VBProject/AddFromString)を検知
+# して VDI が強制停止した。配布方式Bへ切り替えた以上、「配布物にその形が本当に
+# 残っていないか」を毎リリース機械で確かめないと、いつか戻る。
+# あわせて「配布物では direct 経路も mock も使えない」ことを config の実体で
+# 固定する(コード側の分岐だけでは、configを1行足せば経路が生き返るため)。
+# 検査は **prod の配布ブック**(dist/リスク提案ナビ.xlsm)に対して行う。
+# ブックが無い/読めない/binが無いは**すべて失格**(fail-closed)。
+# ==============================================================================
+PROD_BOOK_NAME = "リスク提案ナビ.xlsm"
+
+
+def _read_config_pairs(book: Path) -> dict:
+    import openpyxl
+    wb = openpyxl.load_workbook(book, read_only=True, keep_links=False)
+    try:
+        if "config" not in wb.sheetnames:
+            return {}
+        ws = wb["config"]
+        out = {}
+        for row in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+            if not row or row[0] in (None, ""):
+                continue
+            out[str(row[0]).strip()] = row[1]
+        return out
+    finally:
+        wb.close()
+
+
+def check_item6(dist_dir: Path) -> tuple[bool, list[str]]:
+    print("\n" + "=" * 78)
+    print("裁定書27 W9-B 6 ⑥ 配布物のAV表面積と経路の固定(prod ブック)")
+    print("=" * 78)
+
+    problems: list[str] = []
+    book = dist_dir / PROD_BOOK_NAME
+    if not book.exists():
+        print(f"  FAIL: 配布ブックがありません: {book}")
+        return False, [f"{book} がありません(python3 build/build_rpn.py --prod)"]
+
+    # --- config の実体 --------------------------------------------------------
+    cfg = _read_config_pairs(book)
+    if not cfg:
+        problems.append("config シートを読めません(または空です)")
+    transport = str(cfg.get("llm_transport", "")).strip().lower()
+    print(f"  llm_transport      : {transport!r}")
+    if transport != "ribbon":
+        problems.append(f"config!llm_transport が 'ribbon' ではありません: {transport!r}")
+    print(f"  direct_api_base    : "
+          f"{'あり(失格)' if 'direct_api_base' in cfg else 'なし'}")
+    if "direct_api_base" in cfg:
+        problems.append("config に direct_api_base が載っています"
+                        "(prod では direct 経路の入口を置かない)")
+    mock = cfg.get("mock_llm")
+    print(f"  mock_llm           : {mock!r}")
+    if mock is None:
+        problems.append("config に mock_llm がありません(mockが無効である証跡が無い)")
+    elif bool(mock):
+        problems.append("config!mock_llm が TRUE です(配布物でmockを有効にしない)")
+    if transport == "mock":
+        problems.append("config!llm_transport が 'mock' です")
+
+    # --- vba_src シートの不在 -------------------------------------------------
+    import openpyxl
+    wb = openpyxl.load_workbook(book, read_only=True, keep_links=False)
+    sheetnames = list(wb.sheetnames)
+    wb.close()
+    print(f"  vba_src シート     : {'あり(失格)' if 'vba_src' in sheetnames else 'なし'}")
+    if "vba_src" in sheetnames:
+        problems.append("配布物に隠しシート vba_src が残っています"
+                        "(自己インストール機構は撤去済みのはず)")
+
+    # --- vbaProject.bin の禁止文字列 ------------------------------------------
+    sys.path.insert(0, str(REPO_ROOT / "build"))
+    import build_rpn      # 禁止文字列の表と判定は build 側の1実装を共有する
+    with zipfile.ZipFile(book) as z:
+        if "xl/vbaProject.bin" not in z.namelist():
+            problems.append("配布物に xl/vbaProject.bin がありません")
+            hits = []
+        else:
+            hits = build_rpn.forbidden_strings_in_bin(z.read("xl/vbaProject.bin"))
+    print(f"  bin の禁止文字列   : {hits if hits else 'なし'}"
+          f"  (表: {list(build_rpn.FORBIDDEN_BIN_STRINGS)})")
+    if hits:
+        problems.append("vbaProject.bin に配布禁止の文字列があります: "
+                        + ", ".join(hits))
+
+    if problems:
+        print(f"  FAIL: {len(problems)} 件")
+        for p in problems:
+            print(f"    - {p}")
+        return False, problems
+    print("  PASS: llm_transport=ribbon / direct_api_base 不在 / mock 不在 / "
+          "vba_src 不在 / 禁止文字列 不在")
+    return True, []
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="リスク提案ナビ 出荷前検問(T-46 ①②③)")
+    ap = argparse.ArgumentParser(description="リスク提案ナビ 出荷前検問(T-46 ①②③ + 裁定書27 ⑥)")
     ap.add_argument("--src", default=str(REPO_ROOT / "src"))
     ap.add_argument("--dist", default=str(REPO_ROOT / "dist"))
     args = ap.parse_args()
@@ -390,6 +489,7 @@ def main() -> int:
     ok1, _ = check_item1(Path(args.src).resolve())
     ok2, _ = check_item2(Path(args.dist).resolve())
     ok3, _ = check_item3()
+    ok6, _ = check_item6(Path(args.dist).resolve())
 
     print("\n" + "-" * 78)
     print(f"① 外部由来テキストの直書き検査 : {'PASS' if ok1 else 'FAIL'}")
@@ -398,9 +498,10 @@ def main() -> int:
     print("④ wintest(実Excel)全PASS      : 未実施(Windows実機が必要)")
     print("⑤ modTestsPure 本数条件        : 未実施(実機。Linux側の同等確認は "
           "tools/run_lo_tests.py)")
+    print(f"⑥ 配布物のAV表面積と経路の固定 : {'PASS' if ok6 else 'FAIL'}")
     print("-" * 78)
-    if ok1 and ok2 and ok3:
-        print("結果: ①②③ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
+    if ok1 and ok2 and ok3 and ok6:
+        print("結果: ①②③⑥ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
         return 0
     print("結果: NG(exit code 1) - 1つでも落ちたら出荷しない")
     return 1

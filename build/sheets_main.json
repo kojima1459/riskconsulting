@@ -2859,6 +2859,11 @@
           "name": "portal_url",
           "value": "http://www.portal.s1.ms-ad-ins.co.jp/loader/hp/OpenContents/A201203280048/toppage.html",
           "note": "フッター[© リスクコンサルティング支援部]を押したときに開く部のポータル"
+        },
+        {
+          "name": "tests_expected",
+          "value": 0,
+          "note": "ブック内テスト(17章 T-48)の期待本数。値源は wintest/tests_expected.txt でビルドが焼く(旧 vba_src!E2。裁定書27 W9-A で config へ移設)。空・非数値なら modTestsRunnerUi はテストを実行しない(fail-closed)"
         }
       ]
     },

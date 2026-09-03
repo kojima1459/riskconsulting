@@ -113,7 +113,7 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -Target pro
   「層(b)未指定: -ExcelLayerEntry を渡していないため modTestsExcel は実行していません(T-47)」
   の1行を出す。**この行が出た実行は T-46(4) を満たしていない**(合格扱いにしない)。
   現時点で実機確認できるのは層(a)(`modTestsPure`)の分だけである。
-- **Linux側の検問はまとめて回すのが標準**: `python3 tools/gate.py`(全16ゲート一括)。
+- **Linux側の検問はまとめて回すのが標準**: `python3 tools/gate.py`(全18ゲート一括)。
   個別ツールの直接実行はデバッグ時のみ(17章§5-1)。
 
 ## セキュリティ上の注意

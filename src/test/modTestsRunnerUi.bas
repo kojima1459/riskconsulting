@@ -12,7 +12,7 @@ Option Explicit
 '
 ' 合否の4条件(ps1と同一。どれか1つでも欠ければNG):
 '   (1) FAIL 0件  (2) SKIP 0件
-'   (3) 純層(modTestsPure*)の実行本数 = 期待本数(vba_src!E2)
+'   (3) 純層(modTestsPure*)の実行本数 = 期待本数(config!tests_expected)
 '   (4) 層(b)(modTestsExcel*)が1本以上走っている
 '
 ' 実行順(modTestsExcel.RunAllExcelTests は ResetTests を呼ばない設計であり、
@@ -21,16 +21,20 @@ Option Explicit
 '   -> RunAllExcelTests -> 4条件を判定 -> 使い方タブへ書込 -> MsgBoxで1行
 '
 ' fail-closed(裁定書14 裁定5):
-'   期待本数(vba_src!E2)が空・非数値なら**テストを実行せず**NGで終える。
+'   期待本数(config!tests_expected)が空・非数値なら**テストを実行せず**NGで終える。
 '   「読めなかったから全緑」という抜け道を作らない。
 '
 ' 本モジュールは test層だが、結果の表示と確認ダイアログのためにExcelへ触れる
 '   (modTestRunner / modTestsPure* の純ロジック規律は一切変えていない)。
 ' ============================================================================
 
-Private Const TR_SHEET_SRC As String = "vba_src"
-Private Const TR_EXPECTED_ROW As Long = 2
-Private Const TR_EXPECTED_COL As Long = 5      ' vba_src!E2
+' 期待本数の値源(裁定書27 W9-A)。配布方式Bでは隠しシート vba_src そのものが
+' 無くなったため、旧 vba_src!E2 から config シートの `tests_expected` 行へ移した。
+' config は A=name / B=value の縦持ちなので、A列を name で走査して B を読む
+' (行番号をコードへ焼かない。13章§2.3)。
+Private Const TR_SHEET_CFG As String = "config"
+Private Const TR_EXPECTED_KEY As String = "tests_expected"
+Private Const TR_CFG_MAX_ROWS As Long = 400
 Private Const TR_RESULT_NAME As String = "gd_test_result"
 Private Const TR_RESULT_ROWS As Long = 20
 Private Const TR_TITLE As String = "リスク提案ナビ 自己テスト"
@@ -114,17 +118,25 @@ Private Function SummaryText(ByVal expected As Long, ByVal pureExecuted As Long,
 End Function
 
 ' ============================================================================
-' 期待本数(vba_src!E2)。空・非数値・0以下は 0 を返す(=fail-closed)。
+' 期待本数(config!tests_expected)。空・非数値・0以下は 0 を返す(=fail-closed)。
+'   config シートが無い/キーが無い/読めない、はすべて 0(=テストを実行しない)。
+'   「読めなかったから全緑」の抜け道を作らない(裁定書14 裁定5)。
 ' ============================================================================
 Private Function ExpectedCount() As Long
     On Error GoTo Failed
 
     Dim ws As Object
-    Set ws = modUISheet.SheetOf(TR_SHEET_SRC)
+    Set ws = modUISheet.SheetOf(TR_SHEET_CFG)
     If ws Is Nothing Then Exit Function
 
     Dim raw As String
-    raw = Trim$(CStr(ws.Cells(TR_EXPECTED_ROW, TR_EXPECTED_COL).Value))
+    Dim r As Long
+    For r = 2 To TR_CFG_MAX_ROWS
+        If Trim$(CStr(ws.Cells(r, 1).Value)) = TR_EXPECTED_KEY Then
+            raw = Trim$(CStr(ws.Cells(r, 2).Value))
+            Exit For
+        End If
+    Next r
     If LenB(raw) = 0 Then Exit Function
     If Not IsNumeric(raw) Then Exit Function
 

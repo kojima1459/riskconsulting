@@ -56,6 +56,10 @@ DEFAULT_BOOKS = (
     REPO_ROOT / "dist" / "リスク提案ナビ.xlsm",
 )
 
+# prod(配布)ビルドの config へ載せないキー(裁定書27 W9-B 5)。
+# 正は build/build_rpn.py の PROD_OMITTED_CONFIG_KEYS(ビルド側の1実装)。
+PROD_OMITTED_CONFIG_KEYS = ("direct_api_base",)
+
 SHEETS_KB_JSON = REPO_ROOT / "build" / "sheets_kb.json"
 DEFAULT_KB_BOOKS = (REPO_ROOT / "dist" / "ナレッジブック.xlsx",)
 
@@ -843,11 +847,26 @@ def run(book_path: Path | None, rep: Report) -> None:
     print(f"    13章のキー数: {len(ch13.config_keys)}")
     rep.eq_seq("[台帳] configキー(順序含む)", ch13.config_keys, led.config_keys())
     if book and "config" in book.wb.sheetnames:
-        rep.eq_seq("[ブック] configキー(順序含む)", ch13.config_keys, book.column_a("config"))
+        # prod(配布)ビルドは direct 経路の入口を config に載せない
+        # (裁定書27 W9-B 5)。dev には載る。どちらのブックを検査しても
+        # 「13章の並びから prod で外すキーを抜いたもの」と突き合わせる。
+        got_keys = book.column_a("config")
+        is_prod_book = ("direct_api_base" not in got_keys)
+        want_keys = [k for k in ch13.config_keys
+                     if not (is_prod_book and k in PROD_OMITTED_CONFIG_KEYS)]
+        if is_prod_book:
+            print(f"    prod ブックとして照合(config から外れるキー: "
+                  f"{list(PROD_OMITTED_CONFIG_KEYS)})")
+        rep.eq_seq("[ブック] configキー(順序含む)", want_keys, got_keys)
     lv = led.config_defaults()
+    # ビルドの入力(--dev/--prod や wintest/tests_expected.txt)で値が変わるキー。
+    # 「13章の既定値表 ⇔ 台帳 ⇔ ブック」の3点比較は成立しないので、ここでは
+    # **型だけ**を見る。値そのものはビルド後自己検証が値源と突き合わせる
+    # (build_rpn.verify_build。裁定書14 裁定5・裁定書27 W9-A)。
+    BUILD_VARIABLE_KEYS = ("mock_llm", "tests_expected")
     cmp_n = 0
     for k, want in ch13.config_defaults.items():
-        if k not in lv:
+        if k not in lv or k in BUILD_VARIABLE_KEYS:
             continue
         cmp_n += 1
         rep.check(_norm_default(lv[k]) == _norm_default(want),
@@ -863,9 +882,15 @@ def run(book_path: Path | None, rep: Report) -> None:
                 continue
             got = ws.cell(row=r, column=2).value
             if k == "mock_llm":
-                # --dev / --prod で値が変わる唯一のキー。型だけを見る。
                 rep.check(isinstance(got, bool), "[ブック] mock_llm は真偽値",
                           f"実際={got!r}")
+                continue
+            if k == "tests_expected":
+                rep.check(isinstance(got, int) and not isinstance(got, bool)
+                          and got > 0,
+                          "[ブック] tests_expected は正の整数",
+                          f"実際={got!r}(値源 wintest/tests_expected.txt との一致は"
+                          "ビルド後自己検証が見る)")
                 continue
             rep.check(_norm_default(got) == _norm_default(lv[k]),
                       f"[ブック] config既定値 {k}",

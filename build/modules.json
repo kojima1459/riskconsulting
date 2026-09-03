@@ -1,5 +1,5 @@
 {
-  "_comment": "リスク提案ナビ(RPN) VBAモジュール台帳。12章§2のレイヤ構成とモジュール一覧に準拠し、パスは <repo> からの相対パス。ビルド時にここへ列挙された全ファイルの存在を検査する(--allow-missing で欠落を警告に緩和)。逆方向(src/ に実在するのに未登録)も check_unregistered で検査するため、モジュールを新設したら必ずここへ1行足すこと。role は 12章§2 の層(core/app/ui/test)。type=std の .bas だけが vba_src シートへ格納される。**実装済みのモジュールだけを載せる**(未着手のモジュールを先に載せるとビルドが常に欠落エラーになるため)。wave は 17章§3 のタスクID。",
+  "_comment": "リスク提案ナビ(RPN) VBAモジュール台帳。12章§2のレイヤ構成とモジュール一覧に準拠し、パスは <repo> からの相対パス。ビルド時にここへ列挙された全ファイルの存在を検査する(--allow-missing で欠落を警告に緩和)。逆方向(src/ に実在するのに未登録)も check_unregistered で検査するため、モジュールを新設したら必ずここへ1行足すこと。role は 12章§2 の層(core/app/ui/test)。type=std の .bas だけが vba_src シートへ格納される。**実装済みのモジュールだけを載せる**(未着手のモジュールを先に載せるとビルドが常に欠落エラーになるため)。wave は 17章§3 のタスクID。`ship:false` は「dev には載せるが prod の配布物からは外す」印(裁定書27 W9-B 5。direct経路など配布物のAV表面積を減らすためのもの)。",
   "modules": [
     {
       "name": "modTypes",
@@ -69,7 +69,9 @@
       "path": "src/core/modGatewayDirect.bas",
       "role": "core",
       "type": "std",
-      "wave": "T-13"
+      "wave": "T-13",
+      "ship": true,
+      "_ship_note": "裁定書27 W9-B 5 は本モジュールを prod の配布物から外す(ship=false)と定める。**まだ false にできない**: (a) src/core/modGatewayRPN.bas の DirectStep が modGatewayDirect.CallDirect を名前で呼んでおり(班2が prod 分岐へ差し替える予定)、(b) src/test/modTestsPure2.bas の G11 群16本が modGatewayDirect の純関数を検査している。VBAはプロジェクト全体をコンパイルするので、参照が1本でも残ったまま外すと配布物が実機で必ずコンパイルエラーになる。さらに (b) を外すと prod の純層本数が dev と変わり、wintest/tests_expected.txt(単一の値)と T-48 の条件(3)が prod で必ず落ちる。除外の機構と参照検査(build_rpn._shipped_modules / _check_dropped_module_references)は実装済みで、(a)(b) の始末がついた時点でこの値を false にすれば有効になる"
     },
     {
       "name": "modAppTypes",
