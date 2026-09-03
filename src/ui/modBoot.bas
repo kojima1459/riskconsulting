@@ -129,6 +129,11 @@ Private Const BOOT_KB_AUTO_NOTE As String = "同じフォルダのナレッジ�
 ' 画面制御変数であり、14章§6「状態保持の例外」には当たらない。
 Private gKbAutoFound As Boolean
 
+' アプリのブックイベントを受けるクラス(裁定書26 B・追補)。**参照を捨てると
+'   イベントが来なくなる**ので、起動から終了までモジュール変数で保持する。
+'   ThisWorkbook に依存しないので焼き付け済みファイルでも効く。
+Private gAppEvents As clsAppEvents
+
 ' ============================================================================
 ' Boot - 起動シーケンス本体(12章§2.1の7手順をこの順で1回ずつ実行する)。
 ' ============================================================================
@@ -198,6 +203,9 @@ Private Sub BootStep(ByVal stepNo As Long)
         ' 初回ガイドツアー(裁定書14 裁定6)。実装は modUIGuide が唯一持ち、
         ' 起動シーケンスからの結線はこの1行だけにする(2回目以降は何もしない)。
         modUIGuide.StartTourIfFirstRun
+        ' ブックイベントの結線(裁定書26 B・追補)。**全画面を当てる前**に結線を
+        ' 済ませる(Activate/Deactivate/BeforeClose で戻す口を先に用意する)。
+        HookAppEvents
         ' 全画面表示(裁定書26 B)。**起動シーケンスの最後・ナビを描いた後**に
         ' 1回だけ当てる(先に当てると窓の作り直しで幾何が古い窓のまま決まる)。
         modUIViewport.ApplyFullScreen
@@ -207,6 +215,25 @@ Private Sub BootStep(ByVal stepNo As Long)
 Failed:
     modLog.LogError "E0603", BOOT_SRC & ".Boot", "boot_step_failed:" & CStr(stepNo), Err.Number
 End Sub
+
+' ----------------------------------------------------------------------------
+' ブックイベントの結線(裁定書26 B・追補)
+' ----------------------------------------------------------------------------
+' WithEvents を持つクラスを1つだけ作り、Application のブックイベントを受ける。
+'   2回呼ばれても作り直すだけで害は無い(古い方は参照が切れて自動的に消える)。
+Private Sub HookAppEvents()
+    On Error Resume Next
+    Set gAppEvents = New clsAppEvents
+    If gAppEvents Is Nothing Then Exit Sub
+    Set gAppEvents.App = Application
+End Sub
+
+' AppEventsReady - 結線できているか(層(b)の回帰が読む唯一の口)。
+Public Function AppEventsReady() As Boolean
+    On Error Resume Next
+    If gAppEvents Is Nothing Then Exit Function
+    AppEventsReady = Not (gAppEvents.App Is Nothing)
+End Function
 
 ' ----------------------------------------------------------------------------
 ' (1) ガードシート非表示

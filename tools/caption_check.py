@@ -462,6 +462,66 @@ def check_footer():
     return impl
 
 
+# (H) 使い方タブ⑤「困ったとき」に v3.3(裁定書26 B/追補c)で足した1行。
+# 11章§3.6 の⑤の行に `症状「X」／すること「Y」` の形で逐語を書き、実体は
+# build/build_rpn.py の GUIDE_TROUBLES にある。**全画面から戻る手順**という
+# 実挙動そのものの案内なので、片方だけ直すと利用者を誤った操作へ導く。
+TROUBLE_PAIR = re.compile(r"症状「([^」]+)」／すること「([^」]+)」")
+
+
+def trouble_row_from_spec11():
+    """(H1) 11章§3.6 の⑤の行に書かれた (症状, すること)。"""
+    text = read(SRC_SPEC11)
+    if text is None:
+        return None
+    hits = TROUBLE_PAIR.findall(text)
+    if not hits:
+        fail("%s に「症状「～」／すること「～」」の逐語が1件も無い"
+             "(使い方タブ⑤の1行の値源が変わった可能性)" % SRC_SPEC11)
+        return None
+    if len(hits) > 1:
+        fail("%s の「症状「～」／すること「～」」が%d件ある(照合先が定まらない)"
+             % (SRC_SPEC11, len(hits)))
+        return None
+    return (hits[0][0].strip(), hits[0][1].strip())
+
+
+def trouble_rows_from_build():
+    """(H2) build_rpn.py の GUIDE_TROUBLES。(症状, すること) の一覧。"""
+    text = read(SRC_BUILD)
+    if text is None:
+        return []
+    m = re.search(r"^GUIDE_TROUBLES\s*=\s*\[(.*?)^\]", text, re.M | re.S)
+    if not m:
+        fail("%s に GUIDE_TROUBLES の定義が見つからない" % SRC_BUILD)
+        return []
+    out = []
+    for sym, fix in re.findall(
+            r'\(\s*"([^"]*)"\s*,\s*\n?\s*((?:"[^"]*"\s*\n?\s*)+)\)', m.group(1)):
+        joined = "".join(re.findall(r'"([^"]*)"', fix))
+        out.append((sym.strip(), joined.strip()))
+    return out
+
+
+def check_trouble_row():
+    """(H) 使い方タブ⑤の1行(裁定書26追補 c)の逐語照合。"""
+    want = trouble_row_from_spec11()
+    got = trouble_rows_from_build()
+    if want is None:
+        return None
+    if not got:
+        fail("%s の GUIDE_TROUBLES から1件も抽出できなかった" % SRC_BUILD)
+        return None
+    for sym, fix in got:
+        if sym == want[0]:
+            if fix != want[1]:
+                fail("使い方タブ⑤「%s」のすることが11章§3.6と逐語一致しない:\n"
+                     "      11章 = %r\n      build = %r" % (sym, want[1], fix))
+            return sym
+    fail("%s の GUIDE_TROUBLES に11章§3.6の症状「%s」の行が無い" % (SRC_BUILD, want[0]))
+    return None
+
+
 def compare_sets(label, impl, other):
     missing = sorted(set(impl) - set(other))
     extra = sorted(set(other) - set(impl))
@@ -530,6 +590,9 @@ def main():
     # (G) フッター(裁定書26 D)。
     footer = check_footer()
 
+    # (H) 使い方タブ⑤の1行(裁定書26 B・追補 c)。
+    trouble = check_trouble_row()
+
     if errors:
         print("[caption_check] ナビのボタン名の逐語照合")
         for e in errors:
@@ -544,6 +607,7 @@ def main():
           % len(adv_impl))
     print("区画②の欄の説明・例文: %d欄を11章§3.3.3(a)と逐語照合" % n_fields)
     print("フッター: [%s] を13章§2.10と逐語照合" % (footer or ""))
+    print("使い方タブ⑤の1行: 「%s」を11章§3.6と逐語照合" % (trouble or ""))
     print("OK: 全%d本のキャプションが3系統と一致しました（コーチ帯%d / 4区画%d）"
           % (len(impl), len(main_caps), len(sub_caps)))
     return 0

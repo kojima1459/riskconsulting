@@ -417,14 +417,17 @@ Private Sub TestW81BandAndFooter()
     Dim ws As Object
     Dim okText As Boolean
     Dim okFooter As Boolean
+    Dim okEvents As Boolean
     Dim detText As String
     Dim detFooter As String
+    Dim detEvents As String
     Dim wantText As String
     Dim gotText As String
     On Error GoTo Crashed
 
     detText = "前提不成立"
     detFooter = "前提不成立"
+    detEvents = "前提不成立"
 
     Set ws = modUISheet.SheetOf(T2_SHEET)
     If ws Is Nothing Then GoTo Report
@@ -439,10 +442,17 @@ Private Sub TestW81BandAndFooter()
     okFooter = HasShape(ws, T2_FOOTER_SHAPE)
     detFooter = "図形 " & T2_FOOTER_SHAPE & " の有無"
 
+    ' 裁定書26追補 b: ブックイベントの結線(gAppEvents)が生きていること。
+    ' これが Nothing だと全画面が当たったまま他のブックへ戻らない。
+    okEvents = modBoot.AppEventsReady()
+    detEvents = "modBoot.AppEventsReady()=" & CStr(okEvents) & _
+                " (起動シーケンス手順11の HookAppEvents が通っているか)"
+
 Report:
     ECheck "T47B-W81-01_コーチ帯の図形の中にCoachBandTextと同じ文字がある", _
            okText, detText
     ECheck "T47B-W81-02_ナビの最下部にフッターの図形がある", okFooter, detFooter
+    ECheck "T47B-W81-03_ブックイベントのクラスが結線されている", okEvents, detEvents
 
     ' 画面をふだんの状態へ戻す。
     On Error Resume Next
@@ -451,8 +461,10 @@ Report:
 Crashed:
     okText = False
     okFooter = False
+    okEvents = False
     detText = "Err=" & CStr(Err.Number) & " " & Err.Description
     detFooter = detText
+    detEvents = detText
     Resume Report
 End Sub
 

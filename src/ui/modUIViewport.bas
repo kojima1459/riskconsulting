@@ -14,16 +14,14 @@ Option Explicit
 '   ・変える前の値を1度だけ退避し、RestoreScreen で退避した値へ戻す。
 '   ・全て On Error Resume Next 配下(画面設定の失敗で業務を止めない)。
 '
-' 【申し送り・裁定書26 B の未達分】
-'   裁定は Workbook_Activate / Deactivate / BeforeClose を `WithEvents` を持つ
-'   クラス(clsAppEvents)で受ける方式を指示しているが、本ビルドは**クラス
-'   モジュールを配布ブックへ載せられない**。自己インストーラ(ThisWorkbook
-'   ストリーム。build/build_rpn.py はバイト長固定の外科パッチで焼く)は
-'   `VBComponents.Add(1)`= 標準モジュールしか作らず、ビルド側も
-'   `_vba_src_modules` が `type=class` を vba_src シートから除外する。
-'   このため本モジュールは**起動時(modBoot の最後)に1回 ApplyFullScreen を
-'   呼ぶだけ**であり、Activate/Deactivate/BeforeClose の結線は無い。
-'   RestoreScreen は退避値へ戻す唯一の口として公開しておく(14章§6)。
+' 誰が呼ぶか(裁定書26 B・追補 b):
+'   ApplyFullScreen = modBoot の起動シーケンスの最後(ナビ描画後)に1回 ＋
+'     clsAppEvents.App_WorkbookActivate(本ブックが前面へ戻ったとき)
+'   RestoreScreen   = clsAppEvents.App_WorkbookDeactivate / App_WorkbookBeforeClose
+'     (本ブックから離れたとき・閉じるとき)
+'   イベントを受けるクラスは modBoot が1つだけ生成して保持する。
+'   **ThisWorkbook モジュールには一切依存しない**ので、焼き付け済み
+'   (baked)のファイルでも効く。
 ' ============================================================================
 
 Private Const VP_SRC As String = "modUIViewport"

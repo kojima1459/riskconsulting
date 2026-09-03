@@ -256,7 +256,7 @@ Public Sub Install()
       Set e = Nothing: Set e = p.VBComponents(n)
       If Not e Is Nothing Then p.VBComponents.Remove e
       Set c = Nothing
-      Set c = p.VBComponents.Add(1)
+      Set c = p.VBComponents.Add(IIf(Left$(n, 3) = "cls", 2, 1))
       If c Is Nothing Then
         f = f + 1
       Else
@@ -277,7 +277,7 @@ Public Sub Install()
   Next r
   On Error Resume Next
   If f > 0 Then
-    MsgBox "Setup NG(" & f & "). Close WITHOUT saving, then reopen.", vbCritical
+    MsgBox "Setup NG(" & f & "). Close without saving, reopen.", vbCritical
     ThisWorkbook.Saved = True
     Exit Sub
   End If
@@ -293,7 +293,7 @@ Boot:
     Err.Clear
     Application.Run "modBoot.Boot"
     If Err.Number <> 0 And b Then
-      MsgBox "Setup NG: modules missing. Ask the developer.", vbCritical
+      MsgBox "Setup NG: modules missing. Ask developer.", vbCritical
     End If
   Else
     w.Cells(1, 5).Value = CDbl(bt)
@@ -301,7 +301,7 @@ Boot:
   End If
   Exit Sub
 Trust:
-  MsgBox "Trust the VBA project, then reopen.", vbCritical
+  MsgBox "Trust the VBA project, reopen.", vbCritical
   Exit Sub
 Done:
 End Sub
@@ -500,11 +500,12 @@ def check_unregistered(modules, root):
     import glob as _glob
     registered = {m["path"].replace("\\", "/") for m in modules}
     found = set()
-    for p in _glob.glob(os.path.join(root, "src", "**", "*.bas"), recursive=True):
-        found.add(os.path.relpath(p, root).replace("\\", "/"))
+    for pat in ("*.bas", "*.cls"):
+        for p in _glob.glob(os.path.join(root, "src", "**", pat), recursive=True):
+            found.add(os.path.relpath(p, root).replace("\\", "/"))
     orphans = sorted(found - registered - UNREGISTERED_EXCLUDE)
     if orphans:
-        print("modules.json に未登録の .bas があります(実機でコンパイルエラーになります):",
+        print("modules.json に未登録の .bas/.cls があります(実機でコンパイルエラーになります):",
               file=sys.stderr)
         for o in orphans:
             print(f"  {o}", file=sys.stderr)
@@ -536,10 +537,23 @@ def validate_modules(modules, root, allow_missing):
 # ---------------------------------------------------------------------------
 def _vba_src_modules(present_modules):
     """vba_src シートへ載せる対象モジュールだけを返す。
-    クラスモジュール(VBComponents.Add(1)で追加できない)と、台帳で
-    vba_src=false にされたものは対象外。ビルドと自己検証で同じ判定を使う。"""
-    return [m for m in present_modules
-            if m.get("type") != "class" and m.get("vba_src") is not False]
+
+    裁定書26追補(a)で**"cls" 接頭辞のクラスモジュールも載せる**ようにした。
+    自己インストーラは名前が "cls" で始まる行だけ `VBComponents.Add(2)`
+    (クラスモジュール)で作る(それ以外は従来どおり Add(1)=標準モジュール)。
+    接頭辞で分けるのは、注入側が台帳を読めない(vba_srcシートの列だけが
+    手がかりである)ため。**"cls" で始まらないクラスは載せない**(注入すると
+    標準モジュールとして作られ、WithEvents が実機でコンパイルエラーになる)。
+    台帳で vba_src=false にされたものは従来どおり対象外。
+    ビルドと自己検証で同じ判定を使う。"""
+    out = []
+    for m in present_modules:
+        if m.get("vba_src") is False:
+            continue
+        if m.get("type") == "class" and not m["name"].startswith("cls"):
+            continue
+        out.append(m)
+    return out
 
 
 def _vba_src_text(root, m):
@@ -552,8 +566,27 @@ def _vba_src_text(root, m):
         txt = fp.read()
     txt = txt.replace("\r\n", "\n").replace("\r", "\n")
     out_lines = []
+    # .cls のクラスヘッダ(VERSION 1.0 CLASS / BEGIN ... END)はVBEのエクスポート
+    # 形式であってソースではない。AddFromString は受け付けないので、Attribute行と
+    # 同じくここで落とす(裁定書26追補 a)。**先頭の連続ヘッダだけ**を対象にし、
+    # 本文の "End Sub" 等を巻き込まない。
+    in_cls_header = False
+    body_started = False
     for line in txt.split("\n"):
         stripped = line.lstrip("\ufeff")   # 先頭のBOM(U+FEFF)を落とす
+        if not body_started:
+            bare = stripped.strip()
+            if in_cls_header:
+                if bare == "END":
+                    in_cls_header = False
+                continue
+            if bare.startswith("VERSION ") and bare.endswith("CLASS"):
+                continue
+            if bare == "BEGIN":
+                in_cls_header = True
+                continue
+            if bare != "" and not bare.startswith("Attribute "):
+                body_started = True
         if stripped.lstrip().startswith("Attribute "):
             continue
         out_lines.append(stripped)
@@ -1085,7 +1118,8 @@ GUIDE_TROUBLES = [
      "同じフォルダに置いてあるのに出るときは、そのファイルを右クリック→プロパティ→"
      "[許可する]にチェックを入れて開き直してください(本体とナレッジブックの2ファイルとも)。"
      "それでも直らなければ管理者へ連絡してください。"),
-    ("画面が普通のExcelに戻った(Escを押した等)", "ナビのタブを一度別のタブにして戻してください。"),
+    ("画面が普通のExcelに戻った(Escを押した等)",
+     "別のブックに切り替えてから、このブックに戻ると全画面に戻ります。"),
     ("ボタンを押しても何も起きない", "ほかの処理が動いています。終わるまで待ってください。"),
     ("英語で Trust... というメッセージが出た", "VBAの信頼設定がまだ終わっていません。①の手順3と4をやり直してください。"),
     ("出力の内容が明らかにおかしい", "AIの答えがずれています。シートを直して、その段から作り直してください。直らなければ管理者へ連絡してください。"),
@@ -1521,7 +1555,10 @@ def _make_vba_src(wb, spec, ctx):
                 f"{m['name']}.bas は{len(cleaned)}字でExcelセルの技術上限"
                 f"({EXCEL_CELL_LIMIT}字)を超過しています")
         ws.cell(row=row, column=1, value=m["name"])
-        ws.cell(row=row, column=2, value="std")
+        # B列は種別の記録(読むのは人間。注入側は**名前の "cls" 接頭辞**で
+        # 標準/クラスを決める。裁定書26追補 a)。
+        ws.cell(row=row, column=2,
+                value="class" if m.get("type") == "class" else "std")
         ws.cell(row=row, column=3, value=cleaned)
         ws.cell(row=row, column=4, value=_expected_line_count(cleaned))
         injected.append(m["name"])
@@ -1957,8 +1994,11 @@ def _verify_installer_patch(vba_bin, installer_src):
              "注入成功時に vba_src!E3 へ baked を書く行"),
             ('Application.Run "modBoot.Boot"',
              "OnTime失敗時の Application.Run フォールバック"),
-            ('MsgBox "Setup NG: modules missing. Ask the developer."',
+            ('MsgBox "Setup NG: modules missing. Ask developer."',
              "baked なのに Run が失敗したときの1文"),
+            ('p.VBComponents.Add(IIf(Left$(n, 3) = "cls", 2, 1))',
+             "cls 接頭辞のモジュールをクラスモジュールとして作る分岐"
+             "(裁定書26追補 a)"),
     ):
         if needle not in src_text:
             errors.append(
