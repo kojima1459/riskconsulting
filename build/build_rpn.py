@@ -471,16 +471,44 @@ def patch_installer(vba_bin: bytes, installer_src: bytes) -> bytes:
 #   文字列で名前解決する必要がそもそも無い。直接呼出にすると VBA のコンパイル時
 #   解決になり、ホストの文字列解決を1経路まるごと消せる。
 # ===========================================================================
-_BAKED_THISWORKBOOK_TEXT = '''Attribute VB_Name = "ThisWorkbook"
-Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = False
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = True
-Option Explicit
+# ブックイベントを ThisWorkbook で受ける理由(W9.3・裁定):
+#   全画面表示は「本ブックが前面のときだけ当て、離れたら元へ戻す」必要がある
+#   (16章の既存原則: 他のブックの画面を壊さない)。W8.1 追補ではこれを
+#   `WithEvents` を持つクラスモジュール(clsAppEvents)で受けていたが、Mac の
+#   実Excel で切り分けたところ **クラスモジュールを1本含めるだけで読み込み時に
+#   Err 5 の生ダイアログが出る**(中身が `Public App As Object` だけのクラスでも
+#   再現/標準モジュール93本+ThisWorkbook だけなら正常)。原因は焼き方が Excel と
+#   一致していないことで、Mac 実Excel 製サンプルとの突合で判明した2点
+#   (dir の MODULEPRIVATE 0x0028 欠落・クラス属性行が5行)を build/ovba_write.py
+#   で直し、実機で解消することを確認した(17章 Z-24 解決)。ただし配布物は
+#   **可動部品を減らすためクラスモジュールをやめ、ブックイベントは ThisWorkbook
+#   文書モジュールで受ける**。配布方式B では ThisWorkbook を自由に書ける
+#   (バイト長を固定して外科パッチを当てるのは旧インストーラ経路だけの制約で
+#    あり、こちらは毎回まるごと焼き直す)。
+#
+# 属性行をここに書かない理由(W9.3):
+#   旧実装は6行の属性行を本文と一緒にベタ書きしていたが、Mac 実Excel 製の
+#   ブックの ThisWorkbook は **`VB_TemplateDerived` と `VB_Customizable` を
+#   含む8行**だった。属性行の値源は build/ovba_write.py の `_ATTR_DOCUMENT`
+#   1箇所に寄せ、ここは**本文だけ**を持つ(二重実装を作らない)。
+_BAKED_THISWORKBOOK_TEXT = '''Option Explicit
 Private Sub Workbook_Open()
   On Error Resume Next
   modBoot.Boot
+End Sub
+Private Sub Workbook_Activate()
+  On Error Resume Next
+  modUIViewport.ApplyFullScreen
+End Sub
+Private Sub Workbook_Deactivate()
+  On Error Resume Next
+  modUIToast.CancelToast
+  modUIViewport.RestoreScreen
+End Sub
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+  On Error Resume Next
+  modUIToast.CancelToast
+  modUIViewport.RestoreScreen
 End Sub
 '''
 
@@ -492,12 +520,18 @@ FORBIDDEN_BIN_STRINGS = ("VBProject", "AddFromString", "ExecuteExcel4Macro",
 
 
 def build_baked_thisworkbook() -> bytes:
-    """最小 ThisWorkbook(VBProject・vba_src への言及ゼロ)を CP932/CRLF で返す。"""
+    """ThisWorkbook のモジュールストリーム用ソース(属性行+本文)を返す。
+
+    属性行は build/ovba_write.py の `_ATTR_DOCUMENT`(Excel 製と同じ8行)が
+    唯一の値源で、本文だけを `_BAKED_THISWORKBOOK_TEXT` が持つ。
+    本文は **ASCII のみ**(非ASCIIのブック名・コメントをホストに解釈させない)。
+    """
     try:
         _BAKED_THISWORKBOOK_TEXT.encode("ascii")
     except UnicodeEncodeError as e:
         raise BuildError(f"ThisWorkbook のソースはASCIIのみで書いてください: {e}")
-    return _BAKED_THISWORKBOOK_TEXT.replace("\n", "\r\n").encode("cp932")
+    return ovba_write.module_stream_source(
+        "ThisWorkbook", _BAKED_THISWORKBOOK_TEXT, "document")
 
 
 def _shipped_modules(present_modules, is_dev):
@@ -719,6 +753,13 @@ def validate_modules(modules, root, allow_missing):
 def _vba_src_modules(present_modules):
     """vba_src シートへ載せる対象モジュールだけを返す。
 
+    **配布方式B(裁定書27 W9-A)では未使用**: vba_src シートそのものが配布物から
+    消えており、この分岐が効くのは旧インストーラ経路(--vba-mode=installer)だけ
+    である。加えて W9.3 の裁定で配布物はクラスモジュールを持たない(可動部品を
+    減らすため。17章 Z-24 のクラス焼き込み自体は解決済み)ので、**クラスを載せる
+    下の分岐は Excel 未検証**のまま残してある(旧経路の記録として残すだけで、
+    通ることは確かめていない)。
+
     裁定書26追補(a)で**"cls" 接頭辞のクラスモジュールも載せる**ようにした。
     自己インストーラは名前が "cls" で始まる行だけ `VBComponents.Add(2)`
     (クラスモジュール)で作る(それ以外は従来どおり Add(1)=標準モジュール)。
@@ -735,6 +776,10 @@ def _vba_src_modules(present_modules):
             continue
         out.append(m)
     return out
+
+
+# クラス本体のメンバー属性(`Attribute App.VB_VarHelpID = -1`)を見分ける。
+_MEMBER_ATTR_RE = re.compile(r"Attribute\s+[A-Za-z_]\w*\.[A-Za-z_]\w*\s*=")
 
 
 def _vba_src_text(root, m):
@@ -769,7 +814,15 @@ def _vba_src_text(root, m):
             if bare != "" and not bare.startswith("Attribute "):
                 body_started = True
         if stripped.lstrip().startswith("Attribute "):
-            continue
+            # 例外: `Attribute <変数名>.VB_VarHelpID = -1` のような**メンバー属性**は
+            # 落とさない(W9.3)。クラスモジュールの `Public WithEvents App As
+            # Application` の直後にはこの1行が必ず続き、Mac 実Excel 製のクラス
+            # (突合の根拠: scratchpad の mac_class_sample.xlsm の Class1)でも
+            # **本文の一部として**モジュールストリームに入っていた。モジュール
+            # ヘッダの属性(VB_Name / VB_Base など)は名前にドットを含まないので、
+            # 「識別子.識別子 =」の形だけを残せば取り違えない。
+            if not _MEMBER_ATTR_RE.match(stripped.lstrip()):
+                continue
         out_lines.append(stripped)
     cleaned = _clean("\n".join(out_lines))
 

@@ -23,7 +23,7 @@ Option Explicit
 '   5. **HideToast は対象図形が無ければ何もしない**。ブックを閉じたあとに予約が
 '      残って発火しても、消すものが無ければ黙って戻る(Excelが本ブックを開き直す
 '      経路を作らない)。**CancelToast は終了処理から呼ぶ**
-'      (clsAppEvents.App_WorkbookBeforeClose が RestoreScreen の前に呼ぶ。W9.2)。
+'      (ThisWorkbook.Workbook_BeforeClose が RestoreScreen の前に呼ぶ。W9.2/W9.3)。
 '   6. 自ブックがアクティブなときだけ描く(他人のブックへ図形を作らない)。
 '
 ' 文言はここが唯一の値源(modUIHome は残量が少ないため文言定数を持たない。
@@ -160,7 +160,7 @@ End Sub
 ' ============================================================================
 ' CancelToast - 未消化の OnTime 予約を取り消す。ShowToast が張り替えの前に
 '   呼ぶほか、ブックの終了処理からも呼ぶ(裁定書17 H2・W9.2)。終了時の呼び口は
-'   clsAppEvents.App_WorkbookBeforeClose ただ1本で、RestoreScreen より前に呼ぶ。
+'   ThisWorkbook.Workbook_BeforeClose / Workbook_Deactivate で、RestoreScreen より前に呼ぶ。
 ' ============================================================================
 Public Sub CancelToast()
     On Error Resume Next

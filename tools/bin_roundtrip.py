@@ -19,6 +19,11 @@ bin_roundtrip.py - 配布 vbaProject.bin の読み戻し検問(裁定書27 W9-A 
           "ExecuteExcel4Macro" / "WScript.Shell" / "new:{")が現れないこと
           (裁定書27 W9-B 6。**圧縮を解いた本文で**検査する)
       [5] 全モジュールの MODULEOFFSET が 0(p-code キャッシュを持たない)こと
+      [6] モジュールの「形」が Mac 実Excel 製ブックと一致すること(W9.3)
+          - class : 属性8行(VB_Base = 0{FCFB3D2A-A0FA-1068-A738-08002B3371B5})
+                    ＋ dir の MODULE レコードに MODULEPRIVATE(0x0028・Size=0)
+          - document: 0x0028 は**無い**・VB_Customizable = True
+          - std   : 属性は `Attribute VB_Name` の1行だけ
 
     を確かめる。読めない・数えられない・比較できないは**すべて失格**にする
     (「対象が見つからないので検査せず緑」を作らない)。
@@ -33,6 +38,21 @@ bin_roundtrip.py - 配布 vbaProject.bin の読み戻し検問(裁定書27 W9-A 
     .bas → モジュールソースの整形(Attribute行/.clsヘッダの除去・改行正規化)は
     build/build_rpn.py の `_vba_src_text` **1実装だけ**を呼ぶ。ここで書き写すと
     ビルドと検問が別々に緩められるため、必ず import して使う。
+
+突合の根拠(W9.3・2026-09-03):
+    [6] の期待値は **Mac の実Excel が保存したブック**(Class1 を1本足しただけの
+    サンプル。scratchpad/bisect/mac_class_sample.xlsm)の dir と各モジュール
+    ストリームを解析して得た実測値である。仕様書([MS-OVBA])だけでは
+    「Excel が実際に何を書くか」が決まらず、我々の bin は
+      (1) クラスの MODULE レコードに MODULEPRIVATE(0x0028)が無い
+      (2) クラスの属性行が5行しかない(VB_Base / VB_TemplateDerived /
+          VB_Customizable を欠く)
+    という2点で Excel と食い違っており、**クラスを1本含めるだけで Mac の実Excel が
+    読み込み時に「実行時エラー 5」の生ダイアログを出していた**(17章 Z-24)。
+    両方を直した版が実機で正常に開くことを確認済み。この検問はその退行を止める。
+    なお同サンプルは**全モジュールの改行が LF 単独**だった(Windows 製は CRLF)。
+    我々は CRLF のままにしている(CRLF の切り分けブックが実機で通っており、
+    改行は Err 5 の要因ではない)。事実として記録に残す。
 
 使い方:
     python3 tools/bin_roundtrip.py                 # dist/ の dev と prod 両方
@@ -170,13 +190,38 @@ def check_book(book: Path) -> list[str]:
     # Mac実機で Err 5 の生ダイアログを出した(裁定書27 W9.2)。スタブ本体は
     # bin-roundtrip の「ソース一致」では検出できない(スタブ自体が値源)ため、
     # ここで意味として禁じる。
-    tw = ovba_write.read_modules(vba_bin).get("ThisWorkbook", {}).get("source", b"")
+    mods_info = ovba_write.read_modules(vba_bin)
+    tw = mods_info.get("ThisWorkbook", {}).get("source", b"")
     tw_text = tw.decode("cp932", errors="replace") if isinstance(tw, (bytes, bytearray)) else str(tw)
     bad_stub = [k for k in ("ThisWorkbook.Name", "Application.Run", "VBProject") if k in tw_text]
     print(f"[4b] ThisWorkbook スタブの禁止形: {bad_stub if bad_stub else 'なし'}")
     if bad_stub:
         errors.append(
             f"{book.name}: ThisWorkbook スタブに禁止の形があります(W9.2): {', '.join(bad_stub)}")
+
+    # ブックイベントの受け口は **ThisWorkbook 文書モジュール**である(W9.3)。
+    # 旧実装は WithEvents を持つクラス(clsAppEvents)で受けていたが、配布物から
+    # クラスモジュールを外した(可動部品を減らす。17章 Z-24)。その結果、
+    # 「全画面を当て直す/元へ戻す/閉じるときトーストの予約を取り消す」経路は
+    # このスタブにしか存在しない。**焼き忘れても他のどの検問にも引っかからない**
+    # (スタブ自体が値源であり src/ に対応物が無い)ので、ここで名指しで見る。
+    REQUIRED_STUB_SUBS = ("Workbook_Open", "Workbook_Activate",
+                          "Workbook_Deactivate", "Workbook_BeforeClose")
+    missing_stub = [k for k in REQUIRED_STUB_SUBS if k not in tw_text]
+    print(f"[4b] ThisWorkbook スタブの必須イベント: "
+          f"{'すべてあり' if not missing_stub else '欠落=' + str(missing_stub)}")
+    if missing_stub:
+        errors.append(
+            f"{book.name}: ThisWorkbook スタブに必須のブックイベントがありません"
+            f"(W9.3): {', '.join(missing_stub)}")
+
+    # 配布物にクラスモジュールが無いこと(W9.3)。document は ThisWorkbook 1本。
+    cls_names = sorted(n for n, i in mods_info.items() if i["type"] == "class")
+    print(f"[4b] クラスモジュール: {cls_names if cls_names else '0本'}")
+    if cls_names:
+        errors.append(
+            f"{book.name}: 配布物にクラスモジュールが載っています(W9.3 の配布方針"
+            f"ではブックイベントは ThisWorkbook が受け、クラスは持ちません): {cls_names}")
 
     # --- [5] MODULEOFFSET=0 ---------------------------------------------------
     import struct
@@ -194,7 +239,163 @@ def check_book(book: Path) -> list[str]:
     if bad:
         errors.append(f"{book.name}: MODULEOFFSET≠0 のモジュールが{len(bad)}件"
                       "(p-codeキャッシュが混入しています)")
+
+    # --- [6] モジュールの「形」が Mac 実Excel 製と一致するか(W9.3) -----------
+    errors.extend(check_module_shapes(book.name, vba_bin, dir_dec, mods_info))
     return errors
+
+
+# 実測値(Mac 実Excel 製サンプルの Class1)。ここを緩めると Z-24 が再発する。
+CLASS_VB_BASE = 'Attribute VB_Base = "0{FCFB3D2A-A0FA-1068-A738-08002B3371B5}"'
+REC_MODULEPRIVATE = 0x0028
+
+
+def module_private_flags(dir_dec: bytes) -> dict[str, bool]:
+    """dir を1回舐めて {モジュール名: MODULEPRIVATE(0x0028)を持つか} を返す。
+
+    MODULENAME(0x0019)で名前が確定し、MODULE_TERMINATOR(0x002B)で1本が閉じる。
+    その間に 0x0028 が現れたかどうかを記録する。
+    """
+    out: dict[str, bool] = {}
+    name = None
+    private = False
+    for _off, rid, _sz, body in ovba_write.iter_dir_records(dir_dec):
+        if rid == ovba_write.REC_MODULENAME:
+            name = body.decode("cp932", errors="replace")
+            private = False
+        elif rid == REC_MODULEPRIVATE:
+            private = True
+        elif rid == ovba_write.REC_MODULE_TERMINATOR and name is not None:
+            out[name] = private
+            name = None
+    return out
+
+
+def check_module_shapes(book_name: str, vba_bin: bytes, dir_dec: bytes,
+                        mods_info: dict, verbose: bool = True) -> list[str]:
+    """[6] 属性行と dir の MODULEPRIVATE が Mac 実Excel 製と同じ形か。"""
+    errors: list[str] = []
+    privates = module_private_flags(dir_dec)
+    counts = {"std": 0, "class": 0, "document": 0}
+    for name, info in sorted(mods_info.items()):
+        src = info["source"]
+        text = src.decode("cp932", errors="replace") if isinstance(src, (bytes, bytearray)) else str(src)
+        # 先頭の連続する属性行だけを見る(本文中のメンバー属性
+        # `Attribute App.VB_VarHelpID = -1` を巻き込まない)。
+        header = []
+        for ln in text.split("\r\n"):
+            if not ln.startswith("Attribute "):
+                break
+            header.append(ln)
+        # ovba_write.read_modules は 0x0021 を "procedural" と呼ぶ。
+        kind = {"procedural": "std"}.get(info["type"], info["type"])
+        counts[kind] = counts.get(kind, 0) + 1
+        has_private = privates.get(name)
+        if has_private is None:
+            errors.append(f"{book_name}: '{name}' が dir の MODULE レコードに見つかりません")
+            continue
+        if kind == "std":
+            if len(header) != 1 or not header[0].startswith('Attribute VB_Name'):
+                errors.append(
+                    f"{book_name}: 標準モジュール '{name}' の属性行が "
+                    f"`Attribute VB_Name` の1行だけではありません(実際{len(header)}行)")
+            if has_private:
+                errors.append(f"{book_name}: 標準モジュール '{name}' に "
+                              "MODULEPRIVATE(0x0028)があります(Excel は付けません)")
+        elif kind == "class":
+            if len(header) != 8:
+                errors.append(
+                    f"{book_name}: クラスモジュール '{name}' の属性行が8行では"
+                    f"ありません(実際{len(header)}行。Mac実Excel製と不一致)")
+            if CLASS_VB_BASE not in header:
+                errors.append(
+                    f"{book_name}: クラスモジュール '{name}' に "
+                    f"`{CLASS_VB_BASE}` がありません")
+            if not has_private:
+                errors.append(
+                    f"{book_name}: クラスモジュール '{name}' の dir に "
+                    "MODULEPRIVATE(0x0028)がありません(17章 Z-24 の再発)")
+        elif kind == "document":
+            if has_private:
+                errors.append(f"{book_name}: document module '{name}' に "
+                              "MODULEPRIVATE(0x0028)があります(Excel は付けません)")
+            if "Attribute VB_Customizable = True" not in header:
+                errors.append(
+                    f"{book_name}: document module '{name}' に "
+                    "`Attribute VB_Customizable = True` がありません")
+    if verbose:
+        print(f"[6] モジュールの形: std{counts.get('std', 0)}本 / "
+              f"class{counts.get('class', 0)}本 / document{counts.get('document', 0)}本"
+              f"(属性行と MODULEPRIVATE(0x0028)を Mac実Excel製と突合)")
+    return errors
+
+
+SELFTEST_CLASS_BODY = (
+    "Option Explicit\r\n"
+    "Public WithEvents App As Application\r\n"
+    "Attribute App.VB_VarHelpID = -1\r\n"
+)
+
+
+def selftest_class_shape() -> list[str]:
+    """[6] のクラス規則が**空振りしていない**ことの自己テスト(W9.3)。
+
+    配布物(リスク提案ナビ)はクラスモジュールを持たない(ブックイベントは
+    ThisWorkbook が受ける)ため、上の [6] のクラス分岐は配布物を検査するだけでは
+    **一度も走らない**。走らない検査は数か月で腐る(build/ovba_write.py の
+    クラス対応は他プロダクトも使う)。そこで、その場でクラス入りの bin を1本
+    組み立てて、
+      (正例) 属性8行 + MODULEPRIVATE(0x0028)を書いた bin は 0 件で通ること
+      (負例) dir から 0x0028 を抜いた bin は必ず落ちること
+    を毎回確かめる。負例が通ってしまう=検査が骨抜きになった、である。
+    """
+    import ovba
+    tmpl_path = REPO_ROOT / "build" / "template_skeleton.xlsm"
+    if not tmpl_path.exists():
+        return ["自己テスト: build/template_skeleton.xlsm がありません"]
+    with zipfile.ZipFile(tmpl_path) as z:
+        tmpl_bin = z.read("xl/vbaProject.bin")
+
+    mods = [
+        ovba_write.VbaModule(
+            "ThisWorkbook",
+            ovba_write.module_stream_source("ThisWorkbook", "Option Explicit\r\n",
+                                            "document"),
+            "document"),
+        ovba_write.VbaModule(
+            "modSelfTest",
+            ovba_write.module_stream_source("modSelfTest", "Option Explicit\r\n", "std"),
+            "std"),
+        ovba_write.VbaModule(
+            "clsSelfTest",
+            ovba_write.module_stream_source("clsSelfTest", SELFTEST_CLASS_BODY, "class"),
+            "class"),
+    ]
+    vba_bin = ovba_write.build_vba_project(tmpl_bin, mods)
+    mods_info = ovba_write.read_modules(vba_bin)
+    dir_dec = ovba.ovba_decompress(ovba.CFBReader(vba_bin).read("dir"))
+
+    out: list[str] = []
+    pos = check_module_shapes("(自己テスト・正例)", vba_bin, dir_dec, mods_info,
+                              verbose=False)
+    if pos:
+        out.append("自己テスト(正例): 属性8行+0x0028 を書いた bin が [6] で落ちました: "
+                   + " / ".join(pos))
+
+    # 負例: dir から MODULEPRIVATE(0x0028)のレコードを1本残らず抜く。
+    stripped = bytearray()
+    for off, rid, _sz, body in ovba_write.iter_dir_records(dir_dec):
+        if rid == REC_MODULEPRIVATE:
+            continue
+        # 実長は body の長さで取る(PROJECTVERSION は Size フィールドの申告 4 に
+        # 対して実データが 6 バイトある既知の例外。申告値で切ると dir が壊れる)。
+        stripped += dir_dec[off:off + 6 + len(body)]
+    neg = check_module_shapes("(自己テスト・負例)", vba_bin, bytes(stripped), mods_info,
+                              verbose=False)
+    if not any("MODULEPRIVATE" in m for m in neg):
+        out.append("自己テスト(負例): dir から 0x0028 を抜いた bin を [6] が"
+                   "見逃しました(クラス規則が骨抜きになっています)")
+    return out
 
 
 def main() -> int:
@@ -221,6 +422,9 @@ def main() -> int:
 
     print("=== bin_roundtrip.py (配布binを解凍して src/ とバイト比較) ===")
     errors: list[str] = []
+    st = selftest_class_shape()
+    print(f"[6自己] クラス規則の自己テスト(正例/負例): {'OK' if not st else 'NG'}")
+    errors.extend(st)
     for b in books:
         if not b.exists():
             print(f"ERROR: ブックが見つかりません: {b}", file=sys.stderr)
@@ -234,9 +438,9 @@ def main() -> int:
         for e in errors:
             print(f"  - {e}")
         return 1
-    print(f"結果: OK 検査したブック{len(books)}冊 / 5条件"
+    print(f"結果: OK 検査したブック{len(books)}冊 / 6条件"
           "(本文バイト一致・モジュール数と集合・vba_src不在・禁止文字列不在・"
-          "MODULEOFFSET=0)")
+          "MODULEOFFSET=0・モジュールの形がMac実Excel製と一致)")
     return 0
 
 

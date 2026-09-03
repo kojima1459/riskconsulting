@@ -68,7 +68,14 @@ Private Const TE_BAND_SEQ As Long = 100001
 '  内訳 = 本モジュール37本 + modTestsExcel2 15本。層(a)は「連結の規則」と
 '  「UTF-8のバイト列」を固定できるが、**Excel自身の貼り付け・コピーが実機で
 '  何を返すか**と **Open For Binary が実際に書いたバイト**は層(b)にしか置けない)
-Private Const TE_EXPECTED As Long = 52
+' (W9.3: ブックイベントの受け口を clsAppEvents から ThisWorkbook 文書モジュール
+'  へ移した(17章 Z-24)ため、T47B-W81-03「ブックイベントのクラスが結線されて
+'  いる」を撤去し 52 -> 51。内訳 = 本モジュール37本 + modTestsExcel2 14本。
+'  **置換できなかった理由**: VBA から「ThisWorkbook に Workbook_Activate が
+'  あるか」を読むには VBE のプロジェクト参照を使うしかなく、その語は配布物の
+'  禁止文字列(裁定書27 W9-B 6)である。焼き込まれたスタブの形の検査は
+'  tools/bin_roundtrip.py [4b] へ移した)
+Private Const TE_EXPECTED As Long = 51
 
 Private mRun As Long    ' ECheck が数える実行本数
 

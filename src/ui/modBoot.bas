@@ -130,11 +130,6 @@ Private Const BOOT_MSG_PARTIAL As String = _
 ' 画面制御変数であり、14章§6「状態保持の例外」には当たらない。
 Private gKbAutoFound As Boolean
 
-' アプリのブックイベントを受けるクラス(裁定書26 B・追補)。**参照を捨てると
-'   イベントが来なくなる**ので、起動から終了までモジュール変数で保持する。
-'   ThisWorkbook に依存しないので焼き付け済みファイルでも効く。
-Private gAppEvents As clsAppEvents
-
 ' 起動手順のどれかが失敗した(=E0603 を記録した)か。W9.2 N9 のトーストの条件。
 '   永続しない画面制御変数であり、14章§6「状態保持の例外」には当たらない。
 Private gBootPartial As Boolean
@@ -221,9 +216,10 @@ Private Sub BootStep(ByVal stepNo As Long)
         ' 初回ガイドツアー(裁定書14 裁定6)。実装は modUIGuide が唯一持ち、
         ' 起動シーケンスからの結線はこの1行だけにする(2回目以降は何もしない)。
         modUIGuide.StartTourIfFirstRun
-        ' ブックイベントの結線(裁定書26 B・追補)。**全画面を当てる前**に結線を
-        ' 済ませる(Activate/Deactivate/BeforeClose で戻す口を先に用意する)。
-        HookAppEvents
+        ' ブックイベント(Activate/Deactivate/BeforeClose)は **ThisWorkbook
+        ' 文書モジュール**が受ける(W9.3 の裁定。旧 clsAppEvents は撤去した。
+        ' 理由と経緯は 17章 Z-24 と build/build_rpn.py の
+        ' _BAKED_THISWORKBOOK_TEXT のコメントが持つ)。起動側からの結線は不要。
         ' 全画面表示(裁定書26 B)。**起動シーケンスの最後・ナビを描いた後**に
         ' 1回だけ当てる(先に当てると窓の作り直しで幾何が古い窓のまま決まる)。
         modUIViewport.ApplyFullScreen
@@ -248,23 +244,15 @@ Private Sub LogBootStepFailure(ByVal stepNo As Long, ByVal errNo As Long)
 End Sub
 
 ' ----------------------------------------------------------------------------
-' ブックイベントの結線(裁定書26 B・追補)
+' ブックイベントの結線について(W9.3)
 ' ----------------------------------------------------------------------------
-' WithEvents を持つクラスを1つだけ作り、Application のブックイベントを受ける。
-'   2回呼ばれても作り直すだけで害は無い(古い方は参照が切れて自動的に消える)。
-Private Sub HookAppEvents()
-    On Error Resume Next
-    Set gAppEvents = New clsAppEvents
-    If gAppEvents Is Nothing Then Exit Sub
-    Set gAppEvents.App = Application
-End Sub
-
-' AppEventsReady - 結線できているか(層(b)の回帰が読む唯一の口)。
-Public Function AppEventsReady() As Boolean
-    On Error Resume Next
-    If gAppEvents Is Nothing Then Exit Function
-    AppEventsReady = Not (gAppEvents.App Is Nothing)
-End Function
+' Workbook_Activate / Workbook_Deactivate / Workbook_BeforeClose は
+'   **ThisWorkbook 文書モジュール**が直接受ける(ビルドが焼く。値源は
+'   build/build_rpn.py の _BAKED_THISWORKBOOK_TEXT)。したがって起動側で
+'   結線するコードは無く、クラスを保持するモジュール変数も持たない。
+'   旧実装(WithEvents を持つ clsAppEvents を modBoot が生成・保持する形)は
+'   Mac の実Excel で「実行時エラー 5」の生ダイアログを出したため撤去した
+'   (17章 Z-24)。
 
 ' ----------------------------------------------------------------------------
 ' (1) ガードシート非表示

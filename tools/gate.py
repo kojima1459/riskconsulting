@@ -53,7 +53,7 @@ GATES = [
     #   bin-roundtrip = olevba で解凍して src/ とバイト比較(中身の検問)
     #   lo-xlsm       = LibreOffice に配布xlsmを開かせる(入れ物の検問)
     ("bin-roundtrip", [sys.executable, "tools/bin_roundtrip.py"],
-     r"結果: OK .*5条件"),
+     r"結果: OK .*6条件"),
     ("lo-xlsm",      [sys.executable, "tools/lo_xlsm.py"],
      r"結果: OK 3条件"),
     ("prompt-diff",  [sys.executable, "tools/prompt_diff.py", "--strict"],

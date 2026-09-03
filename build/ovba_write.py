@@ -73,6 +73,9 @@ REC_MODULEHELPCONTEXT = 0x001E
 REC_MODULECOOKIE = 0x002C
 REC_MODULETYPE_PROCEDURAL = 0x0021
 REC_MODULETYPE_DOCUMENT = 0x0022
+# [MS-OVBA] 2.3.4.2.3.2.9 MODULEPRIVATE(Id=0x0028・Size=0)。
+# **クラスモジュールにだけ**現れる(実測。下の build_modules_section の注参照)。
+REC_MODULEPRIVATE = 0x0028
 REC_MODULE_TERMINATOR = 0x002B
 REC_DIR_TERMINATOR = 0x0010
 REC_PROJECTVERSION = 0x0009
@@ -241,6 +244,19 @@ def build_modules_section(modules, cookie: bytes, codepage: str = "cp932") -> by
         # document と class の区別は PROJECT ストリームの Document= / Class= 行が持つ。
         out += _rec(REC_MODULETYPE_PROCEDURAL if m.module_type == "std"
                     else REC_MODULETYPE_DOCUMENT, b'')
+        # MODULEPRIVATE(0x0028・Size=0)は**クラスモジュールにだけ**続く。
+        # 突合の根拠(2026-09-03・W9.3): Mac の実Excel が保存したクラス入り
+        # サンプル(Class1 を1本足しただけのブック)の dir を解析したところ、
+        #   ThisWorkbook / Sheet1 : ... 0x0022 -> 0x002B
+        #   Module1               : ... 0x0021 -> 0x002B
+        #   Class1                : ... 0x0022 -> **0x0028(size 0)** -> 0x002B
+        # という並びだった。我々は 0x0028 を書いていなかったため、クラスを
+        # 含む bin は Excel と不一致であり、これが実機の「実行時エラー 5」
+        # (17章 Z-24)の原因だった。**属性8行と併せて修正した版(v7)が Mac の
+        # 実Excel で正常に開くことを確認済み**(2026-09-03)。
+        # document / std には 0x0028 を出さない(実測どおり)。
+        if m.module_type == "class":
+            out += _rec(REC_MODULEPRIVATE, b'')
         out += _rec(REC_MODULE_TERMINATOR, b'')
     out += _rec(REC_DIR_TERMINATOR, b'')
     return bytes(out)
@@ -523,7 +539,8 @@ class VbaModule:
     """vbaProject.bin へ焼き込む1モジュール。
 
     name        : VBE 上のモジュール名(=dir の MODULENAME)
-    source      : ソース本文(CP932・CRLF・末尾改行あり。Attribute 行は含めない)
+    source      : モジュールストリームへ入れるソース(CP932・CRLF・末尾改行あり)。
+                  **属性行を含めた完全な形**で、`module_stream_source()` が作る
     module_type : "std" | "class" | "document"
     """
 
@@ -554,12 +571,26 @@ class VbaModule:
 # vbaProject.bin のモジュールストリームには「モジュール属性 + ソース」が
 # そのまま入る(Attribute 行はソースの一部である)。
 _ATTR_STD = 'Attribute VB_Name = "%s"\r\n'
+# クラスモジュールの VB_Base(実測。Mac 実Excel 製サンプルの Class1)。
+# document module の VB_Base と同じく「そのモジュールの基底COMクラスのGUID」で
+# あり、クラスモジュールでは常にこの値になる。
+_VB_BASE_CLASS = "0{FCFB3D2A-A0FA-1068-A738-08002B3371B5}"
+
+# 突合の根拠(2026-09-03・W9.3): Mac 実Excel 製サンプルの Class1 の属性行は
+#   VB_Name / VB_Base / VB_GlobalNameSpace / VB_Creatable / VB_PredeclaredId /
+#   VB_Exposed / VB_TemplateDerived / VB_Customizable の**8行**であった
+# (旧実装は VB_Base・VB_TemplateDerived・VB_Customizable を欠く5行だった)。
+# クラス本体の `Attribute <変数名>.VB_VarHelpID = -1`(WithEvents 宣言の直後)は
+# 属性ヘッダではなく**本文の一部**なので、ここではなく本文側が持つ。
 _ATTR_CLASS = (
     'Attribute VB_Name = "%s"\r\n'
+    'Attribute VB_Base = "' + _VB_BASE_CLASS + '"\r\n'
     'Attribute VB_GlobalNameSpace = False\r\n'
     'Attribute VB_Creatable = False\r\n'
     'Attribute VB_PredeclaredId = False\r\n'
     'Attribute VB_Exposed = False\r\n'
+    'Attribute VB_TemplateDerived = False\r\n'
+    'Attribute VB_Customizable = False\r\n'
 )
 # document module の VB_Base は「そのドキュメントのCOMクラスのGUID」であり、
 # ブック本体(Workbook)とワークシート(Worksheet)とで異なる([MS-OVBA] は
@@ -592,6 +623,12 @@ def module_stream_source(name: str, body: str, module_type: str,
     doc_base_guid は module_type="document" のときだけ使う VB_Base のGUIDで、
     ブック(既定・_VB_BASE_WORKBOOK)かシート(_VB_BASE_WORKSHEET)かを呼び出し側
     が選ぶ。現行の呼び出しは ThisWorkbook のみなので既定のままでよい。
+
+    改行について(W9.3 の実測メモ): Mac の実Excel が保存したブック
+    (scratchpad/bisect/mac_class_sample.xlsm)は**全モジュールの改行が LF 単独**
+    だった(Windows 製は CRLF)。本実装は **CRLF のまま**にする(切り分けブック
+    v1_min / v3_full_noclass が CRLF で実機読み込みに成功しており、改行は
+    Err 5 の要因ではないことが確かめられているため)。事実だけ記録に残す。
     """
     if attributes is None:
         if module_type == "class":

@@ -14,14 +14,16 @@ Option Explicit
 '   ・変える前の値を1度だけ退避し、RestoreScreen で退避した値へ戻す。
 '   ・全て On Error Resume Next 配下(画面設定の失敗で業務を止めない)。
 '
-' 誰が呼ぶか(裁定書26 B・追補 b):
+' 誰が呼ぶか(裁定書26 B / W9.3 でクラスから ThisWorkbook へ移した):
 '   ApplyFullScreen = modBoot の起動シーケンスの最後(ナビ描画後)に1回 ＋
-'     clsAppEvents.App_WorkbookActivate(本ブックが前面へ戻ったとき)
-'   RestoreScreen   = clsAppEvents.App_WorkbookDeactivate / App_WorkbookBeforeClose
-'     (本ブックから離れたとき・閉じるとき)
-'   イベントを受けるクラスは modBoot が1つだけ生成して保持する。
-'   **ThisWorkbook モジュールには一切依存しない**ので、焼き付け済み
-'   (baked)のファイルでも効く。
+'     ThisWorkbook.Workbook_Activate(本ブックが前面へ戻ったとき)
+'   RestoreScreen   = ThisWorkbook.Workbook_Deactivate /
+'     ThisWorkbook.Workbook_BeforeClose(本ブックから離れたとき・閉じるとき)
+'   **イベントの受け口は ThisWorkbook 文書モジュールのみ**で、クラスモジュール
+'   (旧 clsAppEvents)は使わない。Mac の実Excel でクラスを1本含めるだけで
+'   読み込み時に Err 5 の生ダイアログが出たため撤去した(17章 Z-24)。
+'   ThisWorkbook の中身はビルドが焼く(値源は build/build_rpn.py の
+'   _BAKED_THISWORKBOOK_TEXT)ので、焼き付け済み(baked)のファイルでも効く。
 ' ============================================================================
 
 Private Const VP_SRC As String = "modUIViewport"

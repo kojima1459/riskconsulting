@@ -431,13 +431,6 @@
       "wave": "W8.1"
     },
     {
-      "name": "clsAppEvents",
-      "path": "src/ui/clsAppEvents.cls",
-      "role": "ui",
-      "type": "class",
-      "wave": "W8.1"
-    },
-    {
       "name": "modUIToast",
       "path": "src/ui/modUIToast.bas",
       "role": "ui",

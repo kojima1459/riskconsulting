@@ -417,17 +417,14 @@ Private Sub TestW81BandAndFooter()
     Dim ws As Object
     Dim okText As Boolean
     Dim okFooter As Boolean
-    Dim okEvents As Boolean
     Dim detText As String
     Dim detFooter As String
-    Dim detEvents As String
     Dim wantText As String
     Dim gotText As String
     On Error GoTo Crashed
 
     detText = "前提不成立"
     detFooter = "前提不成立"
-    detEvents = "前提不成立"
 
     Set ws = modUISheet.SheetOf(T2_SHEET)
     If ws Is Nothing Then GoTo Report
@@ -442,17 +439,18 @@ Private Sub TestW81BandAndFooter()
     okFooter = HasShape(ws, T2_FOOTER_SHAPE)
     detFooter = "図形 " & T2_FOOTER_SHAPE & " の有無"
 
-    ' 裁定書26追補 b: ブックイベントの結線(gAppEvents)が生きていること。
-    ' これが Nothing だと全画面が当たったまま他のブックへ戻らない。
-    okEvents = modBoot.AppEventsReady()
-    detEvents = "modBoot.AppEventsReady()=" & CStr(okEvents) & _
-                " (起動シーケンス手順11の HookAppEvents が通っているか)"
+    ' 跡地(W9.3): T47B-W81-03「ブックイベントのクラスが結線されている」は
+    '   撤去した。ブックイベントの受け口が clsAppEvents から **ThisWorkbook
+    '   文書モジュール**へ移り(17章 Z-24)、VBA から「ThisWorkbook に
+    '   Workbook_Activate があるか」を読む手段が VBE のプロジェクト参照しか
+    '   無く、その語は配布物の禁止文字列(裁定書27 W9-B 6)だからである。
+    '   焼き込まれたスタブの形は tools/bin_roundtrip.py [4b] が配布物の側から
+    '   検査する(層(b)ではなくビルド検問の担当へ移した)。
 
 Report:
     ECheck "T47B-W81-01_コーチ帯の図形の中にCoachBandTextと同じ文字がある", _
            okText, detText
     ECheck "T47B-W81-02_ナビの最下部にフッターの図形がある", okFooter, detFooter
-    ECheck "T47B-W81-03_ブックイベントのクラスが結線されている", okEvents, detEvents
 
     ' 画面をふだんの状態へ戻す。
     On Error Resume Next
@@ -461,10 +459,8 @@ Report:
 Crashed:
     okText = False
     okFooter = False
-    okEvents = False
     detText = "Err=" & CStr(Err.Number) & " " & Err.Description
     detFooter = detText
-    detEvents = detText
     Resume Report
 End Sub
 

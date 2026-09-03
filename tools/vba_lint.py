@@ -125,12 +125,10 @@ MODULE_REGISTRY = {
     #                   シートタブは触らない)。modBoot の起動シーケンスの最後で
     #                   1回だけ適用し、退避した元の値へ戻す口を1本持つ。
     "modUIViewport",
-    # W8.1(裁定書26 B・追補 b)。**唯一のクラスモジュール**(.cls)。
-    #   clsAppEvents = Application のブックイベント(Activate/Deactivate/
-    #                  BeforeClose)を WithEvents で受け、modUIViewport の2本を
-    #                  呼ぶだけの薄い受け口。ThisWorkbook に依存しないので
-    #                  焼き付け済みファイルでも効く。生成と保持は modBoot。
-    "clsAppEvents",
+    # (W9.3 で clsAppEvents を撤去。ブックイベントは ThisWorkbook 文書モジュール
+    #  が受ける。クラスの焼き方の不一致は 17章 Z-24 で解決済みだが、配布物は
+    #  **可動部品を減らす**ためクラスを持たない。理由と経緯は 17章 Z-24 と
+    #  build/build_rpn.py の _BAKED_THISWORKBOOK_TEXT のコメント)
     # ---- app 層 ----
     "modPipeline", "modPlayOps", "modSparring", "modCaseStore", "modCaseRead",
     "modInboxStore",
@@ -550,10 +548,6 @@ CONTRACT: dict[str, dict] = {
         "closed": False,
         "required": ["ApplyFullScreen", "RestoreScreen"],
     },
-    # clsAppEvents: 裁定書26追補 b。公開するのは WithEvents の受け口 App だけで
-    # (modBoot が `Set gAppEvents.App = Application` で結線する)、イベント
-    # ハンドラ3本は Private。required は置かない(Public Sub/Function が無い)。
-    "clsAppEvents": {"closed": False, "required": []},
     # modUIGuide: 裁定書14 裁定6。起動の入口 StartTourIfFirstRun と再視聴の
     # RestartTour、操作ガイドのボタン EnsureGuideButtons を required で固定する
     # (modBoot / modUIHome / 図形の OnAction の結線先そのものであり、改名・
