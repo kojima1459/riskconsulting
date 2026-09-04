@@ -61,7 +61,8 @@ Private Const CF_EXT As String = ".xlsx"
 Private Const CF_CHUNK_CHARS As Long = 32000
 
 Private Const CF_SEP As String = ";"
-Private Const CF_SCHEMA_FALLBACK As String = "2.0.0"
+' (旧 CF_SCHEMA_FALLBACK は撤去。schema_version の値源は
+'  modCompanyFile3.SchemaVersionCurrent の1本にした。裁定書28 W10)
 
 ' ============================================================================
 ' CompanyFilePath - 企業ドシエファイルの絶対パス(13章§2.8のファイル名規則)。
@@ -179,6 +180,9 @@ Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As Strin
     WriteProfile wb, caseId, roundNo
     WriteRounds wb, caseId, ctx, roundNo
     WriteNotes wb, caseId, roundNo
+    ' 裁定書28(W10): 案件一覧の全列・case_data の全 data_key・商談の記録・
+    '   判断台帳(dossier_case/data/facts/judge)は modCompanyFile3 が書く。
+    modCompanyFile3.ExportExtensions wb, caseId, roundNo
 
     Dim expectHash As String
     expectHash = PayloadHash(caseId)
@@ -248,6 +252,8 @@ Public Function ImportCompanyFile(ByVal filePath As String, ByVal caseId As Stri
         If RestoreIfEmpty(caseId, "s2_prev_json", ReadRoundJson(wb, roundNo, "s2_json")) Then restored = restored + 1
         restored = restored + RestoreNotes(wb, caseId, roundNo)
     End If
+    ' 裁定書28(W10): case_data の全 data_key の遅延読込(空の枠にだけ書く)。
+    restored = restored + modCompanyFile3.ImportExtensions(wb, caseId)
 
     modCompanyFile2.DossierClose wb
     Set wb = Nothing
@@ -287,7 +293,8 @@ Private Sub WriteMeta(ByVal wb As Object, ByRef ctx As TCaseCtx, _
             modUtilText.Fnv1a64Hex(modUtilText.NormalizeForHash(ctx.company))
     modCompanyFile2.SheetPutText ws, hdr, 2, "company", ctx.company
     modCompanyFile2.SheetPutText ws, hdr, 2, "industry_code", ctx.industry_code
-    modCompanyFile2.SheetPutText ws, hdr, 2, "schema_version", modConfig.GetStr("app_version", CF_SCHEMA_FALLBACK)
+    ' 裁定書28(W10): 版は app_version ではなく**企業ファイルのスキーマ版**。
+    modCompanyFile2.SheetPutText ws, hdr, 2, "schema_version", modCompanyFile3.SchemaVersionCurrent()
     modCompanyFile2.SheetPutText ws, hdr, 2, "created_at", createdText
     modCompanyFile2.SheetPutText ws, hdr, 2, "updated_at", stampText
     modCompanyFile2.SheetPutText ws, hdr, 2, "pii_scan_result", PiiResultText(piiText)

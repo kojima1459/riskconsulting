@@ -173,6 +173,10 @@ Private Sub BootStep(ByVal stepNo As Long)
         modConfig.LoadFromSheet
         ApplyGhostingGuard
     Case 3
+        ' 裁定書28(W10): **状態修復より前に**企業ファイルから案件一覧を組み直す
+        '   (本体は毎朝消えてよいキャッシュで、蓄積の正は data_dir の企業フォルダ
+        '    に置く1社1ファイル。13章§2.1)。実体は modBootData が持ち、ここは1行。
+        modBootData.RebuildCaseCache
         ' (3) 案件状態の整合修復(RepairStatesが失敗時のE0603記録まで自己完結)
         modCaseStore.RepairStates
     Case 4

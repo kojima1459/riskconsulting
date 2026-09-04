@@ -77,6 +77,9 @@ WE:
 WF:
     On Error GoTo FF
     T_W92_SplitPathParts
+WG:
+    On Error GoTo FG
+    modTestsPure19.RunAll
 WDone:
     Exit Sub
 FA:
@@ -96,6 +99,9 @@ FE:
     Resume WF
 FF:
     GroupFail "W92 SplitPathParts(W9.2)"
+    Resume WG
+FG:
+    GroupFail "modTestsPure19(W10・裁定書28)"
     Resume WDone
 End Sub
 

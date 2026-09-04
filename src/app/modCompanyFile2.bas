@@ -25,18 +25,29 @@ Option Explicit
 Private Const C2_SRC As String = "modCompanyFile2"
 
 ' 13章§2.8の5シートと、その1行目ヘッダ(物理名 snake_case。列番号は書かない)。
-Private Const C2_SHEETS As String = "dossier_meta;dossier_profile;dossier_rounds;dossier_facts;dossier_notes"
+' 裁定書28(W10)で dossier_case / dossier_data / dossier_judge の3枚を足した
+' (企業ファイルが「蓄積の正」になったため、案件一覧の全列・case_data の全
+'  data_key・判断台帳を1ファイルに収める。13章§2.8)。既存5枚は不変。
+Private Const C2_SHEETS As String = "dossier_meta;dossier_profile;dossier_rounds;dossier_facts;dossier_notes;dossier_case;dossier_data;dossier_judge"
 Private Const C2_HDR_META As String = "company_id;company;industry_code;schema_version;created_at;updated_at;pii_scan_result;pii_confirmed_at;owner"
 Private Const C2_HDR_PROFILE As String = "case_id;round_no;seq;s1_json;mvv;aspirations;market_context;updated_at"
 Private Const C2_HDR_ROUNDS As String = "round_no;case_id;executed_at;dossier_tier;seq;s1_json;s2_json;s3_json;report_file;round_summary"
 Private Const C2_HDR_FACTS As String = "round_no;case_id;visited_at;event;used_proposals;customer_quote;terms_summary;loss_note;recorded_by;recorded_at;row_hash"
 Private Const C2_HDR_NOTES As String = "round_no;case_id;note_kind;tag;seq;content;saved_at"
+' 裁定書28(W10)の3枚。dossier_case は 13章§2.1 案件一覧の全列(物理順)＋
+'   schema_version、dossier_data は 13章§2.2 case_data と同じ縦持ち、
+'   dossier_judge は 13章§2.7 判断台帳の全列＋case_id/round_no。
+Private Const C2_HDR_CASE As String = "case_id;case_type;dossier_tier;parent_case_id;company;industry_code;industry_name;channel;kanji;bid;reins;other_insurers;status;created_at;updated_at;owner;adopted_story_nos;focus_line_ids;ppt_path;report_path;note;s4_variant;round_no;last_ok_step;failed_step;schema_version"
+Private Const C2_HDR_DATA As String = "case_id;data_key;seq;content;saved_at"
+Private Const C2_HDR_JUDGE As String = "case_id;round_no;judge_id;judged_at;line_id;recorded_by;case_ref;situation;decision;factor_note;key_reason;result;post_loss"
 
 ' xlOpenXMLWorkbook(マクロ無し.xlsx) / xlUp。組込定数名を書くとLOの構文検査で
 ' 未定義名になるため数値で持つ。
 Private Const C2_XLSX_FORMAT As Long = 51
 Private Const C2_DIR_UP As Long = -4162
-Private Const C2_SCAN_COLS As Long = 20
+' 裁定書28: dossier_case が26列になったため 20 -> 30 へ広げた(見出しの右端を
+'   読み落とすと FindHeaderCol が列を見つけられず、その列が黙って空になる)。
+Private Const C2_SCAN_COLS As Long = 30
 Private Const C2_SEP As String = ";"
 
 ' ============================================================================
@@ -266,6 +277,86 @@ Public Function SheetJoinBySeq(ByVal ws As Object, ByVal roundNo As Long, _
     SheetJoinBySeq = modUtil.JoinCellChunks(hits)
 End Function
 
+' ============================================================================
+' SheetDropCase - 同じ case_id の行を全部消す(裁定書28)。dossier_case /
+'   dossier_data / dossier_facts / dossier_judge の積み直し用。SheetDropRound と
+'   違い**ラウンドを見ない**(これらの枚は「その案件の最新の全体」を持つため、
+'   再保存のたびに丸ごと置き換えるのが正しい)。他の案件の行には触らない。
+' ============================================================================
+Public Sub SheetDropCase(ByVal ws As Object, ByVal caseId As String)
+    On Error GoTo Ignore0
+    If ws Is Nothing Then Exit Sub
+
+    Dim lastRow As Long
+    lastRow = SheetLastRow(ws)
+    If lastRow < 2 Then Exit Sub
+
+    Dim blk As Variant
+    blk = SheetBlock(ws, lastRow)
+    Dim cCase As Long
+    cCase = modUtil.FindHeaderCol(blk, "case_id")
+    If cCase <= 0 Then Exit Sub
+
+    Dim r As Long
+    For r = lastRow To 2 Step -1
+        If Trim$(BlockText(blk, r, cCase)) = caseId Then ws.Rows(r).Delete
+    Next r
+    Exit Sub
+Ignore0:
+End Sub
+
+' ============================================================================
+' SheetJoinByKey - dossier_data の (case_id, data_key) を seq の【値】で並べ直して
+'   結合する(SheetJoinBySeq の data_key 版。13章§2.2 の 32,000字分割の復元)。
+'   行の並び順に頼らないので、利用者が手で行を動かしたファイルでも欠落しない。
+' ============================================================================
+Public Function SheetJoinByKey(ByVal ws As Object, ByVal caseId As String, _
+                               ByVal dataKey As String) As String
+    If ws Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = SheetLastRow(ws)
+    If lastRow < 2 Then Exit Function
+
+    Dim blk As Variant
+    blk = SheetBlock(ws, lastRow)
+    Dim cCase As Long, cKey As Long, cSeq As Long, cVal As Long
+    cCase = modUtil.FindHeaderCol(blk, "case_id")
+    cKey = modUtil.FindHeaderCol(blk, "data_key")
+    cSeq = modUtil.FindHeaderCol(blk, "seq")
+    cVal = modUtil.FindHeaderCol(blk, "content")
+    If cCase <= 0 Or cKey <= 0 Or cSeq <= 0 Or cVal <= 0 Then Exit Function
+
+    Dim maxSeq As Long
+    Dim r As Long, sq As Long
+    For r = 2 To lastRow
+        If KeyMatches(blk, r, cCase, cKey, caseId, dataKey) Then
+            sq = ToLongSafe(blk(r, cSeq))
+            If sq > maxSeq Then maxSeq = sq
+        End If
+    Next r
+    If maxSeq < 1 Then Exit Function
+
+    Dim hits() As String
+    ReDim hits(1 To maxSeq)
+    For r = 2 To lastRow
+        If KeyMatches(blk, r, cCase, cKey, caseId, dataKey) Then
+            sq = ToLongSafe(blk(r, cSeq))
+            If sq >= 1 And sq <= maxSeq Then hits(sq) = BlockText(blk, r, cVal)
+        End If
+    Next r
+
+    SheetJoinByKey = modUtil.JoinCellChunks(hits)
+End Function
+
+Private Function KeyMatches(ByVal blk As Variant, ByVal r As Long, _
+                            ByVal cCase As Long, ByVal cKey As Long, _
+                            ByVal caseId As String, ByVal dataKey As String) As Boolean
+    If Trim$(BlockText(blk, r, cCase)) <> caseId Then Exit Function
+    If Trim$(BlockText(blk, r, cKey)) <> dataKey Then Exit Function
+    KeyMatches = True
+End Function
+
 ' そのシートが持つ最大の round_no(0=行無し)。
 Public Function SheetMaxRound(ByVal ws As Object) As Long
     If ws Is Nothing Then Exit Function
@@ -308,6 +399,9 @@ Private Sub EnsureAllSheets(ByVal wb As Object)
     EnsureSheet wb, "dossier_rounds", C2_HDR_ROUNDS
     EnsureSheet wb, "dossier_facts", C2_HDR_FACTS
     EnsureSheet wb, "dossier_notes", C2_HDR_NOTES
+    EnsureSheet wb, "dossier_case", C2_HDR_CASE
+    EnsureSheet wb, "dossier_data", C2_HDR_DATA
+    EnsureSheet wb, "dossier_judge", C2_HDR_JUDGE
 End Sub
 
 ' シートが無ければ末尾に足して1行目へ物理名ヘッダを書く。既存なら触らない

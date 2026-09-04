@@ -146,6 +146,12 @@ PURE_ALLOWLIST = [
     # modCaseStore3 は data_key の一覧とラウンド確定の付帯処理を持つが、テストが
     # 叩くのは純関数 NormalizeStoryNos / CollectLineIds だけ(技術メモ4)。
     "modKnowledgeFmt", "modCaseStore", "modCaseStore3", "modPipeline",
+    # W10(裁定書28・T-59)。modCompanyFile3 は企業ファイル(.xlsx)を開く関数を
+    # 持つが、テストが叩くのは純関数だけ(技術メモ4): SchemaVersionOf /
+    # IsSchemaReadable(版の前方互換判定)・CompanyFileNameOf / CompanyDirOf
+    # (ファイル名と企業フォルダの組み立て)・HeaderToCaseRow / HeaderValueOf /
+    # PickNewerHeader(見出し -> 案件一覧行の写像と新旧優先)。
+    "modCompanyFile3",
     # T-25/T-28(裁定書8 B-7/B-10)で 14章§6 が公開を宣言した判定核を持つ3本。
     # いずれもモジュール全体としてはシート・LLMに触れるが、テストが叩くのは
     # 純関数だけ(技術メモ4)。
@@ -252,6 +258,10 @@ PURE_ALLOWLIST = [
     #   modUIResearch.DrUrlOf(config欠落時の既定URL。2本)を叩く。
     #   modTestsPure17.RunAll の末尾から呼ぶ。
     "modTestsPure18",
+    # modTestsPure19: W10(裁定書28)の純層7本。13章§2.1 v2.7(起動時再構成の写像)と
+    #   13章§2.8(ファイル名の禁止文字・schema_version の前方互換)だけを根拠に
+    #   modCompanyFile3 の純関数を叩く。modTestsPure18.RunAll の末尾から呼ぶ。
+    "modTestsPure19",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
 

@@ -112,6 +112,7 @@ Public Sub FeedbackSave()
     End If
 
     modLog.LogUsage "feedback_saved", caseId, "row=" & CStr(rowNo)
+    modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: 商談の記録の追記のあとに
     Notice "商談の記録を保存しました。"
 
 Done:
@@ -212,6 +213,8 @@ Public Sub JudgeSave()
         modLog.LogError "E0603", U4_SRC & ".JudgeSave", "draft_row_promoted:" & judgeId
     End If
 
+    ' 裁定書28 W10: 判断台帳の追記のあとに企業ファイルへ無言保存する。
+    modUIHome.AutoSaveNow modUISheet.ReadNamed("hm_case_id")
     Notice "判断台帳へ起票しました: " & judgeId
 
 Done:

@@ -42,6 +42,13 @@ Private gShownCaseId As String
 ' ============================================================================
 ' 起動時の画面用意(11章§5の図形ボタンとenum入力規則)。modBoot から呼ぶ。
 ' ============================================================================
+' 裁定書28(W10): 自動保存の見え方。名前付きレンジは 13章§2.10(e)・11章§3.1.3。
+'   表示は専門用語なしの1行(「保存済み 14:32」)。失敗のトーストは裁定書28 の逐語。
+Private Const UH_SAVED_AT As String = "hm_saved_at"
+Private Const UH_SAVED_PREFIX As String = "保存済み "
+Private Const UH_MSG_SAVE_FAILED As String = _
+    "OneDriveに保存できませんでした。次回の保存で再試行します"
+
 Public Sub EnsureScreens()
     On Error Resume Next
 
@@ -209,3 +216,39 @@ End Sub
 Public Sub WriteRoundNo(ByVal roundNo As Long)
     modUISheet.WriteNamed UH_ROUND, CStr(roundNo)
 End Sub
+
+' ============================================================================
+' AutoSaveNow - 選択中の案件を企業ファイルへ無言で保存する(裁定書28 W10)。
+' ----------------------------------------------------------------------------
+' 呼び口(1行ずつ結線する。裁定書28「アプリ側(T-59) 自動保存」):
+'   modUICase6.PasteIntoArea / SaveNav   貼付の保管のあと
+'   modUIHome2 の段別ループ / RunStepUi  S1〜S4 の各段が終わったあと
+'   modUICase4.FeedbackSave / JudgeSave  商談の記録・判断台帳の追記のあと
+'   modUIHome2.HomeFreezeRound           第2ラウンド確定のあと
+'
+' 見え方(11章§3.1.3): 成功したら区画④に「保存済み hh:mm」の1行を出すだけで、
+'   トーストは出さない(無言)。**失敗したときだけ**逐語のトーストを出す
+'   (裁定書28。err_log は app層 modCompanyFile / modCompanyFile3 が既に書く)。
+'   PII検知で見送ったとき(skipped)は何も出さない: 自動保存は「確認した」を
+'   選ばせられないため書き出さないのが正しく、利用者の手を止める理由が無い
+'   (手動の[企業ファイルへ保存]なら確認して書き出せる。16章 E-05(7))。
+'
+' 自動保存が業務を止めないこと(原則): ここで起きた失敗はすべて飲み込む
+'   (On Error Resume Next)。保存できなくても、利用者の作業そのものは本体の
+'   案件一覧・case_data に残っている。
+' ============================================================================
+Public Sub AutoSaveNow(ByVal caseId As String)
+    On Error Resume Next
+
+    If LenB(caseId) = 0 Then Exit Sub
+
+    Dim outcome As String
+    outcome = modCompanyFile3.AutoSaveCase(caseId)
+
+    If outcome = modCompanyFile3.CF3_SAVED Then
+        modUISheet.WriteNamed UH_SAVED_AT, UH_SAVED_PREFIX & Format$(Now, "hh:mm")
+    ElseIf outcome = modCompanyFile3.CF3_FAILED Then
+        modUIToast.ShowToast UH_MSG_SAVE_FAILED, "warn"
+    End If
+End Sub
+
