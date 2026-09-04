@@ -125,6 +125,12 @@ MODULE_REGISTRY = {
     #                   シートタブは触らない)。modBoot の起動シーケンスの最後で
     #                   1回だけ適用し、退避した元の値へ戻す口を1本持つ。
     "modUIViewport",
+    # W10(裁定書28・17章 T-59)で新設。12章§2のモジュール一覧に追記済み。
+    #   modBootData = 起動時の案件一覧の再構成(data_dir の企業フォルダを Dir$ で
+    #                 走査し、企業ファイルの見出しから案件一覧を組み直す)。
+    #                 modBoot は 30,000字契約を超えているため実体を置けず、
+    #                 起動シーケンスからは手順(3)の1行だけで呼ぶ。
+    "modBootData",
     # (W9.3 で clsAppEvents を撤去。ブックイベントは ThisWorkbook 文書モジュール
     #  が受ける。クラスの焼き方の不一致は 17章 Z-24 で解決済みだが、配布物は
     #  **可動部品を減らす**ためクラスを持たない。理由と経緯は 17章 Z-24 と
@@ -141,6 +147,12 @@ MODULE_REGISTRY = {
     #   modValidate2 / modCompanyFile2 = 30,000字契約による分割先。
     #   modCaseRead = 案件一覧の読取専用API(app層。R4許可も併せて追加)。
     "modValidate2", "modCompanyFile", "modCompanyFile2", "modPii",
+    # W10(裁定書28・17章 T-59)で新設。12章§2のモジュール一覧に追記済み。
+    #   modCompanyFile3 = 企業ファイルのスキーマ拡張(dossier_case/data/judge)・
+    #                     自動保存・起動時再構成の読取口。modCompanyFile は
+    #                     29,833字で満杯、modCompanyFile2 は下位I/Oだけを持つ
+    #                     約束なので3本目を切った(R4許可も併せて追加)。
+    "modCompanyFile3",
     # 裁定書8 A-1/A-2 が承認した分割先(12章§2のモジュール一覧に追記済み)。
     #   modPipeline2  = 入念モードの批判・改訂パイプ(T-28)。R4許可は与えない
     #                   (modPipeline と同じくシートに触れない)。
@@ -511,6 +523,24 @@ CONTRACT: dict[str, dict] = {
         ],
     },
     "modCompanyFile2": {"closed": False, "required": []},
+    # modCompanyFile3: 14章§6 が W10(裁定書28)で宣言した公開口。純関数は
+    #   層(a)の回帰網(modTestsPure20)が叩くので required に載せる(Private へ
+    #   戻すと検査が黙って消えるため)。CaseSheetCols / PiiFlagOf は統合W10で
+    #   足した pii_flag の写像(16章 E-05(7))。
+    "modCompanyFile3": {
+        "closed": False,
+        "required": [
+            "SchemaVersionCurrent", "SchemaVersionOf", "IsSchemaReadable",
+            "CompanyFileNameOf", "CompanyDirOf", "CompanyDir",
+            "HeaderToCaseRow", "HeaderValueOf", "PickNewerHeader",
+            "IsFileNewer", "ReadFileHeader", "AutoSaveCase",
+            "ExportExtensions", "ImportExtensions",
+            "CaseFingerprint", "FileFingerprint",
+            "CaseSheetCols", "PiiFlagOf",
+        ],
+    },
+    # modBootData: 起動時再構成の入口1本(14章§6・裁定書28 W10)。
+    "modBootData": {"closed": False, "required": ["RebuildCaseCache"]},
     # modHtmlTemplate1: 18章§4.4 の分割表で「基底モジュール」が持つと明記された5関数。
     # (SecXxxJs等のセクション関数は modHtmlTemplate2..n 側にあり流動的なので、
     #  分割後モジュールには固定契約を課さない=CONTRACTに載せない。closed=False)。
@@ -655,6 +685,10 @@ R4_EXCEL_ALLOWED_MODULES = {
     #   modCompanyFile と同じ「企業ドシエファイルのシートI/O」で広がっていない。
     #   分割の是非は12章§2のモジュール一覧に載っていないためWARNとして残る。
     "modCompanyFile2",
+    # modCompanyFile3: 上と同一責務の3本目(裁定書28 W10)。許可の幅は
+    #   modCompanyFile と同じ「企業ファイル側のシートI/O」で広がっていない
+    #   (本体ブックの値は modCaseRead / modCaseStore 経由でしか読まない)。
+    "modCompanyFile3",
     # modExportHearing: ヒアリングシート(本体ブック内のシート)を組み立てる。
     "modExportHearing",
     # modUtilText: SetCellSafe 内のセル書込に限る(12章§4 v2.4.1・16章NFR-S7(1))。

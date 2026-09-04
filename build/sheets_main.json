@@ -996,6 +996,13 @@
               "note": "貼った内容から自動で決まります。選ぶ必要はありません"
             },
             {
+              "range": "hm_saved_at",
+              "label": "保存",
+              "type": "String",
+              "input": false,
+              "note": "この案件をOneDriveへ保存した時刻です。自動で書かれます"
+            },
+            {
               "range": "hm_kb_status",
               "label": "社内ナレッジ",
               "type": "String",

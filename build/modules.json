@@ -249,6 +249,14 @@
       "wave": "T-29"
     },
     {
+      "name": "modCompanyFile3",
+      "path": "src/app/modCompanyFile3.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-59",
+      "_note": "裁定書28(W10)。企業ファイルのスキーマ拡張・自動保存・起動時再構成の読取口。modCompanyFile(29,833字)/modCompanyFile2 が30,000字契約で満杯のため新設。"
+    },
+    {
       "name": "modHtmlTheme",
       "path": "src/app/modHtmlTheme.bas",
       "role": "app",
@@ -331,6 +339,14 @@
       "role": "ui",
       "type": "std",
       "wave": "T-16"
+    },
+    {
+      "name": "modBootData",
+      "path": "src/ui/modBootData.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-59",
+      "_note": "裁定書28(W10)。起動時に企業フォルダを走査して案件一覧を組み直す。modBoot(36,172字)に実体を置けないため新設し、modBoot からは手順(3)の1行で呼ぶ。"
     },
     {
       "name": "modUISheet",
@@ -613,6 +629,13 @@
       "wave": "W10"
     },
     {
+      "name": "modTestsPure20",
+      "path": "src/test/modTestsPure20.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W10"
+    },
+    {
       "name": "modTestsExcel",
       "path": "src/test/modTestsExcel.bas",
       "role": "test",
@@ -625,6 +648,14 @@
       "role": "test",
       "type": "std",
       "wave": "T-47"
+    },
+    {
+      "name": "modTestsExcel3",
+      "path": "src/test/modTestsExcel3.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-59",
+      "_note": "裁定書28(W10)。企業ファイルの往復一致と変異注入。modTestsExcel2 が30,000字契約で満杯のため3本目を切った。"
     },
     {
       "name": "modTestsRunnerUi",

@@ -1000,11 +1000,14 @@ Public Function CompanyFilePath(ByVal company As String, ByVal caseId As String,
 Public Function ScanCaseForPii(ByVal caseId As String) As String
 ' 書き出す予定の中身をまとめて modPii へ通す（16章E-05(7)）。""=検知なし
 Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As String, _
-                                  ByVal confirmedAt As String) As String
+                                  ByVal confirmedAt As String, _
+                                  Optional ByVal selfStore As Boolean = False) As String
 ' 現ラウンドを追記書き出し（HOMEの[保存]）。戻り値=書き出した絶対パス。失敗・中止は ""。
 '   company / industry_code / dossier_tier / round_no は modCaseRead.ReadCaseCtx で読む
 '   （読めなければ書き出さない）。confirmedAt=PII検知に対し利用者が「確認した」を選んだ日時。
-'   検知があるのに confirmedAt が空なら**書き出さない**（16章E-05(7)）
+'   検知があるのに confirmedAt が空なら**書き出さない**（16章E-05(7)）。
+'   selfStore=True（自分の `data_dir` への自動保存）は E-05(7) の対象外で、検知があっても
+'   書き出す（共有・送信・配布ではないため。統合W10の裁定。印は `dossier_case.pii_flag`）
 '   **保存の失敗を成功として返さない**（裁定書9 B8・N3）: 下位の `modCompanyFile2.DossierSaveAndClose`
 '   は **`Public Function ... As Boolean`** へ改め、`SaveAs` の失敗を呼び出し側へ返す（共有フォルダの
 '   読取専用・他者ロック・パス長超過で現実に起きる）。False のときは `VerifyRoundTrip` へ進まず
@@ -1013,6 +1016,75 @@ Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As Strin
 '   開いたままのブックを読むと、ディスクではなくメモリ上の未保存内容と突合して合格してしまう）
 Public Function ImportCompanyFile(ByVal filePath As String, ByVal caseId As String) As Boolean
 ' 最新ラウンドの s1/s2 と notes を案件へ復元（HOMEの[開く]）。**その枠が空のときだけ書く**
+
+' === app: modCompanyFile3（企業ファイルの自動保存とスキーマ拡張。裁定書28 W10・T-59）===
+Public Function SchemaVersionCurrent() As String
+Public Function SchemaVersionOf(ByVal rawText As String) As String
+Public Function IsSchemaReadable(ByVal verText As String) As Boolean
+' 企業ファイルのスキーマ版（13章§2.8）。空は 1.0.0 とみなす。**major が現行以下なら読む**
+'   （列が欠けているだけの古いファイルは「欠けは空」で読める＝前方互換）。major が現行より
+'   新しいファイルは読まない（fail-closed）
+Public Function CompanyFileNameOf(ByVal company As String) As String
+Public Function CompanyDirOf(ByVal dataDir As String) As String
+Public Function CompanyDir() As String
+' ファイル名（13章§2.8 の命名テンプレート。8桁は company 由来）と保存先 `data_dir\企業`。
+'   `data_dir` の解決そのものは `modUtil.ResolveDataDir` が唯一持つ（CompanyDir は呼ぶだけ）
+Public Function HeaderToCaseRow(ByVal headerText As String) As String
+Public Function HeaderValueOf(ByVal headerText As String, ByVal keyName As String) As String
+Public Function PickNewerHeader(ByVal aText As String, ByVal bText As String) As String
+Public Function IsFileNewer(ByVal headerText As String, ByVal caseId As String) As Boolean
+Public Function ReadFileHeader(ByVal filePath As String) As String
+' 起動時再構成の写像（13章§2.1）。ReadFileHeader は企業ファイルの**見出しだけ**を
+'   「key=value」の行並びで返し（case_data 等は読まない＝遅延読込）、HeaderToCaseRow が
+'   案件一覧の1行（「列名<TAB>値」を vbLf 連結）へ写す。**欠けている列は空値の行**として出し、
+'   case_id が読めなければ ""（主キーの無い行を案件一覧へ入れない）。新旧の優先は
+'   PickNewerHeader（updated_at の文字列比較。同時刻は本体を残す）が唯一持つ
+Public Function CaseSheetCols() As String
+Public Function PiiFlagOf(ByVal piiText As String) As String
+' dossier_case の**列の並びの正**（案件一覧の全列＋`schema_version`＋`pii_flag`）と、
+'   PII走査結果 -> `pii_flag` の写像（空・空白＝`"FALSE"` / それ以外＝`"TRUE"`）。
+'   WriteCaseRow は CaseSheetCols の並びだけを見て書くので、列を足すときはこの1本を直す
+'   （13章§2.8 v2.8・16章 E-05(7)・統合W10）
+Public Function AutoSaveCase(ByVal caseId As String) As String
+' 選択中の案件を企業ファイルへ無言保存する。戻り値 = "saved" / "skipped" / "failed"。
+'   **PII検知があっても保存する**（統合W10の裁定＝自分の `data_dir` への保存は「共有・送信」
+'   ではないので 16章E-05(7) の対象外。代わりに `dossier_case.pii_flag` に印を残す）。
+'   "skipped" になるのは案件未選択・保存先不明のときだけ。失敗の記録は `E0603`（save_failed。
+'   16章 E-59）。呼び口は ui層の `modUIHome.AutoSaveNow` の1本に閉じる
+Public Sub ExportExtensions(ByVal wb As Object, ByVal caseId As String, ByVal roundNo As Long)
+Public Function ImportExtensions(ByVal wb As Object, ByVal caseId As String) As Long
+' dossier_case / dossier_data / dossier_facts / dossier_judge（13章§2.8 v2.7）の書出と、
+'   dossier_data の案件への書き戻し（**空いている枠にだけ書く**）。呼んでよいのは
+'   modCompanyFile.ExportCompanyFile / ImportCompanyFile だけ
+Public Function CaseFingerprint(ByVal caseId As String) As String
+Public Function FileFingerprint(ByVal filePath As String, ByVal caseId As String) As String
+' 往復一致の照合口（17章§4-1 層(b)）。本体側と企業ファイル側を**同じ並べ方**で1本の文字列に
+'   するので、企業ファイルの列を1つ落とすと必ず食い違う（変異注入の検出点）
+
+' === ui: modBootData（起動時の案件一覧の再構成。裁定書28 W10・T-59）===
+Public Function RebuildCaseCache() As Long
+' `data_dir\企業\*.xlsx` を `Dir$` で走査し（FSO禁止）、見出しから案件一覧を組み直す。
+'   戻り値=書いた件数。**ファイル名を先に全部集めてから**1件ずつ開く（Dir$ の列挙状態は
+'   プロセスで1つしかなく、ループ中に別の Dir$ を呼ぶと取りこぼす）。
+'   起動シーケンスからの結線は `modBoot` 手順(3)の**1行だけ**（実体は本モジュール）
+
+' === ui: modUIHome（自動保存の見え方。裁定書28 W10）===
+Public Sub AutoSaveNow(ByVal caseId As String)
+' 企業ファイルへの無言保存を呼び、成功したら区画④の `hm_saved_at` へ「保存済み hh:mm」を
+'   書く（トーストは出さない）。**失敗したときだけ** warn トーストへ逐語
+'   「OneDriveに保存できませんでした。次回の保存で再試行します」を出す。
+'   呼び口（結線点）: modUICase6.PasteIntoArea / SaveNav・modUIHome2 の段別ループと
+'   RunStepUi・modUICase4.FeedbackSave / JudgeSave・modUIHome2.HomeFreezeRound
+
+' === app: modCaseStore3（W10 追加分。裁定書28）===
+Public Function RecordRowsOf(ByVal sheetTitle As String, ByVal keyCol As String, _
+                             ByVal caseId As String) As String
+Public Function UpsertCaseRow(ByVal caseId As String, ByVal pairsText As String) As Boolean
+' 商談の記録（13章§2.5）・判断台帳（13章§2.7）から当該案件の行を読む口と、案件一覧の
+'   1行を「あれば上書き・無ければ追加」する口。**案件一覧への書込は store 系が唯一持つ**という
+'   12章§2の責務分割を保つため、企業ファイル側（modCompanyFile3）も起動時再構成
+'   （modBootData）もこの2本を通す。UpsertCaseRow は**空値で既存の列を消さない**
+
 ' `modCompanyFile2` は 30,000字契約による分割先（ブック・シートの下位I/O 14本）。
 '   **本節の公開契約面には載せない**（modCompanyFile の下位実装であり、呼んでよいのは
 '   modCompanyFile だけ。vba_lint の CONTRACT は required=[] で登録する）。

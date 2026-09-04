@@ -313,6 +313,7 @@ Public Sub PasteIntoArea(ByVal areaKey As String)
             Exit Sub
         End If
         modUINavDraw.RefreshArea caseId, areaKey
+        modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: 貼付の保管ごとに企業ファイルへ無言保存
         modUIToast.ShowToast "現場メモへ書き足しました。見出しの下をご確認ください。", "info"
         Exit Sub
     End If
@@ -328,6 +329,7 @@ Public Sub PasteIntoArea(ByVal areaKey As String)
     modUINavDraw.RefreshArea caseId, areaKey
 
     ' (8) 成功トースト(11章§2.2 #7 の逐語)。
+    modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: 貼付の保管ごとに企業ファイルへ無言保存
     Dim tail As String
     If footerCut Then tail = U6_MSG_FOOTER
     modUIToast.ShowToast labelText & "に " & Format$(Len(body), "#,##0") & _
@@ -503,6 +505,7 @@ Public Sub SaveNav()
         modUIToast.ShowToast "案件 " & caseId & " を保存しました。" & _
                              "次は③の[まとめて作る]を押してください。", "info"
     End If
+    modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: [貼ったものを保存する]の後も企業ファイルへ
     modLog.LogUsage "case_input_saved", caseId, "nav"
 
 Done:

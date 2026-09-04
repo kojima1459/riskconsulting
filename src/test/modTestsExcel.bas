@@ -75,7 +75,12 @@ Private Const TE_BAND_SEQ As Long = 100001
 '  あるか」を読むには VBE のプロジェクト参照を使うしかなく、その語は配布物の
 '  禁止文字列(裁定書27 W9-B 6)である。焼き込まれたスタブの形の検査は
 '  tools/bin_roundtrip.py [4b] へ移した)
-Private Const TE_EXPECTED As Long = 51
+'  (裁定書28 W10 / T-59: 企業ファイル(1社1.xlsx)の往復一致と、その照合が効いて
+'   いることの変異注入(dossier_case の列を1つ落とすと落ちる)の2本を
+'   **modTestsExcel3**(新設)へ追加し 51 -> 53。内訳 = 本モジュール37本 +
+'   modTestsExcel2 14本 + modTestsExcel3 2本。層(a)に置けないのは、一致の中身が
+'   .xlsx を実際に開いて書いて読み直した結果でしか作れないため)
+Private Const TE_EXPECTED As Long = 53
 
 Private mRun As Long    ' ECheck が数える実行本数
 
@@ -96,6 +101,9 @@ Public Sub RunAllExcelTests()
     ' 裁定書11 Q9/Q1: 30,000字契約による分割先(modTestsExcel2)の本数を足す
     ' (wintest からの入口は本モジュールの1本のままにする=14章§6)。
     mRun = mRun + modTestsExcel2.RunExcelTests2()
+    ' 裁定書28 W10: modTestsExcel2 が30,000字契約で満杯になったため3本目を切った
+    ' (wintest からの入口は本モジュールの1本のままにする=14章§6)。
+    mRun = mRun + modTestsExcel3.RunExcelTests3()
     ' 自己照合はランナーへ直接打つ(mRun には数えない)。
     modTestRunner.Check "T47-00_層(b)本数の自己照合(" & CStr(TE_EXPECTED) & "本)", _
         mRun = TE_EXPECTED, "実際=" & CStr(mRun) & _

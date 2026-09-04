@@ -559,16 +559,24 @@ def check_item7(dist_dir: Path) -> tuple[bool, list[str]]:
         problems.append("excel.exe をフルパスで起動しています: " + ", ".join(full))
 
     # (5) 裁定の4手順が揃っていること(SRC/DST・mkdir・xcopy /D /Y・data_dir.txt)
+    # rem 行は除いて照合する(コメントに語が残っているだけでは合格させない。
+    # 司令塔の変異注入で data_dir.txt の書き出し行を消しても rem 行の語で
+    # 通ってしまったため、コマンド行の実形で照合する)。
+    cmd_lines = [ln for ln in text.splitlines()
+                 if ln.strip() and not ln.strip().lower().startswith("rem")]
+    cmd_text = "\n".join(cmd_lines)
     for needed, why in (
         ("set \"SRC=%~dp0\"", "SRC=配布フォルダ"),
         ("D:\\リスク提案ナビ", "DST=D:"),
         ("%TEMP%\\リスク提案ナビ", "D:が無いときの退避先"),
-        ("mkdir", "DSTの作成"),
-        ("xcopy /D /Y", "新しければコピー"),
-        ("data_dir.txt", "data_dir ポインタの書き出し"),
+        ("mkdir \"%DST%\"", "DSTの作成"),
+        ("xcopy /D /Y \"%SRC%リスク提案ナビ.xlsm\"", "本体を新しければコピー"),
+        ("xcopy /D /Y \"%SRC%ナレッジブック.xlsx\"", "ナレッジブックを新しければコピー"),
+        ("> \"%DST%\\data_dir.txt\" echo %SRC%データ", "data_dir ポインタの書き出し(コマンド行)"),
+        ("start \"\" excel.exe /x \"%DST%\\リスク提案ナビ.xlsm\"", "D: の本体を Excel で開く"),
     ):
-        if needed not in text:
-            problems.append(f"ランチャーに {why} の行がありません: {needed!r}")
+        if needed not in cmd_text:
+            problems.append(f"ランチャーに {why} のコマンド行がありません: {needed!r}")
 
     if problems:
         print(f"  FAIL: {len(problems)} 件")

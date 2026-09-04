@@ -115,6 +115,9 @@ Public Sub HomeRunAll()
             okAll = False
             Exit For
         End If
+        ' 裁定書28 W10: 段が1つ終わるたびに企業ファイルへ無言保存する
+        '   (本体が翌朝消えても、終わった段はOneDrive側に残っている状態を保つ)。
+        modUIHome.AutoSaveNow caseId
         DoEvents
     Next stepNo
 
@@ -215,6 +218,7 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     If modPipeline.RunStep(caseId, stepNo, QualityOverride()) Then
         modUICase2.DrawStep caseId, stepNo
         modUISheet.ShowSheet modUICase2.SheetNameOf(stepNo)
+        modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: S1〜S4 の各段の完了ごとに
         ShowDeepWarning
     Else
         modUIHome.ShowWarning "Step" & CStr(stepNo) & " が完了しませんでした。err_log をご確認ください。"
@@ -400,6 +404,7 @@ Public Sub HomeFreezeRound()
         GoTo Done
     End If
 
+    modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: 第2ラウンド確定のあとに
     modUIHome.WriteRoundNo newRound
     modUIHome.RefreshHome
     modUIHome.ShowWarning "第" & CStr(newRound) & "ラウンドを開始しました（前ラウンドのS2を退避しました）。", "info"
@@ -559,8 +564,14 @@ Public Sub HomeCompanySave()
         confirmedAt = modUtil.NowStamp()
     End If
 
+    ' 裁定書28 W10: 手動も自動も保存先は data_dir\企業(1社1ファイル)。
+    '   企業フォルダが作れないときだけ従来の出力先へ倒す(保存を落とさない)。
+    Dim outText As String
+    outText = modCompanyFile3.CompanyDir()
+    If LenB(outText) = 0 Then outText = OutDir()
+
     Dim pathText As String
-    pathText = modCompanyFile.ExportCompanyFile(caseId, OutDir(), confirmedAt)
+    pathText = modCompanyFile.ExportCompanyFile(caseId, outText, confirmedAt)
     If LenB(pathText) = 0 Then
         modUIHome.ShowWarning "企業ファイルへ書き出せませんでした。err_log をご確認ください。"
     Else

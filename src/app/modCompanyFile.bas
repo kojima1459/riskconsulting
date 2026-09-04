@@ -61,7 +61,8 @@ Private Const CF_EXT As String = ".xlsx"
 Private Const CF_CHUNK_CHARS As Long = 32000
 
 Private Const CF_SEP As String = ";"
-Private Const CF_SCHEMA_FALLBACK As String = "2.0.0"
+' (旧 CF_SCHEMA_FALLBACK は撤去。schema_version の値源は
+'  modCompanyFile3.SchemaVersionCurrent の1本にした。裁定書28 W10)
 
 ' ============================================================================
 ' CompanyFilePath - 企業ドシエファイルの絶対パス(13章§2.8のファイル名規則)。
@@ -126,6 +127,8 @@ End Function
 '                 (読めなければ fail-closed。空の企業名でファイルを作らない)。
 '   dirPath     : 保存先ディレクトリ
 '   confirmedAt : PII検知に対し利用者が「確認した」を選んだ日時(未選択は "")
+'   selfStore   : True=自分の data_dir への自動保存(共有・送信ではないので
+'                 16章 E-05(7) の確認は不要。pii_flag に印を残す。統合W10)
 '   戻り値      : 書き出したファイルの絶対パス。失敗・中止は ""
 '
 '   同じ (case_id, round_no) の行は先に消して積み直す(再保存が二重行にならな
@@ -133,7 +136,8 @@ End Function
 '   閉じて開き直し s1-s3 JSON と notes を読み直してハッシュ照合する(2段検証)。
 ' ============================================================================
 Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As String, _
-                                  ByVal confirmedAt As String) As String
+                                  ByVal confirmedAt As String, _
+                                  Optional ByVal selfStore As Boolean = False) As String
     On Error GoTo Failed
 
     If Not modCaseStore.IsValidCaseId(caseId) Then
@@ -158,11 +162,16 @@ Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As Strin
     End If
 
     ' 16章 E-05(7): 走査 -> 検知があるのに未確認なら書き出さない。
+    '   ただし selfStore=True(自分の data_dir への自動保存)は E-05(7) の対象外
+    '   (共有・送信・配布ではない。統合W10の裁定)。走査結果は記録し、
+    '   dossier_case の pii_flag に印を残したうえで書き出す。
     Dim piiText As String
     piiText = ScanCaseForPii(caseId)
     If LenB(piiText) > 0 Then
         modLog.LogError "E0103", CF_SRC & ".ExportCompanyFile", piiText
-        If LenB(Trim$(confirmedAt)) = 0 Then
+        If selfStore Then
+            modLog.LogUsage "dossier_selfstore_pii", caseId, "pii_flag=TRUE"
+        ElseIf LenB(Trim$(confirmedAt)) = 0 Then
             modLog.LogUsage "dossier_export_blocked", caseId, "pii_unconfirmed"
             Exit Function
         End If
@@ -179,6 +188,9 @@ Public Function ExportCompanyFile(ByVal caseId As String, ByVal dirPath As Strin
     WriteProfile wb, caseId, roundNo
     WriteRounds wb, caseId, ctx, roundNo
     WriteNotes wb, caseId, roundNo
+    ' 裁定書28(W10): 案件一覧の全列・case_data の全 data_key・商談の記録・
+    '   判断台帳(dossier_case/data/facts/judge)は modCompanyFile3 が書く。
+    modCompanyFile3.ExportExtensions wb, caseId, roundNo
 
     Dim expectHash As String
     expectHash = PayloadHash(caseId)
@@ -248,6 +260,8 @@ Public Function ImportCompanyFile(ByVal filePath As String, ByVal caseId As Stri
         If RestoreIfEmpty(caseId, "s2_prev_json", ReadRoundJson(wb, roundNo, "s2_json")) Then restored = restored + 1
         restored = restored + RestoreNotes(wb, caseId, roundNo)
     End If
+    ' 裁定書28(W10): case_data の全 data_key の遅延読込(空の枠にだけ書く)。
+    restored = restored + modCompanyFile3.ImportExtensions(wb, caseId)
 
     modCompanyFile2.DossierClose wb
     Set wb = Nothing
@@ -287,7 +301,8 @@ Private Sub WriteMeta(ByVal wb As Object, ByRef ctx As TCaseCtx, _
             modUtilText.Fnv1a64Hex(modUtilText.NormalizeForHash(ctx.company))
     modCompanyFile2.SheetPutText ws, hdr, 2, "company", ctx.company
     modCompanyFile2.SheetPutText ws, hdr, 2, "industry_code", ctx.industry_code
-    modCompanyFile2.SheetPutText ws, hdr, 2, "schema_version", modConfig.GetStr("app_version", CF_SCHEMA_FALLBACK)
+    ' 裁定書28(W10): 版は app_version ではなく**企業ファイルのスキーマ版**。
+    modCompanyFile2.SheetPutText ws, hdr, 2, "schema_version", modCompanyFile3.SchemaVersionCurrent()
     modCompanyFile2.SheetPutText ws, hdr, 2, "created_at", createdText
     modCompanyFile2.SheetPutText ws, hdr, 2, "updated_at", stampText
     modCompanyFile2.SheetPutText ws, hdr, 2, "pii_scan_result", PiiResultText(piiText)

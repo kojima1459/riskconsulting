@@ -56,6 +56,9 @@ WC:
 WD:
     On Error GoTo FD
     T_W10D_ParseSettingsText
+WE:
+    On Error GoTo FE
+    modTestsPure20.RunAll
 WDone:
     Exit Sub
 FA:
@@ -69,6 +72,9 @@ FC:
     Resume WD
 FD:
     GroupFail "W10D ParseSettingsText(裁定書28 設定.txt)"
+    Resume WE
+FE:
+    GroupFail "modTestsPure20(W10・裁定書28 企業ファイル)"
     Resume WDone
 End Sub
 

@@ -33,6 +33,11 @@ Private Const CS3_SHEET_FB As String = "フィードバック"
 Private Const CS3_SEP As String = ";"
 Private Const CS3_SRC As String = "modCaseStore3"
 
+' 裁定書28: 商談の記録・判断台帳の1行を1本の文字列で運ぶときの区切り。値そのものが
+'   「;」を含む列(used_proposals 等)があるため、本文に現れない制御文字を使う。
+Private Const CS3_FLD As String = vbVerticalTab
+Private Const CS3_KV As String = vbFormFeed
+
 ' 13章§2.2 の data_key(**全29値**。19章§3と完全一致させる)。v2.6 で
 '   `input_finance`(決算・財務。裁定書25 S3)を input_coverage_note の次へ足した。
 '   並びは13章§2.2 の列挙順そのままで、modCaseStore.SaveData の許可リストになる。
@@ -181,6 +186,138 @@ Private Function UsedProposalsOf(ByVal caseId As String) As String
             If LenB(v) > 0 Then UsedProposalsOf = v
         End If
     Next r
+End Function
+
+' ============================================================================
+' RecordRowsOf - 本体シート(商談の記録 / 判断台帳)から、その案件の行を読む
+'   (裁定書28 W10。企業ファイルへ写すための読取口)。
+' ----------------------------------------------------------------------------
+'   sheetTitle : "フィードバック"(13章§2.5) / "判断台帳"(13章§2.7)
+'   keyCol     : 案件を指す列名("case_id" / "case_ref")
+'   戻り値     : 1行=「列名 CS3_KV 値」を CS3_FLD で連ね、行間は vbLf
+'                該当行が無ければ ""
+'
+'   区切りに「;」を使わない理由: `used_proposals`(「1;3」)や
+'   `adopted_story_nos` のように**値そのものが「;」を含む列がある**ため、
+'   「;」で割ると1つの値が2つの列に化ける。制御文字(ChrW(1)/ChrW(2))は
+'   セルの本文に現れないので、ここだけはそれを区切りに使う。
+'
+'   R4(12章§4): 本体シートを読むのは store 系の責務。企業ファイル側
+'   (modCompanyFile3)は本関数の戻り値だけを見て、本体ブックには触らない。
+' ============================================================================
+Public Function RecordRowsOf(ByVal sheetTitle As String, ByVal keyCol As String, _
+                             ByVal caseId As String) As String
+    On Error GoTo Failed
+
+    Dim ws As Object
+    Set ws = modCaseStore2.SheetOf(sheetTitle)
+    If ws Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = modCaseStore2.LastRowOf(ws)
+    If lastRow < 2 Then Exit Function
+
+    Dim blk As Variant
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
+
+    Dim cKey As Long
+    cKey = modUtil.FindHeaderCol(blk, keyCol)
+    If cKey <= 0 Then Exit Function
+
+    Dim acc As String
+    Dim r As Long
+    For r = 2 To lastRow
+        If StrComp(Trim$(CStr(blk(r, cKey))), Trim$(caseId), vbTextCompare) = 0 Then
+            If LenB(acc) > 0 Then acc = acc & vbLf
+            acc = acc & RowPairsOf(blk, r)
+        End If
+    Next r
+    RecordRowsOf = acc
+    Exit Function
+
+Failed:
+    modLog.LogError "E0603", CS3_SRC & ".RecordRowsOf", "read_failed:" & sheetTitle, Err.Number
+    RecordRowsOf = vbNullString
+End Function
+
+' 1行ぶんを「列名 CS3_KV 値」の並びにする(見出しが空の列は飛ばす)。
+Private Function RowPairsOf(ByVal blk As Variant, ByVal r As Long) As String
+    On Error GoTo Done0
+    Dim acc As String
+    Dim c As Long
+    For c = LBound(blk, 2) To UBound(blk, 2)
+        Dim nameText As String
+        nameText = Trim$(CStr(blk(1, c)))
+        If LenB(nameText) > 0 Then
+            If LenB(acc) > 0 Then acc = acc & CS3_FLD
+            acc = acc & nameText & CS3_KV & Trim$(CStr(blk(r, c)))
+        End If
+    Next c
+Done0:
+    RowPairsOf = acc
+End Function
+
+' ============================================================================
+' UpsertCaseRow - 案件一覧の1行を「あれば上書き・無ければ追加」する
+'   (裁定書28 W10 の起動時再構成。本体の案件一覧は**作業用キャッシュ**であり、
+'   正は企業ファイル側にある。13章§2.1)。
+' ----------------------------------------------------------------------------
+'   pairsText : 「列名<TAB>値」を vbLf でつないだもの(modCompanyFile3.
+'               HeaderToCaseRow の戻り値をそのまま渡す)
+'   戻り値    : True=書けた
+'
+'   **case_id は必ず pairsText 側の値**を使い、行が無ければ新しい行の
+'   case_id 列へ書く(NewCase は採番する関数なので、既存IDの復元には使えない)。
+'   書込は modCaseStore2.PutText(=SetCellSafe)を通す(16章 NFR-S7(1))。
+' ============================================================================
+Public Function UpsertCaseRow(ByVal caseId As String, ByVal pairsText As String) As Boolean
+    On Error GoTo Failed
+
+    If Not modCaseStore.IsValidCaseId(caseId) Then Exit Function
+
+    Dim ws As Object
+    Set ws = modCaseStore2.SheetOf(CS3_SHEET_CASES)
+    If ws Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = modCaseStore2.LastRowOf(ws)
+    Dim blk As Variant
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
+
+    Dim cId As Long
+    cId = modUtil.FindHeaderCol(blk, "case_id")
+    If cId <= 0 Then Exit Function
+
+    Dim rowNo As Long
+    rowNo = modCaseStore2.RowOfCase(blk, lastRow, cId, caseId)
+    If rowNo < 2 Then rowNo = lastRow + 1
+
+    modCaseStore2.PutText ws, blk, rowNo, "case_id", caseId
+
+    Dim lines() As String
+    lines = Split(pairsText, vbLf)
+    Dim i As Long
+    For i = LBound(lines) To UBound(lines)
+        Dim p As Long
+        p = InStr(1, lines(i), vbTab, vbBinaryCompare)
+        If p > 1 Then
+            Dim colName As String
+            colName = Trim$(Left$(lines(i), p - 1))
+            ' case_id は上で書いた。空値で既存の列を消さない(欠け列は触らない)。
+            If StrComp(colName, "case_id", vbBinaryCompare) <> 0 Then
+                If LenB(Mid$(lines(i), p + 1)) > 0 Then
+                    modCaseStore2.PutText ws, blk, rowNo, colName, Mid$(lines(i), p + 1)
+                End If
+            End If
+        End If
+    Next i
+
+    UpsertCaseRow = True
+    Exit Function
+
+Failed:
+    modLog.LogError "E0603", CS3_SRC & ".UpsertCaseRow", "upsert_failed", Err.Number
+    UpsertCaseRow = False
 End Function
 
 ' ============================================================================
