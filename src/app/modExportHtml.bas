@@ -434,8 +434,13 @@ End Function
 Private Function FirstCandidate(ByVal rawDir As String) As String
     On Error GoTo Failed
     Dim listText As String
-    listText = modUtil.DataDirCandidates(rawDir, Environ$("OneDriveCommercial"), _
-                                         Environ$("OneDrive"), Environ$("USERPROFILE"))
+    ' 裁定書28: 第1候補は data_dir.txt(ランチャーが書いたポインタ)を含む
+    ' 並びの先頭。ResolveOutDir が「第1候補以外へ落ちた」を判定する相手なので、
+    ' 並べ方は ResolveDataDir と同じ引数で作る(片方だけ古いと誤検知になる)。
+    listText = modUtil.DataDirCandidates( _
+        modUtil.ReadDataDirPointer(modUtil.BookDirHint()), rawDir, _
+        Environ$("OneDriveCommercial"), _
+        Environ$("OneDrive"), Environ$("USERPROFILE"))
     If LenB(listText) = 0 Then Exit Function
     FirstCandidate = Split(listText, vbLf)(0)
     Exit Function

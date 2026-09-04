@@ -37,6 +37,10 @@ Private Const ID_LIST_SEP As String = ";"
 
 ' ファイル属性のディレクトリビット(vbDirectory)。定数名を書かず数値で持つ
 ' (LibreOffice側の構文チェックで未定義名にしないための既存の流儀と同じ)。
+' 本体と同じフォルダのヒント(modBoot が起動手順(2)で1回だけ入れる)。
+' core層は ThisWorkbook を参照できない(12章§4)ため、値は外から預かる。
+Private mBookDir As String
+
 Private Const ATTR_DIRECTORY As Long = 16
 
 ' 保存先(data_dir)の解決で使う環境変数名と最後の逃げ場(裁定書27 W9-C2)。
@@ -44,6 +48,10 @@ Private Const DD_VAR_COMMERCIAL As String = "%OneDriveCommercial%"
 Private Const DD_VAR_ONEDRIVE As String = "%OneDrive%"
 Private Const DD_VAR_PROFILE As String = "%USERPROFILE%"
 Private Const DD_LAST_RESORT_TAIL As String = "\Documents\RPN出力"
+
+' 裁定書28: ランチャー(.bat)が本体と同じフォルダへ書く「data_dir の値そのもの」。
+'   環境変数に依存しない最優先の値源で、中身は1行のフルパス。
+Public Const DATA_DIR_POINTER_FILE As String = "data_dir.txt"
 
 ' ============================================================================
 ' SafeLeft - 先頭n字で切り詰める。ただし末尾に単独の高位サロゲートを残さない。
@@ -541,6 +549,32 @@ Failed:
     WriteUtf8File = False
 End Function
 
+' UTF-8 のファイルを読む(裁定書28。設定.txt。復号は modUtilText.Utf8Text)。
+'   読めなければ空文字(読めない設定ファイルで起動を止めない)。
+Public Function ReadUtf8File(ByVal pathText As String) As String
+    Dim fileNo As Long
+    On Error GoTo Failed
+    If LenB(pathText) = 0 Then Exit Function
+    If Not FileExistsAt(pathText) Then Exit Function
+
+    Dim n As Long
+    Dim buf() As Byte
+    fileNo = FreeFile
+    Open pathText For Binary Access Read As #fileNo
+    n = LOF(fileNo)
+    If n > 0 Then
+        ReDim buf(0 To n - 1)
+        Get #fileNo, 1, buf
+    End If
+    Close #fileNo
+    If n <= 0 Then Exit Function
+    ReadUtf8File = modUtilText.Utf8Text(buf, n)
+    Exit Function
+Failed:
+    CloseQuiet fileNo
+    ReadUtf8File = vbNullString
+End Function
+
 ' 開いたままのファイル番号を黙って閉じる(ハンドラ稼働中に On Error Resume Next
 '   を書けないため、後始末は別Subへ切り出す)。
 Private Sub CloseQuiet(ByVal fileNo As Long)
@@ -558,7 +592,9 @@ End Sub
 '   へ置き、そこが無いときだけ Documents へ落とす。落ちたことは黙らせず、
 '   ナビのお知らせで警告する(11章§8.6 禁忌: 黙って別の場所へ書かない)。
 '
-' 解決の順(裁定書27 W9-C2):
+' 解決の順(裁定書28 で(0)を追加):
+'   (0) **本体と同じフォルダの data_dir.txt の1行目**(ランチャーが書く。環境
+'       変数に依存しない実測値なので最優先。裁定書28「裁定の確定」3)
 '   (1) config `data_dir` を展開したもの(既定 %OneDriveCommercial%\...)
 '   (2) (1)が %OneDriveCommercial% を含むときだけ、それを %OneDrive% に
 '       読み替えたもの(個人用OneDriveしか無い端末の救済)
@@ -571,12 +607,19 @@ End Sub
 ' ============================================================================
 
 ' 候補の並び(vbLf 区切り。純関数)。env は Environ$ の値をそのまま渡す。
-Public Function DataDirCandidates(ByVal configRaw As String, _
+Public Function DataDirCandidates(ByVal pointerRaw As String, _
+                                  ByVal configRaw As String, _
                                   ByVal envCommercial As String, _
                                   ByVal envOneDrive As String, _
                                   ByVal envUserProfile As String) As String
     Dim outText As String
     Dim raw As String
+
+    ' (0) 裁定書28: 本体と同じフォルダの data_dir.txt の値。ランチャーが
+    '     書いた実測値なので、config よりも環境変数よりも先に置く。空なら
+    '     何も足さない(=従来の順のまま)。
+    outText = AppendCandidate(outText, TrimTrailingSep(pointerRaw))
+
     raw = TrimTrailingSep(configRaw)
 
     If LenB(raw) > 0 Then
@@ -647,9 +690,15 @@ Public Function IsUnderOneDrive(ByVal dirText As String, ByVal envCommercial As 
 End Function
 
 ' 実在確認つきの解決。使える(作れた)最初の候補を返す。どれも駄目なら ""。
-Public Function ResolveDataDir(ByVal configRaw As String) As String
+Public Function ResolveDataDir(ByVal configRaw As String, _
+                               Optional ByVal bookDir As String = vbNullString) As String
     Dim listText As String
-    listText = DataDirCandidates(configRaw, Environ$("OneDriveCommercial"), _
+    Dim baseDir As String
+    baseDir = bookDir
+    If LenB(baseDir) = 0 Then baseDir = BookDirHint()
+
+    listText = DataDirCandidates(ReadDataDirPointer(baseDir), configRaw, _
+                                 Environ$("OneDriveCommercial"), _
                                  Environ$("OneDrive"), Environ$("USERPROFILE"))
     If LenB(listText) = 0 Then Exit Function
 
@@ -670,4 +719,119 @@ Public Function DataDirNotOneDrive(ByVal resolvedDir As String) As Boolean
     If LenB(resolvedDir) = 0 Then Exit Function
     DataDirNotOneDrive = Not IsUnderOneDrive(resolvedDir, Environ$("OneDriveCommercial"), _
                                              Environ$("OneDrive"))
+End Function
+
+' ============================================================================
+' data_dir ポインタ(裁定書28「裁定の確定」3)
+' ----------------------------------------------------------------------------
+' ランチャー(.bat)は本体を D: へ写したあと、`%DST%\data_dir.txt` へ
+' `%SRC%データ`(=OneDrive の配布フォルダの下の「データ」)を1行だけ書く。
+' 本体は環境変数を一切見ずにこの1行を読めばよい(会社アカウントの OneDrive の
+' 環境変数名が端末ごとに違っても壊れない)。
+'
+' 読み方の規約: **1行目だけ**を読み、前後の空白と改行を落とし、フォルダとして
+'   実在するときだけ値を返す(実在しない値を最優先の候補に置くと、その先の
+'   候補まで到達しない)。読めなければ空文字=「ポインタ無し」。
+' 符号化: ランチャーの `echo` が書くので端末の既定コードページ(CP932)である。
+'   `Open For Input` の既定と一致するため、ここでは UTF-8 の復号を通さない。
+' ============================================================================
+
+Public Sub SetBookDir(ByVal dirText As String)
+    mBookDir = TrimTrailingSep(dirText)
+End Sub
+
+Public Function BookDirHint() As String
+    BookDirHint = mBookDir
+End Function
+
+' bookDir\data_dir.txt の1行目(実在するフォルダのときだけ返す)。
+Public Function ReadDataDirPointer(ByVal bookDir As String) As String
+    Dim fileNo As Long
+    On Error GoTo Failed
+    If LenB(bookDir) = 0 Then Exit Function
+
+    Dim pathText As String
+    pathText = TrimTrailingSep(bookDir) & PathSep() & DATA_DIR_POINTER_FILE
+    If Not FileExistsAt(pathText) Then Exit Function
+
+    Dim lineText As String
+    fileNo = FreeFile
+    Open pathText For Input As #fileNo
+    If Not EOF(fileNo) Then Line Input #fileNo, lineText
+    Close #fileNo
+
+    lineText = TrimTrailingSep(Trim$(Replace(Replace(lineText, vbCr, " "), vbLf, " ")))
+    If LenB(lineText) = 0 Then Exit Function
+    If Not FolderExists(lineText) Then Exit Function
+    ReadDataDirPointer = lineText
+    Exit Function
+Failed:
+    CloseQuiet fileNo
+    ReadDataDirPointer = vbNullString
+End Function
+
+' 親フォルダ(純関数)。区切り sep で最後の1段を落とす。段が1つしか無いとき
+'   (= "C:" や "d" だけ)は空文字を返す(親を騙って同じ場所を返さない)。
+Public Function ParentDirOf(ByVal pathText As String, ByVal sep As String) As String
+    Dim t As String
+    t = TrimTrailingSep(pathText)
+    If LenB(t) = 0 Then Exit Function
+    If LenB(sep) = 0 Then Exit Function
+
+    Dim pos As Long
+    pos = InStrRev(t, sep)
+    If pos <= 1 Then Exit Function
+    ParentDirOf = TrimTrailingSep(Left$(t, pos - 1))
+End Function
+
+' ============================================================================
+' FileCandidatesIn - ナレッジブックの探索順(純関数。裁定書28)
+' ----------------------------------------------------------------------------
+'   (1) 本体と同じフォルダ(=ランチャーが写した D: 側)
+'   (2) data_dir の親(=OneDrive の配布フォルダ。本体だけ D: に写っていて
+'       ナレッジブックが写せていない端末の救済)
+'   URL形式("://" を含む)の基点は区切りを "/" にする(OneDrive同期フォルダ)。
+'   空の基点・同じ場所の重複は並べない。返り値は vbLf 区切り。
+' ============================================================================
+Public Function FileCandidatesIn(ByVal bookDir As String, ByVal dataDir As String, _
+                             ByVal sepText As String, ByVal fileName As String) As String
+    Dim outText As String
+    If LenB(fileName) = 0 Then Exit Function
+
+    outText = FcAppend(outText, bookDir, sepText, fileName)
+    outText = FcAppend(outText, ParentDirOf(dataDir, FcSepOf(dataDir, sepText)), _
+                       sepText, fileName)
+    FileCandidatesIn = outText
+End Function
+
+' 基点1つぶんの連結(空・重複は足さない)。
+Private Function FcAppend(ByVal listText As String, ByVal baseDir As String, _
+                          ByVal sepText As String, ByVal fileName As String) As String
+    FcAppend = listText
+    Dim b As String
+    b = TrimTrailingSep(baseDir)
+    If LenB(b) = 0 Then Exit Function
+
+    Dim candidate As String
+    candidate = b & FcSepOf(b, sepText) & fileName
+
+    Dim probe As String
+    probe = vbLf & listText & vbLf
+    If InStr(1, probe, vbLf & candidate & vbLf, vbTextCompare) > 0 Then Exit Function
+    If LenB(listText) = 0 Then
+        FcAppend = candidate
+    Else
+        FcAppend = listText & vbLf & candidate
+    End If
+End Function
+
+' URL形式の基点は "/"、それ以外は渡された区切り(既定は "\")。
+Private Function FcSepOf(ByVal baseDir As String, ByVal sepText As String) As String
+    If InStr(1, baseDir, "://", vbBinaryCompare) > 0 Then
+        FcSepOf = "/"
+    ElseIf LenB(sepText) = 0 Then
+        FcSepOf = "\"
+    Else
+        FcSepOf = sepText
+    End If
 End Function

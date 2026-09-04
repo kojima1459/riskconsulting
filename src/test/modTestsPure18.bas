@@ -77,6 +77,9 @@ WE:
 WF:
     On Error GoTo FF
     T_W92_SplitPathParts
+WG:
+    On Error GoTo FG
+    modTestsPure19.RunAll
 WDone:
     Exit Sub
 FA:
@@ -96,6 +99,9 @@ FE:
     Resume WF
 FF:
     GroupFail "W92 SplitPathParts(W9.2)"
+    Resume WG
+FG:
+    GroupFail "modTestsPure19(W10・裁定書28)"
     Resume WDone
 End Sub
 
@@ -236,16 +242,16 @@ End Sub
 ' ============================================================================
 Private Sub T_W9C2_DataDirCandidates()
     ChkS "Test_W9C2_01_会社OneDriveがあれば3候補_裁定書27W9C2", _
-        modUtil.DataDirCandidates(P18_DD_RAW, "C:\OD-Biz", "C:\OD", "C:\Users\u"), _
+        modUtil.DataDirCandidates(vbNullString, P18_DD_RAW, "C:\OD-Biz", "C:\OD", "C:\Users\u"), _
         "C:\OD-Biz" & P18_DD_TAIL & vbLf & "C:\OD" & P18_DD_TAIL & vbLf & _
         "C:\Users\u" & P18_DD_LAST
 
     ChkS "Test_W9C2_02_会社OneDriveが無ければ個人OneDriveへ_裁定書27W9C2", _
-        modUtil.DataDirCandidates(P18_DD_RAW, vbNullString, "C:\OD", "C:\Users\u"), _
+        modUtil.DataDirCandidates(vbNullString, P18_DD_RAW, vbNullString, "C:\OD", "C:\Users\u"), _
         "C:\OD" & P18_DD_TAIL & vbLf & "C:\Users\u" & P18_DD_LAST
 
     ChkS "Test_W9C2_03_OneDriveが無ければDocumentsだけ_裁定書27W9C2", _
-        modUtil.DataDirCandidates(P18_DD_RAW, vbNullString, vbNullString, "C:\Users\u"), _
+        modUtil.DataDirCandidates(vbNullString, P18_DD_RAW, vbNullString, vbNullString, "C:\Users\u"), _
         "C:\Users\u" & P18_DD_LAST
 End Sub
 

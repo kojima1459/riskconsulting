@@ -653,6 +653,99 @@ Private Function CodeUnitAt(ByVal s As String, ByVal idx As Long) As Long
     CodeUnitAt = u
 End Function
 
+' ============================================================================
+' Utf8Text - UTF-8 のバイト列を文字列へ戻す(裁定書28。設定.txt の読取用)
+' ----------------------------------------------------------------------------
+' なぜ要るのか: `Open For Input` は端末の既定コードページ(CP932)で読むため、
+'   UTF-8 で書かれた 設定.txt の日本語(kb_path のフォルダ名など)が化ける。
+'   符号化(Utf8Bytes)を持っている以上、復号もここに1本だけ置く。
+' 規約: 先頭のBOMは落とす。不正なバイト・途中で切れた列は U+FFFD 1文字へ
+'   潰す(fail-closed。読めない箇所で全体を捨てない)。
+' ============================================================================
+Public Function Utf8Text(ByRef b() As Byte, ByVal byteCount As Long) As String
+    If byteCount <= 0 Then Exit Function
+
+    Dim i As Long
+    Dim n As Long
+    Dim cp As Long
+    Dim need As Long
+    Dim k As Long
+    Dim ok As Boolean
+    Dim outText As String
+
+    i = LBound(b)
+    n = i + byteCount - 1
+    ' BOM(EF BB BF)は本文ではない。
+    If byteCount >= 3 Then
+        If b(i) = UTF8_BOM_B1 And b(i + 1) = UTF8_BOM_B2 And b(i + 2) = UTF8_BOM_B3 Then
+            i = i + 3
+        End If
+    End If
+
+    Do While i <= n
+        cp = b(i)
+        need = 0
+        If cp < 128 Then
+            need = 0
+        ElseIf cp >= 194 And cp < 224 Then
+            need = 1
+            cp = cp - 192
+        ElseIf cp >= 224 And cp < 240 Then
+            need = 2
+            cp = cp - 224
+        ElseIf cp >= 240 And cp < 245 Then
+            need = 3
+            cp = cp - 240
+        Else
+            cp = UTF8_REPLACEMENT
+            need = -1
+        End If
+
+        ok = True
+        If need > 0 Then
+            If i + need > n Then
+                ok = False
+            Else
+                For k = 1 To need
+                    If b(i + k) < 128 Or b(i + k) > 191 Then ok = False
+                Next k
+            End If
+            If ok Then
+                For k = 1 To need
+                    cp = (cp * 64) + (b(i + k) - 128)
+                Next k
+                i = i + need
+            Else
+                cp = UTF8_REPLACEMENT
+            End If
+        End If
+        If need < 0 Then cp = UTF8_REPLACEMENT
+
+        outText = outText & CpToText(cp)
+        i = i + 1
+    Loop
+    Utf8Text = outText
+End Function
+
+' 符号位置1つを VBA の文字列(UTF-16)へ。BMP外はサロゲート対にする。
+Private Function CpToText(ByVal cp As Long) As String
+    If cp < 0 Or cp > 1114111 Then
+        CpToText = ChrW$(UTF8_REPLACEMENT)
+    ElseIf cp < 65536 Then
+        If cp >= 32768 Then
+            CpToText = ChrW$(cp - 65536)
+        Else
+            CpToText = ChrW$(cp)
+        End If
+    Else
+        Dim hiUnit As Long
+        Dim lowUnit As Long
+        hiUnit = 55296 + CLng(Fix((cp - 65536) / 1024))
+        lowUnit = 56320 + ((cp - 65536) - (CLng(Fix((cp - 65536) / 1024)) * 1024))
+        CpToText = ChrW$(hiUnit - 65536) & ChrW$(lowUnit - 65536)
+    End If
+End Function
+
 ' 公開: UTF-8 のバイト列。書き出しは modUtil.WriteBytesFile が受ける。
 '   **戻り値が0バイトのときは未割当の配列を返す**(LBound を呼ばないこと。
 '   長さは Utf8Len で先に取る)。

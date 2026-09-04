@@ -61,6 +61,9 @@ Private Const BOOT_GUARD_SHEET As String = "はじめにお読みください"
 Private Const BOOT_DATA_SHEET As String = "case_data"
 ' 保存先(裁定書27 W9-C2)。既定は会社のOneDrive。html_out_dir に値が入って
 ' いればそちらを優先する(分けたい管理者向け)。
+' 裁定書28: 利用者が値を書き換えられる唯一の場所(data_dir の直下)。
+Private Const BOOT_SETTINGS_FILE As String = "設定.txt"
+
 Private Const BOOT_DATA_DIR_KEY As String = "data_dir"
 Private Const BOOT_OUT_DIR_KEY As String = "html_out_dir"
 Private Const BOOT_DATA_DIR_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
@@ -171,6 +174,11 @@ Private Sub BootStep(ByVal stepNo As Long)
         '     ここより前には読めないため、ゴースト化抑止も(2)の直後に置く。
         RegisterConfigDefaults
         modConfig.LoadFromSheet
+        ' 裁定書28: core層は ThisWorkbook を見られないので、本体の置き場所を
+        '   ここで1回だけ預ける(data_dir.txt の探索基点になる)。
+        modUtil.SetBookDir ThisWorkbook.Path
+        ' 裁定書28: data_dir\設定.txt の許可キーを config へ重ねる(無ければ無音)。
+        ApplySettingsFile
         ApplyGhostingGuard
     Case 3
         ' (3) 案件状態の整合修復(RepairStatesが失敗時のE0603記録まで自己完結)
@@ -430,16 +438,12 @@ End Sub
 ' ----------------------------------------------------------------------------
 ' (5の前) ナレッジブックの自動発見(裁定書17 H1 / 裁定書19 H8(b))。
 '   config kb_path が (a)空 (b)プレースホルダ "\\...\" を含む (c)Dir$で不在
-'   のいずれかなら、本体ブックと同じフォルダの BOOT_KB_FILE を kb_path へ
-'   書いてから通常の読込へ進む。**kb_path がURLでも同じ扱い**にする
-'   (URLだからといって「利用者が正しく設定した」とは限らないため。kb_path が
-'    URLで実在するかは Dir$ で判定できないので、判定できるとき=ローカルの
-'    ときだけ実在を見て、それ以外は本体フォルダ候補を優先する)。
-'   本体側 ThisWorkbook.Path がURL形式("://" を含む=OneDrive同期フォルダ)の
-'   ときは "/" で連結し、**Dir$ を通さずに** kb_path へ書く(URLは Dir$ で
-'   必ず不発になり、書けないまま「置いたのに読めない」になるため)。実際に
-'   開けるかどうかの判定は modKnowledge.LoadKnowledge が担う(fail-closed)。
-'   探索と判定はこのPrivate 1本に閉じる(modBoot以外に起動処理を置かない)。
+'   のいずれかなら、探索順(裁定書28: 本体と同じフォルダ→data_dir の親)の
+'   最初に見つかったものを kb_path へ書いてから通常の読込へ進む。
+'   **kb_path がURLでも同じ扱い**にする(URLだからといって「利用者が正しく
+'   設定した」とは限らない。URLの実在は Dir$ で判定できないので、判定できる
+'   とき=ローカルのときだけ実在を見る)。実際に開けるかどうかの判定は
+'   modKnowledge.LoadKnowledge が担う(fail-closed)。
 ' ----------------------------------------------------------------------------
 Private Sub ResolveKbPath()
     On Error Resume Next
@@ -460,15 +464,32 @@ Private Sub ResolveKbPath()
     baseDir = ThisWorkbook.Path
     If LenB(baseDir) = 0 Then Exit Sub
 
+    ' 裁定書28: 探索順は「本体と同じフォルダ → data_dir の親(=OneDrive の
+    '   配布フォルダ)」。並べ方は純関数 KbCandidates が唯一持ち、ここは
+    '   実在確認と書込だけを行う(modUtil.ResolveDataDir と同じ切り分け)。
+    Dim dataDir As String
+    dataDir = modUtil.ResolveDataDir(DataDirRaw(), baseDir)
+
+    Dim listText As String
+    listText = modUtil.FileCandidatesIn(baseDir, dataDir, _
+                                       Application.PathSeparator, BOOT_KB_FILE)
+    If LenB(listText) = 0 Then Exit Sub
+
+    Dim cands() As String
     Dim candidate As String
-    If InStr(1, baseDir, "://", vbBinaryCompare) > 0 Then
-        ' OneDrive同期フォルダ。Dir$ では見えないので確かめずに書く。
-        candidate = baseDir & "/" & BOOT_KB_FILE
-    Else
-        ' 区切りは決め打ちにしない(Mac の実Excel は "/")。W9.2。
-        candidate = baseDir & Application.PathSeparator & BOOT_KB_FILE
-        If LenB(Dir$(candidate)) = 0 Then Exit Sub
-    End If
+    Dim i As Long
+    cands = Split(listText, vbLf)
+    For i = LBound(cands) To UBound(cands)
+        If InStr(1, cands(i), "://", vbBinaryCompare) > 0 Then
+            ' OneDrive同期フォルダ。Dir$ では見えないので確かめずに書く。
+            candidate = cands(i)
+            Exit For
+        ElseIf LenB(Dir$(cands(i))) > 0 Then
+            candidate = cands(i)
+            Exit For
+        End If
+    Next i
+    If LenB(candidate) = 0 Then Exit Sub
 
     modConfig.SetValue BOOT_KB_KEY, candidate
     gKbAutoFound = True
@@ -476,6 +497,52 @@ Private Sub ResolveKbPath()
     ' W9.2 N3: On Error Resume Next が握りつぶした失敗を記録だけは残す。
     If Err.Number <> 0 Then
         modLog.LogError "E0603", BOOT_SRC & ".ResolveKbPath", "kb_resolve_failed", Err.Number
+        Err.Clear
+    End If
+End Sub
+
+' config の data_dir 生値(html_out_dir を優先する既存の順を1箇所に保つ)。
+Private Function DataDirRaw() As String
+    Dim raw As String
+    raw = Trim$(modConfig.GetStr(BOOT_OUT_DIR_KEY, vbNullString))
+    If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(BOOT_DATA_DIR_KEY, BOOT_DATA_DIR_DEFAULT))
+    If LenB(raw) = 0 Then raw = BOOT_DATA_DIR_DEFAULT
+    DataDirRaw = raw
+End Function
+
+' ApplySettingsFile - data_dir\設定.txt を config へ重ねる(裁定書28)。
+'   本体xlsm は毎朝 D: から消えるので、config シートへ書いた値は残らない。
+'   残る場所は OneDrive の データ\設定.txt だけ。許可キーの表と解析は純関数
+'   modConfig.ParseSettingsText が唯一持つ(未知のキーは無視=任意のキーを
+'   設定ファイルから注入させない)。無ければ何もしない(16章 E-61)。
+Private Sub ApplySettingsFile()
+    On Error Resume Next
+
+    Dim dataDir As String
+    dataDir = modUtil.ResolveDataDir(DataDirRaw(), ThisWorkbook.Path)
+    If LenB(dataDir) = 0 Then Exit Sub
+
+    Dim pathText As String
+    pathText = dataDir & modUtil.PathSep() & BOOT_SETTINGS_FILE
+    If Not modUtil.FileExistsAt(pathText) Then Exit Sub
+
+    Dim pairsText As String
+    pairsText = modConfig.ParseSettingsText(modUtil.ReadUtf8File(pathText))
+    If LenB(pairsText) = 0 Then Exit Sub
+
+    Dim rows() As String
+    Dim pos As Long
+    Dim i As Long
+    rows = Split(pairsText, vbLf)
+    For i = LBound(rows) To UBound(rows)
+        pos = InStr(1, rows(i), "=", vbBinaryCompare)
+        If pos > 1 Then
+            modConfig.SetValue Left$(rows(i), pos - 1), Mid$(rows(i), pos + 1)
+        End If
+    Next i
+
+    If Err.Number <> 0 Then
+        modLog.LogError "E0608", BOOT_SRC & ".ApplySettingsFile", "settings_file_failed", Err.Number
         Err.Clear
     End If
 End Sub
@@ -489,13 +556,8 @@ End Sub
 Private Sub NoticeDataDir()
     On Error Resume Next
 
-    Dim raw As String
-    raw = Trim$(modConfig.GetStr(BOOT_OUT_DIR_KEY, vbNullString))
-    If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(BOOT_DATA_DIR_KEY, BOOT_DATA_DIR_DEFAULT))
-    If LenB(raw) = 0 Then raw = BOOT_DATA_DIR_DEFAULT
-
     Dim dirText As String
-    dirText = modUtil.ResolveDataDir(raw)
+    dirText = modUtil.ResolveDataDir(DataDirRaw(), ThisWorkbook.Path)
     If LenB(dirText) = 0 Then Exit Sub
     If Not modUtil.DataDirNotOneDrive(dirText) Then Exit Sub
 

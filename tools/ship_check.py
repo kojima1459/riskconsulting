@@ -505,6 +505,80 @@ def check_item6(dist_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+# ------------------------------------------------------------------------------
+# ⑦ ランチャー .bat の形(裁定書28「裁定の確定」)
+# ------------------------------------------------------------------------------
+# なぜ形を検問するのか: 利用者の手順は「OneDrive の『リスク提案ナビを起動』を
+#   ダブルクリック」の1つだけである(docs/24 §1)。この .bat が cmd.exe に
+#   読めない形(UTF-8・LF)で出ると、利用者の側では「何も起きない」だけになり、
+#   起動できない理由が誰にも見えない。MyBookshelf の実績(裁定書28 追補)で
+#   確かめられている形を、毎ビルド機械で固定する。
+LAUNCHER_NAME = "リスク提案ナビを起動.bat"
+
+
+def check_item7(dist_dir: Path) -> tuple[bool, list[str]]:
+    print("\n" + "=" * 78)
+    print("裁定書28 ⑦ 起動ランチャー(リスク提案ナビを起動.bat)の形")
+    print("=" * 78)
+
+    problems: list[str] = []
+    bat = dist_dir / LAUNCHER_NAME
+    if not bat.exists():
+        print(f"  FAIL: ランチャーがありません: {bat}")
+        return False, [f"{bat} がありません(python3 build/build_rpn.py --prod)"]
+
+    raw = bat.read_bytes()
+    print(f"  ファイル           : {bat} ({len(raw):,} bytes)")
+
+    # (1) 改行は CRLF だけ(裸のLFが1つでもあると cmd.exe が行を読み違える)
+    crlf = raw.count(b"\r\n")
+    lf = raw.count(b"\n")
+    print(f"  改行               : CRLF {crlf} / LF 合計 {lf}")
+    if lf == 0 or crlf != lf:
+        problems.append(f"改行が CRLF だけではありません(CRLF={crlf} / LF={lf})")
+
+    # (2) CP932 で復号できること(UTF-8 で書くと日本語のパスが化ける)
+    text = ""
+    try:
+        text = raw.decode("cp932")
+    except UnicodeDecodeError as e:
+        problems.append(f"CP932 で復号できません: {e}")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        problems.append("先頭に UTF-8 BOM があります(cmd.exe が1行目を読み違えます)")
+
+    # (3) `start "" excel.exe` の形(第1引数の "" が無いとパスが窓題名になる)
+    has_start = 'start "" excel.exe' in text
+    print(f"  start \"\" 形式      : {'あり' if has_start else 'なし(失格)'}")
+    if not has_start:
+        problems.append('start "" excel.exe の形がありません(裁定書28 追補)')
+
+    # (4) excel.exe をフルパスで書いていないこと(版差・言語差で壊れる)
+    full = re.findall(r"[A-Za-z]:\\[^\r\n\"]*excel\.exe", text, re.IGNORECASE)
+    print(f"  excel のフルパス   : {full if full else 'なし'}")
+    if full:
+        problems.append("excel.exe をフルパスで起動しています: " + ", ".join(full))
+
+    # (5) 裁定の4手順が揃っていること(SRC/DST・mkdir・xcopy /D /Y・data_dir.txt)
+    for needed, why in (
+        ("set \"SRC=%~dp0\"", "SRC=配布フォルダ"),
+        ("D:\\リスク提案ナビ", "DST=D:"),
+        ("%TEMP%\\リスク提案ナビ", "D:が無いときの退避先"),
+        ("mkdir", "DSTの作成"),
+        ("xcopy /D /Y", "新しければコピー"),
+        ("data_dir.txt", "data_dir ポインタの書き出し"),
+    ):
+        if needed not in text:
+            problems.append(f"ランチャーに {why} の行がありません: {needed!r}")
+
+    if problems:
+        print(f"  FAIL: {len(problems)} 件")
+        for p in problems:
+            print(f"    - {p}")
+        return False, problems
+    print("  PASS: 存在 / CRLF / CP932 / start \"\" 形式 / excelフルパス無し / 4手順")
+    return True, []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="リスク提案ナビ 出荷前検問(T-46 ①②③ + 裁定書27 ⑥)")
     ap.add_argument("--src", default=str(REPO_ROOT / "src"))
@@ -515,6 +589,7 @@ def main() -> int:
     ok2, _ = check_item2(Path(args.dist).resolve())
     ok3, _ = check_item3()
     ok6, _ = check_item6(Path(args.dist).resolve())
+    ok7, _ = check_item7(Path(args.dist).resolve())
 
     print("\n" + "-" * 78)
     print(f"① 外部由来テキストの直書き検査 : {'PASS' if ok1 else 'FAIL'}")
@@ -524,9 +599,10 @@ def main() -> int:
     print("⑤ modTestsPure 本数条件        : 未実施(実機。Linux側の同等確認は "
           "tools/run_lo_tests.py)")
     print(f"⑥ 配布物のAV表面積と経路の固定 : {'PASS' if ok6 else 'FAIL'}")
+    print(f"⑦ 起動ランチャー(.bat)の形    : {'PASS' if ok7 else 'FAIL'}")
     print("-" * 78)
-    if ok1 and ok2 and ok3 and ok6:
-        print("結果: ①②③⑥ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
+    if ok1 and ok2 and ok3 and ok6 and ok7:
+        print("結果: ①②③⑥⑦ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
         return 0
     print("結果: NG(exit code 1) - 1つでも落ちたら出荷しない")
     return 1

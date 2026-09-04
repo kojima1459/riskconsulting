@@ -252,6 +252,12 @@ PURE_ALLOWLIST = [
     #   modUIResearch.DrUrlOf(config欠落時の既定URL。2本)を叩く。
     #   modTestsPure17.RunAll の末尾から呼ぶ。
     "modTestsPure18",
+    # modTestsPure19: W10(裁定書28)の純層11本。data_dir.txt を最優先にした
+    #   解決順(modUtil.DataDirCandidates)・ナレッジブックの探索順
+    #   (modUtil.FileCandidatesIn)・ログcsvの1行組立て(modLog.CsvLineOf)・
+    #   設定.txt のパーサ(modConfig.ParseSettingsText)を叩く。
+    #   modTestsPure18.RunAll の末尾から呼ぶ。
+    "modTestsPure19",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
 

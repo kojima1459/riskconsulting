@@ -58,6 +58,9 @@ Private Const LOG_SHEET_HIDDEN As Long = 0
 ' ローテーション既定(config log_max_rows。13章§2.3)。
 Private Const LOG_MAX_ROWS_DEFAULT As Long = 2000
 
+' 裁定書28: data_dir の下のログ置き場(csv の複製先)。
+Private Const LOG_CSV_FOLDER As String = "ログ"
+
 ' ============================================================================
 ' 純ロジック(Excel非依存。LibreOffice実行テストで直接叩ける。14章§6)
 ' ----------------------------------------------------------------------------
@@ -77,6 +80,57 @@ End Function
 Public Function ShouldRotate(ByVal rowCount As Long, ByVal maxRows As Long) As Boolean
     If maxRows <= 0 Then Exit Function
     ShouldRotate = (rowCount >= maxRows)
+End Function
+
+' ============================================================================
+' CSV の1行組立て(純関数。裁定書28・司令塔裁定「標準CSVで書く」)
+' ----------------------------------------------------------------------------
+' なぜ要るのか: 本体xlsm は毎朝 D: から消える(裁定書28 確定事実)ので、
+'   シートに書いたログも一緒に消える。同じ1行を data_dir\ログ\*.csv へも
+'   足しておけば、手順書の「err_log の最後の行を送ってください」が、消えた
+'   あとでも成立する。
+' 形の規約: **情シス・開発担当が Excel やメモ帳でそのまま開ける標準CSV**に
+'   する(司令塔裁定)。したがって
+'   ・区切りは**カンマ**。組立ては**フィールドの配列**から行い、値の中の
+'     カンマは引用符の中にそのまま残す(列は増えない)
+'   ・各フィールドは**常に**二重引用符で囲み、値の中の `"` は `""` にする
+'     (囲むか囲まないかを値で分けない=読む側の実装差で崩れない)
+'   ・改行(CR/LF)とタブは半角空白へ潰す(1行=1レコードを崩さない。壊れた
+'     1行より、1行に収まった読みにくい1行のほうが後で使える)
+'   ・先頭の式記号(= + - @)は E-46 と同じ理由で `'` を前置する(CSVを
+'     Excelで開いた管理者側で式として実行されないように)
+' ============================================================================
+
+' 1フィールドぶんの無害化(常に二重引用符で囲んで返す)。
+Public Function CsvField(ByVal s As String) As String
+    Dim t As String
+    t = Replace(Replace(Replace(s, vbCrLf, " "), vbCr, " "), vbLf, " ")
+    t = Replace(t, Chr$(9), " ")
+
+    If LenB(t) > 0 Then
+        Select Case Left$(t, 1)
+        Case "=", "+", "-", "@"
+            t = "'" & t
+        End Select
+    End If
+
+    CsvField = """" & Replace(t, """", """""") & """"
+End Function
+
+' 1行ぶん。**フィールドの配列**を受け取り、1つずつ CsvField に通して
+'   カンマでつなぐ。値を先に1本の文字列へ連結してから割り直すことはしない
+'   (割り直すと、値の中のカンマや区切り文字がそこで列を分けてしまう。
+'    標準CSVでは囲まれたフィールドの中のカンマは列を分けない)。
+'   配列は VBA の規則により ByRef で受ける(tools/vba_lint.py の
+'   check_udt_byval_param)。
+Public Function CsvLineOf(ByRef fields() As String) As String
+    Dim outText As String
+    Dim i As Long
+    For i = LBound(fields) To UBound(fields)
+        If i > LBound(fields) Then outText = outText & ","
+        outText = outText & CsvField(fields(i))
+    Next i
+    CsvLineOf = outText
 End Function
 
 ' ============================================================================
@@ -101,7 +155,10 @@ Public Sub LogError(ByVal errCode As String, ByVal source As String, ByVal detai
     Dim r As Long
     r = NextRow(ws)
 
-    PutText ws, hdr, r, "logged_at", modUtil.NowStamp()
+    Dim stamp As String
+    stamp = modUtil.NowStamp()
+
+    PutText ws, hdr, r, "logged_at", stamp
     PutText ws, hdr, r, "err_code", errCode
     PutText ws, hdr, r, "source", modUtil.SafeLeft(source, LOG_SOURCE_MAX)
     PutText ws, hdr, r, "detail", TruncDetail(detail)
@@ -109,6 +166,16 @@ Public Sub LogError(ByVal errCode As String, ByVal source As String, ByVal detai
     PutNum ws, hdr, r, "http_status", httpStatus
 
     TrimLog ws
+
+    ' csv 複製(裁定書28)。13章§2.4 の err_log の列順そのままに並べる。
+    Dim csvFields(0 To 5) As String
+    csvFields(0) = stamp
+    csvFields(1) = errCode
+    csvFields(2) = modUtil.SafeLeft(source, LOG_SOURCE_MAX)
+    csvFields(3) = TruncDetail(detail)
+    csvFields(4) = CStr(errNumber)
+    csvFields(5) = CStr(httpStatus)
+    AppendCsv LOG_SHEET_ERR, CsvLineOf(csvFields)
     Exit Sub
 
 Failed:
@@ -185,10 +252,77 @@ Public Sub LogRun(ByRef rec As TRunLogRec)
     PutText ws, hdr, r, "operator", rec.operator
 
     TrimLog ws
+
+    ' csv 複製(裁定書28)。13章§2.4 の run_log の14列をその順で並べる。
+    Dim csvFields(0 To 13) As String
+    csvFields(0) = stamp
+    csvFields(1) = rec.case_id
+    csvFields(2) = rec.round_no
+    csvFields(3) = rec.stepName
+    csvFields(4) = rec.play
+    csvFields(5) = rec.transport
+    csvFields(6) = rec.model
+    csvFields(7) = CStr(rec.latency_ms)
+    csvFields(8) = CStr(rec.input_chars)
+    csvFields(9) = CStr(rec.output_chars)
+    csvFields(10) = rec.injected_kb_ids
+    csvFields(11) = rec.validate_result
+    csvFields(12) = TruncDetail(rec.detail)
+    csvFields(13) = rec.operator
+    AppendCsv LOG_SHEET_RUN, CsvLineOf(csvFields)
     Exit Sub
 
 Failed:
     Debug.Print "[modLog.LogRun:書込失敗] " & rec.stepName & " " & rec.case_id
+End Sub
+
+' ----------------------------------------------------------------------------
+' AppendCsv - data_dir\ログ\<kind>.csv へ1行足す(裁定書28。13章§2.4)
+'   本体のシートへの記録が済んだ**あと**に呼ぶ。ここでの失敗は握り潰し、
+'   シート側の1行だけを残す(ログの複製でアプリを止めない)。
+'   UTF-8 は modUtilText.Utf8Bytes、フォルダは modUtil.EnsureFolder が持つ。
+'   `Print #` は CP932 で書くため使わない(Binary で末尾へ足す)。
+' ----------------------------------------------------------------------------
+Private Sub AppendCsv(ByVal kind As String, ByVal lineText As String)
+    Dim fileNo As Long
+    On Error GoTo Failed
+    If LenB(lineText) = 0 Then Exit Sub
+
+    Dim dataDir As String
+    dataDir = modUtil.ResolveDataDir(modConfig.GetStr("data_dir", vbNullString))
+    If LenB(dataDir) = 0 Then Exit Sub
+
+    Dim logDir As String
+    logDir = dataDir & modUtil.PathSep() & LOG_CSV_FOLDER
+    If Not modUtil.EnsureFolder(logDir) Then Exit Sub
+
+    Dim pathText As String
+    pathText = logDir & modUtil.PathSep() & kind & ".csv"
+
+    Dim body As String
+    body = lineText & vbCrLf
+    Dim n As Long
+    n = modUtilText.Utf8Len(body, False)
+    If n <= 0 Then Exit Sub
+
+    Dim buf() As Byte
+    buf = modUtilText.Utf8Bytes(body, False)
+
+    fileNo = FreeFile
+    Open pathText For Binary Access Write As #fileNo
+    Put #fileNo, LOF(fileNo) + 1, buf
+    Close #fileNo
+    Exit Sub
+
+Failed:
+    CloseCsvQuiet fileNo
+    Debug.Print "[modLog:csv複製の失敗] " & kind
+End Sub
+
+' ハンドラ内で On Error Resume Next は効かないため、後始末は別Subへ。
+Private Sub CloseCsvQuiet(ByVal fileNo As Long)
+    On Error Resume Next
+    If fileNo > 0 Then Close #fileNo
 End Sub
 
 ' ----------------------------------------------------------------------------

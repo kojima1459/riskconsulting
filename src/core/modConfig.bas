@@ -29,6 +29,11 @@ Option Explicit
 '   LoadFromSheet / SetValue だけ、という切り分けを崩さないこと。
 ' ============================================================================
 
+' 裁定書28: data_dir\設定.txt から上書きしてよいキー(表はここ1箇所)。
+Public Const SETTINGS_ALLOWED_KEYS As String = _
+    "portal_url;dr_url_menu;dr_url_quick;dr_url_full;dr_open_after_copy;" & _
+    "ui_fullscreen;kb_path;data_dir"
+
 Private Const CFG_SHEET As String = "config"
 Private Const CFG_COL_NAME As Long = 1
 Private Const CFG_COL_VALUE As Long = 2
@@ -243,6 +248,59 @@ Public Function SetValue(ByVal cfgKey As String, ByVal valueText As String) As B
     Exit Function
 Failed:
     SetValue = False
+End Function
+
+' ============================================================================
+' ParseSettingsText - data_dir\設定.txt の解析(純関数。裁定書28)
+' ----------------------------------------------------------------------------
+' 書式(利用者が手で書く前提の最小形):
+'   ・1行1件の `key=value`(UTF-8)。key と value の前後の空白は落とす
+'   ・`#` で始まる行はコメント。空行は無視
+'   ・**許可キー以外は黙って捨てる**(設定ファイルから任意の config キーを
+'     注入させない。log_max_rows や llm_transport を書き換えられないこと)
+'   ・同じキーが2度出たら**後の行が勝つ**(手で足した行が効く)
+' 返り値は `key=value` を vbLf でつないだもの(呼出側は Split して SetValue)。
+' 値の中の改行は書式上あり得ない(1行1件)。値の中の "=" は残す(URLのため)。
+' ============================================================================
+Public Function ParseSettingsText(ByVal bodyText As String) As String
+    If LenB(bodyText) = 0 Then Exit Function
+
+    Dim t As String
+    t = Replace(Replace(bodyText, vbCrLf, vbLf), vbCr, vbLf)
+
+    Dim rows() As String
+    rows = Split(t, vbLf)
+
+    Dim outText As String
+    Dim lineText As String
+    Dim keyText As String
+    Dim valueText As String
+    Dim pos As Long
+    Dim i As Long
+    For i = LBound(rows) To UBound(rows)
+        lineText = Trim$(rows(i))
+        If LenB(lineText) > 0 Then
+            If Left$(lineText, 1) <> "#" Then
+                pos = InStr(1, lineText, "=", vbBinaryCompare)
+                If pos > 1 Then
+                    keyText = LCase$(Trim$(Left$(lineText, pos - 1)))
+                    valueText = Trim$(Mid$(lineText, pos + 1))
+                    If IsSettingsKeyAllowed(keyText) Then
+                        If LenB(outText) > 0 Then outText = outText & vbLf
+                        outText = outText & keyText & "=" & valueText
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    ParseSettingsText = outText
+End Function
+
+' 許可キーか(純関数)。表は SETTINGS_ALLOWED_KEYS 1箇所だけが持つ。
+Public Function IsSettingsKeyAllowed(ByVal cfgKey As String) As Boolean
+    If LenB(cfgKey) = 0 Then Exit Function
+    IsSettingsKeyAllowed = (InStr(1, ";" & SETTINGS_ALLOWED_KEYS & ";", _
+                                  ";" & LCase$(Trim$(cfgKey)) & ";", vbBinaryCompare) > 0)
 End Function
 
 ' ----------------------------------------------------------------------------

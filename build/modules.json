@@ -606,6 +606,13 @@
       "wave": "W8.1"
     },
     {
+      "name": "modTestsPure19",
+      "path": "src/test/modTestsPure19.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W10"
+    },
+    {
       "name": "modTestsExcel",
       "path": "src/test/modTestsExcel.bas",
       "role": "test",
