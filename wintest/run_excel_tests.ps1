@@ -21,7 +21,8 @@
 #         入っている(配布方式B)。起動時の自己インストール/焼き付けは無い。
 #         レジストリのVBA信頼設定(AccessVBOM)は、このスクリプト自身が
 #         COMでVBAへ触れるために要るのであって、配布物の要件ではない。
-#   3. wintest\tests_expected.txt を読んで modTestRunner.SetExpectedCount へ渡す
+#   3. wintest\tests_expected.txt(prod / dev_only の2行)を読み、対象ブックの
+#      期待本数を modTestRunner.SetExpectedCount へ渡す
 #      (17章§4-1 ランナー要件(2)。0件実行の「全緑」を成立させない)
 #   4. modTestRunner.RunAllPureTests を実行し PASS/FAIL/SKIP を取得
 #   5. 層(b) modTestsExcel.RunAllExcelTests を既定で実行する(T-47。同じランナー
@@ -58,14 +59,24 @@ if (-not (Test-Path $xlsm)) {
     throw "ビルド成果物が見つかりません: $xlsm (先に python build\build_rpn.py --$Target)"
 }
 if (-not (Test-Path $expectedFile)) {
-    throw "wintest\tests_expected.txt がありません(17章§4-1: 1行目に10進整数のみ)"
+    throw "wintest\tests_expected.txt がありません(裁定書30 裁定1(e): prod=<整数> / dev_only=<整数> の2行)"
 }
-$expectedRaw = (Get-Content -Path $expectedFile -TotalCount 1).Trim()
-if ($expectedRaw -notmatch '^\d+$') {
-    throw "wintest\tests_expected.txt の1行目が10進整数ではありません: '$expectedRaw'"
+# 裁定書30 裁定1(e): 期待本数はビルドモード別。prod ブックは prod 行、
+# dev ブックは prod+dev_only(dev専用モジュールぶんが積まれる)。
+$expectedProd = $null
+$expectedDevOnly = $null
+foreach ($line in (Get-Content -Path $expectedFile)) {
+    $t = $line.Trim()
+    if ($t -eq "" -or $t.StartsWith("#")) { continue }
+    if ($t -match '^prod\s*=\s*(\d+)$')     { $expectedProd    = [int]$Matches[1]; continue }
+    if ($t -match '^dev_only\s*=\s*(\d+)$') { $expectedDevOnly = [int]$Matches[1]; continue }
+    throw "wintest\tests_expected.txt の行が読めません: '$t'(書式は prod=<整数> / dev_only=<整数>)"
 }
-$expected = [int]$expectedRaw
-Log "tests_expected = $expected"
+if ($null -eq $expectedProd -or $null -eq $expectedDevOnly) {
+    throw "wintest\tests_expected.txt に prod= と dev_only= の2行が要ります"
+}
+$expected = if ($Target -eq "dev") { $expectedProd + $expectedDevOnly } else { $expectedProd }
+Log "tests_expected = $expected (prod=$expectedProd / dev_only=$expectedDevOnly / target=$Target)"
 
 # --- 1) VBA信頼設定(現ユーザーのみ。テスト終了後に元の値へ復元する) ---
 Log "VBA信頼設定(HKCU)を確認・設定します(終了時に元の値へ復元します)"

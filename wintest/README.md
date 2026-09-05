@@ -77,8 +77,12 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -Target pro
   件数そのものを見張る)
 - **実行本数 = `wintest/tests_expected.txt` の値**(0件実行の「全緑」を成立させない)
 
-`tests_expected.txt` は1行目に10進整数のみを書く。**テストを増減したコミットで
-このファイルを更新するのは実装者の義務**であり、更新漏れは即FAILとして現れる。
+`tests_expected.txt` は `prod=<整数>` / `dev_only=<整数>` の2行を書く
+(裁定書30 裁定1(e))。`prod` は配布ブック(ship:true のモジュールだけ)で走る本数、
+`dev_only` は dev専用モジュール(`src/test/dev/modTestsPureDev.bas`)だけの本数で、
+**dev ブックの期待本数は prod + dev_only** である(ps1 は `-Target` から自動で選ぶ)。
+**テストを増減したコミットでこのファイルを更新するのは実装者の義務**であり、
+更新漏れは即FAILとして現れる。
 
 ## T-14b(ニセリボンちゃん配管検証)で確認する4点
 
@@ -113,7 +117,7 @@ powershell -ExecutionPolicy Bypass -File wintest\run_excel_tests.ps1 -Target pro
   「層(b)未指定: -ExcelLayerEntry を渡していないため modTestsExcel は実行していません(T-47)」
   の1行を出す。**この行が出た実行は T-46(4) を満たしていない**(合格扱いにしない)。
   現時点で実機確認できるのは層(a)(`modTestsPure`)の分だけである。
-- **Linux側の検問はまとめて回すのが標準**: `python3 tools/gate.py`(全18ゲート一括)。
+- **Linux側の検問はまとめて回すのが標準**: `python3 tools/gate.py`(全19ゲート一括)。
   個別ツールの直接実行はデバッグ時のみ(17章§5-1)。
 
 ## セキュリティ上の注意

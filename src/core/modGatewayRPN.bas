@@ -760,18 +760,19 @@ Delivered:
 ExitPoint:
 End Function
 
-' DirectStep - 開発・検証用(14章§3)。HTTP・strict・リトライ・キー読込の実体は
-'   modGatewayDirect(T-13)が持ち、本モジュールは経路を選ぶだけ。呼び出し契約は
-'   14章§6の CallDirect。errCode は "" = 成功 / E0203(429・5xxリトライ尽き)/
-'   E0205(キー無し)/ E0206(refusal・finish_reason が stop 以外)/ E0202(その他)。
-'   err_log 記録とHTTPステータスの保持は modGatewayDirect 側の責務。
+' DirectStep - 開発・検証用(14章§3)。呼ぶ相手は接続点 modGatewayLink 1本だけで
+'   (裁定書30 裁定1(b)。実体 modGatewayDirect は配布物から外れており、prod では
+'   E0209 を返す版へビルドが差し替える)、本モジュールは経路を選ぶだけ。呼び出し
+'   契約は14章§6の CallDirect。errCode は "" = 成功 / E0203(429・5xxリトライ
+'   尽き)/ E0205(キー無し)/ E0206(refusal)/ E0209(配布版)/ E0202(その他)。
+'   err_log 記録とHTTPステータスの保持は呼び先側の責務。
 Private Function DirectStep(ByVal stepName As String, ByVal systemPrompt As String, _
                             ByVal userPrompt As String, ByVal schemaJson As String, _
                             ByRef modelUsed As String, ByRef errCode As String, _
                             ByRef errMsg As String) As String
     modelUsed = modConfig.GetStr("direct_model", "")
-    DirectStep = modGatewayDirect.CallDirect(stepName, systemPrompt, userPrompt, _
-                                             schemaJson, modelUsed, errCode, errMsg)
+    DirectStep = modGatewayLink.CallDirect(stepName, systemPrompt, userPrompt, _
+                                           schemaJson, modelUsed, errCode, errMsg)
     If LenB(errCode) > 0 Then
         If LenB(errMsg) = 0 Then errMsg = ErrMessageFor(errCode)
         DirectStep = ""

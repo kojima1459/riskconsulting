@@ -178,6 +178,13 @@ MODULE_REGISTRY = {
     "modHtmlTheme",
     # ---- core 層 ----
     "modGatewayRPN", "modGatewayDirect", "modJsonLite", "modConfig", "modLog",
+    # W11-a(裁定書30 裁定1(b))で新設。12章§2のモジュール一覧に追記済み。
+    #   modGatewayLink = direct経路への薄い接続点。**同名で2ソース**を持ち、
+    #                    prod(src/core/modGatewayLink.bas)は E0209 を返すだけ、
+    #                    dev(src/core/dev/modGatewayLink.bas)は modGatewayDirect
+    #                    へ転送する。どちらを使うかは build/modules.json の
+    #                    dev_src が決める(実行時の名前ディスパッチはしない)。
+    "modGatewayLink",
     "modUtil", "modUtilText", "modTypes",
     # W10.1(裁定書29 T-60)で新設。12章§2のモジュール一覧に追記済み。
     #   modUtilPath = パスの連結(JoinPathWith/JoinPath)・分解(FileNameOf)・
@@ -197,6 +204,12 @@ MODULE_REGISTRY = {
     # modTestsRunnerUi = ブック内テスト実行(17章 T-48・裁定書14 裁定5)。
     #   ターミナルの使えない社内PC向けに ps1 と同じ4条件をブック内で回す。
     "modTestRunner", "modTestsExcel", "modMockLlm", "modTestsRunnerUi",
+    # W11-a(裁定書30 裁定1(d))で新設。12章§2のモジュール一覧に追記済み。
+    #   modTestsPureHook = dev専用の純層テストを呼ぶ接続点(modGatewayLink と
+    #                      同じ**同名2ソース**。prod版は1本も実行しない)。
+    #   modTestsPureDev  = dev専用の純層テスト(modGatewayDirect の純関数17本)。
+    #                      配布物には載らない(modules.json の ship:false)。
+    "modTestsPureHook", "modTestsPureDev",
 }
 # 分割される可能性のあるモジュール名(末尾に1以上の数字が付く)。
 # modMockLlm1..n は 12章§2(v2.4.1)が 30,000字契約による分割を明記している。

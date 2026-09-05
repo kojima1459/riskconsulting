@@ -1,5 +1,5 @@
 {
-  "_comment": "リスク提案ナビ(RPN) VBAモジュール台帳。12章§2のレイヤ構成とモジュール一覧に準拠し、パスは <repo> からの相対パス。ビルド時にここへ列挙された全ファイルの存在を検査する(--allow-missing で欠落を警告に緩和)。逆方向(src/ に実在するのに未登録)も check_unregistered で検査するため、モジュールを新設したら必ずここへ1行足すこと。role は 12章§2 の層(core/app/ui/test)。type=std の .bas だけが vba_src シートへ格納される。**実装済みのモジュールだけを載せる**(未着手のモジュールを先に載せるとビルドが常に欠落エラーになるため)。wave は 17章§3 のタスクID。`ship:false` は「dev には載せるが prod の配布物からは外す」印(裁定書27 W9-B 5。direct経路など配布物のAV表面積を減らすためのもの)。",
+  "_comment": "リスク提案ナビ(RPN) VBAモジュール台帳。12章§2のレイヤ構成とモジュール一覧に準拠し、パスは <repo> からの相対パス。ビルド時にここへ列挙された全ファイルの存在を検査する(--allow-missing で欠落を警告に緩和)。逆方向(src/ に実在するのに未登録)も check_unregistered で検査するため、モジュールを新設したら必ずここへ1行足すこと。role は 12章§2 の層(core/app/ui/test)。type=std の .bas だけが vba_src シートへ格納される。**実装済みのモジュールだけを載せる**(未着手のモジュールを先に載せるとビルドが常に欠落エラーになるため)。wave は 17章§3 のタスクID。`ship:false` は「dev には載せるが prod の配布物からは外す」印(裁定書27 W9-B 5。direct経路など配布物のAV表面積を減らすためのもの)。`dev_src` は「同じモジュール名で dev ビルドのときだけ別のソースを使う」印(裁定書30 裁定1(b)。ship:false のモジュールへの参照を配布物から断つ薄い接続モジュールのための機構で、path=prod のソース / dev_src=dev のソース。実行時の名前ディスパッチは使わない)。",
   "modules": [
     {
       "name": "modTypes",
@@ -73,13 +73,22 @@
       "wave": "T-12"
     },
     {
+      "name": "modGatewayLink",
+      "path": "src/core/modGatewayLink.bas",
+      "dev_src": "src/core/dev/modGatewayLink.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "W11-a",
+      "_variant_note": "裁定書30 裁定1(b)。**モード別ソース選択**の1件目。`path` が prod のソース(direct経路は使えないと E0209 を返す版)、`dev_src` が dev のソース(modGatewayDirect へ転送する版)。ビルドは --dev のときだけ dev_src を採り、それ以外は path を使う(build_rpn.select_variant_paths)。Application.Run や文字列ディスパッチによる実行時の切替はしない(その形自体がAVの見る形であり禁止事項)。両版とも lo-compile がコンパイルする。"
+    },
+    {
       "name": "modGatewayDirect",
       "path": "src/core/modGatewayDirect.bas",
       "role": "core",
       "type": "std",
       "wave": "T-13",
-      "ship": true,
-      "_ship_note": "裁定書27 W9-B 5 は本モジュールを prod の配布物から外す(ship=false)と定める。**まだ false にできない**: (a) src/core/modGatewayRPN.bas の DirectStep が modGatewayDirect.CallDirect を名前で呼んでおり(班2が prod 分岐へ差し替える予定)、(b) src/test/modTestsPure2.bas の G11 群16本が modGatewayDirect の純関数を検査している。VBAはプロジェクト全体をコンパイルするので、参照が1本でも残ったまま外すと配布物が実機で必ずコンパイルエラーになる。さらに (b) を外すと prod の純層本数が dev と変わり、wintest/tests_expected.txt(単一の値)と T-48 の条件(3)が prod で必ず落ちる。除外の機構と参照検査(build_rpn._shipped_modules / _check_dropped_module_references)は実装済みで、(a)(b) の始末がついた時点でこの値を false にすれば有効になる"
+      "ship": false,
+      "_ship_note": "裁定書30 裁定1(a)(W11-a)で ship:false を発効させた(裁定書27 W9-B 5 の本来の指示)。ServerXMLHTTP は社内AVが重く見る書き方なので、direct経路のモジュールごと prod の配布物(bin と PROJECT)から落とす。dev ビルドには載る。発効の前提だった3件はすべて片づいている: (a) 参照元 modGatewayRPN.DirectStep は接続点 modGatewayLink.CallDirect を呼ぶ形になり、prod ではソースごと E0209 を返す版へ差し替わる(dev_src)、(b) modTestsPure2 の G11 群17本は dev専用の modTestsPureDev へ移設した、(c) wintest/tests_expected.txt は prod / dev_only の2行になり、prod の期待本数と dev の期待本数が別々に焼ける。"
     },
     {
       "name": "modAppTypes",
@@ -502,6 +511,24 @@
       "role": "test",
       "type": "std",
       "wave": "T-01"
+    },
+    {
+      "name": "modTestsPureHook",
+      "path": "src/test/modTestsPureHook.bas",
+      "dev_src": "src/test/dev/modTestsPureHook.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W11-a",
+      "_variant_note": "裁定書30 裁定1(d)。**モード別ソース選択**の2件目。modTestRunner.RunAllPureTests は常に modTestsPureHook.RunAll を呼ぶ。prod のソース(path)は1本も実行せず、dev のソース(dev_src)が modTestsPureDev.RunAll を呼ぶ。配布物に載る modTestRunner が ship:false のモジュールを名前で参照しないための接続点である。"
+    },
+    {
+      "name": "modTestsPureDev",
+      "path": "src/test/dev/modTestsPureDev.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W11-a",
+      "ship": false,
+      "_ship_note": "裁定書30 裁定1(d)。dev専用の純層テスト(modGatewayDirect の純関数17本 = 旧 modTestsPure2 の G11)。本数の正は wintest/tests_expected.txt の dev_only 行で、ゲート lo-pure-dev がこのモジュールだけを走らせて照合する。"
     },
     {
       "name": "modTestsPure",

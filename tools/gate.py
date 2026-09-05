@@ -37,6 +37,12 @@ GATES = [
      r"対象モジュール数: \d+|結果: OK"),
     ("lo-pure",      [sys.executable, "tools/run_lo_tests.py", "--mode", "pure"],
      r"PASS \d+ / FAIL \d+ / SKIP \d+"),
+    # 裁定書30 裁定1(e): 純層は配布集合(ship:true)と dev専用で別々に照合する。
+    #   lo-pure     = 配布集合だけを走らせ tests_expected の prod と一致
+    #   lo-pure-dev = dev専用モジュールだけを走らせ dev_only と一致
+    ("lo-pure-dev",  [sys.executable, "tools/run_lo_tests.py", "--mode", "pure",
+                      "--pure-set", "dev-only"],
+     r"PASS \d+ / FAIL \d+ / SKIP \d+"),
     ("build-dev",    [sys.executable, "build/build_rpn.py", "--dev"],
      r"自己検証 OK|Done"),
     ("build-prod",   [sys.executable, "build/build_rpn.py", "--prod"],

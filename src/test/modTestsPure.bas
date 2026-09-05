@@ -44,7 +44,7 @@ Option Explicit
 '
 ' グループ / 本数 / 根拠章:
 '   G0  ランナー自己テスト(W0から継続)      4本  17章§4-1
-'   G1  SetCellSafe純ロジック(SanitizeForCell)  9本  16章 E-46 / NFR-S7(1) / E-22
+'   G1  SetCellSafe純ロジック(SanitizeForCell) 11本  16章 E-46 / NFR-S7(1) / E-22
 '   G2  SanitizeInput                           6本  15章§0原則9 / 16章 E-04
 '   G3  NormalizeForHash系(Fnv1a64Hex)          2本  14章§6 / 16章 E-49
 '   G4  ExtractJsonBlock 入力パターン表        11本  14章§5(7パターン表+前処理P0)
@@ -202,6 +202,16 @@ Private Sub T_SetCellSafe()
     modTestRunner.Check "SetCellSafe_32000字ちょうどは切詰めない_E22", _
         (modUtilText.SanitizeForCell(exactText) = exactText), _
         "実際の長さ=" & Len(modUtilText.SanitizeForCell(exactText))
+
+    ' 裁定書30 裁定4(16章 E-46): 無害化は必ず行うが、閲覧・受け皿シートへの
+    ' 流し込みは E0606 を**記録しない**(本物の注入検知を埋もれさせないため)。
+    ' 正負2本。除外側を1つでも取り違えたら片方が落ちる。
+    modTestRunner.Check "ShouldLogFormulaGuard_中身シートへの流し込みは記録しない_E46", _
+        (modUtilText.ShouldLogFormulaGuard("modUICase7/body_text") = False), _
+        "閲覧用シートへの書込で E0606 を記録している"
+    modTestRunner.Check "ShouldLogFormulaGuard_保管される欄への書込は記録する_E46", _
+        (modUtilText.ShouldLogFormulaGuard("run_log/detail") = True), _
+        "本物の注入検知(保管される欄への書込)を記録していない"
 End Sub
 
 ' ----------------------------------------------------------------------------

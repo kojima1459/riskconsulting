@@ -76,12 +76,29 @@ Public Sub RunAllTestsFromBook()
     Dim summary As String
     summary = SummaryText(expected, pureExecuted, excelExecuted)
 
+    ClearTestNotices
     WriteResult summary, modTestRunner.ReportText()
     MsgBox summary, vbInformation, TR_TITLE
     Exit Sub
 
 Failed:
     NoticeAbort Err.Number
+End Sub
+
+' ============================================================================
+' ClearTestNotices - テストが画面へ出した警告の後始末(裁定書30 裁定2・Z-28)。
+' ----------------------------------------------------------------------------
+' 層(b)のテストは、警告の出方そのものを確かめるために hm_warning と警告トースト
+' をわざと出させる(例: modTestsExcel2 の W61 (3) が SaveNav の不一致警告を
+' 出させる)。各テストは自分で後始末するが、途中でクラッシュすると残る。
+' 「テストのあと赤い帯が居座る」のは利用者にとって障害の顔をしているので、
+' ランナーの終端でも**保険として**必ず消す(消すものが無ければ何も起きない)。
+' ============================================================================
+Private Sub ClearTestNotices()
+    On Error Resume Next
+    modUISheet.WriteNamed "hm_warning", vbNullString
+    modUIToast.CancelToast
+    modUIToast.HideToast
 End Sub
 
 ' 実行中に想定外のエラーが出たときの後始末(ハンドラ稼働中に On Error を重ねない
@@ -91,6 +108,7 @@ Private Sub NoticeAbort(ByVal errNumber As Long)
     Dim errText As String
     errText = "テストの実行中に問題が起きました（" & CStr(errNumber) & "）。" & _
               "開発担当へご連絡ください。"
+    ClearTestNotices
     WriteResult errText, vbNullString
     MsgBox errText, vbExclamation, TR_TITLE
 End Sub

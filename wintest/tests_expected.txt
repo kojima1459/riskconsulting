@@ -1,1 +1,10 @@
-786
+# 純ロジックテスト(層(a))の期待本数。書式は key=整数 の2行(裁定書30 裁定1(e))。
+# prod     = 配布ブック(ship:true のモジュールだけ)で走る本数。
+#            ゲート lo-pure と、prod ビルドの config!tests_expected の値源。
+# dev_only = dev専用モジュール(src/test/dev/modTestsPureDev.bas)だけの本数。
+#            ゲート lo-pure-dev の値源。dev ビルドの config!tests_expected は
+#            prod + dev_only を焼く。
+# テストを増減したらこの数字を必ず同時に更新すること(更新漏れは
+# modTestRunner と tools/run_lo_tests.py が即FAILとして可視化する。17章§4-1)。
+prod=771
+dev_only=17

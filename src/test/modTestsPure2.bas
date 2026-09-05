@@ -2,7 +2,7 @@ Attribute VB_Name = "modTestsPure2"
 Option Explicit
 
 ' ============================================================================
-' modTestsPure2 - 純ロジックモジュールのユニットテスト(17章§4-1 層(a))G6～G11
+' modTestsPure2 - 純ロジックモジュールのユニットテスト(17章§4-1 層(a))G6～G10
 ' ----------------------------------------------------------------------------
 ' 役割:
 '   modTestsPure.bas が30,000字契約の警告域(29,851字)に達したため、
@@ -17,9 +17,12 @@ Option Explicit
 ' 設計判断(R4準拠): Worksheets/Range/Application/ThisWorkbook/MsgBox/
 '   ActiveSheet には一切触れない。改行は vbLf 基準。
 '
-' 本ファイルのテスト本数: 70本(G6 21 / G7 9 / G8 5 / G9 4 / G10 10 / G11 16 /
-'   Fnv1a64Hex系はG3で modTestsPure.bas 側)。modTestsPure.bas(G0～G5) 45本と
-'   合わせて総記載 115本 = 実行 115本 / SKIP 0本(wintest/tests_expected.txt)。
+' 本ファイルのテスト本数: G6 21 / G7 9 / G8 5 / G9 4 / G10 10
+'   (Fnv1a64Hex系はG3で modTestsPure.bas 側)。総本数の正は
+'   wintest/tests_expected.txt であって本コメントではない。
+'   G11(modGatewayDirect の純ロジック17本)は 裁定書30 裁定1(d) で dev専用の
+'   src/test/dev/modTestsPureDev.bas へ移設した(direct経路ごと配布物から外れた
+'   ため。移設にあたりアサーション・期待値・テスト名は一字も変えていない)。
 '
 ' グループ / 本数 / 根拠章:
 '   G6  modMockLlm 正常系11応答                21本  15章§8.1
@@ -27,14 +30,12 @@ Option Explicit
 '   G8  modConfig 型変換の既定値フォールバック  5本  13章§2.3 / 16章 E-52 / 14章§2
 '   G9  modLog 純ロジック                       4本  13章§2.4 / 16章 NFR-S3
 '   G10 modGatewayRPN 経路分岐・上限・DecideOk 10本  14章§1 / §2 / §6
-'   G11 modGatewayDirect 純ロジック            16本  14章§3 / 17章 T-13
+'   (G11 modGatewayDirect 純ロジック 17本は modTestsPureDev.bas へ移設)
 '
 ' 本ファイルが前提とする公開契約(すべて14章§6にある。★は裁定書5で§6へ追記):
 '   modConfig.GetStr / GetLong / GetDouble / GetBool
 '   modLog.TruncDetail ★ / ShouldRotate ★
 '   modGatewayRPN.ResolveTransport / LooksLikeLimitError / DecideOk ★
-'   modGatewayDirect.BackoffMs ★ / RetryBudgetFor ★ / ParseKeyLine ★ /
-'                    IsOSeriesModel ★ / BuildRequestBody ★
 '   modMockLlm.MockResponse ★ / ResponseById ★ / FaultResponse ★
 ' ============================================================================
 
@@ -53,9 +54,6 @@ G9:
 G10:
     On Error GoTo F10
     T_GatewayRpn
-G11:
-    On Error GoTo F11
-    T_GatewayDirect
 GDone:
     On Error GoTo 0
     Exit Sub
@@ -74,9 +72,6 @@ F9:
     Resume G10
 F10:
     GroupFail "G10 GatewayRpn"
-    Resume G11
-F11:
-    GroupFail "G11 GatewayDirect"
     Resume GDone
 End Sub
 
@@ -346,75 +341,6 @@ Private Sub T_GatewayRpn()
     modTestRunner.Check "DecideOk_transport失敗は本文に関わらずFalse_14章§6", _
         (okFlag = False) And (ec = "E0201"), _
         "経路が失敗を申告しているのに成功にしている。ec=" & ec
-End Sub
-
-' ----------------------------------------------------------------------------
-' G11: modGatewayDirect の純ロジック(14章§3)。
-'   HTTP送信(ServerXMLHTTP)そのものは層(a)の対象外。リトライ回数・待ち時間・
-'   ボディ組立・キーファイル1行目の取り出しだけを固定する。
-'   ボディの検査は書式(空白の有無)に依存しないよう modJsonLite 経由で読む。
-'   BackoffMs / RetryBudgetFor / ParseKeyLine は14章§6で確定した名前(裁定書5 A-3)。
-' ----------------------------------------------------------------------------
-Private Sub T_GatewayDirect()
-    Dim body As String
-    Dim sch As String
-
-    sch = "{""type"":""object""}"
-
-    ' 指数バックオフ 2s/4s/8s(1回目/2回目/3回目)
-    ChkN "BackoffMs_1回目は2000ms_14章§3", modGatewayDirect.BackoffMs(1), 2000
-    ChkN "BackoffMs_2回目は4000ms_14章§3", modGatewayDirect.BackoffMs(2), 4000
-    ChkN "BackoffMs_3回目は8000ms_14章§3", modGatewayDirect.BackoffMs(3), 8000
-
-    ' 429/500/502/503=最大3回、408=1回、その他4xx=リトライなし
-    ChkN "RetryBudget_429は3回_14章§3", modGatewayDirect.RetryBudgetFor(429), 3
-    ChkN "RetryBudget_408は1回_14章§3", modGatewayDirect.RetryBudgetFor(408), 1
-    ChkN "RetryBudget_その他4xxはリトライなし_14章§3", _
-        modGatewayDirect.RetryBudgetFor(404), 0
-    ChkN "RetryBudget_500は3回_14章§3", modGatewayDirect.RetryBudgetFor(500), 3
-
-    ' o系モデル判定(14章§3「o系モデル名(先頭"o")では temperature を送らない」)。
-    ' BuildRequestBody は渡された sendTemperature しか見ない契約(1判断1箇所)な
-    ' ので、モデル名からフラグを起こす側をここで単体固定する(裁定書5 C-12)。
-    ' 期待値 o3=True / gpt-4.1=False は同節の根拠文言そのもの。
-    modTestRunner.Check "IsOSeriesModel_o3はTrue_14章§3", _
-        (modGatewayDirect.IsOSeriesModel("o3") = True), _
-        "先頭が o のモデル名を o系と判定していない"
-    modTestRunner.Check "IsOSeriesModel_gpt41はFalse_14章§3", _
-        (modGatewayDirect.IsOSeriesModel("gpt-4.1") = False), _
-        "o系でないモデル名を o系と誤判定している"
-
-    body = modGatewayDirect.BuildRequestBody("s1", "gpt-4.1", "S", "U", sch, 0.3, _
-        (Not modGatewayDirect.IsOSeriesModel("gpt-4.1")), 0)
-    ChkS "BuildRequestBody_modelをconfig値で載せる_14章§3", _
-        modJsonLite.GetStr(body, "model"), "gpt-4.1"
-    ' llm_max_tokens=0 のときはキー自体を送らない(14章§3の但し書き)。
-    modTestRunner.Check "BuildRequestBody_max_tokens0はキーごと送らない_14章§3", _
-        (InStr(body, """max_tokens""") = 0), "max_tokensキーが送出されている"
-    modTestRunner.Check "BuildRequestBody_json_schemaはstrictがtrue_14章§3", _
-        (modJsonLite.GetBoolJ(body, "strict", False) = True), "strict:trueでない"
-    ChkS "BuildRequestBody_json_schemaのnameはstep名_14章§3", _
-        modJsonLite.GetStr(body, "name"), "s1"
-
-    ' o系モデル名(先頭"o")では temperature を送らない。
-    body = modGatewayDirect.BuildRequestBody("s1", "o3", "S", "U", sch, 0.3, _
-        (Not modGatewayDirect.IsOSeriesModel("o3")), 0)
-    modTestRunner.Check "BuildRequestBody_o系モデルはtemperatureを送らない_14章§3", _
-        (InStr(body, """temperature""") = 0), "o系なのにtemperatureが載っている"
-
-    ' 外部由来テキストがボディを壊さないこと(引用符はJSONエスケープされる)。
-    body = modGatewayDirect.BuildRequestBody("s1", "gpt-4.1", "S", _
-        "彼は""はい""と答えた", sch, 0.3, _
-        (Not modGatewayDirect.IsOSeriesModel("gpt-4.1")), 0)
-    modTestRunner.Check "BuildRequestBody_user本文の引用符をエスケープ_14章§3", _
-        (InStr(body, "\""") > 0), "引用符がエスケープされていない"
-
-    ' キーはファイル1行目のみを使う(ブック・config・ログ・配布物に一切残さない
-    ' =16章 NFR-S2。ローテ不能の借用キーのため一度露出したら恒久被害)。
-    ChkS "ParseKeyLine_LF区切りの1行目を返す_14章§3", _
-        modGatewayDirect.ParseKeyLine("KEY-1行目" & vbLf & "KEY-2行目"), "KEY-1行目"
-    ChkS "ParseKeyLine_CRLF区切りでもCRを残さない_14章§3", _
-        modGatewayDirect.ParseKeyLine("KEY-1行目" & vbCrLf & "KEY-2行目"), "KEY-1行目"
 End Sub
 
 ' ============================================================================

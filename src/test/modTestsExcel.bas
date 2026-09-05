@@ -80,7 +80,8 @@ Private Const TE_BAND_SEQ As Long = 100001
 '   **modTestsExcel3**(新設)へ追加し 51 -> 53。内訳 = 本モジュール37本 +
 '   modTestsExcel2 14本 + modTestsExcel3 2本。層(a)に置けないのは、一致の中身が
 '   .xlsx を実際に開いて書いて読み直した結果でしか作れないため)
-Private Const TE_EXPECTED As Long = 53
+'  (裁定書30 裁定2: W61 (3)の警告帯の後始末1本を追加し 53 -> 54)
+Private Const TE_EXPECTED As Long = 54
 
 Private mRun As Long    ' ECheck が数える実行本数
 

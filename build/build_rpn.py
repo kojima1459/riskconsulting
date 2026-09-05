@@ -518,6 +518,11 @@ End Sub
 FORBIDDEN_BIN_STRINGS = ("VBProject", "AddFromString", "ExecuteExcel4Macro",
                          "WScript.Shell", "new:{")
 
+# **prod の配布物にだけ**現れてはいけない文字列(裁定書30 裁定1(f))。direct経路
+# (modGatewayDirect)は dev ビルドには載るので、共通表(上)には入れられない。
+# tools/ship_check.py ⑥ が prod ブックに対して fail-closed で使う。
+FORBIDDEN_BIN_STRINGS_PROD = ("ServerXMLHTTP", "MSXML2", "XMLHTTP")
+
 
 def build_baked_thisworkbook() -> bytes:
     """ThisWorkbook のモジュールストリーム用ソース(属性行+本文)を返す。
@@ -579,7 +584,7 @@ def _check_dropped_module_references(shipped, dropped, root):
             % (len(problems), "\n  ".join(problems[:20])))
 
 
-def build_baked_vba_project(template_bin, shipped_modules, root):
+def build_baked_vba_project(template_bin, shipped_modules, root, is_dev=True):
     """完成品 vbaProject.bin を組み立てて (bin, 焼込モジュール名リスト) を返す。"""
     tmpl = ovba_write.read_modules(template_bin)
     docs = [(nm, info) for nm, info in tmpl.items() if info["type"] == "document"]
@@ -612,7 +617,7 @@ def build_baked_vba_project(template_bin, shipped_modules, root):
         template_bin, mods,
         vba_project_stream=_neutralize_vba_project(
             ovba.CFBReader(template_bin).read("_VBA_PROJECT")))
-    hits = forbidden_strings_in_bin(vba_bin)
+    hits = forbidden_strings_in_bin(vba_bin, prod=not is_dev)
     if hits:
         print("  WARNING: vbaProject.bin に配布禁止の文字列があります"
               "(裁定書27 W9-B 6。出荷を止めるのは tools/bin_roundtrip.py と "
@@ -634,8 +639,10 @@ def _decompressed_bin_text(vba_bin):
     return "\n".join(parts)
 
 
-def forbidden_strings_in_bin(vba_bin):
-    """完成品binに現れた配布禁止文字列を返す(裁定書27 W9-B 6)。
+def forbidden_strings_in_bin(vba_bin, prod=False):
+    """完成品binに現れた配布禁止文字列を返す(裁定書27 W9-B 6・裁定書30 裁定1(f))。
+
+    prod=True のときは FORBIDDEN_BIN_STRINGS_PROD(direct経路の痕跡)も見る。
 
     **判定の唯一の実装**。tools/bin_roundtrip.py と tools/ship_check.py が
     これを import して fail-closed に使う(ビルド側は警告を出すだけ。
@@ -644,7 +651,8 @@ def forbidden_strings_in_bin(vba_bin):
     """
     dec = _decompressed_bin_text(vba_bin)
     low = dec.lower()
-    return [w for w in FORBIDDEN_BIN_STRINGS if w.lower() in low]
+    table = FORBIDDEN_BIN_STRINGS + (FORBIDDEN_BIN_STRINGS_PROD if prod else ())
+    return [w for w in table if w.lower() in low]
 
 
 # ---------------------------------------------------------------------------
@@ -677,7 +685,37 @@ def load_manifest(path):
                 f"modules.json: path '{pth}' が重複しています"
                 f"(name={seen_paths[pth]['name']!r} と name={nm!r})。")
         seen_paths[pth] = m
+        dev_src = m.get("dev_src")
+        if dev_src:
+            if dev_src in seen_paths:
+                raise BuildError(
+                    f"modules.json: dev_src '{dev_src}' が他のエントリのパスと"
+                    f"重複しています(name={nm!r})。")
+            seen_paths[dev_src] = m
     return modules
+
+
+def select_variant_paths(modules, is_dev):
+    """モード別ソース選択(裁定書30 裁定1(b))。`dev_src` を持つ台帳行は、
+    dev ビルドのときだけそのパスを実効ソースにする。
+
+    **表現は modules.json 側にある**(この関数は台帳を読むだけで、どちらを使うか
+    をコードで決めない)。実効パスを `path` へ畳んでから下流(存在検査・vba_src・
+    baked bin・自己検証)へ渡すので、下流はモード別ソースの存在を知らずに済む。
+    Application.Run や文字列ディスパッチによる実行時の切替は**しない**
+    (両版とも .bas として存在し、lo-compile が両方をコンパイルする)。
+    """
+    out = []
+    for m in modules:
+        dev_src = m.get("dev_src")
+        if dev_src and is_dev:
+            m = dict(m)
+            # 使わなかった側(prod のソース)も台帳に載っている事実として残す
+            # (check_unregistered が「未登録の .bas」と誤検出しないため)。
+            m["prod_src"] = m["path"]
+            m["path"] = dev_src
+        out.append(m)
+    return out
 
 
 def load_sheets(path):
@@ -714,6 +752,9 @@ UNREGISTERED_EXCLUDE: set[str] = set()
 def check_unregistered(modules, root):
     import glob as _glob
     registered = {m["path"].replace("\\", "/") for m in modules}
+    # dev_src(モード別ソース。裁定書30 裁定1(b))も「台帳に載っている」とみなす。
+    registered |= {m["dev_src"].replace("\\", "/") for m in modules if m.get("dev_src")}
+    registered |= {m["prod_src"].replace("\\", "/") for m in modules if m.get("prod_src")}
     found = set()
     for pat in ("*.bas", "*.cls"):
         for p in _glob.glob(os.path.join(root, "src", "**", pat), recursive=True):
@@ -888,7 +929,7 @@ class BuildCtx:
         self.block_headers = {}  # sheet -> [(block名, [列名])]
         self.dv_skipped = []     # [(sheet, target, enumキー, 長さ)]
         self.injected = []
-        self.tests_expected = read_tests_expected(root)
+        self.tests_expected = read_tests_expected(root, self.is_dev)
 
 
 def _add_name(ctx, ws, name, col, row):
@@ -1529,7 +1570,11 @@ def _make_guide(wb, spec, ctx):
         row[0] = r + 1
 
     def note(text):
+        """1行の補足。**B:C を結合**して書く(裁定書30 裁定3・Z-29)。
+        B列だけに wrap_text で書くと、幅の狭いB列では1行の高さに収まらず
+        文字が潰れて読めなかった(実測)。prompt() と同じ結合幅にそろえる。"""
         r = row[0]
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
         c = ws.cell(row=r, column=2, value=_clean(text))
         c.font = GUIDE_NOTE_FONT
         c.alignment = Alignment(vertical="center", wrap_text=True, indent=1)
@@ -1834,22 +1879,45 @@ def _make_vba_src(wb, spec, ctx):
 TESTS_EXPECTED_PATH = os.path.join("wintest", "tests_expected.txt")
 
 
-def read_tests_expected(root):
-    """wintest/tests_expected.txt の1行目の整数(ブック内テストの期待本数)を返す。
-    欠落・非整数はビルドを止める(裁定書14 裁定5。実行時は E2 を読めなければ
-    テストを実行しない fail-closed なので、焼き込み側で必ず担保する)。"""
+def read_tests_expected_pair(root):
+    """wintest/tests_expected.txt の (prod, dev_only) を返す(裁定書30 裁定1(e))。
+
+    書式は `prod=<整数>` / `dev_only=<整数>` の2行(順不同・空行と # コメント可)。
+      prod     … 配布ブックで利用者が見る純層の本数(ship:true のモジュールぶん)
+      dev_only … dev専用モジュール(modTestsPureDev)だけの本数
+    欠落・非整数・キー不足はビルドを止める(裁定書14 裁定5。実行時は
+    config!tests_expected を読めなければテストを実行しない fail-closed なので、
+    焼き込み側で必ず担保する)。"""
     path = os.path.join(root, TESTS_EXPECTED_PATH)
     if not os.path.exists(path):
         raise BuildError(
             f"{TESTS_EXPECTED_PATH} が見つかりません({path})。"
             "ブック内テストの期待本数(config!tests_expected)を焼き込めないためビルドを中止します。")
+    values = {}
     with open(path, encoding="utf-8-sig") as fp:
-        first = fp.readline().strip()
-    if not re.fullmatch(r"[0-9]+", first):
-        raise BuildError(
-            f"{TESTS_EXPECTED_PATH} の1行目が整数ではありません: {first!r}。"
-            "ブック内テストの期待本数(config!tests_expected)として使えないためビルドを中止します。")
-    return int(first)
+        for line in fp:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m = re.fullmatch(r"(prod|dev_only)\s*=\s*([0-9]+)", line)
+            if not m:
+                raise BuildError(
+                    f"{TESTS_EXPECTED_PATH} の行が読めません: {line!r}。"
+                    "書式は prod=<整数> / dev_only=<整数> の2行です(裁定書30 裁定1(e))。")
+            values[m.group(1)] = int(m.group(2))
+    for key in ("prod", "dev_only"):
+        if key not in values:
+            raise BuildError(
+                f"{TESTS_EXPECTED_PATH} に {key}= の行がありません"
+                "(prod と dev_only の2行が要ります。裁定書30 裁定1(e))。")
+    return values["prod"], values["dev_only"]
+
+
+def read_tests_expected(root, is_dev=False):
+    """そのビルドの config!tests_expected へ焼く値。
+    prod = prod行 / dev = prod行 + dev_only行(裁定書30 裁定1(e))。"""
+    prod, dev_only = read_tests_expected_pair(root)
+    return prod + dev_only if is_dev else prod
 
 
 SHEET_BUILDERS = {
@@ -2680,6 +2748,8 @@ def main():
 
     try:
         modules = load_manifest(args.modules)
+        # モード別ソース選択(裁定書30 裁定1(b))。以降 `path` は実効ソースを指す。
+        modules = select_variant_paths(modules, is_dev)
         sheets_data, sheets = load_sheets(args.sheets)
     except BuildError as e:
         sys.exit(f"ERROR: {e}")
@@ -2794,7 +2864,7 @@ def main():
             dropped = [m for m in present if m not in shipped]
             _check_dropped_module_references(shipped, dropped, root)
             baked_bin, baked_names = build_baked_vba_project(
-                template_bin, shipped, root)
+                template_bin, shipped, root, is_dev=is_dev)
         except BuildError as e:
             sys.exit(f"ERROR: {e}")
         parts["xl/vbaProject.bin"] = baked_bin

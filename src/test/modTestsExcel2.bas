@@ -108,7 +108,7 @@ End Sub
 '   V1(採番へ倒さない) -> T47B-V1N-06,07(下記 TestV1NavNumbering)。判定の担い手が
 '                        `modUICase3.CaseSave` から `modUICase6.SaveNav` へ
 '                        移ったので、SaveNav の3値判定で検査する。
-' 本数は 16本 -> 11本(Q9N 5 + V1N 2 + V5 1 + W61 3)。**通し番号は詰めない**
+' 本数は 16本 -> 12本(Q9N 5 + V1N 2 + V5 1 + W61 4)。**通し番号は詰めない**
 ' (T47B-V5-13 / T47B-W61-14..16 は W6.1 以前から使っている名前であり、
 '  実機の合否ログを過去の記録と突き合わせられなくなるため)。08〜12 は
 '  旧 Q1/V1 の欠番であり、その理由は上の対応表が持つ。
@@ -483,12 +483,13 @@ Private Sub TestW61NavPaste()
     Dim hdr As Variant
     Dim cCase As Long
     Dim rowNo As Long
-    Dim warnOrig As String
     Dim actOrig As String
     Dim newCaseId As String
     Dim okPii As Boolean
     Dim okNew As Boolean
     Dim okMismatch As Boolean
+    Dim okClean As Boolean
+    Dim detClean As String
     Dim detPii As String
     Dim detNew As String
     Dim detMis As String
@@ -497,8 +498,8 @@ Private Sub TestW61NavPaste()
     detPii = "前提不成立"
     detNew = "前提不成立"
     detMis = "前提不成立"
+    detClean = "前提不成立"
     actOrig = ActiveSheetName()
-    warnOrig = modUISheet.ReadNamed("hm_warning")
 
     Set wsCases = SheetByName("案件一覧")
     If wsCases Is Nothing Then GoTo Report
@@ -582,6 +583,15 @@ Private Sub TestW61NavPaste()
                vbBinaryCompare) > 0)
     detMis = "hm_warning=[" & modUISheet.ReadNamed("hm_warning") & "]"
 
+    ' 裁定書30 裁定2(Z-28)。(3)は SaveNav にわざと不一致警告を出させる。
+    ' 帯(トーストの図形)と hm_warning を残すと、テストのあと利用者の画面に
+    ' 赤い警告が居座る。ここで消し、消えたことを1本のECheckで押さえる。
+    modUISheet.WriteNamed "hm_warning", vbNullString
+    modUIToast.CancelToast
+    modUIToast.HideToast
+    okClean = (LenB(Trim$(modUISheet.ReadNamed("hm_warning"))) = 0)
+    detClean = "後始末後 hm_warning=[" & modUISheet.ReadNamed("hm_warning") & "]"
+
 Report:
     ECheck "T47B-W61-14_[ここに貼る]は個人情報を検知したらcase_dataを1字も増やさない", _
            okPii, detPii
@@ -589,6 +599,8 @@ Report:
            okNew, detNew
     ECheck "T47B-W61-16_ci_case_id不一致の画面からの保存は1欄も書かない", _
            okMismatch, detMis
+    ECheck "T47B-W61-17_(3)の後にhm_warningと警告帯を残さない", _
+           okClean, detClean
 
     On Error Resume Next
     modCaseStore.SaveData T2_CASE, "input_hp", vbNullString
@@ -608,7 +620,9 @@ Report:
     ClearNamed "ci_industry_name"
     modUISheet.WriteNamed "ci_case_id", vbNullString
     modUISheet.WriteNamed "hm_case_id", vbNullString
-    modUISheet.WriteNamed "hm_warning", warnOrig
+    modUISheet.WriteNamed "hm_warning", vbNullString
+    modUIToast.CancelToast
+    modUIToast.HideToast
     DropFixtureRow wsCases, cCase
     If LenB(actOrig) > 0 Then modUISheet.ShowSheet actOrig
     Exit Sub
@@ -619,6 +633,7 @@ Crashed:
     okPii = False
     okNew = False
     okMismatch = False
+    okClean = False
     Resume Report
 End Sub
 

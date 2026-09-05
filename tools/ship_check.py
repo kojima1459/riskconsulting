@@ -465,9 +465,13 @@ def check_item6(dist_dir: Path) -> tuple[bool, list[str]]:
             hits = []
         else:
             vba_bin = z.read("xl/vbaProject.bin")
-            hits = build_rpn.forbidden_strings_in_bin(vba_bin)
+            # prod=True で direct経路の痕跡(ServerXMLHTTP / MSXML2 / XMLHTTP)も
+            # 見る(裁定書30 裁定1(f))。dev ビルドには載ってよいので、この3語は
+            # prod ブックを見るこの⑥だけの禁止語である。
+            hits = build_rpn.forbidden_strings_in_bin(vba_bin, prod=True)
     print(f"  bin の禁止文字列   : {hits if hits else 'なし'}"
-          f"  (表: {list(build_rpn.FORBIDDEN_BIN_STRINGS)})")
+          f"  (表: {list(build_rpn.FORBIDDEN_BIN_STRINGS)}"
+          f" + prod限定 {list(build_rpn.FORBIDDEN_BIN_STRINGS_PROD)})")
     if hits:
         problems.append("vbaProject.bin に配布禁止の文字列があります: "
                         + ", ".join(hits))

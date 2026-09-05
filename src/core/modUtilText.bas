@@ -86,7 +86,7 @@ Public Function SetCellSafe(ByVal target As Object, ByVal rawText As String, _
     ' 発火の記録(16章 E-46 / E-22)。detail には箇所だけを書く(NFR-S3)。
     If Not gTxtInGuardLog Then
         gTxtInGuardLog = True
-        If StartsWithFormulaChar(rawText) Then
+        If StartsWithFormulaChar(rawText) And ShouldLogFormulaGuard(whereNote) Then
             modLog.LogError "E0606", "SetCellSafe", "formula_guard:" & whereNote
         End If
         If srcLen > CELL_MAX_CHARS Then
@@ -98,6 +98,25 @@ Public Function SetCellSafe(ByVal target As Object, ByVal rawText As String, _
 
     target.Value = outText
     SetCellSafe = outText
+End Function
+
+' ============================================================================
+' ShouldLogFormulaGuard - 先頭式記号の無害化を err_log へ記録するか(純関数)。
+' ----------------------------------------------------------------------------
+'   裁定書30 裁定4(16章 E-46)。無害化は**どの書込先でも必ず行う**が、閲覧・
+'   受け皿シートへの流し込みだけは E0606 を記録しない。「中身」シート(読ませる
+'   だけの写し)と paste_buf(クリップボード授受の受け皿)は外部由来テキストを
+'   そのまま大量に流し込む面であり、1行ごとに積むと err_log が埋まって
+'   **本物の注入検知**が見つけられなくなるためである。
+'   判定は whereNote だけを見る純関数に閉じる(1判断1箇所)。除外は modUICase7 の
+'   3つだけで、増やすときは16章 E-46 を先に直す。
+' ============================================================================
+Public Function ShouldLogFormulaGuard(ByVal whereNote As String) As Boolean
+    ShouldLogFormulaGuard = True
+    Select Case Trim$(whereNote)
+        Case "modUICase7/body_title", "modUICase7/body_text", "modUICase7/clip_copy"
+            ShouldLogFormulaGuard = False
+    End Select
 End Function
 
 ' ============================================================================

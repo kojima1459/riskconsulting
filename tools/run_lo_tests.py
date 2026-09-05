@@ -127,7 +127,10 @@ PURE_ALLOWLIST = [
     "modUtilPath",
     # core のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは純関数だけの
     # モジュール(技術メモ4。W1のG8/G9/G10/G11が叩く)。
-    "modConfig", "modLog", "modGatewayRPN", "modGatewayDirect",
+    # modGatewayLink は direct経路への薄い接続点(裁定書30 裁定1(b))。prod の
+    #   ソースは E0209 を返すだけ。modGatewayDirect は配布物から外れたので
+    #   **配布集合(このリスト)には無い**。dev専用集合(DEV_ONLY_EXTRA)が持つ。
+    "modConfig", "modLog", "modGatewayRPN", "modGatewayLink",
     # app の純文字列・純ロジック(W2)。
     "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
     "modSchemas", "modValidate", "modValidate2", "modPii",
@@ -273,8 +276,22 @@ PURE_ALLOWLIST = [
     #   写像)と 13章§2.8(ファイル名の禁止文字・schema_version の前方互換)だけを
     #   根拠に modCompanyFile3 の純関数を叩く。modTestsPure19.RunAll の末尾から呼ぶ。
     "modTestsPure20",
+    # modTestsPureHook: dev専用テストの接続点(裁定書30 裁定1(d))。prod の
+    #   ソースは1本も実行しない。dev のソースが modTestsPureDev.RunAll を呼ぶ。
+    "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
 ]
+
+# ==============================================================================
+# dev専用集合(裁定書30 裁定1(d)(e))
+# ------------------------------------------------------------------------------
+# 配布物から外れたモジュール(build/modules.json の ship:false)と、それを叩く
+# dev専用テスト。ゲート lo-pure-dev はこれらを注入したうえで
+# modTestsPureDev.RunAll **だけ**を走らせ、tests_expected.txt の dev_only 行と
+# 実行本数を照合する。lo-pure(配布集合)は prod 行と照合する。
+# ==============================================================================
+DEV_ONLY_EXTRA = ["modGatewayDirect", "modTestsPureDev"]
+DEV_ONLY_ENTRY = "modTestsPureDev"
 
 TEMPLATE_PROFILE_DIR = Path(tempfile.gettempdir()) / "rpn_lo_template_profile"
 
@@ -341,18 +358,25 @@ def find_soffice() -> str:
     sys.exit(2)
 
 
-def read_tests_expected() -> int | None:
-    """wintest/tests_expected.txt の1行目(10進整数)を読む。無ければ None。"""
+def read_tests_expected(key: str = "prod") -> int | None:
+    """wintest/tests_expected.txt の `prod=` / `dev_only=` を読む(裁定書30 裁定1(e))。
+
+    書式が壊れていたら None を返す(呼び出し側が FAIL にする=合格側へ倒さない)。
+    """
     if not TESTS_EXPECTED_FILE.exists():
         return None
+    values: dict[str, int] = {}
     for line in TESTS_EXPECTED_FILE.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        if re.fullmatch(r"\d+", line):
-            return int(line)
+        m = re.fullmatch(r"(prod|dev_only)\s*=\s*(\d+)", line)
+        if not m:
+            return None
+        values[m.group(1)] = int(m.group(2))
+    if "prod" not in values or "dev_only" not in values:
         return None
-    return None
+    return values.get(key)
 
 
 def strip_attributes(text: str) -> str:
@@ -513,19 +537,66 @@ def discover_modules(src_root: Path) -> list[tuple[str, Path]]:
     return out
 
 
+def load_dev_srcs() -> dict[str, str]:
+    """build/modules.json から {モジュール名: devソースの相対パス} を読む。
+
+    モード別ソース選択の**唯一の値源**は台帳であり、本ツールはそれを読むだけ
+    (裁定書30 裁定1(b))。台帳が読めないときは空を返さず落とす(合格側へ
+    倒さない: dev のソースを prod のつもりでコンパイルしても気付けなくなる)。
+    """
+    path = REPO_ROOT / "build" / "modules.json"
+    if not path.exists():
+        print(f"[run_lo_tests] {path} がありません(モード別ソースを解決できません)。")
+        sys.exit(2)
+    import json
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {m["name"]: m["dev_src"] for m in data["modules"] if m.get("dev_src")}
+
+
+def select_mode_modules(pairs, dev_srcs: dict[str, str],
+                        use_dev: bool) -> dict[str, Path]:
+    """同名2ソースのうち、そのモードで使う1本だけを残した {名前: パス}。"""
+    dev_paths = {v.replace("\\", "/") for v in dev_srcs.values()}
+    out: dict[str, Path] = {}
+    for name, path in pairs:
+        rel = path.resolve().relative_to(REPO_ROOT).as_posix()
+        is_dev_file = rel in dev_paths
+        if name in dev_srcs and (is_dev_file != use_dev):
+            continue
+        if is_dev_file and name not in dev_srcs:
+            # dev_src として台帳に載っていない dev/ 配下の .bas(dev専用モジュール
+            # そのもの)。名前の衝突は無いのでそのまま採る。
+            pass
+        out[name] = path
+    return out
+
+
 # ==============================================================================
 # モード1: 純ロジック実行(RunAllPureTests -> ReportText)
 # ==============================================================================
 def run_pure_mode(soffice: str, template: Path, all_modules: dict[str, Path],
                   work_dir: Path, timeout_sec: int, verbose: bool,
-                  type_blocks: dict[str, str] | None = None):
+                  type_blocks: dict[str, str] | None = None,
+                  pure_set: str = "prod"):
+    dev_only = (pure_set == "dev-only")
     print("=" * 78)
-    print("モード1: LibreOffice上で純ロジックテスト(modTestRunner.RunAllPureTests)を実行")
+    if dev_only:
+        print("モード1(dev-only): dev専用の純ロジックテスト"
+              f"({DEV_ONLY_ENTRY}.RunAll)を実行")
+    else:
+        print("モード1: LibreOffice上で純ロジックテスト"
+              "(modTestRunner.RunAllPureTests)を実行")
     print("=" * 78)
+
+    wanted = list(PURE_ALLOWLIST)
+    if dev_only:
+        # dev専用テストが叩く相手(modGatewayDirect)と、その入口を足す。
+        # 注入は配布集合ごと行い、**実行するのは dev専用の入口だけ**にする。
+        wanted += DEV_ONLY_EXTRA
 
     pure_srcs: dict[str, str] = {}
     missing = []
-    for name in PURE_ALLOWLIST:
+    for name in wanted:
         path = all_modules.get(name)
         if path is None:
             missing.append(name)
@@ -539,25 +610,36 @@ def run_pure_mode(soffice: str, template: Path, all_modules: dict[str, Path],
         print("  modTestRunner.bas が見つからないためモード1を実行できません。")
         return False, "modTestRunner.bas not found"
 
-    expected = read_tests_expected()
+    if dev_only and DEV_ONLY_ENTRY not in pure_srcs:
+        print(f"  {DEV_ONLY_ENTRY}.bas が見つからないため dev-only を実行できません。")
+        return False, f"{DEV_ONLY_ENTRY}.bas not found"
+
+    key = "dev_only" if dev_only else "prod"
+    expected = read_tests_expected(key)
     if expected is None:
         print(f"  FAIL: {TESTS_EXPECTED_FILE} が読めません"
-              "(1行目に10進整数のみを書いてください。17章§4-1)")
+              "(prod=<整数> / dev_only=<整数> の2行。裁定書30 裁定1(e))")
         return False, "tests_expected unreadable"
-    print(f"  tests_expected = {expected} ({TESTS_EXPECTED_FILE})")
+    print(f"  tests_expected[{key}] = {expected} ({TESTS_EXPECTED_FILE})")
 
     out_path = work_dir / "pure_result.txt"
     if out_path.exists():
         out_path.unlink()
 
+    # dev-only は「dev専用モジュールだけを走らせる」ので、配布集合を回す
+    # RunAllPureTests は呼ばない(呼ぶと prod のテストまで数に入る)。
+    entry_src = ("    modTestsPureDev.RunAll\n" if dev_only
+                 else "    modTestRunner.RunAllPureTests\n")
+    reset_src = "    modTestRunner.ResetTests\n" if dev_only else ""
     test_main_src = (
         "Option Explicit\n\n"
         "Sub Main\n"
         "    On Error Resume Next\n"
         "    Err.Clear\n"
         f"    modTestRunner.SetExpectedCount {expected}\n"
-        "    modTestRunner.RunAllPureTests\n"
-        "    Dim runErr As String\n"
+        + reset_src
+        + entry_src
+        + "    Dim runErr As String\n"
         "    If Err.Number <> 0 Then\n"
         '        runErr = "RUNNER_ERROR " & Err.Number & ": " & Err.Description\n'
         "        Err.Clear\n"
@@ -572,14 +654,16 @@ def run_pure_mode(soffice: str, template: Path, all_modules: dict[str, Path],
         "End Sub\n"
     )
 
-    profile_dir = work_dir / "profile_pure"
+    profile_dir = work_dir / ("profile_pure_dev" if dev_only else "profile_pure")
     fresh_profile_copy(template, profile_dir)
     modules = dict(pure_srcs)
     modules["TestMain"] = test_main_src
-    write_library(profile_dir, "RpnPureRun", modules, type_blocks)
-    register_libraries(profile_dir, ["RpnPureRun"])
+    lib = "RpnPureDevRun" if dev_only else "RpnPureRun"
+    write_library(profile_dir, lib, modules, type_blocks)
+    register_libraries(profile_dir, [lib])
 
-    uri = "vnd.sun.star.script:RpnPureRun.TestMain.Main?language=Basic&location=application"
+    uri = (f"vnd.sun.star.script:{lib}.TestMain.Main"
+           "?language=Basic&location=application")
     rc, out, err = run_uri(soffice, profile_dir, uri, timeout_sec)
 
     if not out_path.exists():
@@ -615,11 +699,13 @@ def run_pure_mode(soffice: str, template: Path, all_modules: dict[str, Path],
             print("        理由をテスト側のコメントに書いたうえで EXPECTED_SKIP_MAX を更新してください。")
             ok = False
         if executed != expected:
-            print(f"  FAIL: 実行本数が {executed} 件で tests_expected({expected})と一致しません。")
+            print(f"  FAIL: 実行本数が {executed} 件で "
+                  f"tests_expected[{key}]({expected})と一致しません。")
             print("        テストを増減したら wintest/tests_expected.txt を同時に更新してください。")
             ok = False
         if ok:
-            print(f"  ベースライン照合 OK: 実行本数 {executed} = tests_expected {expected} / "
+            print(f"  ベースライン照合 OK: 実行本数 {executed} = "
+                  f"tests_expected[{key}] {expected} / "
                   f"SKIP {skip_count} <= {EXPECTED_SKIP_MAX}")
 
     return ok, report
@@ -634,7 +720,11 @@ def safe_lib_name(module_name: str) -> str:
 
 def run_compile_mode(soffice: str, template: Path, all_modules: dict[str, Path],
                      work_dir: Path, timeout_sec: int, verbose: bool,
-                     type_blocks: dict[str, str] | None = None):
+                     type_blocks: dict[str, str] | None = None,
+                     module_names: dict[str, str] | None = None):
+    """all_modules のキーは**ラベル**(同名2ソースを区別するための一意名)で、
+    実際のモジュール名は module_names[ラベル] が持つ(裁定書30 裁定1(b) の
+    モード別ソースは prod版・dev版の両方をここでコンパイルする)。"""
     print("\n" + "=" * 78)
     print("モード2: 全モジュールの構文コンパイルチェック(実行はしない)")
     print("=" * 78)
@@ -646,9 +736,10 @@ def run_compile_mode(soffice: str, template: Path, all_modules: dict[str, Path],
     results: list[tuple[str, bool, str]] = []
     all_ok = True
 
-    for name, path in sorted(all_modules.items()):
+    for label, path in sorted(all_modules.items()):
+        name = (module_names or {}).get(label, label)
         target_src = path.read_text(encoding="utf-8", errors="replace")
-        lib_name = safe_lib_name(name)
+        lib_name = safe_lib_name(label)
 
         modules_for_lib: dict[str, str] = {}
         if name != "modTypes" and modtypes_src is not None:
@@ -670,10 +761,10 @@ def run_compile_mode(soffice: str, template: Path, all_modules: dict[str, Path],
         detail = f"exit={rc} ({elapsed:.1f}s)"
         if rc == 124:
             detail = f"タイムアウト({timeout_sec}s) - 構文エラーの疑い"
-        results.append((name, ok, detail))
+        results.append((label, ok, detail))
         all_ok = all_ok and ok
 
-        print(f"  {'PASS' if ok else 'FAIL':<4} {name:<24} {detail}")
+        print(f"  {'PASS' if ok else 'FAIL':<4} {label:<28} {detail}")
         shutil.rmtree(profile_dir, ignore_errors=True)
 
     if not results:
@@ -686,6 +777,10 @@ def main() -> int:
     parser.add_argument("--path", type=str, default=str(DEFAULT_SRC_ROOT),
                         help="対象src(既定: <repo>/src)")
     parser.add_argument("--mode", choices=["pure", "compile", "all"], default="all")
+    parser.add_argument("--pure-set", choices=["prod", "dev-only"], default="prod",
+                        help="モード1で走らせる集合(裁定書30 裁定1(e))。"
+                             "prod=配布集合(ship:true)で tests_expected の prod と照合 / "
+                             "dev-only=dev専用モジュールだけで dev_only と照合")
     parser.add_argument("--pure-timeout", type=int, default=120,
                         help="モード1のタイムアウト秒(既定120)")
     parser.add_argument("--compile-timeout", type=int, default=20,
@@ -703,11 +798,37 @@ def main() -> int:
     soffice = find_soffice()
     template = ensure_template_profile(soffice, args.verbose)
 
-    all_modules: dict[str, Path] = dict(discover_modules(src_root))
-    print(f"[run_lo_tests] soffice={soffice}")
-    print(f"[run_lo_tests] 対象モジュール数: {len(all_modules)} (in {src_root})")
+    pairs = discover_modules(src_root)
 
-    type_blocks = collect_public_type_blocks(all_modules)
+    # モード別ソース(裁定書30 裁定1(b))。同じモジュール名の .bas が2本ある
+    # ことがあり、どちらが prod でどちらが dev かの**唯一の値源は
+    # build/modules.json の dev_src** である(ここでコードが決めない)。
+    dev_srcs = load_dev_srcs()
+
+    # モード2(コンパイル)は**両版**を見る。ラベルで区別して1本ずつ隔離する。
+    compile_modules: dict[str, Path] = {}
+    compile_names: dict[str, str] = {}
+    seen: dict[str, int] = {}
+    for name, path in pairs:
+        label = name
+        if name in seen:
+            label = f"{name}__{path.parent.name}"
+        seen[name] = seen.get(name, 0) + 1
+        compile_modules[label] = path
+        compile_names[label] = name
+
+    # モード1(実行)は片方だけを注入する(同じ名前の2ソースは同居できない)。
+    use_dev = (args.pure_set == "dev-only")
+    pure_modules = select_mode_modules(pairs, dev_srcs, use_dev)
+
+    print(f"[run_lo_tests] soffice={soffice}")
+    print(f"[run_lo_tests] 対象モジュール数: {len(compile_modules)} (in {src_root})")
+    if dev_srcs:
+        print(f"[run_lo_tests] モード別ソース(build/modules.json の dev_src): "
+              f"{', '.join(sorted(dev_srcs))} / モード1は "
+              f"{'dev' if use_dev else 'prod'} 側を注入")
+
+    type_blocks = collect_public_type_blocks(compile_modules)
     if type_blocks:
         print(f"[run_lo_tests] 跨ぎ参照へ写す Public Type(技術メモ7): "
               f"{', '.join(sorted(type_blocks))}")
@@ -716,12 +837,14 @@ def main() -> int:
     overall_ok = True
     try:
         if args.mode in ("pure", "all"):
-            ok, _report = run_pure_mode(soffice, template, all_modules, work_dir,
-                                        args.pure_timeout, args.verbose, type_blocks)
+            ok, _report = run_pure_mode(soffice, template, pure_modules, work_dir,
+                                        args.pure_timeout, args.verbose, type_blocks,
+                                        pure_set=args.pure_set)
             overall_ok = overall_ok and ok
         if args.mode in ("compile", "all"):
-            ok, _results = run_compile_mode(soffice, template, all_modules, work_dir,
-                                            args.compile_timeout, args.verbose, type_blocks)
+            ok, _results = run_compile_mode(soffice, template, compile_modules, work_dir,
+                                            args.compile_timeout, args.verbose, type_blocks,
+                                            module_names=compile_names)
             overall_ok = overall_ok and ok
     finally:
         if args.keep_profile:

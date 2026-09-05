@@ -242,6 +242,19 @@ Public Sub RunAllPureTests()
     End If
     On Error GoTo 0
 
+    ' dev専用の純層テスト(裁定書30 裁定1(d))。配布ビルドでは modTestsPureHook が
+    ' 何も実行しない版に差し替わるので、ここは prod/dev のどちらでも同じ1行で
+    ' 済む(実行時の名前ディスパッチは使わない)。
+    On Error Resume Next
+    Err.Clear
+    modTestsPureHook.RunAll
+    If Err.Number <> 0 Then
+        Check "modTestsPureHook.RunAll", False, _
+              "呼び出しでエラー: " & Err.Description & " (Err=" & Err.Number & ")"
+        Err.Clear
+    End If
+    On Error GoTo 0
+
     ' ---- 実行本数の照合(0件実行の「全緑」を成立させない) ----
     If Not mExpectedSet Then
         AddFailure "NG: tests_expected が未設定です", _

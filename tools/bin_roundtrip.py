@@ -90,6 +90,9 @@ DEV_SUFFIX = "_dev.xlsm"
 def expected_sources(is_dev: bool) -> dict:
     """台帳から {モジュール名: 期待するモジュール本文(bytes)} を作る。"""
     modules = build_rpn.load_manifest(str(REPO_ROOT / "build" / "modules.json"))
+    # モード別ソース選択(裁定書30 裁定1(b))。dev ブックの modGatewayLink /
+    # modTestsPureHook は dev_src のソースと突き合わせる。
+    modules = build_rpn.select_variant_paths(modules, is_dev)
     present, _missing = [], []
     for m in modules:
         if (REPO_ROOT / m["path"]).exists():
@@ -177,7 +180,8 @@ def check_book(book: Path) -> list[str]:
             f"{book.name}: モジュール数が台帳と不一致(台帳{len(want)} / bin{len(std_got)})")
 
     # --- [4] 禁止文字列 -------------------------------------------------------
-    hits = build_rpn.forbidden_strings_in_bin(vba_bin)
+    # prod ブックは direct経路の痕跡(ServerXMLHTTP 等)も見る(裁定書30 裁定1(f))。
+    hits = build_rpn.forbidden_strings_in_bin(vba_bin, prod=not is_dev)
     print(f"[4] 配布禁止文字列: {hits if hits else 'なし'}")
     if hits:
         errors.append(

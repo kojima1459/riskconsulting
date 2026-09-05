@@ -29,7 +29,7 @@ vba_lint.py 緑
   -> app_version 更新 -> 15分スモーク -> 署名 -> 共有フォルダ配置
 ```
 
-- **検問はまとめて `python3 tools/gate.py` で回すのが標準**(全18ゲート・緑は1行/赤だけ末尾ログ+全文ログパス。テストが数千本規模になっても出力が肥大しない非対称出力)。`--only lint,lo-pure` で絞り、`--tail N` で失敗時表示量を調整、`--list` で一覧。個別ツールの直接実行はデバッグ時のみ。
+- **検問はまとめて `python3 tools/gate.py` で回すのが標準**(全19ゲート・緑は1行/赤だけ末尾ログ+全文ログパス。テストが数千本規模になっても出力が肥大しない非対称出力)。`--only lint,lo-pure` で絞り、`--tail N` で失敗時表示量を調整、`--list` で一覧。個別ツールの直接実行はデバッグ時のみ。
 - `vba_lint.py` と `run_lo_tests.py` は**コミット条件**。HTMLテンプレ系(modHtmlTemplate*/modHtmlTheme/modExportHtml)へ触れたコミットは `render_report.py`(standard・--faithful の両方)も**コミット条件**に含める(18章固定文の逐語照合・DATAリテラル検査・SEC-16非描画検査はここが唯一の検問。層(a)のG90/G91は空白畳み照合のため見出し内空白の漂流には盲)。
   これらが緑でも**実機 wintest(層b)を飛ばしてよい理由にはならない**(17章§1)。
 - 検問を1つでも飛ばした版は配布しない。
@@ -163,6 +163,11 @@ python3 tools/run_lo_tests.py --mode compile  # 全モジュール構文チェ�
 # exit code: 0 = 全PASS / 1 = いずれか失敗
 ```
 
+- モード1は2つの集合を別々に走らせる(裁定書30 裁定1(e))。`--pure-set prod`(既定・ゲート `lo-pure`)は
+  **配布集合**(`build/modules.json` の ship:true)だけを注入して `modTestRunner.RunAllPureTests` を回し、
+  `wintest/tests_expected.txt` の `prod=` と実行本数を照合する。`--pure-set dev-only`(ゲート `lo-pure-dev`)は
+  dev専用モジュール `modTestsPureDev.RunAll` だけを走らせ `dev_only=` と照合する。
+  同名2ソース(`dev_src`)のモジュールは、モード1では片方だけを注入し、モード2(コンパイル)では**両方**を見る。
 - モード1は `wintest/tests_expected.txt` を読んで `modTestRunner.SetExpectedCount`
   へ渡し、**実行本数の完全一致**を検査する。
 - モード1に注入するモジュールは `PURE_ALLOWLIST`。**テストが新しいモジュールを
