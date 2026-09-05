@@ -24,7 +24,7 @@ Option Explicit
 '
 ' prod版のふるまい(裁定書30 裁定1(c)・司令塔の手直し):
 '   config の llm_transport=direct が設定されていたら E0209 を返し、
-'   **err_log にも1行残す**(16章 E-60)。**リボン経路へ黙って倒さない**
+'   **err_log にも1行残す**(16章 E-62)。**リボン経路へ黙って倒さない**
 '   (設定ミスを隠すと、利用者は自分が何経路で動いているのか分からなくなる)。
 '   detail は "direct_not_shipped" の一語だけで、設定値も本文も書かない
 '   (NFR-S3)。
@@ -47,7 +47,7 @@ Public Function CallDirect(ByVal stepName As String, ByVal systemPrompt As Strin
     modelUsed = vbNullString
     CallDirect = vbNullString
 
-    ' 設定ミスの記録(16章 E-60)。detail は固定語のみ=NFR-S3。
+    ' 設定ミスの記録(16章 E-62)。detail は固定語のみ=NFR-S3。
     modLog.LogError GL_ERR_DIRECT_OFF, "modGatewayLink.CallDirect", _
                     "direct_not_shipped"
 End Function

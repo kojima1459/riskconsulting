@@ -117,7 +117,7 @@ Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログ�
 - リトライ: 429/500/502/503=指数バックオフ最大3回（2s/4s/8s）。408/タイムアウト=1回。その他4xx=リトライなし
 - o系モデル名（先頭"o"）では temperature を送らない。temperature / max_tokens はリテラルで書かず必ず config から読む（NFR-M3。ribbon経路の§2と同じ値源）
 - キー不存在=E0205「direct経路は開発者専用です」
-- **direct経路は dev ビルド専用である**（W11-a・裁定書30 裁定1）。実体 `modGatewayDirect` は配布ビルド（prod）から外れており（`build/modules.json` の `ship:false`）、`modGatewayRPN.DirectStep` が呼ぶのは接続モジュール `modGatewayLink.CallDirect`（14章§6と同一契約）である。ソースはビルドモードで差し替わり、prod 版は `llm_transport=direct` が設定されていても **E0209**「この配布では direct 経路は使えません。llm_transport=ribbon にしてください」を返す（リボン経路へ黙って倒さない。16章 E-60）。dev 版は`modGatewayDirect` へ転送するだけで、本節の仕様は dev ビルドでそのまま生きている
+- **direct経路は dev ビルド専用である**（W11-a・裁定書30 裁定1）。実体 `modGatewayDirect` は配布ビルド（prod）から外れており（`build/modules.json` の `ship:false`）、`modGatewayRPN.DirectStep` が呼ぶのは接続モジュール `modGatewayLink.CallDirect`（14章§6と同一契約）である。ソースはビルドモードで差し替わり、prod 版は `llm_transport=direct` が設定されていても **E0209**「この配布では direct 経路は使えません。llm_transport=ribbon にしてください」を返す（リボン経路へ黙って倒さない。16章 E-62）。dev 版は`modGatewayDirect` へ転送するだけで、本節の仕様は dev ビルドでそのまま生きている
 - コスト目安: 1案件=4呼び出し・入力 約25k tok・出力 約8k tok → 数十円/案件。PoC全体で数千円以内
 - **コスト前提（発注者確認 2026-08-28）: API利用コストは設計制約としない**。トークン節約のための品質妥協（入力の間引き・批判パスの省略・リトライ回数の切詰め）は行わない。有報級の長文（5万字≒25k tok強）を1呼び出しに載せる設計も可。usage ログ（modLog）は引き続き全呼び出しで記録する（コスト管理でなく挙動監視のため）
 - **長文入力の根拠（2026-08-28実機検証済み）**: リボン側ラッパーは機能制限なし・Azure OpenAI応答素通し（PoC台帳 RIBBON_API_CONFIRMED.md）。上限はモデルのコンテキスト長のみ。**実機テスト合格**: 三菱電機・有報「事業等のリスク」章全文を1呼び出しで構造化、最終項目まで完走・切り捨てなし。Wait（config `llm_wait_sec`）と MaxTokens（config `llm_max_tokens`・Step別上書き可）は長文時に引数で拡張する前提で設計する
