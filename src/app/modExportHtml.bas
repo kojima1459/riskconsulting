@@ -41,9 +41,10 @@ Private Const EX_PH_COMPANY As String = "{{COMPANY}}"
 Private Const EX_PH_POLICY As String = "{{POLICY_NO}}"
 Private Const EX_THEME_DEFAULT As String = "standard"
 ' 保存先(裁定書27 W9-C2)。html_out_dir が空なら data_dir に従う。解決(候補の
-' 並べ方・実在確認・作成)は modUtil.ResolveDataDir が唯一持ち、`%…%` を含む値は
-' **展開せず候補から捨てる**(裁定書31 裁定1)ので、この既定値は候補にならない。
-Private Const EX_OUT_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
+' 並べ方・実在確認・作成)は modUtil.ResolveDataDir が唯一持つ。**既定は空**
+' (裁定書31 裁定1・司令塔裁定: コード上に環境変数のリテラルを残さない。空の
+' まま渡せば data_dir.txt -> config -> 本体と同じフォルダ \データ の順に決まる)。
+Private Const EX_OUT_DEFAULT As String = vbNullString
 Private Const EX_VER_DEFAULT As String = "2.0.0"
 Private Const EX_CODE_FAIL As String = "E0502"
 
@@ -446,21 +447,6 @@ Private Function FirstCandidate(ByVal rawDir As String) As String
     Exit Function
 Failed:
     FirstCandidate = vbNullString
-End Function
-
-Private Function ExpandEnvText(ByVal pathText As String) As String
-    ExpandEnvText = pathText
-    Dim t As String
-    t = pathText
-    Dim userProfile As String
-    userProfile = Environ$("USERPROFILE")
-    If LenB(userProfile) > 0 Then t = Replace(t, "%USERPROFILE%", userProfile)
-    Dim homeDrive As String
-    homeDrive = Environ$("HOME")
-    If InStr(1, t, "%HOME%", vbTextCompare) > 0 And LenB(homeDrive) > 0 Then
-        t = Replace(t, "%HOME%", homeDrive)
-    End If
-    ExpandEnvText = t
 End Function
 
 ' 末尾の区切りを落とす。答えを2箇所に持たないため modUtil へ委ねる

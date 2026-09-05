@@ -2744,7 +2744,40 @@ def check_env_temp_literal(info: ModuleInfo) -> None:
             )
 
 
-# 上の2ルールの自己テスト(骨抜き防止)。正例=findingが出てはいけない書き方、
+# ==============================================================================
+# 保存先(data_dir)の環境変数の参照(裁定書31 裁定1・司令塔裁定 2026-09-05)
+# ------------------------------------------------------------------------------
+# 会社PC実測で `%OneDrive%` が**別の利用者(win11admin)のフォルダ**を指し、
+# `%OneDriveCommercial%` は未定義だった。環境変数から OneDrive を探すと、
+# 他人のフォルダへ企業データを書きに行く。よって data_dir の解決からこれらの
+# 参照を全撤去した(17章 Z-32)。純関数テストは引数しか見ないので、「常に空を
+# 返す Environ$」を足し戻す退行は層(a)では捕まらない(W11-b の変異注入(a)で
+# 実測)。ここで**全モジュール(modUtil / modUtilPath / src/test を含む。除外
+# なし)**を対象に機械で止める。
+#
+# 対象の語: OneDrive / OneDriveCommercial / USERPROFILE の3つ。
+#   TEMP / TMP / TMPDIR の規則(上)とその除外は別物で、そのまま据え置く。
+# ==============================================================================
+ENV_DATADIR_PATTERN = re.compile(
+    r'\bEnviron\$?\s*\(\s*"(?:OneDriveCommercial|OneDrive|USERPROFILE)"\s*\)',
+    re.IGNORECASE)
+
+
+def check_env_datadir_literal(info: ModuleInfo) -> None:
+    """裁定書31 裁定1: OneDrive/USERPROFILE の環境変数参照を全モジュールで禁止。"""
+    for lineno, stmt in info.statements:
+        if ENV_DATADIR_PATTERN.search(stmt):
+            info.add(
+                "ERROR", lineno,
+                "裁定書31 W11-b: 保存先の環境変数参照は禁止です"
+                "(会社PCの %OneDrive% は別の利用者のフォルダを指します)。"
+                "data_dir の値源は data_dir.txt -> config -> 本体と同じフォルダ"
+                "\\データ の3段だけです(17章 Z-32): "
+                f"「{stmt.strip()[:80]}」",
+            )
+
+
+# 上の3ルールの自己テスト(骨抜き防止)。正例=findingが出てはいけない書き方、
 # 負例=必ずERRORが出なければならない書き方。run_lint の末尾で毎回走らせる。
 _PATHJOIN_SELFTEST_OK = [
     'CompanyFilePath = modUtilPath.JoinPath(dirText, baseName & CF_EXT)',
@@ -2761,6 +2794,14 @@ _ENVTEMP_SELFTEST_NG = [
     'd = Environ$("TEMP")',
     'd = Environ("TMPDIR")',
 ]
+# 裁定書31: OneDrive/USERPROFILE は除外なしで禁止。TMPDIR は modUtilPath で
+#   許可のまま(上の規則の管轄であり、この規則は反応してはいけない)。
+_ENVDATADIR_SELFTEST_OK = [
+    'd = Environ$("TMPDIR")',
+]
+_ENVDATADIR_SELFTEST_NG = [
+    'outText = AppendCandidate(outText, Environ$("OneDrive"))',
+]
 
 
 def _selftest_path_rules() -> list[str]:
@@ -2771,6 +2812,8 @@ def _selftest_path_rules() -> list[str]:
          _PATHJOIN_SELFTEST_OK, _PATHJOIN_SELFTEST_NG),
         ('Environ$("TEMP")禁止', check_env_temp_literal,
          _ENVTEMP_SELFTEST_OK, _ENVTEMP_SELFTEST_NG),
+        ('Environ$("OneDrive")禁止', check_env_datadir_literal,
+         _ENVDATADIR_SELFTEST_OK, _ENVDATADIR_SELFTEST_NG),
     )
     for label, fn, ok_list, ng_list in cases:
         for src in ok_list:
@@ -3424,6 +3467,7 @@ def run_lint(src_root: Path) -> int:
         check_integer_division_operator(info)
         check_path_join_literal(info)
         check_env_temp_literal(info)
+        check_env_datadir_literal(info)
         check_excel_tokens(info)
         check_forbidden_api_tokens(info)
         check_workbooks_open_alerts(info)

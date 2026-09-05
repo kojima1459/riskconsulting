@@ -38,10 +38,13 @@ Private Const UH_MSG_NO_CASE As String = "案件が選ばれていません。�
 ' 企業ドシエファイルの保存先。13章§2.3 に専用キーが無いため、出力の共通
 ' フォルダ(html_out_dir)を使う(17章の裁定事項として申し送り)。
 Private Const UH_DIR_KEY As String = "html_out_dir"
-' 裁定書27 W9-C2: 保存先の正は config data_dir(既定は会社のOneDrive)。
-' html_out_dir に値が入っていればそちらを優先する(分けたい管理者向け)。
+' 裁定書27 W9-C2: 保存先の正は config data_dir。html_out_dir に値が入って
+' いればそちらを優先する(分けたい管理者向け)。**既定は空**(裁定書31 裁定1・
+' 司令塔裁定: コード上に環境変数のリテラルを残さない。空のまま渡せば
+' modUtil.ResolveDataDir が data_dir.txt -> config -> 本体と同じフォルダ
+' \データ の順に決める)。
 Private Const UH_DATA_DIR_KEY As String = "data_dir"
-Private Const UH_DIR_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
+Private Const UH_DIR_DEFAULT As String = vbNullString
 
 ' HOMEの品質上書き(13章§2.10 hm_quality_mode)。日本語ラベル -> 機械値。
 '   空(未選択)は "" のまま返し、config・ティア連動の解決へ委ねる。
