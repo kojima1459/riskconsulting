@@ -40,9 +40,9 @@ Private Const EX_WARN_SEP As String = vbLf
 Private Const EX_PH_COMPANY As String = "{{COMPANY}}"
 Private Const EX_PH_POLICY As String = "{{POLICY_NO}}"
 Private Const EX_THEME_DEFAULT As String = "standard"
-' 保存先(裁定書27 W9-C2)。html_out_dir が空なら data_dir に従い、data_dir も
-' 空なら13章§2.3 の既定を使う。解決(実在確認・作成・OneDrive無しの逃げ場)は
-' modUtil.ResolveDataDir が唯一持つ。
+' 保存先(裁定書27 W9-C2)。html_out_dir が空なら data_dir に従う。解決(候補の
+' 並べ方・実在確認・作成)は modUtil.ResolveDataDir が唯一持ち、`%…%` を含む値は
+' **展開せず候補から捨てる**(裁定書31 裁定1)ので、この既定値は候補にならない。
 Private Const EX_OUT_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
 Private Const EX_VER_DEFAULT As String = "2.0.0"
 Private Const EX_CODE_FAIL As String = "E0502"
@@ -417,9 +417,9 @@ Private Function OutDirRaw() As String
     OutDirRaw = t
 End Function
 
-' 出力先の解決(16章 E-21・裁定書27 W9-C2)。候補の並べ方と実在確認は
-'   modUtil.ResolveDataDir が唯一持つ(会社OneDrive -> 個人OneDrive ->
-'   %USERPROFILE%\Documents\RPN出力)。第1候補以外へ落ちたら記録を残す。
+' 出力先の解決(16章 E-21・裁定書27 W9-C2 → 裁定書31 裁定1)。候補の並べ方と
+'   実在確認は modUtil.ResolveDataDir が唯一持つ(data_dir.txt -> config ->
+'   本体と同じフォルダ \データ)。第1候補以外へ落ちたら記録を残す。
 Private Function ResolveOutDir(ByVal rawDir As String) As String
     Dim dirText As String
     dirText = modUtil.ResolveDataDir(rawDir)
@@ -437,10 +437,10 @@ Private Function FirstCandidate(ByVal rawDir As String) As String
     ' 裁定書28: 第1候補は data_dir.txt(ランチャーが書いたポインタ)を含む
     ' 並びの先頭。ResolveOutDir が「第1候補以外へ落ちた」を判定する相手なので、
     ' 並べ方は ResolveDataDir と同じ引数で作る(片方だけ古いと誤検知になる)。
+    ' 裁定書31 裁定1: 環境変数は渡さない(第3候補は本体と同じフォルダ \データ)。
     listText = modUtil.DataDirCandidates( _
         modUtil.ReadDataDirPointer(modUtil.BookDirHint()), rawDir, _
-        Environ$("OneDriveCommercial"), _
-        Environ$("OneDrive"), Environ$("USERPROFILE"))
+        modUtil.BookDirHint())
     If LenB(listText) = 0 Then Exit Function
     FirstCandidate = Split(listText, vbLf)(0)
     Exit Function

@@ -43,11 +43,10 @@ Private mBookDir As String
 
 Private Const ATTR_DIRECTORY As Long = 16
 
-' 保存先(data_dir)の解決で使う環境変数名と最後の逃げ場(裁定書27 W9-C2)。
-Private Const DD_VAR_COMMERCIAL As String = "%OneDriveCommercial%"
-Private Const DD_VAR_ONEDRIVE As String = "%OneDrive%"
-Private Const DD_VAR_PROFILE As String = "%USERPROFILE%"
-Private Const DD_LAST_RESORT_TAIL As String = "\Documents\RPN出力"
+' 保存先(data_dir)の最後の逃げ場のフォルダ名(裁定書31 裁定1)。本体と同じ
+'   フォルダの直下に作る。**環境変数は一切見ない**(会社PCの %OneDrive% は
+'   別利用者のフォルダを指しうる。裁定書31 事実)。
+Private Const DD_LAST_RESORT_NAME As String = "データ"
 
 ' 裁定書28: ランチャー(.bat)が本体と同じフォルダへ書く「data_dir の値そのもの」。
 '   環境変数に依存しない最優先の値源で、中身は1行のフルパス。
@@ -583,59 +582,41 @@ Private Sub CloseQuiet(ByVal fileNo As Long)
 End Sub
 
 ' ============================================================================
-' 保存先(data_dir)の解決(裁定書27 W9-C2)
+' 保存先(data_dir)の解決(裁定書27 W9-C2 → 裁定書31 裁定1 で環境変数を全撤去)
 ' ----------------------------------------------------------------------------
-' なぜ要るのか:
-'   会社PCの `D:` はシャットダウンで消える。`%USERPROFILE%\Documents` が残るか
-'   はOneDriveのリダイレクト設定次第で、未測定である(裁定書27 事実)。企業
-'   ファイル・HTMLレポート・ヒアリングシートを既定で **OneDrive(会社)** の下
-'   へ置き、そこが無いときだけ Documents へ落とす。落ちたことは黙らせず、
-'   ナビのお知らせで警告する(11章§8.6 禁忌: 黙って別の場所へ書かない)。
+' なぜ環境変数を見ないのか(裁定書31 事実):
+'   会社PCでは `%OneDrive%` が**別の利用者(win11admin)**のフォルダを指し、
+'   `%OneDriveCommercial%` は未定義だった。環境変数から OneDrive を探すと、
+'   他人のフォルダへ企業データを書きに行きうる。よって data_dir の解決から
+'   環境変数の参照を全部やめる(`%…%` を含む値は展開せず、無効として捨てる)。
 '
-' 解決の順(裁定書28 で(0)を追加):
-'   (0) **本体と同じフォルダの data_dir.txt の1行目**(ランチャーが書く。環境
-'       変数に依存しない実測値なので最優先。裁定書28「裁定の確定」3)
-'   (1) config `data_dir` を展開したもの(既定 %OneDriveCommercial%\...)
-'   (2) (1)が %OneDriveCommercial% を含むときだけ、それを %OneDrive% に
-'       読み替えたもの(個人用OneDriveしか無い端末の救済)
-'   (3) %USERPROFILE%\Documents\RPN出力
-'   環境変数が空の候補は最初から並べない(展開できない "%" を残さない)。
+' 解決の順(13章§2.3):
+'   (1) **本体と同じフォルダの data_dir.txt の1行目**(ランチャー
+'       `リスク提案ナビを起動.bat` が書く。これが唯一の正)
+'   (2) config `data_dir`(利用者の明示値。`%…%` を含む値は捨てる)
+'   (3) **本体と同じフォルダ \データ**(最後の逃げ場。ここへ落ちたら warn)
 '
 ' 候補の並べ方は純関数 DataDirCandidates が唯一持ち(層(a)でテストする)、
 ' 実在確認とフォルダ作成だけを ResolveDataDir が行う(modBoot.ResolveKbPath と
 ' 同じ「純部+実在確認」の切り分け)。
 ' ============================================================================
 
-' 候補の並び(vbLf 区切り。純関数)。env は Environ$ の値をそのまま渡す。
+' 候補の並び(vbLf 区切り。純関数)。bookDir は本体と同じフォルダ。
 Public Function DataDirCandidates(ByVal pointerRaw As String, _
                                   ByVal configRaw As String, _
-                                  ByVal envCommercial As String, _
-                                  ByVal envOneDrive As String, _
-                                  ByVal envUserProfile As String) As String
+                                  ByVal bookDir As String) As String
     Dim outText As String
-    Dim raw As String
 
-    ' (0) 裁定書28: 本体と同じフォルダの data_dir.txt の値。ランチャーが
-    '     書いた実測値なので、config よりも環境変数よりも先に置く。空なら
-    '     何も足さない(=従来の順のまま)。
+    ' (1) ランチャーが書いた実測値。環境変数に依存しないので最優先。
     outText = AppendCandidate(outText, TrimTrailingSep(pointerRaw))
 
-    raw = TrimTrailingSep(configRaw)
+    ' (2) 利用者の明示値。`%…%` を含むものは AppendCandidate が捨てる
+    '     (展開しない=環境変数を読まない。裁定書31 裁定1)。
+    outText = AppendCandidate(outText, TrimTrailingSep(configRaw))
 
-    If LenB(raw) > 0 Then
-        outText = AppendCandidate(outText, _
-            ExpandDirVars(raw, envCommercial, envOneDrive, envUserProfile))
-        If InStr(1, raw, DD_VAR_COMMERCIAL, vbTextCompare) > 0 Then
-            outText = AppendCandidate(outText, ExpandDirVars( _
-                Replace(raw, DD_VAR_COMMERCIAL, DD_VAR_ONEDRIVE, 1, -1, vbTextCompare), _
-                envCommercial, envOneDrive, envUserProfile))
-        End If
-    End If
+    ' (3) 最後の逃げ場。本体と同じフォルダの直下 \データ。
+    outText = AppendCandidate(outText, DataDirLastResortOf(bookDir))
 
-    If LenB(envUserProfile) > 0 Then
-        outText = AppendCandidate(outText, _
-            TrimTrailingSep(envUserProfile) & DD_LAST_RESORT_TAIL)
-    End If
     DataDirCandidates = outText
 End Function
 
@@ -654,39 +635,21 @@ Private Function AppendCandidate(ByVal listText As String, ByVal candidate As St
     End If
 End Function
 
-' 3つの環境変数だけを展開する(未知の "%..%" は残し、候補から外す材料にする)。
-Private Function ExpandDirVars(ByVal pathText As String, ByVal envCommercial As String, _
-                               ByVal envOneDrive As String, _
-                               ByVal envUserProfile As String) As String
-    Dim t As String
-    t = pathText
-    If LenB(envCommercial) > 0 Then
-        t = Replace(t, DD_VAR_COMMERCIAL, TrimTrailingSep(envCommercial), 1, -1, vbTextCompare)
-    End If
-    If LenB(envOneDrive) > 0 Then
-        t = Replace(t, DD_VAR_ONEDRIVE, TrimTrailingSep(envOneDrive), 1, -1, vbTextCompare)
-    End If
-    If LenB(envUserProfile) > 0 Then
-        t = Replace(t, DD_VAR_PROFILE, TrimTrailingSep(envUserProfile), 1, -1, vbTextCompare)
-    End If
-    ExpandDirVars = TrimTrailingSep(t)
+' 最後の逃げ場(3)のフォルダ(純関数)。本体と同じフォルダの直下 \データ。
+'   bookDir が空なら空文字(逃げ場を作らない=候補ゼロで解決失敗させる)。
+Public Function DataDirLastResortOf(ByVal bookDir As String) As String
+    Dim b As String
+    b = TrimTrailingSep(bookDir)
+    If LenB(b) = 0 Then Exit Function
+    DataDirLastResortOf = b & DdSepOf(b) & DD_LAST_RESORT_NAME
 End Function
 
-' 解決した保存先がOneDriveの下かどうか(純関数)。ナビの警告の要否はこれで決める。
-Public Function IsUnderOneDrive(ByVal dirText As String, ByVal envCommercial As String, _
-                                ByVal envOneDrive As String) As Boolean
-    If LenB(dirText) = 0 Then Exit Function
-    If LenB(envCommercial) > 0 Then
-        If InStr(1, dirText, TrimTrailingSep(envCommercial), vbTextCompare) = 1 Then
-            IsUnderOneDrive = True
-            Exit Function
-        End If
-    End If
-    If LenB(envOneDrive) > 0 Then
-        If InStr(1, dirText, TrimTrailingSep(envOneDrive), vbTextCompare) = 1 Then
-            IsUnderOneDrive = True
-        End If
-    End If
+' 区切り文字を bookDir の見た目から決める(純関数)。"/" しか使っていない
+'   経路(URL・Mac)は "/"、それ以外は "\"。
+Private Function DdSepOf(ByVal bookDir As String) As String
+    DdSepOf = "\"
+    If InStr(1, bookDir, "\", vbBinaryCompare) > 0 Then Exit Function
+    If InStr(1, bookDir, "/", vbBinaryCompare) > 0 Then DdSepOf = "/"
 End Function
 
 ' 実在確認つきの解決。使える(作れた)最初の候補を返す。どれも駄目なら ""。
@@ -697,9 +660,7 @@ Public Function ResolveDataDir(ByVal configRaw As String, _
     baseDir = bookDir
     If LenB(baseDir) = 0 Then baseDir = BookDirHint()
 
-    listText = DataDirCandidates(ReadDataDirPointer(baseDir), configRaw, _
-                                 Environ$("OneDriveCommercial"), _
-                                 Environ$("OneDrive"), Environ$("USERPROFILE"))
+    listText = DataDirCandidates(ReadDataDirPointer(baseDir), configRaw, baseDir)
     If LenB(listText) = 0 Then Exit Function
 
     Dim cands() As String
@@ -714,11 +675,15 @@ Public Function ResolveDataDir(ByVal configRaw As String, _
     Next i
 End Function
 
-' 解決した保存先がOneDriveの下でないとき True(ナビのお知らせに warn を出す)。
-Public Function DataDirNotOneDrive(ByVal resolvedDir As String) As Boolean
+' 解決した保存先が(3)最後の逃げ場だったとき True(純関数)。ナビのお知らせに
+'   warn を出す条件はこれ(=data_dir.txt も config も無かった。裁定書31 裁定1)。
+Public Function DataDirIsLastResort(ByVal resolvedDir As String, _
+                                    ByVal bookDir As String) As Boolean
+    Dim lastDir As String
+    lastDir = DataDirLastResortOf(bookDir)
+    If LenB(lastDir) = 0 Then Exit Function
     If LenB(resolvedDir) = 0 Then Exit Function
-    DataDirNotOneDrive = Not IsUnderOneDrive(resolvedDir, Environ$("OneDriveCommercial"), _
-                                             Environ$("OneDrive"))
+    DataDirIsLastResort = (StrComp(TrimTrailingSep(resolvedDir), lastDir, vbTextCompare) = 0)
 End Function
 
 ' ============================================================================

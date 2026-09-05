@@ -59,17 +59,17 @@ Option Explicit
 Private Const BOOT_SRC As String = "modBoot"
 Private Const BOOT_GUARD_SHEET As String = "はじめにお読みください"
 Private Const BOOT_DATA_SHEET As String = "case_data"
-' 保存先(裁定書27 W9-C2)。既定は会社のOneDrive。html_out_dir に値が入って
-' いればそちらを優先する(分けたい管理者向け)。
+' 保存先(裁定書27 W9-C2)。既定は空で、値源は data_dir.txt(裁定書31 裁定1)。
+' html_out_dir に値が入っていればそちらを優先する(分けたい管理者向け)。
 ' 裁定書28: 利用者が値を書き換えられる唯一の場所(data_dir の直下)。
 Private Const BOOT_SETTINGS_FILE As String = "設定.txt"
 
 Private Const BOOT_DATA_DIR_KEY As String = "data_dir"
 Private Const BOOT_OUT_DIR_KEY As String = "html_out_dir"
-Private Const BOOT_DATA_DIR_DEFAULT As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
-' 逐語(裁定書27 W9-C2)。1字も変えない。
-Private Const BOOT_MSG_NOT_ONEDRIVE As String = _
-    "保存先がOneDriveではありません。シャットダウンで消える可能性があります。"
+' 逐語(裁定書31 裁定1)。1字も変えない。
+Private Const BOOT_MSG_NO_DATA_DIR As String = _
+    "保存先が確認できません。『リスク提案ナビを起動』から開き直してください。" & _
+    "このまま使うと、保存したものはこのパソコンの再起動で消えることがあります。"
 Private Const BOOT_ENUM_SHEET As String = "enum_hidden"
 Private Const BOOT_NAME_DATA_KEY As String = "enum_data_key"
 Private Const BOOT_DATA_SCAN_COLS As Long = 20
@@ -317,7 +317,9 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "ppt_template_path", vbNullString
     ' 裁定書27 W9-C2: 成果物の保存先は data_dir が正。html_out_dir は空を既定に
     ' して「data_dir に従う」を既定動作にし、分けたい管理者だけが値を入れる。
-    modConfig.RegisterDefault "data_dir", "%OneDriveCommercial%\リスク提案ナビ\データ"
+    ' 裁定書31 裁定1: data_dir の既定は**空**(値源は data_dir.txt。環境変数を
+    ' 既定値に書くと、他人の OneDrive を指しうる)。
+    modConfig.RegisterDefault "data_dir", vbNullString
     modConfig.RegisterDefault "html_out_dir", vbNullString
     modConfig.RegisterDefault "html_theme", "standard"
     modConfig.RegisterDefault "mock_fault", vbNullString
@@ -506,11 +508,11 @@ Private Sub ResolveKbPath()
 End Sub
 
 ' config の data_dir 生値(html_out_dir を優先する既存の順を1箇所に保つ)。
+'   既定は空(裁定書31 裁定1。値が無いときは data_dir.txt か \データ が決める)。
 Private Function DataDirRaw() As String
     Dim raw As String
     raw = Trim$(modConfig.GetStr(BOOT_OUT_DIR_KEY, vbNullString))
-    If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(BOOT_DATA_DIR_KEY, BOOT_DATA_DIR_DEFAULT))
-    If LenB(raw) = 0 Then raw = BOOT_DATA_DIR_DEFAULT
+    If LenB(raw) = 0 Then raw = Trim$(modConfig.GetStr(BOOT_DATA_DIR_KEY, vbNullString))
     DataDirRaw = raw
 End Function
 
@@ -552,10 +554,11 @@ Private Sub ApplySettingsFile()
 End Sub
 
 ' ----------------------------------------------------------------------------
-' NoticeDataDir - 保存先がOneDriveでないときだけ、ナビのお知らせへ warn を出す
-'   (裁定書27 W9-C2)。会社PCの `D:` はシャットダウンで消え、Documents が残るか
-'   はOneDriveのリダイレクト設定次第で未測定であるため、**黙って Documents へ
-'   書かない**。解決そのものは modUtil.ResolveDataDir が唯一持つ。
+' NoticeDataDir - 保存先が(3)最後の逃げ場(本体と同じフォルダ \データ)へ落ちた
+'   ときだけ、ナビのお知らせへ warn を出す(裁定書31 裁定1)。そこへ落ちたのは
+'   data_dir.txt も config も無かったとき=ランチャーを経ずに本体を直接開いた
+'   ときであり、`D:` はシャットダウンで消えるので**黙って書かない**。解決も
+'   判定も純部は modUtil が唯一持つ。
 ' ----------------------------------------------------------------------------
 Private Sub NoticeDataDir()
     On Error Resume Next
@@ -563,9 +566,9 @@ Private Sub NoticeDataDir()
     Dim dirText As String
     dirText = modUtil.ResolveDataDir(DataDirRaw(), ThisWorkbook.Path)
     If LenB(dirText) = 0 Then Exit Sub
-    If Not modUtil.DataDirNotOneDrive(dirText) Then Exit Sub
+    If Not modUtil.DataDirIsLastResort(dirText, ThisWorkbook.Path) Then Exit Sub
 
-    modUIHome.ShowWarning BOOT_MSG_NOT_ONEDRIVE, "warn"
+    modUIHome.ShowWarning BOOT_MSG_NO_DATA_DIR, "warn"
 End Sub
 
 ' ----------------------------------------------------------------------------

@@ -8,13 +8,18 @@ Option Explicit
 '   出力を見てから期待値を合わせない)。
 '
 ' 対象と根拠:
-'   W10A DataDirCandidates(pointer) 3本  裁定書28「裁定の確定」3・4。
-'     解決順は `data_dir.txt` → config data_dir → %OneDriveCommercial% →
-'     %OneDrive% → Documents。pointer が有るとき・無いとき・空文字のときで
-'     並びがどう変わるかを固定する。
-'       01 pointer 有 : 先頭が pointer、その後ろは従来の3候補
-'       02 pointer 無 : 従来どおり(裁定書27 W9-C2 の3候補)
-'       03 pointer 空 : 「無し」と同じ(空文字を候補に置かない)
+'   W11B data_dir の解決 8本  裁定書31 裁定1(環境変数の全撤去)。
+'     解決順は (1)本体と同じフォルダの `data_dir.txt` → (2)config `data_dir`
+'     (`%…%` を含む値は展開せず捨てる) → (3)本体と同じフォルダ `\データ`。
+'     **環境変数は1つも見ない**(会社PCの %OneDrive% は別利用者を指しうる)。
+'       01 (1)が最優先で先頭、次に(2)、最後に(3)
+'       02 config に `%…%` が入っていたら候補に入らない(負例)
+'       03 (1)も(2)も無ければ (3)だけ
+'       04 末尾の区切りは重ねない(ポインタ・本体フォルダの両方)
+'       05 ポインタが空白だけなら「無し」と同じ
+'       06 本体フォルダが空なら候補ゼロ(逃げ場を勝手に作らない。負例)
+'       07 DataDirIsLastResort: (3)で解決したら True(=warn を出す条件)
+'       08 DataDirIsLastResort: (1)で解決したら False(負例)
 '   W10B FileCandidatesIn 1本  裁定書28「ナレッジブック探索順」。
 '     本体と同じフォルダ → data_dir の親(=OneDrive の配布フォルダ)。
 '       01 D:\リスク提案ナビ と ...\リスク提案ナビ\データ から2候補
@@ -35,10 +40,13 @@ Option Explicit
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
 ' ============================================================================
 
-' 13章§2.3 の data_dir 既定(表から手で写した逐語)と、そこから作る期待値の部品。
-Private Const P19_DD_RAW As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
-Private Const P19_DD_TAIL As String = "\リスク提案ナビ\データ"
-Private Const P19_DD_LAST As String = "\Documents\RPN出力"
+' 裁定書31 裁定1 の解決順から手で書き出した部品。本体と同じフォルダ(=ランチャー
+'   が写した D: 側)と、そこへ作る最後の逃げ場(3)。
+Private Const P19_BOOK As String = "D:\リスク提案ナビ"
+Private Const P19_LAST As String = "D:\リスク提案ナビ\データ"
+' 利用者が config へ手で書いた明示値(2)と、環境変数入りの無効値(捨てる側)。
+Private Const P19_CFG As String = "C:\手動で決めた保存先"
+Private Const P19_CFG_ENV As String = "%OneDrive%\リスク提案ナビ\データ"
 '  CSVの二重引用符1文字(期待値を数え違えないための部品)。
 Private Const P19_Q As String = """"
 ' ランチャー(.bat)が data_dir.txt へ書く値の形(裁定書28「裁定の確定」3)。
@@ -46,7 +54,7 @@ Private Const P19_POINTER As String = "C:\Users\u\OneDrive - 会社\リスク提
 
 Public Sub RunAll()
     On Error GoTo FA
-    T_W10A_DataDirPointer
+    T_W11B_DataDirCandidates
 WB:
     On Error GoTo FB
     T_W10B_FileCandidatesIn
@@ -62,7 +70,7 @@ WE:
 WDone:
     Exit Sub
 FA:
-    GroupFail "W10A DataDirCandidates(裁定書28 data_dir.txt)"
+    GroupFail "W11B data_dir の解決(裁定書31 裁定1)"
     Resume WB
 FB:
     GroupFail "W10B FileCandidatesIn(裁定書28 ナレッジブック探索順)"
@@ -89,25 +97,38 @@ Private Sub ChkS(ByVal nm As String, ByVal act As String, ByVal want As String)
 End Sub
 
 ' ============================================================================
-' W10A DataDirCandidates(pointer 有/無/空)
+' W11B data_dir の解決(裁定書31 裁定1。環境変数を1つも見ない)
 ' ============================================================================
-Private Sub T_W10A_DataDirPointer()
-    ChkS "Test_W10A_01_pointerが最優先で先頭に来る_裁定書28", _
-        modUtil.DataDirCandidates(P19_POINTER, P19_DD_RAW, _
-                                  "C:\OD-Biz", "C:\OD", "C:\Users\u"), _
-        P19_POINTER & vbLf & "C:\OD-Biz" & P19_DD_TAIL & vbLf & _
-        "C:\OD" & P19_DD_TAIL & vbLf & "C:\Users\u" & P19_DD_LAST
+Private Sub T_W11B_DataDirCandidates()
+    ChkS "Test_W11B_01_ポインタconfig逃げ場の順_裁定書31", _
+        modUtil.DataDirCandidates(P19_POINTER, P19_CFG, P19_BOOK), _
+        P19_POINTER & vbLf & P19_CFG & vbLf & P19_LAST
 
-    ChkS "Test_W10A_02_pointerが無ければ従来の3候補_裁定書28", _
-        modUtil.DataDirCandidates(vbNullString, P19_DD_RAW, _
-                                  "C:\OD-Biz", "C:\OD", "C:\Users\u"), _
-        "C:\OD-Biz" & P19_DD_TAIL & vbLf & "C:\OD" & P19_DD_TAIL & vbLf & _
-        "C:\Users\u" & P19_DD_LAST
+    ChkS "Test_W11B_02_configの環境変数入りは捨てる_裁定書31", _
+        modUtil.DataDirCandidates(vbNullString, P19_CFG_ENV, P19_BOOK), _
+        P19_LAST
 
-    ChkS "Test_W10A_03_pointerが空白だけなら無しと同じ_裁定書28", _
-        modUtil.DataDirCandidates("   ", P19_DD_RAW, _
-                                  vbNullString, vbNullString, "C:\Users\u"), _
-        "C:\Users\u" & P19_DD_LAST
+    ChkS "Test_W11B_03_ポインタもconfigも無ければ逃げ場だけ_裁定書31", _
+        modUtil.DataDirCandidates(vbNullString, vbNullString, P19_BOOK), _
+        P19_LAST
+
+    ChkS "Test_W11B_04_末尾の区切りは重ねない_裁定書31", _
+        modUtil.DataDirCandidates(P19_POINTER & "\", vbNullString, P19_BOOK & "\"), _
+        P19_POINTER & vbLf & P19_LAST
+
+    ChkS "Test_W11B_05_ポインタが空白だけなら無しと同じ_裁定書31", _
+        modUtil.DataDirCandidates("   ", P19_CFG, P19_BOOK), _
+        P19_CFG & vbLf & P19_LAST
+
+    ChkS "Test_W11B_06_本体フォルダが空なら候補ゼロ_裁定書31", _
+        modUtil.DataDirCandidates(vbNullString, P19_CFG_ENV, vbNullString), _
+        vbNullString
+
+    ChkS "Test_W11B_07_逃げ場へ落ちたらwarnを出す_裁定書31", _
+        CStr(modUtil.DataDirIsLastResort(P19_LAST, P19_BOOK)), CStr(True)
+
+    ChkS "Test_W11B_08_ポインタで解決したらwarnを出さない_裁定書31", _
+        CStr(modUtil.DataDirIsLastResort(P19_POINTER, P19_BOOK)), CStr(False)
 End Sub
 
 ' ============================================================================

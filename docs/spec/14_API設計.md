@@ -294,20 +294,23 @@ Public Function WriteUtf8File(ByVal pathText As String, ByVal bodyText As String
 ' UTF-8 でファイルへ書く（`Open For Binary`）。**既存ファイルは消してから作り直す**（Binary の上書きは
 ' 前の内容の残骸を残す）。符号化は `modUtilText.Utf8Bytes` が唯一持つ。失敗は False（例外を漏らさない）
 
-' --- 保存先 data_dir の解決（v3.4・裁定書27 W9-C2。13章§2.3 `data_dir`）---
-Public Function DataDirCandidates(ByVal configRaw As String, ByVal envCommercial As String, _
-                                  ByVal envOneDrive As String, ByVal envUserProfile As String) As String
+' --- 保存先 data_dir の解決（v6.1・裁定書31 裁定1 で環境変数を全撤去。13章§2.3 `data_dir`）---
+Public Function DataDirCandidates(ByVal pointerRaw As String, ByVal configRaw As String, _
+                                  ByVal bookDir As String) As String
 ' **純関数**（層(a)テスト対象）。候補を vbLf 区切りで順に返す:
-' (1) configRaw の展開値 (2) configRaw が `%OneDriveCommercial%` を含むときだけ `%OneDrive%` へ
-' 読み替えた値 (3) `<envUserProfile>\Documents\RPN出力`。**展開できず "%" が残る候補と既出は並べない**
-Public Function ResolveDataDir(ByVal configRaw As String) As String
-' 実在確認つきの解決。`DataDirCandidates`（環境変数は `Environ$`）の順に `EnsureFolder` を試し、
-' **作れた最初の1つ**を返す。どれも駄目なら ""（modBoot.ResolveKbPath と同じ「純部＋実在確認」の切り分け）
-Public Function IsUnderOneDrive(ByVal dirText As String, ByVal envCommercial As String, _
-                                ByVal envOneDrive As String) As Boolean   ' 純関数
-Public Function DataDirNotOneDrive(ByVal resolvedDir As String) As Boolean
-' True のとき `modBoot` がナビのお知らせへ warn（逐語）「保存先がOneDriveではありません。
-' シャットダウンで消える可能性があります。」を出す（**黙って Documents へ書かない**）
+' (1) pointerRaw（`<bookDir>\data_dir.txt` の1行目。ランチャーが書く）(2) configRaw（利用者の
+' 明示値）(3) `<bookDir>\データ`（最後の逃げ場）。**環境変数は1つも読まない**（`%…%` を含む候補は
+' 展開せず捨てる）。既出と空も並べない。末尾の区切りは重ねない
+Public Function DataDirLastResortOf(ByVal bookDir As String) As String   ' 純関数。(3)の値。空なら ""
+Public Function ResolveDataDir(ByVal configRaw As String, _
+                               Optional ByVal bookDir As String = vbNullString) As String
+' 実在確認つきの解決。`DataDirCandidates` の順に `EnsureFolder` を試し、**作れた最初の1つ**を返す。
+' どれも駄目なら ""。`bookDir` 省略時は `BookDirHint()`（modBoot が起動手順(2)で預けた本体フォルダ）
+Public Function DataDirIsLastResort(ByVal resolvedDir As String, _
+                                    ByVal bookDir As String) As Boolean   ' 純関数
+' True（=(3)で解決した＝`data_dir.txt` も config も無かった）のとき `modBoot` がナビのお知らせへ
+' warn（逐語）「保存先が確認できません。『リスク提案ナビを起動』から開き直してください。
+' このまま使うと、保存したものはこのパソコンの再起動で消えることがあります。」を出す
 
 ' === core: modUtilText ===
 Public Function JsStringSafe(ByVal s As String) As String

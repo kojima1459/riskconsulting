@@ -591,8 +591,108 @@ def check_item7(dist_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+# ------------------------------------------------------------------------------
+# ⑧ 手順書のコードブロック == dist の .bat(裁定書31 裁定2)
+# ------------------------------------------------------------------------------
+# なぜ照合するのか: 会社のメールは `.bat` も `.bat.txt` も受信時に削除し、zip は
+#   Gmail 側が送信を拒否する(2026-09-05 実測)。したがって発行者が会社PCへ最初の
+#   1本を持ち込む唯一の手段は「**手順書のコードブロックをメモ帳へ貼って保存する**」
+#   になった(docs/24 §8.1c-1)。手順書の枠が配布物の .bat と1行でもずれると、
+#   利用者の側では「押しても何も起きない」だけになり、原因が誰にも見えない。
+#   改行(CRLF/LF)だけは書き方の違いなので LF へ正規化してから**バイト比較**する。
+LAUNCHER_DOC = REPO_ROOT / "docs" / "24_実機テスト手順書_Windows.md"
+# 手順書側のコードブロック(```bat ... ```)。1つだけ在ることも条件にする
+# (増えるとどちらが正か分からなくなる)。
+DOC_BAT_BLOCK_RE = re.compile(r"^```bat[ \t]*\r?\n(.*?)^```", re.M | re.S)
+
+
+def _normalize_launcher(text: str) -> str:
+    """CRLF・CR を LF へ正規化する(改行の書き方だけを無視する)。"""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def compare_launcher(doc_text: str, bat_text: str) -> list[str]:
+    """手順書のコードブロックと .bat の中身を突き合わせる(⑧の判定本体)。
+    自己テストからも呼ぶので、ファイルI/Oを持たない純関数にしてある。"""
+    blocks = DOC_BAT_BLOCK_RE.findall(doc_text)
+    if len(blocks) != 1:
+        return [f"docs/24 の ```bat コードブロックが {len(blocks)} 個です(1個であること)"]
+
+    doc = _normalize_launcher(blocks[0])
+    bat = _normalize_launcher(bat_text)
+    if doc == bat:
+        return []
+
+    doc_lines = doc.split("\n")
+    bat_lines = bat.split("\n")
+    problems = []
+    if len(doc_lines) != len(bat_lines):
+        problems.append(f"行数が違います(手順書={len(doc_lines)} / bat={len(bat_lines)})")
+    for i in range(min(len(doc_lines), len(bat_lines))):
+        if doc_lines[i] != bat_lines[i]:
+            problems.append(f"{i + 1}行目が違います: 手順書={doc_lines[i]!r} / bat={bat_lines[i]!r}")
+    if not problems:
+        problems.append("末尾が違います(手順書と bat の中身が一致しません)")
+    return problems
+
+
+def selftest_item8() -> list[str]:
+    """⑧が空振りしていないことの自己テスト(骨抜き防止)。
+    正例=同じ本文なら問題なし / 負例=1行変える・1行消すと必ず問題が出る。"""
+    body = '@echo off\nset "DST=D:\\x"\nstart "" excel.exe /x "%DST%\\a.xlsm"\n'
+    doc_ok = "前書き\n\n```bat\n" + body + "```\n後書き\n"
+    out = []
+    if compare_launcher(doc_ok, body.replace("\n", "\r\n")):
+        out.append("自己テスト(正例): 同じ本文(CRLF違いだけ)を⑧が不一致と判定しました")
+    changed = body.replace('set "DST=D:\\x"', 'set "DST=D:\\y"')
+    if not compare_launcher("```bat\n" + changed + "```\n", body):
+        out.append("自己テスト(負例1): 手順書側の1行を変えても⑧が通りました")
+    dropped = body.replace('set "DST=D:\\x"\n', "")
+    if not compare_launcher("```bat\n" + dropped + "```\n", body):
+        out.append("自己テスト(負例2): 手順書側の1行を消しても⑧が通りました")
+    if not compare_launcher("本文にコードブロックが無い\n", body):
+        out.append("自己テスト(負例3): コードブロックが無くても⑧が通りました")
+    return out
+
+
+def check_item8(dist_dir: Path) -> tuple[bool, list[str]]:
+    print("\n" + "=" * 78)
+    print("裁定書31 ⑧ 手順書(docs/24 §8.1c-1)のコードブロック == dist の .bat")
+    print("=" * 78)
+
+    problems = selftest_item8()
+    print(f"  自己テスト(正例1/負例3): {'OK' if not problems else 'NG'}")
+
+    bat = dist_dir / LAUNCHER_NAME
+    if not bat.exists():
+        print(f"  FAIL: ランチャーがありません: {bat}")
+        return False, problems + [f"{bat} がありません(python3 build/build_rpn.py --prod)"]
+    if not LAUNCHER_DOC.exists():
+        print(f"  FAIL: 手順書がありません: {LAUNCHER_DOC}")
+        return False, problems + [f"{LAUNCHER_DOC} がありません"]
+
+    try:
+        bat_text = bat.read_bytes().decode("cp932")
+    except UnicodeDecodeError as e:
+        return False, problems + [f".bat を CP932 で復号できません: {e}"]
+    doc_text = LAUNCHER_DOC.read_text(encoding="utf-8")
+
+    problems += compare_launcher(doc_text, bat_text)
+    print(f"  手順書             : {LAUNCHER_DOC}")
+    print(f"  照合対象           : {bat}")
+
+    if problems:
+        print(f"  FAIL: {len(problems)} 件")
+        for p in problems:
+            print(f"    - {p}")
+        return False, problems
+    print("  PASS: 手順書のコードブロックと dist の .bat が一致(CRLF→LF 正規化のうえ)")
+    return True, []
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="リスク提案ナビ 出荷前検問(T-46 ①②③ + 裁定書27 ⑥)")
+    ap = argparse.ArgumentParser(
+        description="リスク提案ナビ 出荷前検問(T-46 ①②③ + 裁定書27 ⑥ + 裁定書28 ⑦ + 裁定書31 ⑧)")
     ap.add_argument("--src", default=str(REPO_ROOT / "src"))
     ap.add_argument("--dist", default=str(REPO_ROOT / "dist"))
     args = ap.parse_args()
@@ -602,6 +702,7 @@ def main() -> int:
     ok3, _ = check_item3()
     ok6, _ = check_item6(Path(args.dist).resolve())
     ok7, _ = check_item7(Path(args.dist).resolve())
+    ok8, _ = check_item8(Path(args.dist).resolve())
 
     print("\n" + "-" * 78)
     print(f"① 外部由来テキストの直書き検査 : {'PASS' if ok1 else 'FAIL'}")
@@ -612,9 +713,10 @@ def main() -> int:
           "tools/run_lo_tests.py)")
     print(f"⑥ 配布物のAV表面積と経路の固定 : {'PASS' if ok6 else 'FAIL'}")
     print(f"⑦ 起動ランチャー(.bat)の形    : {'PASS' if ok7 else 'FAIL'}")
+    print(f"⑧ 手順書のbatと配布batの一致   : {'PASS' if ok8 else 'FAIL'}")
     print("-" * 78)
-    if ok1 and ok2 and ok3 and ok6 and ok7:
-        print("結果: ①②③⑥⑦ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
+    if ok1 and ok2 and ok3 and ok6 and ok7 and ok8:
+        print("結果: ①②③⑥⑦⑧ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
         return 0
     print("結果: NG(exit code 1) - 1つでも落ちたら出荷しない")
     return 1

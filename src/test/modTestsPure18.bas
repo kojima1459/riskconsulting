@@ -32,8 +32,6 @@ Option Explicit
 '       06 CP932外 U+9FA6       -> E9 BE A6   (40870 = 224+9, 128+62, 128+38)
 '       07 孤立サロゲート        -> EF BF BD  (U+FFFD へ落とす)
 '       08 Utf8Len  "A"+BOM     -> 4
-'   W9C2 DataDirCandidates 3本 裁定書27 W9-C2 の解決順(1)(2)(3)。
-'     環境変数の有無だけで並びが決まることを、値を手で与えて固定する。
 '   W92 SplitPathParts 3本  W9.2(実機第3報)。modUtil.EnsureFolder が MkDir する
 '     「親から順の一覧」を作る純関数。**区切り文字を引数で受ける**ので
 '     Windows と Mac の両方を1本の実装で書ける(区切りの判定そのものは
@@ -54,10 +52,6 @@ Private Const P18_ACTION As String = _
 ' 13章§2.3 の既定URL(表から手で写した逐語)。
 Private Const P18_URL_FULL As String = "https://app.hdtech.jp/research/instructions"
 Private Const P18_URL_QUICK As String = "https://app.hdtech.jp/research/quick-search"
-' 13章§2.3 の data_dir 既定(表から手で写した逐語)と、そこから作る期待値の部品。
-Private Const P18_DD_RAW As String = "%OneDriveCommercial%\リスク提案ナビ\データ"
-Private Const P18_DD_TAIL As String = "\リスク提案ナビ\データ"
-Private Const P18_DD_LAST As String = "\Documents\RPN出力"
 
 Public Sub RunAll()
     On Error GoTo FA
@@ -73,12 +67,9 @@ WD:
     T_W9B2_Utf8Bytes
 WE:
     On Error GoTo FE
-    T_W9C2_DataDirCandidates
+    T_W92_SplitPathParts
 WF:
     On Error GoTo FF
-    T_W92_SplitPathParts
-WG:
-    On Error GoTo FG
     modTestsPure19.RunAll
 WDone:
     Exit Sub
@@ -95,12 +86,9 @@ FD:
     GroupFail "W9B2 Utf8Bytes(裁定書27 W9-B2)"
     Resume WE
 FE:
-    GroupFail "W9C2 DataDirCandidates(裁定書27 W9-C2)"
+    GroupFail "W92 SplitPathParts(W9.2)"
     Resume WF
 FF:
-    GroupFail "W92 SplitPathParts(W9.2)"
-    Resume WG
-FG:
     GroupFail "modTestsPure19(W10・裁定書28)"
     Resume WDone
 End Sub
@@ -235,24 +223,6 @@ Private Sub T_W9B2_Utf8Bytes()
         modUtilText.Utf8Hex(ChrW(&HD842&), False), "efbfbd"
     ChkS "Test_W9B2_08_Utf8LenはBOMを数える_裁定書27W9B2", _
         CStr(modUtilText.Utf8Len("A", True)), "4"
-End Sub
-
-' ============================================================================
-' W9C2 DataDirCandidates(裁定書27 W9-C2 の解決順)
-' ============================================================================
-Private Sub T_W9C2_DataDirCandidates()
-    ChkS "Test_W9C2_01_会社OneDriveがあれば3候補_裁定書27W9C2", _
-        modUtil.DataDirCandidates(vbNullString, P18_DD_RAW, "C:\OD-Biz", "C:\OD", "C:\Users\u"), _
-        "C:\OD-Biz" & P18_DD_TAIL & vbLf & "C:\OD" & P18_DD_TAIL & vbLf & _
-        "C:\Users\u" & P18_DD_LAST
-
-    ChkS "Test_W9C2_02_会社OneDriveが無ければ個人OneDriveへ_裁定書27W9C2", _
-        modUtil.DataDirCandidates(vbNullString, P18_DD_RAW, vbNullString, "C:\OD", "C:\Users\u"), _
-        "C:\OD" & P18_DD_TAIL & vbLf & "C:\Users\u" & P18_DD_LAST
-
-    ChkS "Test_W9C2_03_OneDriveが無ければDocumentsだけ_裁定書27W9C2", _
-        modUtil.DataDirCandidates(vbNullString, P18_DD_RAW, vbNullString, vbNullString, "C:\Users\u"), _
-        "C:\Users\u" & P18_DD_LAST
 End Sub
 
 ' ============================================================================

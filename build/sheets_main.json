@@ -2774,8 +2774,8 @@
         },
         {
           "name": "data_dir",
-          "value": "%OneDriveCommercial%\\リスク提案ナビ\\データ",
-          "note": "成果物(企業ファイル・HTMLレポート)の保存先(裁定書27 W9-C2)。無ければ %OneDrive% -> %USERPROFILE%\\Documents\\RPN出力 の順に落ちる"
+          "value": "",
+          "note": "成果物(企業ファイル・HTMLレポート)の保存先(裁定書27 W9-C2)。既定は空で、値源は起動batが書く data_dir.txt(裁定書31 裁定1)。ここへ手で書くときは環境変数(%...%)を使わない(展開せず捨てる)。空なら本体と同じフォルダの データ へ落ちて warn"
         },
         {
           "name": "html_out_dir",
