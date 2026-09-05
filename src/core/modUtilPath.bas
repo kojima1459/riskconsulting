@@ -13,18 +13,21 @@ Option Explicit
 '   連結の式をここへ寄せ、tools/vba_lint.py の禁止規則で戻れないようにする。
 '
 ' なぜ modUtil ではないのか: modUtil は 30,000字契約(12章§2)に対して残りが
-'   1,000字ほどしかなく、本モジュールの5関数を足せない。同じ core 層の姉妹
+'   1,000字ほどしかなく、本モジュールの4関数を足せない。同じ core 層の姉妹
 '   モジュールとして分ける(文字列の無害化・整形は modUtilText、パスは
 '   modUtilPath、それ以外の道具は modUtil、という切り分け)。
 '
 ' 純と外皮の分け方(17章§1):
 '   純   = JoinPathWith / FileNameOf … 引数だけで答えが決まる。層(a)で検査する
-'   外皮 = JoinPath(PathSep を読む)/ TempDir(環境変数)/ IsMacExcel(ホスト)
-'          … 環境依存なので層(a)では検査できない。中身は上の純関数に委ねる
+'   外皮 = JoinPath(PathSep を読む)/ TempDir(環境変数) … 環境依存なので
+'          層(a)では検査できない。中身は上の純関数に委ねる
 '
-' R4の但し書き: IsMacExcel の1行だけ Application.OperatingSystem を読む
-'   (12章§4のR4許可モジュール表へ理由つきで登記した)。**許可の幅はその1行**
-'   であり、シート・ブック・セルには触れない。
+' R4準拠: Excelトークン(Worksheets/Range/Application/ThisWorkbook/MsgBox/
+'   ActiveSheet)には**1つも触れない**。本体と同じフォルダの値も
+'   modUtil.BookDirHint()(modBoot が起動手順(2)で預けたもの)から借りる。
+'   Mac版Excelかどうかの判定(`Application.OperatingSystem`)は **core には
+'   置かず、テスト層の modTestsExcel3.IsMacExcel が持つ**(司令塔の裁定
+'   2026-09-05。層(b)のSKIP判定にしか使わないので core を広げない)。
 '
 ' 12章§4準拠: 製品固有の語彙(製品名・シート名・ドメインenum)を持たない。
 ' ============================================================================
@@ -117,20 +120,4 @@ Public Function FileNameOf(ByVal pathText As String) As String
     Else
         FileNameOf = Mid$(pathText, p + 1)
     End If
-End Function
-
-' ============================================================================
-' IsMacExcel - Mac版Excelで動いているか(裁定書29 裁定4)。
-' ----------------------------------------------------------------------------
-'   Application.OperatingSystem は Mac版が "Macintosh ..." を返す。判定を
-'   **この1関数に閉じる**ことで、ホストの見分け方が散らばるのを防ぐ。
-'   読めない環境(LibreOffice等)では False = 「Macではない」側へ倒す
-'   (Windowsの検問に新しい逃げ道を作らないため。裁定書29 裁定4)。
-' ============================================================================
-Public Function IsMacExcel() As Boolean
-    On Error GoTo NotMac
-    IsMacExcel = (InStr(1, Application.OperatingSystem, "Macintosh", vbTextCompare) = 1)
-    Exit Function
-NotMac:
-    IsMacExcel = False
 End Function

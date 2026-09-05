@@ -714,7 +714,7 @@ Private Sub TestW9ClipRoundTrip()
         okClip = (okFlag And StrComp(backText, srcText, vbBinaryCompare) = 0)
         detClip = "戻り=[" & modUtil.SafeLeft(backText, 120) & "]"
         ' 裁定書29 裁定4: 貼り付けが通らないMac版Excelだけ SKIP(上の注記)。
-        If (Not okFlag) And modUtilPath.IsMacExcel() Then
+        If (Not okFlag) And modTestsExcel3.IsMacExcel() Then
             okClip = True
             detClip = "SKIP(Mac): 貼り付け書式名がMac版Excelに無い"
         End If

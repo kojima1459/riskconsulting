@@ -15,6 +15,6 @@
 
 | モジュール | 責務 |
 |---|---|
-| `modUtilPath` | パスの連結（`JoinPathWith`（純）/ `JoinPath`）・分解（`FileNameOf`（純））・一時フォルダ（`TempDir`）・Mac判定（`IsMacExcel`）。**区切り文字（`\` / `/`）を知っているのはここだけ**という状態を作る（12章§4。決め打ち連結と `Environ$("TEMP")` は `tools/vba_lint.py` が ERROR で止める）。`modUtil` が 30,000字契約で満杯のため分割した |
+| `modUtilPath` | パスの連結（`JoinPathWith`（純）/ `JoinPath`）・分解（`FileNameOf`（純））・一時フォルダ（`TempDir`）。**区切り文字（`\` / `/`）を知っているのはここだけ**という状態を作る（12章§4。決め打ち連結と `Environ$("TEMP")`/`("TMP")`/`("TMPDIR")` は `tools/vba_lint.py` が ERROR で止める）。`modUtil` が 30,000字契約で満杯のため分割した |
 
-`modUtilPath` は R4 の例外として `IsMacExcel` の `Application.OperatingSystem` を読む**1行だけ**Excelトークンを持つ（12章§4 の許可列挙に登記済み）。シート・ブック・セルには触れない。
+`modUtilPath` は **Excelトークンを1つも持たない**（R4の例外を作っていない）。本体と同じフォルダの値も `modUtil.BookDirHint()`（`modBoot` が起動手順(2)で `modUtil.SetBookDir` へ預けたもの）から借りる。Mac版Excelかどうかの判定（`Application.OperatingSystem`）は層(b)のSKIP判定にしか使わないため、core ではなく**テスト層の `modTestsExcel3.IsMacExcel`** が持つ（司令塔の裁定 2026-09-05）。

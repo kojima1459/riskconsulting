@@ -48,6 +48,31 @@ Private Sub ECheck(ByVal testName As String, ByVal cond As Boolean, _
 End Sub
 
 ' ============================================================================
+' IsMacExcel - Mac版Excelで動いているか(裁定書29 裁定4)。
+' ----------------------------------------------------------------------------
+'   Application.OperatingSystem は Mac版が "Macintosh ..." を返す。判定を
+'   **この1関数に閉じる**ことで、ホストの見分け方が散らばるのを防ぐ。
+'   読めない環境(LibreOffice等)では False =「Macではない」側へ倒す
+'   (Windowsの検問に新しい逃げ道を作らないため)。
+'
+'   なぜ core(modUtilPath)ではなく**テスト層**に置くのか: 用途は層(b)の
+'   SKIP判定だけで、製品コードは1箇所も呼ばない。core へ置くと 12章§4 の
+'   R4(Excelトークンの許可モジュール)を1本広げることになるため、
+'   司令塔の裁定(2026-09-05)で test層へ移した。test層は R4 適用外である。
+'
+'   本モジュールの他の Public は RunExcelTests3 だけだが、層(b)の3本
+'   (modTestsExcel / modTestsExcel2 / modTestsExcel3)から共用するため
+'   Public にする(層(b)どうしの参照はテスト層内なので R1 に触れない)。
+' ============================================================================
+Public Function IsMacExcel() As Boolean
+    On Error GoTo NotMac
+    IsMacExcel = (InStr(1, Application.OperatingSystem, "Macintosh", vbTextCompare) = 1)
+    Exit Function
+NotMac:
+    IsMacExcel = False
+End Function
+
+' ============================================================================
 ' W10: 企業ファイルの往復一致(裁定書28・13章§2.8 v2.7・17章§4-1 層(b))
 ' ----------------------------------------------------------------------------
 '   (1) 案件を企業ファイルへ書き出し、**本体側と企業ファイル側の全項目**

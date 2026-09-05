@@ -32,7 +32,7 @@ RPNの規約(12章§2・§4 / 16章NFR-S7 / 17章T-46):
        HTML=HtmlSafe・JsStringSafe)。17章T-46①を(c)層でも毎コミット走らせる
     パス連結の一元化(裁定書29 W10.1): パスの連結は modUtilPath.JoinPath のみ
        (`& "\"` / `"\" &` の決め打ちを禁止)。一時フォルダは modUtilPath.TempDir
-       のみ(`Environ$("TEMP")` の決め打ちを禁止)
+       のみ(`Environ$("TEMP")`/`("TMP")`/`("TMPDIR")` の決め打ちを禁止)
 
 使い方:
     python3 tools/vba_lint.py                 # <repo>/src 配下を検査
@@ -181,10 +181,11 @@ MODULE_REGISTRY = {
     "modUtil", "modUtilText", "modTypes",
     # W10.1(裁定書29 T-60)で新設。12章§2のモジュール一覧に追記済み。
     #   modUtilPath = パスの連結(JoinPathWith/JoinPath)・分解(FileNameOf)・
-    #                 一時フォルダ(TempDir)・Mac判定(IsMacExcel)。区切り文字を
-    #                 知っているのはここだけ、という状態を作る(下の
-    #                 check_path_join_literal が製品側の決め打ちを禁止する)。
-    #                 modUtil が30,000字契約で満杯のため分割した。
+    #                 一時フォルダ(TempDir)。区切り文字を知っているのはここだけ、
+    #                 という状態を作る(下の check_path_join_literal が製品側の
+    #                 決め打ちを禁止する)。modUtil が30,000字契約で満杯のため
+    #                 分割した。**Excelトークンは1つも持たない**(Mac判定
+    #                 IsMacExcel は core へ置かず modTestsExcel3 が持つ)。
     "modUtilPath",
     # W6第1弾(1画面ナビ・17章 T-49)で新設。12章§2のモジュール一覧に追記済み。
     #   modUIGeom  = 画面の幾何(帯・ボタンの並び・カードの高さ・表示時間)の純関数。
@@ -349,7 +350,7 @@ CONTRACT: dict[str, dict] = {
     "modUtilPath": {
         "closed": False,
         "required": [
-            "JoinPathWith", "JoinPath", "TempDir", "FileNameOf", "IsMacExcel",
+            "JoinPathWith", "JoinPath", "TempDir", "FileNameOf",
         ],
     },
     "modKnowledgeFmt": {
@@ -710,11 +711,6 @@ R4_EXCEL_ALLOWED_MODULES = {
     "modCompanyFile3",
     # modExportHearing: ヒアリングシート(本体ブック内のシート)を組み立てる。
     "modExportHearing",
-    # modUtilPath: 裁定書29 裁定4 が「Mac版Excelかどうかの判定は
-    #   modUtilPath.IsMacExcel に閉じる」と定めたため、`Application.OperatingSystem`
-    #   を読む**その1行だけ**Excelトークンが要る。**許可の幅はその1行**であり、
-    #   シート・ブック・セルには触れない(触れたらこの注記に反する)。
-    "modUtilPath",
     # modUtilText: SetCellSafe 内のセル書込に限る(12章§4 v2.4.1・16章NFR-S7(1))。
     #   「外部由来テキストのセル書込口はこの1関数」と定めた以上、その関数本体だけは
     #   セルに触れざるを得ない。純変換部は SanitizeForCell として分離してあり、
@@ -2706,12 +2702,18 @@ def check_path_join_literal(info: ModuleInfo) -> None:
 # 値源は modUtilPath.TempDir()(TEMP -> TMP -> TMPDIR -> 本体と同じフォルダ)の
 # 1本に寄せ、他所からの決め打ちを禁止する。
 #
+# 対象の語: TEMP / TMP / TMPDIR の3つ(裁定書29 の逐語は TEMP だけだが、どれを
+#   決め打ちしても同じ壊れ方をするので司令塔の裁定 2026-09-05 で3語へ広げた)。
 # 許可: modUtil / modUtilPath のみ(TempDir の実装本体。裁定書29 は「modUtil
 #   以外で禁止」と書いたが、30,000字契約により実装は modUtilPath へ置いた)。
 #   **src/test も対象**にする(今回の事故はテスト側の決め打ちが原因だった)。
 # ==============================================================================
 ENV_TEMP_EXEMPT_MODULES = {"modUtil", "modUtilPath"}
-ENV_TEMP_PATTERN = re.compile(r'\bEnviron\$?\s*\(\s*"TEMP"\s*\)', re.IGNORECASE)
+# 裁定書29 の逐語は `Environ$("TEMP")` だけだが、Macの実Excel が持つのは TMPDIR
+# であり、TMP も含めた3語のどれを決め打ちしても同じ壊れ方をする(司令塔の裁定
+# 2026-09-05 で3語へ拡張)。値源は modUtilPath.TempDir() の1本に寄せる。
+ENV_TEMP_PATTERN = re.compile(
+    r'\bEnviron\$?\s*\(\s*"(?:TEMP|TMP|TMPDIR)"\s*\)', re.IGNORECASE)
 
 
 def check_env_temp_literal(info: ModuleInfo) -> None:
@@ -2744,6 +2746,7 @@ _ENVTEMP_SELFTEST_OK = [
 ]
 _ENVTEMP_SELFTEST_NG = [
     'd = Environ$("TEMP")',
+    'd = Environ("TMPDIR")',
 ]
 
 

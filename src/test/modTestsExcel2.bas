@@ -560,7 +560,7 @@ Private Sub TestW61NavPaste()
         '   変えず、**貼り付けが不成立のMacのときだけ**SKIPで緑にする。
         '   Windowsでは IsMacExcel が False なのでこの枝に入らない
         '   (=Windowsに新しいSKIP経路は作らない。落ちたら FAIL のまま)。
-        If LenB(newCaseId) = 0 And modUtilPath.IsMacExcel() Then
+        If LenB(newCaseId) = 0 And modTestsExcel3.IsMacExcel() Then
             okNew = True
             detNew = "SKIP(Mac): 貼り付け書式名がMac版Excelに無い"
         End If
