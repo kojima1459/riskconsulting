@@ -147,7 +147,7 @@ Public Function CompanyDirOf(ByVal dataDir As String) As String
     Dim t As String
     t = modUtil.TrimTrailingSep(dataDir)
     If LenB(t) = 0 Then Exit Function
-    CompanyDirOf = t & "\" & CF3_DIR_TAIL
+    CompanyDirOf = modUtilPath.JoinPath(t, CF3_DIR_TAIL)
 End Function
 
 ' HeaderToCaseRow - 企業ファイルの見出し(「key=value」の行並び)から案件一覧の

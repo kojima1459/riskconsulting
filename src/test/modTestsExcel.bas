@@ -673,13 +673,13 @@ No0:
     ErrLogged = False
 End Function
 
-' 一時ファイルの置き場(%TEMP%。取れなければブックと同じフォルダ)。
+' 一時ファイルの置き場(取れなければブックと同じフォルダ)。裁定書29: 環境変数名は
+'   端末で違う(Win=TEMP/TMP・Mac=TMPDIR)ので TempDir + JoinPath へ寄せる。
 Private Function TempFilePath(ByVal fileName As String) As String
     Dim d As String
-    d = Environ$("TEMP")
+    d = modUtilPath.TempDir()
     If LenB(d) = 0 Then d = ThisWorkbook.Path
-    If Right$(d, 1) = "\" Then d = Left$(d, Len(d) - 1)
-    TempFilePath = d & "\" & fileName
+    TempFilePath = modUtilPath.JoinPath(d, fileName)
 End Function
 
 ' ============================================================================
@@ -694,6 +694,8 @@ End Function
 '   そこが崩れると[コピー]した調べる文が黙って別の文になる(いちばん怖い壊れ方)。
 ' クリップボードを使えない環境(RDP・EDR)では往復そのものができないので、
 '   その場合は SKIP 扱いで**緑にする**(既存の modTestsExcel2 の作法と同じ)。
+' 裁定書29 裁定4: Mac版Excelは書式名が無く PasteSpecial が全滅するので、製品を
+'   変えず IsMacExcel のときだけ SKIP(Windowsは新しいSKIP経路を作らない)。
 ' ============================================================================
 Private Sub TestW9ClipRoundTrip()
     On Error GoTo Crashed
@@ -703,15 +705,22 @@ Private Sub TestW9ClipRoundTrip()
 
     Dim okFlag As Boolean
     Dim backText As String
+    Dim okClip As Boolean
+    Dim detClip As String
+    okClip = True
+    detClip = "SKIP: クリップボードへ書けない環境"
     If modUISheet.CopyToClipboard(srcText) Then
         backText = modUISheet.PasteFromClipboard(okFlag)
-        ECheck "T47-W9-01_複数行テキストがクリップボードを往復して一致する(裁定書27 W9-B1)", _
-            (okFlag And StrComp(backText, srcText, vbBinaryCompare) = 0), _
-            "戻り=[" & modUtil.SafeLeft(backText, 120) & "]"
-    Else
-        ECheck "T47-W9-01_複数行テキストがクリップボードを往復して一致する(裁定書27 W9-B1)", _
-            True, "SKIP: クリップボードへ書けない環境"
+        okClip = (okFlag And StrComp(backText, srcText, vbBinaryCompare) = 0)
+        detClip = "戻り=[" & modUtil.SafeLeft(backText, 120) & "]"
+        ' 裁定書29 裁定4: 貼り付けが通らないMac版Excelだけ SKIP(上の注記)。
+        If (Not okFlag) And modUtilPath.IsMacExcel() Then
+            okClip = True
+            detClip = "SKIP(Mac): 貼り付け書式名がMac版Excelに無い"
+        End If
     End If
+    ECheck "T47-W9-01_複数行テキストがクリップボードを往復して一致する(裁定書27 W9-B1)", _
+        okClip, detClip
 
     ' 受け皿シートは**読んだあとに消える**(11章§0.2 タブを増やさない)。
     ECheck "T47-W9-02_読み取りのあと受け皿シートが残っていない(裁定書27 W9-B1)", _
@@ -736,7 +745,7 @@ Private Sub TestW9WriteUtf8File()
     Dim fileNo As Long
     On Error GoTo Crashed
 
-    pathText = Environ$("TEMP") & "\rpn_t47_utf8.txt"
+    pathText = modUtilPath.JoinPath(modUtilPath.TempDir(), "rpn_t47_utf8.txt")
     If Not modUtil.WriteUtf8File(pathText, "A" & ChrW(&H3042&), True) Then
         ECheck "T47-W9-03_UTF8書出のバイト列がBOM+41+E38182(裁定書27 W9-B2)", _
             False, "WriteUtf8File が False"

@@ -23,6 +23,14 @@
       "wave": "T-10"
     },
     {
+      "name": "modUtilPath",
+      "path": "src/core/modUtilPath.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-60",
+      "_note": "裁定書29 W10.1。パスの連結(JoinPath/JoinPathWith)・分解(FileNameOf)・一時フォルダ(TempDir)・Mac判定(IsMacExcel)。modUtil が30,000字契約で満杯のため分割した。"
+    },
+    {
       "name": "modNavText",
       "path": "src/core/modNavText.bas",
       "role": "core",

@@ -120,6 +120,11 @@ EXPECTED_SKIP_MAX = 0
 PURE_ALLOWLIST = [
     # core(W1で移植済)。純ロジックなのでそのまま実行テストにかけられる。
     "modTypes", "modUtil", "modUtilText", "modJsonLite",
+    # W10.1(裁定書29・T-60)。パスの連結と分解。テストが叩くのは純関数
+    #   JoinPathWith / FileNameOf だけで、JoinPath(PathSep=CurDir$)・
+    #   TempDir(Environ$)・IsMacExcel(Application.OperatingSystem)は
+    #   環境依存なので層(a)からは呼ばない(技術メモ4)。
+    "modUtilPath",
     # core のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは純関数だけの
     # モジュール(技術メモ4。W1のG8/G9/G10/G11が叩く)。
     "modConfig", "modLog", "modGatewayRPN", "modGatewayDirect",

@@ -31,6 +31,19 @@ Option Explicit
 '        「検知あり -> TRUE / 検知なし(空・空白) -> FALSE」を返す。
 '        自分の data_dir への自動保存は PII があっても行い、印だけ残すため。
 '
+'   W101 パスの連結と分解(裁定書29 W10.1) 6本  12章§4の規約(パスの連結は
+'     modUtilPath.JoinPath のみ)を、その中身の純関数で固定する。
+'     01 末尾区切り  dir の末尾に区切りが有っても無くても同じ1本の区切りで
+'                    つながる(重ねない)
+'     02 dir空       dir が空(空白のみを含む)なら "" を返す。**空フォルダに
+'                    対して "\name" のような根っこ直下のパスを作らない**
+'                    (Mac実測で実際に起きた壊れ方がこれ)
+'     03 sep "/"     区切りを "/" にすれば Mac の形でつながる(区切りは引数で
+'                    決まる=環境非依存の純関数である、ということの検査)
+'     04 tail先頭    tail の先頭の区切り("\" でも "/" でも)は重ねない
+'     05 FileNameOf  "\" 区切りのパスから末尾のファイル名を取り出す
+'     06 FileNameOf  "/" 区切りでも同じ。区切りが1つも無ければ全体を返す
+'
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
 ' ============================================================================
@@ -52,6 +65,9 @@ WC:
 WD:
     On Error GoTo FD
     T_W10P_PiiFlag
+WE:
+    On Error GoTo FE
+    T_W101_JoinPath
 WDone:
     Exit Sub
 FA:
@@ -65,6 +81,9 @@ FC:
     Resume WD
 FD:
     GroupFail "W10P pii_flag の写像(統合W10・16章E-05(7))"
+    Resume WE
+FE:
+    GroupFail "W101 パスの連結と分解(裁定書29 W10.1)"
     Resume WDone
 End Sub
 
@@ -202,4 +221,49 @@ Private Sub T_W10P_PiiFlag()
         (modCompanyFile3.PiiFlagOf(vbNullString) = "FALSE") And _
         (modCompanyFile3.PiiFlagOf("  ") = "FALSE"), _
         "列の並び=[" & colsText & "]"
+End Sub
+
+' ============================================================================
+' W101 パスの連結と分解(裁定書29 W10.1・12章§4)
+' ----------------------------------------------------------------------------
+'   期待値は裁定書29 裁定1の文だけから手で書き出した(実装の出力は見ていない)。
+'   JoinPathWith は**区切りを引数で受ける純関数**なので、Windowsの "\\" でも
+'   Macの "/" でも同じ1本の関数で検査できる(層(a)で環境差を再現できる)。
+' ============================================================================
+Private Sub T_W101_JoinPath()
+    ' 01 dir の末尾に区切りが有っても無くても、区切りは1本だけ。
+    ChkT "Test_W101_01_末尾の区切りを重ねない_裁定書29裁定1", _
+        (modUtilPath.JoinPathWith("C:\out", "a.html", "\") = "C:\out\a.html") And _
+        (modUtilPath.JoinPathWith("C:\out\", "a.html", "\") = "C:\out\a.html") And _
+        (modUtilPath.JoinPathWith("C:\out\\", "a.html", "\") = "C:\out\a.html"), _
+        "区切り無し・1本・2本のどれでも [C:\out\a.html]"
+
+    ' 02 dir が空なら "" (根っこ直下のパスを組み立てない)。
+    ChkT "Test_W101_02_dirが空なら空文字_裁定書29裁定1", _
+        (LenB(modUtilPath.JoinPathWith(vbNullString, "a.html", "\")) = 0) And _
+        (LenB(modUtilPath.JoinPathWith("   ", "a.html", "\")) = 0) And _
+        (LenB(modUtilPath.JoinPathWith("\", "a.html", "\")) = 0), _
+        "空・空白・区切りだけ、のどれでも空文字"
+
+    ' 03 区切りを "/" にすれば Mac の形。
+    ChkS "Test_W101_03_区切りをスラッシュにするとMacの形になる_裁定書29裁定1", _
+        modUtilPath.JoinPathWith("/Users/me/out/", "a.html", "/"), _
+        "/Users/me/out/a.html"
+
+    ' 04 tail の先頭の区切りは重ねない(どちらの区切り文字でも落とす)。
+    ChkT "Test_W101_04_tail先頭の区切りを重ねない_裁定書29裁定1", _
+        (modUtilPath.JoinPathWith("C:\out", "\a.html", "\") = "C:\out\a.html") And _
+        (modUtilPath.JoinPathWith("C:\out", "/a.html", "\") = "C:\out\a.html") And _
+        (modUtilPath.JoinPathWith("C:\out", vbNullString, "\") = "C:\out"), _
+        "先頭の区切りは落とし、tail が空なら dir だけを返す"
+
+    ' 05/06 FileNameOf は両方の区切りを見る(Windows製もMac製も分解できる)。
+    ChkS "Test_W101_05_FileNameOfは円記号区切りの末尾を返す_裁定書29裁定1", _
+        modUtilPath.FileNameOf("C:\out\sub\a b.html"), "a b.html"
+
+    ChkT "Test_W101_06_FileNameOfはスラッシュ区切りでも同じで区切り無しは全体_裁定書29裁定1", _
+        (modUtilPath.FileNameOf("/Users/me/out/a b.html") = "a b.html") And _
+        (modUtilPath.FileNameOf("C:\out/sub\a.html") = "a.html") And _
+        (modUtilPath.FileNameOf("a.html") = "a.html"), _
+        "スラッシュ・混在・区切り無し、の3条件"
 End Sub

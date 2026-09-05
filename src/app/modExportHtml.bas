@@ -372,7 +372,7 @@ Private Function UniqueOutPath(ByVal dirText As String, ByVal baseName As String
     If LenB(Trim$(baseName)) = 0 Then Exit Function
 
     Dim candidate As String
-    candidate = dirText & "\" & baseName & EX_EXT ' SAFE:html ファイルパス(HTMLへは入らない)
+    candidate = modUtilPath.JoinPath(dirText, baseName & EX_EXT) ' SAFE:html ファイルパス(HTMLへは入らない)
     If Not OutFileExists(candidate) Then
         UniqueOutPath = candidate
         Exit Function
@@ -380,7 +380,7 @@ Private Function UniqueOutPath(ByVal dirText As String, ByVal baseName As String
 
     Dim n As Long
     For n = 2 To EX_SERIAL_MAX
-        candidate = dirText & "\" & baseName & "_" & CStr(n) & EX_EXT ' SAFE:html ファイルパス(HTMLへは入らない)
+        candidate = modUtilPath.JoinPath(dirText, baseName & "_" & CStr(n) & EX_EXT) ' SAFE:html ファイルパス(HTMLへは入らない)
         If Not OutFileExists(candidate) Then
             UniqueOutPath = candidate
             Exit Function

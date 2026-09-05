@@ -97,7 +97,7 @@ Private Sub TestW10CompanyFileRoundTrip()
     modCaseStore.SaveData T3_CASE, "s1_edited", "{""mvv"":""検査用""}"
     modCaseStore.SaveData T3_CASE, "input_memo", T3_SAFE_TEXT
 
-    dirText = Environ$("TEMP")
+    dirText = modUtilPath.TempDir()
     If LenB(dirText) = 0 Then GoTo Report
 
     pathText = modCompanyFile.ExportCompanyFile(T3_CASE, dirText, vbNullString)

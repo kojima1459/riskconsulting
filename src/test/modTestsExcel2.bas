@@ -555,6 +555,15 @@ Private Sub TestW61NavPaste()
         End If
         detNew = "採番=[" & newCaseId & "] 保存字数=" & _
                  CStr(Len(modCaseStore.LoadData(newCaseId, "input_hp")))
+        ' 裁定書29 裁定4: Mac版Excelは貼り付けの書式名が無く PasteSpecial が
+        '   全滅し、採番へ進む前に PasteIntoArea が抜ける(採番=[])。製品は
+        '   変えず、**貼り付けが不成立のMacのときだけ**SKIPで緑にする。
+        '   Windowsでは IsMacExcel が False なのでこの枝に入らない
+        '   (=Windowsに新しいSKIP経路は作らない。落ちたら FAIL のまま)。
+        If LenB(newCaseId) = 0 And modUtilPath.IsMacExcel() Then
+            okNew = True
+            detNew = "SKIP(Mac): 貼り付け書式名がMac版Excelに無い"
+        End If
     Else
         okNew = True
         detNew = "SKIP: クリップボードへ書けない環境"

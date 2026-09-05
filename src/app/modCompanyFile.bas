@@ -87,7 +87,7 @@ Public Function CompanyFilePath(ByVal company As String, ByVal caseId As String,
                    modUtilText.NormalizeForHash(company), CF_TAIL, dirText, CF_EXT)
     If LenB(baseName) = 0 Then Exit Function
 
-    CompanyFilePath = dirText & "\" & baseName & CF_EXT
+    CompanyFilePath = modUtilPath.JoinPath(dirText, baseName & CF_EXT)
 End Function
 
 ' ============================================================================
@@ -558,7 +558,7 @@ Private Function BookStillOpen(ByVal pathText As String) As Boolean
     ' VerifyRoundTrip が走り、B8が塞いだ2段検証の無効化が再現する)。
     ' ファイル名まで違うときだけ False(別フォルダの同名ブックの誤検知は避ける)。
     Dim wantName As String
-    wantName = BaseNameOf(wantPath)
+    wantName = modUtilPath.FileNameOf(wantPath)
 
     Dim i As Long
     For i = 1 To Application.Workbooks.Count
@@ -576,20 +576,6 @@ Private Function BookStillOpen(ByVal pathText As String) As Boolean
     Exit Function
 Unknown0:
     BookStillOpen = True
-End Function
-
-' パスの末尾(ファイル名)。区切りが無ければ全体。
-Private Function BaseNameOf(ByVal pathText As String) As String
-    Dim p As Long
-    p = InStrRev(pathText, "\")
-    Dim q As Long
-    q = InStrRev(pathText, "/")
-    If q > p Then p = q
-    If p <= 0 Then
-        BaseNameOf = pathText
-    Else
-        BaseNameOf = Mid$(pathText, p + 1)
-    End If
 End Function
 
 ' Application.UserName(13章§2.1 owner と同じ扱い)。取れない環境では ""。

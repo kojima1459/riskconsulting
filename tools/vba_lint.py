@@ -30,6 +30,9 @@ RPNの規約(12章§2・§4 / 16章NFR-S7 / 17章T-46):
     CP932安全(VBEはCP932でソースを保持するため、CP932外文字は "?" 化する)
     NFR-S7 外部由来テキストの書き込み口の一元化(セル=SetCellSafe /
        HTML=HtmlSafe・JsStringSafe)。17章T-46①を(c)層でも毎コミット走らせる
+    パス連結の一元化(裁定書29 W10.1): パスの連結は modUtilPath.JoinPath のみ
+       (`& "\"` / `"\" &` の決め打ちを禁止)。一時フォルダは modUtilPath.TempDir
+       のみ(`Environ$("TEMP")` の決め打ちを禁止)
 
 使い方:
     python3 tools/vba_lint.py                 # <repo>/src 配下を検査
@@ -176,6 +179,13 @@ MODULE_REGISTRY = {
     # ---- core 層 ----
     "modGatewayRPN", "modGatewayDirect", "modJsonLite", "modConfig", "modLog",
     "modUtil", "modUtilText", "modTypes",
+    # W10.1(裁定書29 T-60)で新設。12章§2のモジュール一覧に追記済み。
+    #   modUtilPath = パスの連結(JoinPathWith/JoinPath)・分解(FileNameOf)・
+    #                 一時フォルダ(TempDir)・Mac判定(IsMacExcel)。区切り文字を
+    #                 知っているのはここだけ、という状態を作る(下の
+    #                 check_path_join_literal が製品側の決め打ちを禁止する)。
+    #                 modUtil が30,000字契約で満杯のため分割した。
+    "modUtilPath",
     # W6第1弾(1画面ナビ・17章 T-49)で新設。12章§2のモジュール一覧に追記済み。
     #   modUIGeom  = 画面の幾何(帯・ボタンの並び・カードの高さ・表示時間)の純関数。
     #                Excelを1つも触らないので層(a)からテストできる(11章§8.6の流用表)。
@@ -331,6 +341,15 @@ CONTRACT: dict[str, dict] = {
         "required": [
             "SplitForCells", "JoinCellChunks", "SplitKeepNonEmpty", "AppendIdList",
             "ClampLong", "SafeLeft", "BufInit", "BufAdd", "BufText", "FindHeaderCol",
+        ],
+    },
+    # 裁定書29 W10.1(17章 T-60)。パスの連結・分解と実行環境の判定。
+    #   純関数(JoinPathWith / FileNameOf)は層(a)の回帰網が叩くので required に
+    #   載せる(Private へ落として層(a)を空振りさせる改変をここで止める)。
+    "modUtilPath": {
+        "closed": False,
+        "required": [
+            "JoinPathWith", "JoinPath", "TempDir", "FileNameOf", "IsMacExcel",
         ],
     },
     "modKnowledgeFmt": {
@@ -691,6 +710,11 @@ R4_EXCEL_ALLOWED_MODULES = {
     "modCompanyFile3",
     # modExportHearing: ヒアリングシート(本体ブック内のシート)を組み立てる。
     "modExportHearing",
+    # modUtilPath: 裁定書29 裁定4 が「Mac版Excelかどうかの判定は
+    #   modUtilPath.IsMacExcel に閉じる」と定めたため、`Application.OperatingSystem`
+    #   を読む**その1行だけ**Excelトークンが要る。**許可の幅はその1行**であり、
+    #   シート・ブック・セルには触れない(触れたらこの注記に反する)。
+    "modUtilPath",
     # modUtilText: SetCellSafe 内のセル書込に限る(12章§4 v2.4.1・16章NFR-S7(1))。
     #   「外部由来テキストのセル書込口はこの1関数」と定めた以上、その関数本体だけは
     #   セルに触れざるを得ない。純変換部は SanitizeForCell として分離してあり、
@@ -2608,6 +2632,145 @@ def _selftest_integer_division_operator() -> list[str]:
 
 
 # ==============================================================================
+# パス連結の一元化(裁定書29 W10.1・裁定5)
+# ------------------------------------------------------------------------------
+# 実機事故: 2026-09-05 のMac実測で層(b)が7本落ちた。原因の1つが、製品側に残って
+# いた `dirText & "\" & name` というパス連結の**区切り決め打ち**である
+# (modBootData 2箇所 / modCompanyFile 1 / modCompanyFile3 1 / modExportHtml 2)。
+# W9.2 で modUtil.PathSep() を用意したのに、そこを通らない連結が残っていた。
+# Windowsでは同じ文字列になるので**どのゲートも赤くならず**、Macの実Excel
+# (区切りが "/")でだけ企業ファイルの往復とレポート出力が壊れる。
+#
+# 規則: 連結の形(`& "\"` / `"\" &`)を書いてはならない。連結は
+#   modUtilPath.JoinPath(dirText, tail) だけを使う(区切りは PathSep が決める)。
+#
+# 検出の形: **連結形だけ**を見る(裁定書29 裁定5 の逐語)。
+#   ・`... & "\"` / `"\" & ...`      -> ERROR(パス連結の決め打ち)
+#   ・`If Right$(t, 1) = "\" Then`   -> 対象外(文字の比較。連結していない)
+#   ・`Replace$(s, "\\", "/")`       -> 対象外(2文字のリテラルは別物)
+#
+# 許可(理由を必ず1行書くこと):
+#   ・src/test/ 配下 … 層(a)/層(b)のテストは「Windowsの区切りで組んだパスを
+#     分解できるか」を確かめるために `"\"` そのものを式に持つ必要がある
+#     (modTestsPure11 の JsStringSafe 検査も同じ形を持つ)。裁定書29 裁定5 が
+#     名指しで src/test を除外している。
+#   ・modUtil / modUtilPath … PathSep / TrimTrailingSep / JoinPathWith の
+#     **実装本体**。区切りを知ってよい唯一の場所であり、ここを禁止すると
+#     規則そのものが書けない。
+#   ・modJsonLite … `"\" & nx` は JSONのエスケープ(RFC 8259 の逆斜線)であって
+#     パス連結ではない。裁定書29 裁定5 が「JSONエスケープは対象外」と定めて
+#     いるが、検出パターン(連結形)には掛かってしまうため、モジュール単位で
+#     外す。**modJsonLite はパスを一切組み立てない**(JSONの読み書きだけ)ので
+#     この除外でパス連結の検出漏れは生じない。
+# ==============================================================================
+PATH_JOIN_EXEMPT_MODULES = {"modUtil", "modUtilPath", "modJsonLite"}
+PATH_JOIN_EXEMPT_LAYER_DIRS = ("test",)
+# `& "\"`(前が連結演算子)と `"\" &`(後ろが連結演算子)の2形。`"\\"`(2文字)は
+# 別リテラルなので、リテラルは**ちょうど1文字の逆斜線**に限定する。
+PATH_JOIN_PATTERNS = (
+    re.compile(r'&\s*"\\"(?!")'),
+    re.compile(r'(?<!")"\\"\s*&'),
+)
+
+
+def _path_join_exempt(info: ModuleInfo) -> bool:
+    if module_name_for_display(info) in PATH_JOIN_EXEMPT_MODULES:
+        return True
+    parts = info.relpath.as_posix().split("/")
+    return len(parts) > 1 and parts[0] in PATH_JOIN_EXEMPT_LAYER_DIRS
+
+
+def check_path_join_literal(info: ModuleInfo) -> None:
+    r"""裁定書29 裁定5: パス連結の `& "\"` / `"\" &` を禁止(JoinPath へ寄せる)。"""
+    if _path_join_exempt(info):
+        return
+    for lineno, stmt in info.statements:
+        for pat in PATH_JOIN_PATTERNS:
+            if pat.search(stmt):
+                info.add(
+                    "ERROR", lineno,
+                    "裁定書29 W10.1: パス区切りの決め打ち連結は禁止です"
+                    "(Mac版Excelの区切りは \"/\" なので往復が成立しません)。"
+                    "`modUtilPath.JoinPath(dirText, tail)` へ寄せてください: "
+                    f"「{stmt.strip()[:80]}」",
+                )
+                break
+
+
+# ==============================================================================
+# 一時フォルダの環境変数の決め打ち(裁定書29 W10.1・裁定5)
+# ------------------------------------------------------------------------------
+# 同じMac実測で、テストが `Environ$("TEMP")` を使っていたために一時ファイルの
+# 置き場が空になり、SaveAs失敗(Err=1004)・UTF8書出失敗・企業ファイル往復の
+# 前提不成立が連鎖した。Macの実Excel は TEMP を持たず TMPDIR を持つ。
+# 値源は modUtilPath.TempDir()(TEMP -> TMP -> TMPDIR -> 本体と同じフォルダ)の
+# 1本に寄せ、他所からの決め打ちを禁止する。
+#
+# 許可: modUtil / modUtilPath のみ(TempDir の実装本体。裁定書29 は「modUtil
+#   以外で禁止」と書いたが、30,000字契約により実装は modUtilPath へ置いた)。
+#   **src/test も対象**にする(今回の事故はテスト側の決め打ちが原因だった)。
+# ==============================================================================
+ENV_TEMP_EXEMPT_MODULES = {"modUtil", "modUtilPath"}
+ENV_TEMP_PATTERN = re.compile(r'\bEnviron\$?\s*\(\s*"TEMP"\s*\)', re.IGNORECASE)
+
+
+def check_env_temp_literal(info: ModuleInfo) -> None:
+    """裁定書29 裁定5: `Environ$("TEMP")` を禁止(modUtilPath.TempDir へ寄せる)。"""
+    if module_name_for_display(info) in ENV_TEMP_EXEMPT_MODULES:
+        return
+    for lineno, stmt in info.statements:
+        if ENV_TEMP_PATTERN.search(stmt):
+            info.add(
+                "ERROR", lineno,
+                "裁定書29 W10.1: 一時フォルダの環境変数の決め打ちは禁止です"
+                "(Mac版Excelは TEMP を持たず TMPDIR を持ちます)。"
+                "`modUtilPath.TempDir()` を使ってください: "
+                f"「{stmt.strip()[:80]}」",
+            )
+
+
+# 上の2ルールの自己テスト(骨抜き防止)。正例=findingが出てはいけない書き方、
+# 負例=必ずERRORが出なければならない書き方。run_lint の末尾で毎回走らせる。
+_PATHJOIN_SELFTEST_OK = [
+    'CompanyFilePath = modUtilPath.JoinPath(dirText, baseName & CF_EXT)',
+    'If Right$(t, 1) = "\\" Or Right$(t, 1) = "/" Then',
+]
+_PATHJOIN_SELFTEST_NG = [
+    'CompanyFilePath = dirText & "\\" & baseName & CF_EXT',
+    'nameText = Dir$(dirText & "\\" & BD_PATTERN)',
+]
+_ENVTEMP_SELFTEST_OK = [
+    'd = modUtilPath.TempDir()',
+]
+_ENVTEMP_SELFTEST_NG = [
+    'd = Environ$("TEMP")',
+]
+
+
+def _selftest_path_rules() -> list[str]:
+    """裁定書29 の2ルールへ正例/負例を通し、食い違いを文字列で返す。"""
+    problems: list[str] = []
+    cases = (
+        ("パス連結禁止", check_path_join_literal,
+         _PATHJOIN_SELFTEST_OK, _PATHJOIN_SELFTEST_NG),
+        ('Environ$("TEMP")禁止', check_env_temp_literal,
+         _ENVTEMP_SELFTEST_OK, _ENVTEMP_SELFTEST_NG),
+    )
+    for label, fn, ok_list, ng_list in cases:
+        for src in ok_list:
+            probe = _probe_module([src])
+            fn(probe)
+            if probe.findings:
+                problems.append(f"{label}: 正例が誤検知されました: {src!r}")
+        for src in ng_list:
+            probe = _probe_module([src])
+            fn(probe)
+            if not probe.findings:
+                problems.append(f"{label}: 負例が検知されませんでした: {src!r}")
+    return problems
+
+
+# ==============================================================================
 # (a) AV表面積: 配布物から消すAPIの「形」(裁定書27 W9-B7(a))
 # ------------------------------------------------------------------------------
 # 2026-09-02、同じ社内環境でマクロ型マルウェアの「形」が社内AVのAMSIに検知され、
@@ -3243,6 +3406,8 @@ def run_lint(src_root: Path) -> int:
         check_msvbal_reserved_names(info)
         check_hex_literal_suffix(info)
         check_integer_division_operator(info)
+        check_path_join_literal(info)
+        check_env_temp_literal(info)
         check_excel_tokens(info)
         check_forbidden_api_tokens(info)
         check_workbooks_open_alerts(info)
@@ -3313,6 +3478,16 @@ def run_lint(src_root: Path) -> int:
         for msg in w9_selftest:
             print(f"  ERROR L1: {msg}")
         total_error += len(w9_selftest)
+
+    # W10.1(裁定書29 T-60): パス連結禁止 / Environ$("TEMP")禁止 の自己テスト。
+    # 正負例が期待どおり判定できているか。ルールを空振りさせる改変(パターンの
+    # 削除・許可リストの拡大)はここが赤で止める。
+    path_selftest = _selftest_path_rules()
+    if path_selftest:
+        print("\n[W10.1: パス連結 / 一時フォルダ 禁止ルールの自己テスト]")
+        for msg in path_selftest:
+            print(f"  ERROR L1: {msg}")
+        total_error += len(path_selftest)
 
     # W9.4(17章 T-58): UDT/配列 ByVal 禁止ルールの自己テスト。正負例が期待どおり
     # 判定できているか。ルールを空振りさせる改変はここが赤で止める。

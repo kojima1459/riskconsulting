@@ -60,7 +60,7 @@ Public Function RebuildCaseCache() As Long
     Dim i As Long
     For i = LBound(names) To UBound(names)
         If LenB(names(i)) > 0 Then
-            If ApplyOneFile(dirText & "\" & names(i)) Then n = n + 1
+            If ApplyOneFile(modUtilPath.JoinPath(dirText, names(i))) Then n = n + 1
         End If
     Next i
 
@@ -83,7 +83,7 @@ Private Function FileNamesIn(ByVal dirText As String) As String
     Dim acc As String
     Dim n As Long
     Dim nameText As String
-    nameText = Dir$(dirText & "\" & BD_PATTERN)
+    nameText = Dir$(modUtilPath.JoinPath(dirText, BD_PATTERN))
     Do While LenB(nameText) > 0
         ' Excel が開いているファイルの一時名(~$...)は企業ファイルではない。
         If Left$(nameText, 2) <> "~$" Then
