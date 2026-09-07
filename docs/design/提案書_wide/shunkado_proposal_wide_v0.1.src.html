@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>有限会社春華堂 御中｜経営リスク分析と保険活用のご提案（SAMPLE）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- =====================================================================
+     [1] FORMAT LAYER  ―  slideformat_wide/format_wide.html のテーマCSSを逐語移植
+         （Marp出力の div#\:\$p > svg > foreignObject > section を section.slide に読み替え）
+         ※ 位置・サイズ・色・フォントはフォーマット原本の値を変更していない
+     ===================================================================== -->
+<style id="format-css">
+section.slide{
+  width:1280px;height:720px;box-sizing:border-box;overflow:hidden;position:relative;
+  padding:0;margin:0;background:#ffffff;color:var(--ink);
+  font-family:"BIZ UDPGothic","BIZ UDPゴシック","Yu Gothic","YuGothic","Hiragino Kaku Gothic ProN","Hiragino Sans","Meiryo",sans-serif;
+  font-size:29px;line-height:1.5;
+  --teal:#00655A;--teal-footer:#006666;--ink:#1a1a1a;
+}
+section.slide .el{position:absolute}
+section.slide .header-bar{left:0;top:0;width:100%;height:8%;background-image:url("assets/header_bar.png");background-size:100% 100%;background-repeat:no-repeat}
+section.slide .cover-meta{left:4.28%;top:13.25%;width:39.57%;height:10.36%;display:flex;flex-direction:column;gap:1%}
+section.slide .cover-meta .to{font-size:32px;text-align:left;font-weight:bold}
+section.slide .cover-date{left:50%;top:82%;transform:translateX(-50%);text-align:center;font-size:26.6px;font-weight:bold}
+section.slide .cover-titlebox{left:3.75%;top:33.28%;width:92.51%;height:33.07%;background-image:url("assets/title_box.png");background-size:100% 100%;background-repeat:no-repeat}
+section.slide .cover-title{left:6.88%;top:40.15%;width:86.25%;height:19.33%;display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:45.3px;font-weight:700;line-height:1.3;text-align:center}
+section.slide .cover-company{left:30.07%;top:87.81%;width:39.86%;height:3.71%;background-image:url("assets/company_name.svg");background-size:contain;background-repeat:no-repeat;background-position:center}
+section.slide .section-label{left:8.14%;top:14.15%;width:83.73%;height:6.79%;display:flex;align-items:flex-end;color:var(--teal);font-size:29.3px;font-weight:700;letter-spacing:.02em}
+section.slide .section-title{left:8.14%;top:21.28%;width:83.73%;height:8.97%;display:flex;align-items:flex-end;color:var(--ink);font-size:34.7px;font-weight:bold}
+section.slide .section-rule{left:8.14%;top:31.64%;width:83.73%;height:0;border-top:4px solid var(--teal)}
+section.slide .content-title{left:4.43%;top:0;width:67.27%;height:7.97%;display:flex;align-items:center;color:#ffffff;font-size:29.3px;font-weight:700;padding-top:1.5px /* 文字の視覚中心を帯の中心に合わせる微調整（計測値+1.5px） */}
+section.slide .content-body{left:4.43%;top:11%;width:91%;height:80%;font-size:24px;line-height:1.7}
+section.slide .footer-rule{left:0;top:96.57%;width:100%;height:0;border-top:1px solid var(--teal-footer)}
+section.slide .page-number{left:38.19%;top:97.07%;width:24.17%;height:2.48%;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--ink)}
+section.slide .back-watermark{left:50%;top:50%;transform:translate(-50%,-50%);width:29.54%;aspect-ratio:1 / 1;background-image:url("assets/watermark.png");background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.20}
+section.slide .back-logo{left:50%;top:45.26%;transform:translateX(-50%);width:62.53%;height:9.45%;background-image:url("assets/logo_back.png");background-size:contain;background-repeat:no-repeat;background-position:center}
+section.slide .back-tagline{left:50%;top:59.10%;transform:translateX(-50%);width:46.42%;height:4.53%;background-image:url("assets/tagline.png");background-size:contain;background-repeat:no-repeat;background-position:center}
+</style>
+
+<!-- =====================================================================
+     [2] VIEWER LAYER  ―  画面表示（縦スクロール・自動縮小）と印刷（1280×720／1枚1ページ）
+     ===================================================================== -->
+<style id="viewer-css">
+html,body{margin:0;padding:0;background:#5f6368}
+.deck{padding:24px 0}
+.frame{position:relative;width:min(1280px,calc(100vw - 48px));aspect-ratio:16 / 9;margin:0 auto 24px;overflow:hidden;background:#fff}
+.frame>section.slide{position:absolute;left:0;top:0;transform-origin:0 0;transform:scale(var(--s,1))}
+body.single{background:#fff}
+body.single .deck{padding:0}
+body.single .frame{width:1280px;height:720px;margin:0;aspect-ratio:auto}
+@page{size:1280px 720px;margin:0}
+@media print{
+  html,body{background:#fff}
+  .deck{padding:0}
+  .frame{width:1280px;height:720px;margin:0;aspect-ratio:auto;page-break-after:always;break-after:page}
+  .frame:last-child{page-break-after:auto;break-after:auto}
+  .frame>section.slide{transform:none!important}
+  section.slide,section.slide *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
+</style>
+
+<!-- =====================================================================
+     [3] CONTENT LAYER  ―  本文コンポーネント（コンサル型レイアウト）
+         配色：メイン＝フォーマットのティール #00655A／淡い塗り #E6F2F0／
+               強調 #D84315（キーワード専用）／本文 #222222／補助 #888888／罫線 #E0E0E0
+     ===================================================================== -->
+<style id="content-css">
+.cb{position:relative;height:100%;font-size:15px;line-height:1.5;color:#222222}
+.cb p{margin:0}
+.cb p.hm{margin:0 0 18px}
+.cb p.hm:has(+ .sub){margin-bottom:8px}
+.cb p.sub{margin:0 0 18px}
+.hm{font-size:22px;font-weight:700;line-height:1.45;color:#1a1a1a;margin:0 0 18px}
+.hm:has(+ .sub){margin-bottom:8px}
+.hm em{font-style:normal;color:#D84315}
+.sub{font-size:14px;line-height:1.6;color:#222222;margin:0 0 18px}
+.src{position:absolute;left:0;right:0;bottom:0;font-size:10.5px;line-height:1.45;color:#888888}
+.kicker{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:#00655A}
+.h3{font-size:16px;font-weight:700;color:#1a1a1a;margin:2px 0 6px;line-height:1.35}
+.p{font-size:14px;line-height:1.6;color:#222222}
+.muted{color:#888888}
+.acc{color:#D84315}
+.tealtx{color:#00655A}
+.b{font-weight:700}
+.card{border:1px solid #E0E0E0;border-radius:4px;padding:16px 18px;background:#fff;box-sizing:border-box}
+.card.hl{background:#E6F2F0;border-color:#E6F2F0}
+.cols{display:flex;gap:16px}
+.cols>*{flex:1;min-width:0}
+.num{display:inline-flex;width:22px;height:22px;border-radius:50%;background:#00655A;color:#fff;font-size:12px;font-weight:700;align-items:center;justify-content:center;flex:none}
+.num.lg{width:28px;height:28px;font-size:14px}
+.tag{display:inline-block;font-size:11.5px;line-height:1.5;padding:1px 8px;border-radius:3px;border:1px solid;white-space:nowrap;font-weight:400}
+.tag.cover{color:#00655A;background:#E6F2F0;border-color:#E6F2F0}
+.tag.partial{color:#555555;background:#fff;border-color:#BDBDBD}
+.tag.hard{color:#D84315;background:#fff;border-color:#D84315}
+.tg{font-style:normal;font-size:10.5px;font-weight:400;color:#888888;border:1px solid #E0E0E0;padding:0 5px;border-radius:2px;margin-left:4px;vertical-align:1px;white-space:nowrap}
+
+/* 表：縦罫線なし・横罫線のみ、ヘッダー薄塗り */
+table.t{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.45;table-layout:fixed}
+table.t th{background:#E6F2F0;color:#1a1a1a;font-weight:700;text-align:left;padding:7px 10px;border-bottom:1px solid #E0E0E0;vertical-align:middle}
+table.t td{padding:9px 10px;border-bottom:1px solid #E0E0E0;vertical-align:top}
+table.t td.r,table.t th.r{text-align:right;font-variant-numeric:tabular-nums}
+table.t td.c,table.t th.c{text-align:center}
+table.t .rid{font-size:11px;color:#888888;font-weight:400}
+table.t .lv{font-weight:700;white-space:nowrap}
+table.t .lv.crit{color:#D84315}
+table.t .mini{font-size:10.5px;color:#888888}
+table.t.dense th,table.t.dense td{padding:5px 10px}
+table.t.airy td{padding:18px 10px}
+
+/* KPIストリップ */
+.stats{display:flex;border-top:1px solid #E0E0E0;border-bottom:1px solid #E0E0E0}
+.stat{flex:1;padding:14px 16px;border-right:1px solid #E0E0E0;min-width:0}
+.stat:last-child{border-right:0}
+.stat .lb{font-size:12.5px;color:#888888}
+.stat .v{font-size:30px;font-weight:700;color:#00655A;line-height:1.2;margin:2px 0}
+.stat .nt{font-size:12.5px;color:#888888;line-height:1.4}
+.core{background:#E6F2F0;padding:14px 18px;font-size:14.5px;line-height:1.55;border-radius:4px}
+.core .kicker{margin-right:8px}
+
+/* アジェンダ */
+.agenda{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:8px}
+.agenda>div{display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.4;padding:9px 10px;white-space:nowrap;border:1px solid #E0E0E0;border-radius:4px}
+
+/* 2ペイン＋矢印 */
+.two{display:flex;align-items:stretch;gap:0}
+.pane{flex:1;min-width:0}
+.pane-h{font-size:12px;font-weight:700;color:#00655A;border-bottom:2px solid #00655A;padding-bottom:4px;margin-bottom:2px}
+.row{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #E0E0E0;font-size:14px;line-height:1.5}
+.row b{color:#1a1a1a}
+.arrow{width:48px;flex:none;align-self:center;position:relative;height:2px;background:#00655A;margin:0 14px}
+.arrow::after{content:"";position:absolute;right:-1px;top:-5px;border-left:9px solid #00655A;border-top:6px solid transparent;border-bottom:6px solid transparent}
+
+/* ファクト帯 */
+.facts{display:flex;gap:16px;margin:0 0 18px}
+.fact{flex:1;border-left:3px solid #00655A;padding:2px 12px}
+.fact .lb{font-size:12px;color:#888888}
+.fact .v{font-size:22px;font-weight:700;color:#1a1a1a;line-height:1.25}
+.fact .nt{font-size:12px;color:#888888}
+
+/* リスクユニバース */
+.uni{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.ucard{border:1px solid #E0E0E0;border-radius:4px;padding:16px 16px;min-height:136px;box-sizing:border-box}
+.ucard .t{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;margin-bottom:6px}
+.ucard .k{font-size:13.5px;color:#888888;line-height:1.6}
+
+/* ヒートマップ */
+.heat{display:grid;grid-template-columns:52px repeat(5,102px);grid-template-rows:repeat(5,72px) 24px;gap:3px}
+.heat .y{font-size:12px;color:#888888;display:flex;align-items:center;justify-content:flex-end;padding-right:8px}
+.heat .x{font-size:12px;color:#888888;text-align:center;padding-top:4px}
+.heat .c{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:3px;padding:3px;border:1px solid #E0E0E0;box-sizing:border-box}
+.heat .c.l0{background:#E3F1E4}.heat .c.l1{background:#FFF2C2}.heat .c.l2{background:#FFD6A8}.heat .c.l3{background:#F7B3A6}
+.dot{width:22px;height:22px;border-radius:50%;background:#00655A;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.dot.top{background:#D84315;outline:2px solid #fff}
+.axis{font-size:12px;color:#888888}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:#888888;align-items:center;margin-top:8px}
+.legend>span{white-space:nowrap}
+.legend .sw{display:inline-block;width:14px;height:10px;border:1px solid #E0E0E0;vertical-align:-1px;margin-right:4px}
+.rank{display:grid;grid-template-columns:24px 1fr 86px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #E0E0E0}
+.rank .nm{font-size:14px;font-weight:700;line-height:1.35}
+.rank .ct{font-size:11.5px;color:#888888}
+.rank .sc{text-align:right;font-size:12px;color:#888888;line-height:1.3}
+.rank .sc b{display:block;font-size:15px;color:#1a1a1a}
+.rank .sc b.crit{color:#D84315}
+
+/* 3分類カラム */
+.tri{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.tri .hd{display:flex;align-items:baseline;gap:10px}
+.tri .hd .n{font-size:34px;font-weight:700;line-height:1;color:#00655A}
+.tri .hd .n.g{color:#888888}.tri .hd .n.a{color:#D84315}
+.tri .hd .l{font-size:15px;font-weight:700}
+.tri .hd .u{font-size:12px;color:#888888;margin-right:4px}
+.bar{height:8px;background:#E6F2F0;margin:8px 0 10px;position:relative}
+.bar i{display:block;height:100%;background:#00655A}
+.bar i.g{background:#BDBDBD}.bar i.a{background:#D84315}
+.tri ul{list-style:none;margin:0;padding:0}
+.tri li{font-size:14px;line-height:1.4;padding:5px 0;border-bottom:1px solid #E0E0E0;display:flex;gap:8px}
+.tri li .rid{color:#888888;flex:none;width:28px;font-size:11px}
+.pol{margin-top:14px;font-size:13.5px;line-height:1.5;padding:8px 10px;border:1px solid #E0E0E0;border-radius:4px}
+.pol .kicker{display:block;margin-bottom:2px}
+
+/* タイムライン */
+.tl{position:relative;height:100%}
+.tl .ax{display:flex;font-size:10px;color:#888888;justify-content:space-between}
+.tl .trk{position:relative;height:10px;background:#F2F7F6;margin-top:3px}
+.tl .trk i{position:absolute;top:0;height:100%;background:#00655A}
+.tl .trk i.dash{background:repeating-linear-gradient(90deg,#00655A 0 6px,transparent 6px 10px)}
+
+/* 2軸マトリクス */
+.mx{position:relative;width:540px;height:392px;border-left:1px solid #E0E0E0;border-bottom:1px solid #E0E0E0;margin:14px 0 0 60px}
+.mx .gl{position:absolute;left:0;right:0;border-top:1px dashed #E0E0E0}
+.mx .gv{position:absolute;top:0;bottom:0;border-left:1px dashed #E0E0E0}
+.mx .pt{position:absolute;transform:translate(-50%,-14px);display:flex;flex-direction:column;align-items:center;gap:4px}
+.mx .pt .b{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:#00655A;color:#fff;flex:none}
+.mx .pt.lo .b{background:#fff;color:#888888;border:1px solid #BDBDBD}
+.mx .pt .lb{font-size:12px;white-space:nowrap;line-height:1.2;text-align:center}
+.mx .pt.lo .lb{color:#888888}
+.mx .yl{position:absolute;right:100%;margin-right:8px;font-size:12px;color:#888888;white-space:nowrap;transform:translateY(-50%)}
+.mx .xl{position:absolute;top:100%;margin-top:6px;font-size:12px;color:#888888;white-space:nowrap;transform:translateX(-50%)}
+.mx .yt{position:absolute;left:-58px;top:-18px;font-size:12px;color:#888888;font-weight:700}
+.mx .xt{position:absolute;right:0;top:100%;margin-top:24px;font-size:12px;color:#888888;font-weight:700}
+.ideas{list-style:none;margin:0;padding:0}
+.ideas li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;padding:6px 0;border-bottom:1px solid #E0E0E0;font-size:13.5px;line-height:1.4}
+.ideas li .nm{font-weight:700}
+.ideas li .aim{color:#888888;font-size:12px}
+.ideas li.lo .nm{color:#888888;font-weight:400}
+
+/* 施策カード */
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.pc{border:1px solid #E0E0E0;border-radius:4px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}
+.pc .top{display:flex;align-items:center;gap:8px}
+.pc .nm{font-size:15px;font-weight:700;line-height:1.3}
+.pc .p{flex:1}
+.pc dl{margin:0;display:grid;grid-template-columns:84px 1fr;gap:3px 6px;font-size:12.5px;line-height:1.4;border-top:1px solid #E0E0E0;padding-top:8px}
+.pc dt{color:#888888}
+.pc dd{margin:0}
+.stars{color:#00655A;letter-spacing:1px}
+.stars .off{color:#E0E0E0}
+
+/* ステップ */
+.steps{display:grid;grid-template-columns:1fr 24px 1fr 24px 1fr 24px 1fr;align-items:stretch}
+.step{border:1px solid #E0E0E0;border-radius:4px;padding:18px 20px;box-sizing:border-box}
+.step .k{font-size:11px;font-weight:700;color:#00655A;letter-spacing:.06em}
+.step .t{font-size:17px;font-weight:700;margin:4px 0 8px;line-height:1.3}
+.step .d{font-size:14.5px;line-height:1.6}
+.step .ref{margin-top:12px;padding-top:8px;border-top:1px solid #E0E0E0;font-size:12px;color:#888888;line-height:1.4}
+.chev{position:relative;align-self:center;height:2px;background:#00655A}
+.chev::after{content:"";position:absolute;right:-1px;top:-5px;border-left:9px solid #00655A;border-top:6px solid transparent;border-bottom:6px solid transparent}
+.flow{display:grid;grid-template-columns:1fr 24px 1fr 24px 1fr;align-items:stretch;margin-top:18px}
+.fbox{border:1px solid #E0E0E0;border-radius:4px;padding:14px 16px;font-size:14px;line-height:1.5;box-sizing:border-box}
+.fbox.hl{background:#E6F2F0;border-color:#E6F2F0}
+.fbox .k{font-size:11px;font-weight:700;color:#00655A;display:block;margin-bottom:2px}
+
+/* 質問4カラム */
+.qcols{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.qcols .qh{font-size:14px;font-weight:700;color:#00655A;border-bottom:2px solid #00655A;padding-bottom:4px;margin-bottom:6px}
+.q{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid #E0E0E0;font-size:14px;line-height:1.5}
+.q b{display:block;font-size:14.5px}
+.q .qd{color:#555555}
+
+/* 前提・出典 */
+.pre{font-size:14px;line-height:1.65}
+.pre p{margin:0 0 10px}
+.pre b{color:#00655A}
+.srcs{list-style:none;margin:0;padding:0;font-size:11.5px;line-height:1.4}
+.srcs li{display:grid;grid-template-columns:34px 1fr;gap:6px;padding:4px 0;border-bottom:1px solid #E0E0E0}
+.srcs .id{color:#888888}
+.srcs .u{color:#888888;font-size:10px;word-break:break-all}
+
+/* 追加コンポーネント（v0.2） */
+.row b .tg{display:block;width:max-content;margin:4px 0 0}
+.tg.pri{color:#00655A;border-color:#00655A;font-weight:700}
+table.t.reg{font-size:12px}
+table.t.reg th,table.t.reg td{padding:4.5px 8px}
+table.t.reg td.top{font-weight:700}
+table.t.reg td.rid{color:#888888}
+table.t.reg .acc{color:#D84315;font-weight:700}
+.dec{flex:1;border:1px solid #E0E0E0;border-radius:4px;padding:24px 24px;box-sizing:border-box}
+.dec .t{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;margin-bottom:10px;line-height:1.3}
+.dec .d{font-size:15px;line-height:1.7}
+.dec .o{margin-top:14px;padding-top:12px;border-top:1px solid #E0E0E0;font-size:14px;line-height:1.6}
+.dec .o .kicker{display:block;margin-bottom:2px}
+.fbox .k .tg{margin-left:6px;vertical-align:1px}
+</style>
+</head>
+<body>
+<main class="deck">
+
+<!-- ============ 01 表紙 ============ -->
+<div class="frame"><section class="slide" data-master="cover">
+  <div class="el header-bar"></div>
+  <div class="el cover-meta"><div class="to">有限会社春華堂　御中</div></div>
+  <div class="el cover-titlebox"></div>
+  <div class="el cover-title"><div>経営リスク分析と保険活用のご提案<span style="display:block;font-size:24px;font-weight:700;margin-top:10px;line-height:1.3">― 138年超のブランドを、次の成長の「リスク許容力」へ ―</span></div></div>
+  <div class="el cover-date">2026年9月3日</div>
+  <div class="el cover-company"></div>
+</section></div>
+
+<!-- ============ 02 ご提案の要旨 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">ご提案の要旨</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm"><em>事業を止めない・ブランドを守る・成長を後押しする</em>の3テーマで、貴社の保険を組み直すことをご提案します</p>
+    <div class="cols">
+      <div class="card"><div class="kicker">テーマ 1</div><div class="h3">事業を止めない</div><p class="p">地域集中、自然災害、設備停止、供給途絶、技能継承、IT停止が連鎖すると、製造・販売・観光体験が同時に止まり得ます。財物の補償だけでなく、「復旧までの時間」を指標にした事業継続計画と補償の設計が重要です。</p></div>
+      <div class="card"><div class="kicker">テーマ 2</div><div class="h3">ブランドを守る</div><p class="p">食品事故、転売・不正流通、サイバー事故、SNS上の誤情報。貴社にとって損失が大きいのは「モノ」より、長年蓄積された信用・ブランドです。PL・リコール・サイバー等の補償を「ブランド危機への備え」として一体で設計します。</p></div>
+      <div class="card"><div class="kicker">テーマ 3</div><div class="h3">成長を後押しする</div><p class="p">保険をコストではなく、新しい販売チャネル・法人取引・地域観光・共同企画に踏み出す際の「リスク許容力」として活用します。法人向け納品保証、ギフト安心保証、体験キャンセル補償、信用補完を優先候補とします。</p></div>
+    </div>
+    <div class="stats" style="margin:14px 0">
+      <div class="stat"><div class="lb">評価したリスク</div><div class="v">24件</div><div class="nt">10のカテゴリーで整理</div></div>
+      <div class="stat"><div class="lb">既存の保険で備えやすい</div><div class="v">8件</div><div class="nt">契約条件の確認が前提</div></div>
+      <div class="stat"><div class="lb">補償条件の設計が必要</div><div class="v">10件</div><div class="nt">特約・支払限度の設計</div></div>
+      <div class="stat"><div class="lb">保険以外の対策が中心</div><div class="v">6件</div><div class="nt">価格・人材・需要など</div></div>
+      <div class="stat"><div class="lb">成長を後押しする活用案</div><div class="v">8案</div><div class="nt">うち優先候補4案</div></div>
+    </div>
+    <div class="core"><span class="kicker">ご提案の前提</span>貴社の事業は、製造、ブランド、小売、EC、観光・体験、地域連携が一体となっています。そのため保険も、工場の火災やPLといった個別の種目ごとではなく、事業全体を横断して設計することが合理的です。</div>
+    <div class="pane-h" style="font-size:13px;margin-top:14px">本資料の構成</div>
+    <div class="agenda">
+      <div><span class="num">1</span><span>事業構造とリスクの全体像</span></div>
+      <div><span class="num">2</span><span>保険で備えられるリスクと条件</span></div>
+      <div><span class="num">3</span><span>保険だけでは備えにくいリスク</span></div>
+      <div><span class="num">4</span><span>成長を後押しする保険の活用</span></div>
+      <div><span class="num">5</span><span>ご提案の全体像と進め方</span></div>
+    </div>
+    <p class="src">本資料は公開情報（調査基準日：2026年8月27日）に基づく仮説であり、貴社の現在のご契約内容・損害実績は確認していません。24件のリスク一覧と前提・参照情報は巻末に掲載しています。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">2</div>
+</section></div>
+
+<!-- ============ 03 Section 1 ============ -->
+<div class="frame"><section class="slide" data-master="section">
+  <div class="el section-label">Section 1</div>
+  <div class="el section-title">貴社の事業構造とリスクの全体像</div>
+  <div class="el section-rule"></div>
+</section></div>
+
+<!-- ============ 04 事業構造 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">事業構造：リスクを生む5つの事業領域</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">製造・販売・体験・地域が一体の事業モデルのため、一つの事故が<em>製造→店舗→EC→観光へ連鎖</em>し得ます</p>
+    <div class="facts">
+      <div class="fact"><div class="lb">創業</div><div class="v">1887年</div><div class="nt">長期のブランド資産を保有</div></div>
+      <div class="fact"><div class="lb">代表的商品</div><div class="v">うなぎパイ</div><div class="nt">1961年誕生</div></div>
+      <div class="fact"><div class="lb">主な事業拠点</div><div class="v">複数拠点</div><div class="nt">工場・営業所・体験施設</div></div>
+      <div class="fact"><div class="lb">事業特性</div><div class="v">製造＋体験</div><div class="nt">工場見学・商業施設・コミュニティ</div></div>
+    </div>
+    <div class="two">
+      <div class="pane">
+        <div class="pane-h">貴社の事業領域（公開情報に基づく当社の理解）</div>
+        <div class="row"><b>菓子製造</b><span>和洋菓子、うなぎパイ、五穀屋、coneri等。原材料・設備・品質管理・職人技能への依存が大きい</span></div>
+        <div class="row"><b>小売・卸</b><span>直営店舗、百貨店等の正規販売網。一部商品は通信販売を行わず、品質管理と正規流通を重視</span></div>
+        <div class="row"><b>EC・会員</b><span>オンラインショップを運営。2026年10月に公式アプリを終了し、LINEへ会員・ポイントを移行予定</span></div>
+        <div class="row"><b>観光・体験</b><span>うなぎパイファクトリーの工場見学、nicoeのイベント、SWEETS BANKの商業・コミュニティ機能</span></div>
+        <div class="row"><b>地域共創</b><span>学生・地域企業とのスタディツアー等、地域価値・人材育成に関わる活動を展開</span></div>
+      </div>
+      <div class="arrow"></div>
+      <div class="pane">
+        <div class="pane-h">事業構造から見えるリスク要因</div>
+        <div class="row"><b>拠点の地域集中<i class="tg">当社の想定</i></b><span>主要な製造・体験拠点が浜松周辺に集積。大規模地震や広域停電・交通寸断の際は、複数の拠点が同時に被災し得る（南海トラフ巨大地震等を想定）</span></div>
+        <div class="row"><b>ブランド価値への集中<i class="tg">当社の想定</i></b><span>「うなぎパイ」の認知度が高いほど、食品事故・偽情報・転売品の品質問題が評判に与える影響は、物的な損失を上回り得る</span></div>
+        <div class="row"><b>職人技能への依存<i class="tg">公開情報より</i></b><span>職人の手わざが価値の中核。技能継承・採用難は中長期の生産能力を左右する。2026年には原材料価格・為替・人材確保を背景に賃金改定を公表</span></div>
+        <div class="row"><b>デジタルへの依存<i class="tg">当社の想定</i></b><span>EC・キャッシュレス・会員基盤・LINE連携により、IT障害・サイバー事故は売上だけでなく顧客との接点にも波及する</span></div>
+        <div class="row"><b>来訪者の安全<i class="tg">公開情報より</i></b><span>工場見学・体験施設の運営により、一般的な製造業に比べ、施設内の事故・混雑・イベント運営への備えが必要</span></div>
+      </div>
+    </div>
+    <p class="src">出典：春華堂 企業情報・沿革・ブランド、取扱店・通信販売案内、オンラインショップ、うなぎパイファクトリー、SWEETS BANK／nicoe、公式アプリ終了のお知らせ（2026年8月4日）、プレスリリース（2026年2月9日）、静岡県第4次地震被害想定・浜松市地域防災計画。「公開情報より」は公開情報で確認した事項、「当社の想定」は事業構造から当社が想定した事項です。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">4</div>
+</section></div>
+
+<!-- ============ 05 リスクの全体像 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">リスクの全体像：10のカテゴリーで捉える</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm"><em>リスクの発生源</em>で10のカテゴリーに整理し、貴社の経営上の論点を漏れなく捉えます</p>
+    <p class="sub">貴社の事業に関わるリスクを発生源ごとに10のカテゴリーに分け、次頁以降で扱う24のリスク（R01〜R24）をこの枠組みで整理しています</p>
+    <div class="uni">
+      <div class="ucard"><div class="t"><span class="num">1</span>戦略・市場</div><div class="k">需要構造、観光需要、商品構成、競争、地域依存、成長投資</div></div>
+      <div class="ucard"><div class="t"><span class="num">2</span>調達・供給網</div><div class="k">原材料、包装材、単一仕入先、価格・為替、物流寸断、仕入先の品質</div></div>
+      <div class="ucard"><div class="t"><span class="num">3</span>製造・品質</div><div class="k">食品安全、異物・アレルゲン、設備故障、歩留まり、工程停止、リコール</div></div>
+      <div class="ucard"><div class="t"><span class="num">4</span>販売・顧客</div><div class="k">店舗、卸、EC、配送、決済、顧客苦情、正規流通、ギフト納品</div></div>
+      <div class="ucard"><div class="t"><span class="num">5</span>施設・事業継続</div><div class="k">火災、地震、風水害、停電、来訪者事故、イベント、復旧遅延</div></div>
+      <div class="ucard"><div class="t"><span class="num">6</span>人材・労務</div><div class="k">採用、技能継承、労災、長時間労働、ハラスメント、キーパーソン</div></div>
+      <div class="ucard"><div class="t"><span class="num">7</span>デジタル・情報</div><div class="k">ランサムウェア、個人情報、EC停止、外部クラウドサービス、生産設備の制御システム、詐欺</div></div>
+      <div class="ucard"><div class="t"><span class="num">8</span>法務・規制</div><div class="k">食品表示、広告、知的財産、契約、景品表示、個人情報、取引条件</div></div>
+      <div class="ucard"><div class="t"><span class="num">9</span>財務・取引先</div><div class="k">売掛債権、資金繰り、盗難・不正、与信、投資回収、価格転嫁</div></div>
+      <div class="ucard"><div class="t"><span class="num">10</span>ブランド・社会</div><div class="k">SNS炎上、偽情報、転売品の品質、地域からの信頼、危機広報、社会的要請</div></div>
+    </div>
+    <div class="cols" style="margin-top:18px">
+      <div class="card hl" style="flex:2"><div class="kicker">貴社で特に重みが増すカテゴリー</div><p class="p" style="margin-top:4px">貴社の事業モデルでは、「販売・顧客（正規流通・ギフト納品）」「施設・事業継続（来訪者・地域集中）」「ブランド・社会（転売品の品質・偽情報）」が、一般的な食品製造業より重くなります。</p></div>
+      <div class="card" style="flex:1"><div class="kicker">この整理で分かること</div><p class="p" style="margin-top:4px">保険に「入っている／いない」ではなく、どのリスクをどこまで保険に移せるか、保険以外で何を備えるかを、経営判断として確認できます。</p></div>
+    </div>
+    <p class="src">分類は当社の整理によるものであり、貴社の内部管理区分とは異なる場合があります。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">5</div>
+</section></div>
+
+<!-- ============ 06 リスクマップ ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">リスクマップ：24のリスクの優先順位</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">大規模地震とランサムウェアが最上位、次いで<em>原料価格・転売・人材という「保険では備えにくい」リスク</em>が上位に並びます</p>
+    <div class="cols" style="gap:36px">
+      <div style="flex:none;width:580px">
+        <div class="axis" style="margin-bottom:4px;font-weight:700">影響度（大 ↑）</div>
+        <div class="heat">
+          <div class="y">5</div>
+          <div class="c l1"></div><div class="c l1"></div><div class="c l2"><span class="dot top">04</span><span class="dot top">05</span><span class="dot top">06</span><span class="dot">24</span></div><div class="c l3"><span class="dot top">11</span><span class="dot top">17</span></div><div class="c l3"></div>
+          <div class="y">4</div>
+          <div class="c l0"></div><div class="c l1"><span class="dot">20</span></div><div class="c l1"><span class="dot">01</span><span class="dot">07</span><span class="dot">09</span><span class="dot">13</span><span class="dot">14</span><span class="dot">16</span><span class="dot">18</span></div><div class="c l2"><span class="dot top">03</span><span class="dot top">10</span><span class="dot top">15</span></div><div class="c l3"></div>
+          <div class="y">3</div>
+          <div class="c l0"></div><div class="c l0"><span class="dot">02</span><span class="dot">21</span><span class="dot">22</span></div><div class="c l1"><span class="dot">08</span><span class="dot">19</span><span class="dot">23</span></div><div class="c l1"></div><div class="c l2"></div>
+          <div class="y">2</div>
+          <div class="c l0"></div><div class="c l0"></div><div class="c l0"></div><div class="c l1"></div><div class="c l1"></div>
+          <div class="y">1</div>
+          <div class="c l0"></div><div class="c l0"></div><div class="c l0"></div><div class="c l0"></div><div class="c l0"></div>
+          <div></div><div class="x">1</div><div class="x">2</div><div class="x">3</div><div class="x">4</div><div class="x">5</div>
+        </div>
+        <div class="axis" style="text-align:right;margin-top:2px;font-weight:700">発生可能性（高 →）</div>
+        <div class="legend"><span><i class="sw" style="background:#E3F1E4"></i>低（7以下）</span><span><i class="sw" style="background:#FFF2C2"></i>中（8〜14）</span><span><i class="sw" style="background:#FFD6A8"></i>高（15〜19）</span><span><i class="sw" style="background:#F7B3A6"></i>最優先（20以上）</span><span style="flex-basis:100%"><i class="dot top" style="display:inline-flex;width:14px;height:14px;font-size:0;vertical-align:-2px"></i> 経営優先度 上位8件（番号はリスクID、名称は巻末「リスク一覧」）</span></div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="pane-h" style="font-size:13px">経営優先度 上位8件（影響度×発生可能性）</div>
+        <div class="rank"><span class="num">1</span><div><div class="nm">大規模地震による工場・店舗・交通の同時被災</div><div class="ct">R11｜施設・事業継続</div></div><div class="sc"><b class="crit">20</b>最優先</div></div>
+        <div class="rank"><span class="num">2</span><div><div class="nm">ランサムウェア／基幹・EC・生産システム停止</div><div class="ct">R17｜デジタル・情報</div></div><div class="sc"><b class="crit">20</b>最優先</div></div>
+        <div class="rank"><span class="num">3</span><div><div class="nm">原材料価格・為替・エネルギー価格の上昇</div><div class="ct">R03｜調達・供給網</div></div><div class="sc"><b>16</b>高</div></div>
+        <div class="rank"><span class="num">4</span><div><div class="nm">不正転売・正規外流通による品質毀損</div><div class="ct">R10｜販売・顧客</div></div><div class="sc"><b>16</b>高</div></div>
+        <div class="rank"><span class="num">5</span><div><div class="nm">採用難・人件費上昇・要員不足</div><div class="ct">R15｜人材・労務</div></div><div class="sc"><b>16</b>高</div></div>
+        <div class="rank"><span class="num">6</span><div><div class="nm">重要原材料・包装資材の供給途絶</div><div class="ct">R04｜調達・供給網</div></div><div class="sc"><b>15</b>高</div></div>
+        <div class="rank"><span class="num">7</span><div><div class="nm">食品汚染・異物・アレルゲン誤表示</div><div class="ct">R05｜製造・品質</div></div><div class="sc"><b>15</b>高</div></div>
+        <div class="rank"><span class="num">8</span><div><div class="nm">主要製造設備の故障・長期停止</div><div class="ct">R06｜製造・品質</div></div><div class="sc"><b>15</b>高</div></div>
+      </div>
+    </div>
+    <p class="src">スコアは公開情報から作成した仮評価（影響度×発生可能性、各1〜5、満点25）であり、事故実績・売上構成・事業継続計画・保険契約を確認した実評価ではありません。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">6</div>
+</section></div>
+
+<!-- ============ 07 Section 2 ============ -->
+<div class="frame"><section class="slide" data-master="section">
+  <div class="el section-label">Section 2</div>
+  <div class="el section-title">既存の保険で備えられるリスクと、その条件</div>
+  <div class="el section-rule"></div>
+</section></div>
+
+<!-- ============ 08 3分類 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">保険での備えやすさ：24のリスクの3分類</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">24件のうち<em>8件は既存の保険で備えやすく</em>、10件は補償条件の設計が必要、6件は保険以外の対策が中心です</p>
+    <p class="sub">補償の有無は商品名ではなく、事故の原因・損害の種類・免責や支払限度などの契約条件で決まるため、その観点で分類しています</p>
+    <div class="tri">
+      <div>
+        <div class="hd"><span class="n">8</span><span class="u">件</span><span class="l">保険で備えやすい</span></div>
+        <div class="bar"><i style="width:80%"></i></div>
+        <ul>
+          <li><span class="rid">R05</span>食品汚染・異物・アレルゲン誤表示</li>
+          <li><span class="rid">R06</span>主要製造設備の故障・長期停止</li>
+          <li><span class="rid">R08</span>配送事故・破損・納期遅延</li>
+          <li><span class="rid">R12</span>火災・爆発・水濡れ等による工場停止</li>
+          <li><span class="rid">R13</span>工場見学・商業施設での来訪者事故</li>
+          <li><span class="rid">R16</span>労災・熱中症・製造現場事故</li>
+          <li><span class="rid">R18</span>個人情報・会員情報の漏えい</li>
+          <li><span class="rid">R22</span>販売先倒産・売掛金回収不能</li>
+        </ul>
+        <div class="pol"><span class="kicker">進め方</span>現在のご契約の免責・支払限度・支払条件を確認し、補償額の不足を解消</div>
+      </div>
+      <div>
+        <div class="hd"><span class="n g">10</span><span class="u">件</span><span class="l">補償条件の設計が必要</span></div>
+        <div class="bar"><i class="g" style="width:100%"></i></div>
+        <ul>
+          <li><span class="rid">R04</span>重要原材料・包装資材の供給途絶</li>
+          <li><span class="rid">R09</span>EC・決済停止による販売機会損失</li>
+          <li><span class="rid">R11</span>大規模地震による工場・店舗・交通の同時被災</li>
+          <li><span class="rid">R14</span>風水害・停電・交通寸断による休業</li>
+          <li><span class="rid">R17</span>ランサムウェア／基幹・EC・生産システム停止</li>
+          <li><span class="rid">R19</span>LINE等外部プラットフォームへの依存</li>
+          <li><span class="rid">R20</span>食品表示・景品表示・広告表現の違反</li>
+          <li><span class="rid">R21</span>知的財産・コラボ契約紛争</li>
+          <li><span class="rid">R23</span>内部不正・送金詐欺・サイバー詐欺</li>
+          <li><span class="rid">R24</span>SNS炎上・偽情報・事故時のブランド毀損</li>
+        </ul>
+        <div class="pol"><span class="kicker">進め方</span>特約や支払限度、休業損失の算定方法を設計し、補償されない範囲を明確にする</div>
+      </div>
+      <div>
+        <div class="hd"><span class="n a">6</span><span class="u">件</span><span class="l">保険以外の対策が中心</span></div>
+        <div class="bar"><i class="a" style="width:60%"></i></div>
+        <ul>
+          <li><span class="rid">R01</span>観光・土産需要の変動／地域依存</li>
+          <li><span class="rid">R02</span>新規ブランド・施設投資の回収未達</li>
+          <li><span class="rid">R03</span>原材料価格・為替・エネルギー価格の上昇</li>
+          <li><span class="rid">R07</span>品質ばらつき／職人技能の継承失敗</li>
+          <li><span class="rid">R10</span>不正転売・正規外流通による品質毀損</li>
+          <li><span class="rid">R15</span>採用難・人件費上昇・要員不足</li>
+        </ul>
+        <div class="pol"><span class="kicker">進め方</span>回避・低減・契約での分担・金融的手段・自社での引受けを組み合わせ、経営施策として管理（Section 3）</div>
+      </div>
+    </div>
+    <p class="src">商品名は一般名称です。実際の補償可否は保険会社・約款・特約・告知内容等により異なります。貴社の現在のご契約内容は確認していません。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">8</div>
+</section></div>
+
+<!-- ============ 09 優先リスク ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">優先リスク：対応する保険と確認事項</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">優先8件のうち<em>地震・サイバー・供給途絶は補償条件の設計</em>が鍵、価格・転売・人材は経営施策が主役です</p>
+    <table class="t dense" style="font-size:13px">
+      <colgroup><col style="width:32px"><col style="width:232px"><col style="width:80px"><col style="width:180px"><col style="width:112px"><col style="width:270px"><col></colgroup>
+      <thead><tr><th class="c">#</th><th>リスク</th><th class="c">評価</th><th>対応する保険（一般名称）</th><th>備えやすさ</th><th>補償の確認事項</th><th>貴社側の対策（例）</th></tr></thead>
+      <tbody>
+        <tr><td class="c">1</td><td><span class="rid">R11</span><br>大規模地震による工場・店舗・交通の同時被災</td><td class="c"><span class="lv crit">最優先</span><div class="mini">5×4＝20</div></td><td>地震保険・地震危険補償、利益保険、財物保険</td><td><span class="tag partial">条件設計が必要</span></td><td>地震免責、支払限度額、広域インフラ停止、取引先の同時被災</td><td>拠点別の最大損失想定、耐震、代替生産、非常用電源、広域の事業継続計画</td></tr>
+        <tr><td class="c">2</td><td><span class="rid">R17</span><br>ランサムウェア／基幹・EC・生産システム停止</td><td class="c"><span class="lv crit">最優先</span><div class="mini">5×4＝20</div></td><td>サイバー保険（事故対応・復旧・休業損失等）</td><td><span class="tag partial">条件設計が必要</span></td><td>生産設備の停止、補償開始までの待機期間、バックアップからの復旧、委託先起因、身代金の扱い</td><td>多要素認証、端末監視、隔離バックアップ、訓練、生産設備の資産把握</td></tr>
+        <tr><td class="c">3</td><td><span class="rid">R03</span><br>原材料価格・為替・エネルギー価格の上昇</td><td class="c"><span class="lv">高</span><div class="mini">4×4＝16</div></td><td>標準的な企業保険では原則対象外</td><td><span class="tag hard">保険以外が中心</span></td><td>価格変動そのものは保険事故ではない</td><td>調達分散、価格転嫁、長期契約、金融的な価格ヘッジ</td></tr>
+        <tr><td class="c">4</td><td><span class="rid">R10</span><br>不正転売・正規外流通による品質毀損</td><td class="c"><span class="lv">高</span><div class="mini">4×4＝16</div></td><td>標準的な保険では限定的</td><td><span class="tag hard">保険以外が中心</span></td><td>第三者の転売によるブランド毀損は通常補償外</td><td>正規流通の認証、ECの監視、購入者への周知、保証制度</td></tr>
+        <tr><td class="c">5</td><td><span class="rid">R15</span><br>採用難・人件費上昇・要員不足</td><td class="c"><span class="lv">高</span><div class="mini">4×4＝16</div></td><td>標準的な企業保険では原則対象外</td><td><span class="tag hard">保険以外が中心</span></td><td>労働市場・賃金の上昇は保険では備えにくい</td><td>省人化、採用チャネル、離職の先行指標、多能工化、処遇設計</td></tr>
+        <tr><td class="c">6</td><td><span class="rid">R04</span><br>重要原材料・包装資材の供給途絶</td><td class="c"><span class="lv">高</span><div class="mini">5×3＝15</div></td><td>利益保険の取引先特約、貨物保険、取引信用保険等</td><td><span class="tag partial">条件設計が必要</span></td><td>対象仕入先・原因・地域・支払限度の制限。物損を伴わない途絶は対象外になり得る</td><td>単一調達先の把握、代替品の認証、在庫戦略、仕入先の事業継続計画</td></tr>
+        <tr><td class="c">7</td><td><span class="rid">R05</span><br>食品汚染・異物・アレルゲン誤表示</td><td class="c"><span class="lv">高</span><div class="mini">5×3＝15</div></td><td>PL保険、リコール費用保険、危機対応費用保険</td><td><span class="tag cover">備えやすい</span></td><td>自主回収の定義、汚染の判定、ブランド回復費用、休業損失の限度</td><td>HACCP、トレーサビリティ、回収訓練、危機広報</td></tr>
+        <tr><td class="c">8</td><td><span class="rid">R06</span><br>主要製造設備の故障・長期停止</td><td class="c"><span class="lv">高</span><div class="mini">5×3＝15</div></td><td>機械保険、財物保険、利益保険</td><td><span class="tag cover">備えやすい</span></td><td>経年劣化・保守不良の扱い、補償開始までの待機期間、代替設備費、増加費用の限度</td><td>予防保全、予備品、メーカーとの復旧時間の取り決め、代替生産</td></tr>
+      </tbody>
+    </table>
+    <p class="src">評価は影響度×発生可能性（各1〜5）の仮評価です。商品名は一般名称であり、実際の補償内容はご契約により異なります。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">9</div>
+</section></div>
+
+<!-- ============ 10 Section 3 ============ -->
+<div class="frame"><section class="slide" data-master="section">
+  <div class="el section-label">Section 3</div>
+  <div class="el section-title">保険だけでは備えにくいリスク</div>
+  <div class="el section-rule"></div>
+</section></div>
+
+<!-- ============ 11 備えにくい6リスク ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">保険だけでは備えにくい6つのリスク</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">保険では引き受けにくいが経営上重要な6つのリスクには、<em>経営施策と保険の組み合わせ</em>で備えます</p>
+    <table class="t" style="font-size:13px">
+      <colgroup><col style="width:210px"><col style="width:190px"><col style="width:370px"><col></colgroup>
+      <thead><tr><th>リスク</th><th>顕在化の時間軸</th><th>背景</th><th>備え方（経営施策＋保険）</th></tr></thead>
+      <tbody>
+        <tr><td class="b">原材料・エネルギー・為替の構造的な変動</td><td><div class="tl"><div class="ax"><span>現在</span><span>3年</span><span>5年</span><span>10年</span></div><div class="trk"><i style="left:0;width:30%"></i></div></div></td><td>貴社が公表資料で挙げられている原材料価格の高騰・為替変動。価格上昇そのものは通常の企業保険では原則補償されない</td><td>調達分散、価格スライド条項、先物・為替による価格ヘッジ、天候指数保険等で一部を補う</td></tr>
+        <tr><td class="b">職人技能・商品文化の継承</td><td><div class="tl"><div class="ax"><span>現在</span><span>3年</span><span>5年</span><span>10年</span></div><div class="trk"><i style="left:10%;width:40%"></i></div></div></td><td>「職人の手わざ」がブランド価値の源泉。キーパーソンの退職・採用難・技能伝承の失敗は製品品質・生産能力に波及</td><td>技能の見える化、担当の複線化、教育工程の標準化、依存度の指標管理。技能の喪失そのものは保険では代替できない</td></tr>
+        <tr><td class="b">ブランド偽情報・Deepfake・なりすまし</td><td><div class="tl"><div class="ax"><span>現在</span><span>3年</span><span>5年</span><span>10年</span></div><div class="trk"><i style="left:0;width:30%"></i></div></div></td><td>AI生成コンテンツによる偽キャンペーン・偽広告・食品事故の偽情報が短時間で拡散。従来のサイバー保険では第三者発信による風評損失を補償しきれない場合がある</td><td>ブランド監視、公式アカウントの認証、危機広報の手順書、削除・法務対応費用の補償可否確認</td></tr>
+        <tr><td class="b">プラットフォーム依存・顧客接点の喪失</td><td><div class="tl"><div class="ax"><span>現在</span><span>3年</span><span>5年</span><span>10年</span></div><div class="trk"><i style="left:0;width:30%"></i></div></div></td><td>アプリからLINEへの会員基盤移行は、顧客接点の効率化と同時に外部プラットフォームへの依存を高める可能性</td><td>顧客ID・同意情報の移行可能性の確保、障害時の代替チャネル、委託先との復旧時間の取り決め、システム障害による休業損失のサイバー保険適用確認</td></tr>
+        <tr><td class="b">気候変動による農産物・一次産品の供給変動</td><td><div class="tl"><div class="ax"><span>現在</span><span>3年</span><span>5年</span><span>10年</span></div><div class="trk"><i style="left:30%;width:70%"></i></div></div></td><td>小麦、砂糖、乳製品、卵、カカオ、栗等の農畜産原料に依存。気候由来の収量・価格変動は物的事故を伴わずに利益率を圧迫</td><td>原産地の分散、代替レシピの研究開発、長期調達契約、指数連動型保険の適用可能性検討</td></tr>
+        <tr><td class="b">地域観光・交通需要の急変</td><td><div class="tl"><div class="ax"><span>現在</span><span>3年</span><span>5年</span><span>10年</span></div><div class="trk"><i style="left:0;width:50%"></i></div></div></td><td>工場見学・体験施設は感染症、交通障害、旅行需要の変化で来訪者数が大きく変動。単純な需要減は多くの場合保険の対象外</td><td>地元企業・交通事業者との周遊商品、イベント収益の分散、特定イベントのキャンセル保険や天候連動型補償の活用</td></tr>
+      </tbody>
+    </table>
+    <p class="src">時間軸は当社の定性的な見立て（バーの範囲＝顕在化が想定される期間）。出典：春華堂プレスリリース（2026年2月9日）、公式アプリ終了のお知らせ（2026年8月4日）ほか公開情報。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">11</div>
+</section></div>
+
+<!-- ============ 12 Section 4 ============ -->
+<div class="frame"><section class="slide" data-master="section">
+  <div class="el section-label">Section 4</div>
+  <div class="el section-title">成長を後押しする保険の活用</div>
+  <div class="el section-rule"></div>
+</section></div>
+
+<!-- ============ 13 8案マトリクス ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">成長支援：8つの保険活用アイデアと優先候補</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">8案のうち<em>貴社の事業効果が高く、実現しやすいA〜Dの4案</em>を優先候補としてご提案します</p>
+    <div class="cols" style="gap:40px">
+      <div style="flex:none;width:620px">
+        <div class="mx">
+          <div class="yt">貴社の事業効果</div>
+          <div class="gl" style="top:18%"></div><div class="gl" style="top:50%"></div><div class="gl" style="top:82%"></div>
+          <div class="yl" style="top:18%"><span class="stars">★★★★★</span></div>
+          <div class="yl" style="top:50%"><span class="stars">★★★★<span class="off">★</span></span></div>
+          <div class="yl" style="top:82%"><span class="stars">★★★<span class="off">★★</span></span></div>
+          <div class="xl" style="left:22%">低〜中</div><div class="xl" style="left:44%">中</div><div class="xl" style="left:66%">中〜高</div><div class="xl" style="left:88%">高</div>
+          <div class="xt">実現までの難易度</div>
+          <div class="pt" style="left:44%;top:18%"><span class="b">B</span><span class="lb">ハレの日ギフト保証</span></div>
+          <div class="pt" style="left:66%;top:18%"><span class="b">A</span><span class="lb">法人ギフト納品保証</span></div>
+          <div class="pt" style="left:22%;top:50%"><span class="b">C</span><span class="lb">体験キャンセル安心</span></div>
+          <div class="pt" style="left:44%;top:50%"><span class="b">D</span><span class="lb">信用補完パッケージ</span></div>
+          <div class="pt lo" style="left:66%;top:50%"><span class="b">E</span><span class="lb">正規店購入者保証</span></div>
+          <div class="pt lo" style="left:44%;top:82%"><span class="b">F</span><span class="lb">コラボLaunch Safe</span></div>
+          <div class="pt lo" style="left:88%;top:66%"><span class="b">G</span><span class="lb">収量・天候共同管理</span></div>
+          <div class="pt lo" style="left:88%;top:88%"><span class="b">H</span><span class="lb">地域周遊パス</span></div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="pane-h" style="font-size:13px">アイデア一覧と狙い（●＝優先候補）</div>
+        <ul class="ideas">
+          <li><span class="num lg">A</span><div><div class="nm">法人ギフト「納品・代替調達保証」</div><div class="aim">大口の法人受注率向上</div></div></li>
+          <li><span class="num lg">B</span><div><div class="nm">「ハレの日ギフト安心保証」</div><div class="aim">ECギフト市場の拡大</div></div></li>
+          <li><span class="num lg">C</span><div><div class="nm">nicoe／工場見学「体験キャンセル安心」</div><div class="aim">予約率・客単価の向上</div></div></li>
+          <li><span class="num lg">D</span><div><div class="nm">新規卸・海外販路「信用補完パッケージ」</div><div class="aim">新規販路・海外展開</div></div></li>
+          <li class="lo"><span class="num lg" style="background:#fff;color:#888888;border:1px solid #BDBDBD">E</span><div><div class="nm">正規販売店「品質信頼マーク＋購入者保証」</div><div class="aim">正規流通・ブランド保護</div></div></li>
+          <li class="lo"><span class="num lg" style="background:#fff;color:#888888;border:1px solid #BDBDBD">F</span><div><div class="nm">コラボ商品「Launch Safe」プログラム</div><div class="aim">共同企画の高速化</div></div></li>
+          <li class="lo"><span class="num lg" style="background:#fff;color:#888888;border:1px solid #BDBDBD">G</span><div><div class="nm">農産物サプライヤーと組む「収量・天候リスク共同管理」</div><div class="aim">安定調達・産地共生</div></div></li>
+          <li class="lo"><span class="num lg" style="background:#fff;color:#888888;border:1px solid #BDBDBD">H</span><div><div class="nm">地域周遊「浜松スイーツ・ものづくりパス」＋包括補償</div><div class="aim">地域観光・送客拡大</div></div></li>
+        </ul>
+      </div>
+    </div>
+    <p class="src">事業効果・実現までの難易度は当社の定性評価です（難易度は貴社側の導入負担だけでなく、商品設計・法規制・運用体制を含みます）。各案は構想段階であり、実現には保険業法上の整理、補償設計、保険料、必要なデータ、お客様の同意等の検討が必要です。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">13</div>
+</section></div>
+
+<!-- ============ 14 優先4案 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">優先4案：狙い・仕組み・想定する保険</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm"><em>納期・ギフト・体験・与信</em>という「失敗できない場面」の不安を保険が引き受け、受注と予約の障壁を下げます</p>
+    <div class="four">
+      <div class="pc">
+        <div class="top"><span class="num lg">A</span><span class="nm">法人ギフト「納品・代替調達保証」</span></div>
+        <p class="p">周年記念、キャンペーン、株主・顧客向けギフト等、期日納品が重要な案件で、偶発事故により約定数量・期日に納品できない場合の緊急輸送、代替品調達、再製造等の追加費用を保険で補償。「納期リスクまで引き受ける菓子会社」として法人案件に臨めます。</p>
+        <dl><dt>狙い</dt><dd>大口の法人受注率向上</dd><dt>想定する保険</dt><dd>履行費用の補償（新規設計）</dd><dt>事業効果</dt><dd><span class="stars">★★★★★</span></dd><dt>実現難易度</dt><dd>中〜高</dd></dl>
+      </div>
+      <div class="pc">
+        <div class="top"><span class="num lg">B</span><span class="nm">「ハレの日ギフト安心保証」</span></div>
+        <p class="p">ECで購入する誕生日・結婚・出産・記念日のギフトに、配送事故、一定の遅延、破損等への再送・返金保証を小額で付帯。「うなぎパイミニ アニバーサリー」等の祝い用途と親和性が高く、「失敗できないギフト」の心理障壁を下げて単価上昇・購入率向上を狙います。</p>
+        <dl><dt>狙い</dt><dd>ECギフト市場の拡大</dd><dt>想定する保険</dt><dd>動産・費用保険</dd><dt>事業効果</dt><dd><span class="stars">★★★★★</span></dd><dt>実現難易度</dt><dd>中</dd></dl>
+      </div>
+      <div class="pc">
+        <div class="top"><span class="num lg">C</span><span class="nm">nicoe／工場見学「体験キャンセル安心」</span></div>
+        <p class="p">有料ツアー、ワークショップ、季節イベント等に、参加者の急病・交通障害等を対象とするキャンセル費用補償を付帯。予約時点の不安を下げ、先行予約・高付加価値体験への転換を促します。地域ホテル・交通との周遊パッケージにも拡張可能です。</p>
+        <dl><dt>狙い</dt><dd>予約率・客単価の向上</dd><dt>想定する保険</dt><dd>キャンセル費用保険</dd><dt>事業効果</dt><dd><span class="stars">★★★★<span class="off">★</span></span></dd><dt>実現難易度</dt><dd>低〜中</dd></dl>
+      </div>
+      <div class="pc">
+        <div class="top"><span class="num lg">D</span><span class="nm">新規卸・海外販路「信用補完パッケージ」</span></div>
+        <p class="p">新規の小売・卸・海外販売先への取引拡大時に、取引信用保険、貨物保険、海外PL、リコールをセットで設計。与信上限を理由に躊躇していた販売先への進出を可能にし、保険を「営業可能な取引枠」を広げる手段として使います。</p>
+        <dl><dt>狙い</dt><dd>新規販路・海外展開</dd><dt>想定する保険</dt><dd>取引信用・貨物・海外PL</dd><dt>事業効果</dt><dd><span class="stars">★★★★<span class="off">★</span></span></dd><dt>実現難易度</dt><dd>中</dd></dl>
+      </div>
+    </div>
+    <table class="t dense" style="margin-top:16px">
+      <colgroup><col style="width:170px"><col><col><col><col></colgroup>
+      <thead><tr><th>4案の比較</th><th>A　法人ギフト納品保証</th><th>B　ハレの日ギフト安心保証</th><th>C　体験キャンセル安心</th><th>D　信用補完パッケージ</th></tr></thead>
+      <tbody>
+        <tr><td class="b">対象</td><td>法人の周年記念・販促・贈答案件</td><td>祝い用途のギフトのEC購入者</td><td>有料ツアー・イベントの参加者</td><td>新規の小売・卸・海外販売先</td></tr>
+        <tr><td class="b">保険が引き受ける不安</td><td>期日・数量どおりに納品できない</td><td>配送事故・遅延・破損で贈り物を損なう</td><td>急病・交通障害で参加できない</td><td>与信上限・回収不能・輸送・海外事故</td></tr>
+        <tr><td class="b">成果指標</td><td>法人案件単価、受注率</td><td>購入率、客単価</td><td>予約率、客単価</td><td>新規取引枠、海外売上</td></tr>
+      </tbody>
+    </table>
+    <p class="src">各案は構想段階であり、補償内容・保険料・付帯方法は個別に設計します。実現には保険業法上の整理、補償設計、保険料、必要なデータ、お客様の同意等の検討が必要です。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">14</div>
+</section></div>
+
+<!-- ============ 15 Section 5 ============ -->
+<div class="frame"><section class="slide" data-master="section">
+  <div class="el section-label">Section 5</div>
+  <div class="el section-title">ご提案の全体像と進め方</div>
+  <div class="el section-rule"></div>
+</section></div>
+
+<!-- ============ 16 3テーマ ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">提案テーマ：経営課題ごとに補償と指標を束ねる</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm"><em>事業を止めない・ブランドを守る・成長を後押しする</em>の3テーマで、論点・保険・経営指標を一体で設計します</p>
+    <p class="sub">貴社の強みであるブランド、職人性、地域との関係、体験価値は、品質事故・自然災害・技能継承・デジタル接点の障害に対して損失の連鎖を生み得ます。保険を事故後の補填ではなく、①事業継続の確度を上げ、②ブランド危機を抑え、③新しい販売・体験・取引に踏み出せるリスク許容力として設計し直します</p>
+    <table class="t airy">
+      <colgroup><col style="width:176px"><col style="width:290px"><col style="width:230px"><col style="width:250px"><col></colgroup>
+      <thead><tr><th>テーマ</th><th>論点</th><th>組み合わせる保険</th><th>接続する経営指標</th><th>対応するリスク・施策</th></tr></thead>
+      <tbody>
+        <tr><td><span class="num">1</span>　<span class="kicker">テーマ 1</span><div class="b" style="margin-top:4px;font-size:14px">事業を止めない</div></td><td>地震・火災・設備・供給途絶・サイバーを個別ではなく「復旧までの時間」で統合して設計する</td><td>財物＋利益＋地震＋機械＋サイバー＋供給網</td><td>重要商品別の目標復旧時間（RTO）、代替生産可能率、在庫日数、代替仕入先率</td><td class="muted">優先リスク R11 地震、R17 サイバー、R04 供給途絶、R06 設備、R12 火災、R14 風水害・停電</td></tr>
+        <tr><td><span class="num">2</span>　<span class="kicker">テーマ 2</span><div class="b" style="margin-top:4px;font-size:14px">ブランドを守る</div></td><td>食品事故・転売・偽情報・個人情報を「ブランド危機」として統合して備える</td><td>PL＋リコール＋サイバー＋危機広報費用等</td><td>初動時間、回収完了時間、問い合わせ急増への対応、正規流通比率</td><td class="muted">優先リスク R05 食品事故、R10 転売、R24 偽情報・炎上、R18 個人情報</td></tr>
+        <tr><td><span class="num">3</span>　<span class="kicker">テーマ 3</span><div class="b" style="margin-top:4px;font-size:14px">成長を後押しする</div></td><td>新規法人取引・EC・体験・地域連携において、失敗時のコストを保険で限定する</td><td>取引信用＋履行費用＋キャンセル＋動産＋海外PL等</td><td>新規取引枠、購入率、法人案件単価、予約率、海外売上</td><td class="muted">成長支援の優先4案 A〜D（Section 4）</td></tr>
+      </tbody>
+    </table>
+    <p class="src">経営指標は貴社の実態に合わせて、ヒアリング後に確定します。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">16</div>
+</section></div>
+
+<!-- ============ 17 進め方 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">進め方：4つのステップ</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm"><em>守る対象の再定義</em>から始め、連鎖の可視化と保険への移し方の整理を経て、保険を成長に接続します</p>
+    <div class="steps">
+      <div class="step"><div class="k">STEP 1</div><div class="t">守る対象を再定義</div><div class="d">建物・設備だけでなく、ブランド、納期、顧客接点、技能、地域からの信頼を重要資産として棚卸しします。</div><div class="ref">本資料での該当：Section 1（事業構造と5つのリスク要因）</div></div>
+      <div class="chev"></div>
+      <div class="step"><div class="k">STEP 2</div><div class="t">止まる連鎖を可視化</div><div class="d">地震・食品事故・サイバー・供給途絶が、製造→店舗→EC→観光へどう連鎖するかをシナリオ化します。</div><div class="ref">本資料での該当：Section 1（リスクマップ）、Section 3</div></div>
+      <div class="chev"></div>
+      <div class="step"><div class="k">STEP 3</div><div class="t">持つリスクと移すリスクを整理</div><div class="d">既存の保険で移せる損害、条件付きで移せる損害、保険の対象外として経営で管理するリスクを切り分けます。</div><div class="ref">本資料での該当：Section 2（3分類と優先リスク）</div></div>
+      <div class="chev"></div>
+      <div class="step"><div class="k">STEP 4</div><div class="t">保険を成長に使う</div><div class="d">法人向け納品保証、ギフト安心保証、体験キャンセル補償、信用補完等を事業側の指標と接続します。</div><div class="ref">本資料での該当：Section 4（8案と優先4案）</div></div>
+    </div>
+    <div class="pane-h" style="font-size:13px;margin-top:40px">本資料から正式提案まで</div>
+    <div class="flow" style="margin-top:14px">
+      <div class="fbox hl"><span class="k">今回<i class="tg">当社</i></span>本資料：公開情報に基づく仮説（事業構造・リスクマップ・保険活用アイデア）</div>
+      <div class="chev"></div>
+      <div class="fbox"><span class="k">次回以降<i class="tg">当社＋貴社</i></span>貴社へのヒアリング（19頁の項目）、拠点の現地確認、現在のご契約内容の確認。必要に応じて専門家による調査</div>
+      <div class="chev"></div>
+      <div class="fbox"><span class="k">正式提案<i class="tg">当社</i></span>評価と推奨する保険を実態に合わせて更新し、テーマ別の補償設計・経営指標・実行計画・費用をご提示</div>
+    </div>
+    <p class="src">各ステップの期間・体制は、貴社のご都合とヒアリング結果に応じて設定します。保険料等の費用は正式提案時にご提示します。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">17</div>
+</section></div>
+
+<!-- ============ 18 本日ご判断いただきたいこと ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">本日ご判断いただきたいこと</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm"><em>方向性・優先する成長支援案・次のステップ</em>の3点についてご意見をいただき、正式提案の準備に進みます</p>
+    <div class="cols" style="gap:18px">
+      <div class="dec"><div class="t"><span class="num lg">1</span>3つのテーマの方向性</div><div class="d">「事業を止めない」「ブランドを守る」「成長を後押しする」という組み立てが、貴社の経営課題の認識と合っているか。</div><div class="o"><span class="kicker">確認したい点</span>3テーマの優先順位。追加すべき論点、外してよい論点の有無。</div></div>
+      <div class="dec"><div class="t"><span class="num lg">2</span>優先して検討する成長支援案</div><div class="d">A 法人ギフト納品保証、B ハレの日ギフト安心保証、C 体験キャンセル安心、D 信用補完パッケージのうち、検討を進めたい案。</div><div class="o"><span class="kicker">確認したい点</span>E〜Hで関心のある案の有無。検討にあたって関わる貴社の部門。</div></div>
+      <div class="dec"><div class="t"><span class="num lg">3</span>次のステップの進め方</div><div class="d">貴社へのヒアリング、拠点の現地確認、現在のご契約内容の確認について、実施の可否と時期。</div><div class="o"><span class="kicker">確認したい点</span>貴社側のご担当部門・窓口。優先してご共有いただける情報（次頁）。</div></div>
+    </div>
+    <div class="core" style="margin-top:28px"><span class="kicker">ご判断の位置づけ</span>いずれも本日の最終的な結論を求めるものではありません。方向性についてのご意見をいただければ、次回以降の作業範囲を絞り込み、貴社のご負担を最小限にして進めることができます。</div>
+    <p class="src">ご判断に必要な追加の資料や説明があれば、ご用意します。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">18</div>
+</section></div>
+
+<!-- ============ 19 ご共有いただきたい事項 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">次のステップ：ご共有いただきたい事項</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">公開情報の限界を貴社との対話で埋め、<em>リスク評価と推奨する保険を実態に合わせて更新</em>します</p>
+    <p class="sub">以下14項目のご回答をもとに、優先順位・補償設計・成長支援策を具体化します。「優先」の4項目からご共有いただければ評価の更新に着手できます（差し支えない範囲で結構です）</p>
+    <div class="qcols">
+      <div>
+        <div class="qh">事業・生産</div>
+        <div class="q"><span class="num">1</span><div><b>売上構成<i class="tg pri">優先</i></b><span class="qd">うなぎパイ、その他菓子、直営、卸、EC、施設・飲食等の売上・粗利構成</span></div></div>
+        <div class="q"><span class="num">2</span><div><b>生産集中<i class="tg pri">優先</i></b><span class="qd">主要商品ごとの生産工場、代替工場、相互生産の可否、許容できる最大の復旧時間</span></div></div>
+        <div class="q"><span class="num">3</span><div><b>設備</b><span class="qd">ボトルネック設備、交換リードタイム、メーカー保守、予備品の保有状況</span></div></div>
+      </div>
+      <div>
+        <div class="qh">調達・品質・災害</div>
+        <div class="q"><span class="num">4</span><div><b>調達</b><span class="qd">重要原材料・包装資材の単一調達比率、代替レシピ、代替仕入先、在庫日数</span></div></div>
+        <div class="q"><span class="num">5</span><div><b>食品安全</b><span class="qd">HACCP運用、トレーサビリティ、過去の自主回収・クレーム、回収訓練の実施状況</span></div></div>
+        <div class="q"><span class="num">6</span><div><b>自然災害</b><span class="qd">各拠点の耐震・浸水・液状化・停電対策、非常用電源、従業員参集計画</span></div></div>
+      </div>
+      <div>
+        <div class="qh">IT・情報・人材・来訪者</div>
+        <div class="q"><span class="num">7</span><div><b>IT</b><span class="qd">EC・POS・基幹・生産設備の依存関係、バックアップ、多要素認証、端末監視、外部委託先、復旧訓練</span></div></div>
+        <div class="q"><span class="num">8</span><div><b>個人情報</b><span class="qd">EC・LINE・会員情報の件数、委託先、データ連携、漏えい時の連絡体制</span></div></div>
+        <div class="q"><span class="num">9</span><div><b>人材</b><span class="qd">重要工程の技能保有者数、年齢構成、代替要員、教育期間、採用充足率</span></div></div>
+        <div class="q"><span class="num">10</span><div><b>来訪者</b><span class="qd">工場見学・nicoe・SWEETS BANKの年間来訪者、イベント最大人数、事故履歴</span></div></div>
+      </div>
+      <div>
+        <div class="qh">取引・保険・経営方針</div>
+        <div class="q"><span class="num">11</span><div><b>取引先</b><span class="qd">上位販売先・仕入先への集中度、支払条件、信用限度、新規販路拡大の方針</span></div></div>
+        <div class="q"><span class="num">12</span><div><b>保険<i class="tg pri">優先</i></b><span class="qd">財物・利益・地震・PL・リコール・サイバー・役員賠償（D&amp;O）等の現契約、支払限度額、免責、主要免責事由</span></div></div>
+        <div class="q"><span class="num">13</span><div><b>成長戦略<i class="tg pri">優先</i></b><span class="qd">EC、法人ギフト、海外、体験事業、地域連携のうち、今後3年で重点投資する領域</span></div></div>
+        <div class="q"><span class="num">14</span><div><b>許容損失</b><span class="qd">単一事故で許容できる最大自己負担額と、経営として許容できない非財務損失</span></div></div>
+      </div>
+    </div>
+    <p class="src">ご回答いただいた情報は本提案の検討目的にのみ使用し、当社の情報管理規程に従って取り扱います。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">19</div>
+</section></div>
+
+<!-- ============ 20 巻末：リスク一覧 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">巻末資料：リスク一覧（24件）</div>
+  <div class="el content-body"><div class="cb">
+    <p class="hm">24件のうち<em>上位8件</em>を本文で優先リスクとして扱い、残る16件も正式提案時に評価を更新します</p>
+    <div class="cols" style="gap:24px">
+      <table class="t reg">
+        <colgroup><col style="width:36px"><col style="width:96px"><col><col style="width:84px"><col style="width:112px"></colgroup>
+        <thead><tr><th>ID</th><th>カテゴリー</th><th>リスク</th><th class="c">評価</th><th>備えやすさ</th></tr></thead>
+        <tbody>
+          <tr><td class="rid">R01</td><td>戦略・市場</td><td>観光・土産需要の変動／地域依存</td><td class="c">12 中</td><td><span class="tag hard">保険以外が中心</span></td></tr>
+          <tr><td class="rid">R02</td><td>戦略・市場</td><td>新規ブランド・施設投資の回収未達</td><td class="c">6 低</td><td><span class="tag hard">保険以外が中心</span></td></tr>
+          <tr><td class="rid">R03</td><td>調達・供給網</td><td class="top">原材料価格・為替・エネルギー価格の上昇</td><td class="c top">16 高</td><td><span class="tag hard">保険以外が中心</span></td></tr>
+          <tr><td class="rid">R04</td><td>調達・供給網</td><td class="top">重要原材料・包装資材の供給途絶</td><td class="c top">15 高</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R05</td><td>製造・品質</td><td class="top">食品汚染・異物・アレルゲン誤表示</td><td class="c top">15 高</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R06</td><td>製造・品質</td><td class="top">主要製造設備の故障・長期停止</td><td class="c top">15 高</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R07</td><td>製造・品質</td><td>品質ばらつき／職人技能の継承失敗</td><td class="c">12 中</td><td><span class="tag hard">保険以外が中心</span></td></tr>
+          <tr><td class="rid">R08</td><td>販売・顧客</td><td>配送事故・破損・納期遅延</td><td class="c">9 中</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R09</td><td>販売・顧客</td><td>EC・決済停止による販売機会損失</td><td class="c">12 中</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R10</td><td>販売・顧客</td><td class="top">不正転売・正規外流通による品質毀損</td><td class="c top">16 高</td><td><span class="tag hard">保険以外が中心</span></td></tr>
+          <tr><td class="rid">R11</td><td>施設・事業継続</td><td class="top">大規模地震による工場・店舗・交通の同時被災</td><td class="c top"><span class="acc">20 最優先</span></td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R12</td><td>施設・事業継続</td><td>火災・爆発・水濡れ等による工場停止</td><td class="c">10 中</td><td><span class="tag cover">備えやすい</span></td></tr>
+        </tbody>
+      </table>
+      <table class="t reg">
+        <colgroup><col style="width:36px"><col style="width:96px"><col><col style="width:84px"><col style="width:112px"></colgroup>
+        <thead><tr><th>ID</th><th>カテゴリー</th><th>リスク</th><th class="c">評価</th><th>備えやすさ</th></tr></thead>
+        <tbody>
+          <tr><td class="rid">R13</td><td>施設・事業継続</td><td>工場見学・商業施設での来訪者事故</td><td class="c">12 中</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R14</td><td>施設・事業継続</td><td>風水害・停電・交通寸断による休業</td><td class="c">12 中</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R15</td><td>人材・労務</td><td class="top">採用難・人件費上昇・要員不足</td><td class="c top">16 高</td><td><span class="tag hard">保険以外が中心</span></td></tr>
+          <tr><td class="rid">R16</td><td>人材・労務</td><td>労災・熱中症・製造現場事故</td><td class="c">12 中</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R17</td><td>デジタル・情報</td><td class="top">ランサムウェア／基幹・EC・生産システム停止</td><td class="c top"><span class="acc">20 最優先</span></td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R18</td><td>デジタル・情報</td><td>個人情報・会員情報の漏えい</td><td class="c">12 中</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R19</td><td>デジタル・情報</td><td>LINE等外部プラットフォームへの依存</td><td class="c">9 中</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R20</td><td>法務・規制</td><td>食品表示・景品表示・広告表現の違反</td><td class="c">8 中</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R21</td><td>法務・規制</td><td>知的財産・コラボ契約紛争</td><td class="c">6 低</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R22</td><td>財務・取引先</td><td>販売先倒産・売掛金回収不能</td><td class="c">6 低</td><td><span class="tag cover">備えやすい</span></td></tr>
+          <tr><td class="rid">R23</td><td>財務・取引先</td><td>内部不正・送金詐欺・サイバー詐欺</td><td class="c">9 中</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+          <tr><td class="rid">R24</td><td>ブランド・社会</td><td>SNS炎上・偽情報・事故時のブランド毀損</td><td class="c">15 高</td><td><span class="tag partial">条件設計が必要</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src">評価＝影響度×発生可能性（各1〜5、満点25）。最優先：20以上／高：15〜19／中：8〜14／低：7以下。公開情報に基づく仮評価です。太字は本文で扱った優先8件。「備えやすさ」の分類は8頁参照。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">20</div>
+</section></div>
+
+<!-- ============ 21 前提と出典 ============ -->
+<div class="frame"><section class="slide" data-master="content">
+  <div class="el header-bar"></div>
+  <div class="el content-title">本資料の前提と参照した公開情報</div>
+  <div class="el content-body"><div class="cb">
+    <div class="cols" style="gap:36px">
+      <div style="flex:1.05" class="pre">
+        <div class="pane-h" style="font-size:13px;margin-bottom:10px">前提・留意事項</div>
+        <p><b>公開情報に基づく仮説：</b>本資料は、公開情報のみを用いて貴社の事業構造と一般的なリスクを仮説化したものです。貴社の実際の保険契約、損害履歴、財務数値、設備仕様、サイバー対策、仕入先集中度、事故履歴等は確認していません。</p>
+        <p><b>リスク評価の位置づけ：</b>評価は対話を開始するための仮のものであり、保険引受判断・保険価額算定・法的意見・安全性の保証を目的とするものではありません。</p>
+        <p><b>保険商品の表記：</b>本資料の商品名は一般名称です。実際の補償可否は保険会社・約款・特約・告知内容等により異なります。</p>
+        <p><b>成長支援アイデア：</b>Section 4の各案は構想段階であり、実現には保険業法上の整理、補償設計、保険料、必要なデータ、お客様の同意等の検討が必要です。</p>
+        <p><b>今後の更新：</b>正式提案時には、貴社へのヒアリング、拠点の現地確認、現在のご契約内容の確認、必要に応じた専門家による調査により各項目を更新します。</p>
+      </div>
+      <div style="flex:1">
+        <div class="pane-h" style="font-size:13px;margin-bottom:6px">参照した公開情報（調査基準日：2026年8月27日）</div>
+        <ul class="srcs">
+          <li><span class="id">[S1]</span><div>春華堂 企業情報（会社概要・事業所）<div class="u">group.shunkado.co.jp/company/</div></div></li>
+          <li><span class="id">[S2]</span><div>春華堂 沿革／ブランド・施設<div class="u">group.shunkado.co.jp/company/history.php ／ group.shunkado.co.jp/brand/</div></div></li>
+          <li><span class="id">[S3]</span><div>うなぎパイ取扱店・通信販売／転売に関する案内<div class="u">www.shunkado.co.jp/sales/ ／ www.shunkado.co.jp/unagipie-ec.php</div></div></li>
+          <li><span class="id">[S4]</span><div>春華堂オンラインショップ<div class="u">ec.shunkado.co.jp/</div></div></li>
+          <li><span class="id">[S5]</span><div>うなぎパイファクトリー（施設・工場見学）<div class="u">www.unagipai-factory.jp/about/ ／ www.unagipai-factory.jp/tour/</div></div></li>
+          <li><span class="id">[S6]</span><div>SWEETS BANK／nicoe<div class="u">www.sweetsbank.jp/ ／ www.nicoe.jp/event/</div></div></li>
+          <li><span class="id">[S7]</span><div>春華堂公式アプリ サービス終了のお知らせ（2026年8月4日）<div class="u">group.shunkado.co.jp/information/2026/08/post-40.php</div></div></li>
+          <li><span class="id">[S8]</span><div>新卒初任給引き上げのお知らせ（2026年2月9日プレスリリース）／地域スタディツアー事後報告</div></li>
+          <li><span class="id">[S9]</span><div>静岡県第4次地震被害想定／浜松市地域防災計画<div class="u">www.pref.shizuoka.jp ／ www.city.hamamatsu.shizuoka.jp</div></div></li>
+        </ul>
+      </div>
+    </div>
+    <p class="src">本資料の内容は作成時点の公開情報に基づきます。無断での複製・第三者への開示はご遠慮ください。</p>
+  </div></div>
+  <div class="el footer-rule"></div>
+  <div class="el page-number">21</div>
+</section></div>
+
+<!-- ============ 22 裏表紙 ============ -->
+<div class="frame"><section class="slide" data-master="back">
+  <div class="el back-watermark"></div>
+  <div class="el back-logo"></div>
+  <div class="el back-tagline"></div>
+</section></div>
+
+</main>
+<script>
+(function(){
+  var q=new URLSearchParams(location.search);
+  var p=parseInt(q.get('p'),10);
+  var frames=Array.prototype.slice.call(document.querySelectorAll('.frame'));
+  if(p>0){
+    document.body.classList.add('single');
+    frames.forEach(function(f,i){ if(i!==p-1) f.parentNode.removeChild(f); });
+  }
+  function fit(){
+    frames.forEach(function(f){
+      if(!f.isConnected) return;
+      f.style.setProperty('--s', (f.clientWidth/1280).toString());
+    });
+  }
+  window.addEventListener('resize',fit);
+  fit();
+})();
+</script>
+</body>
+</html>
