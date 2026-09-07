@@ -125,6 +125,11 @@ PURE_ALLOWLIST = [
     #   TempDir(Environ$)・IsMacExcel(Application.OperatingSystem)は
     #   環境依存なので層(a)からは呼ばない(技術メモ4)。
     "modUtilPath",
+    # W11-c(裁定書33 C-4・T-62)。経路側の切断疑いの判定(LooksRibbonCut)と
+    #   err_log detail の1語(CutNote)。全体が純関数なのでそのまま実行できる。
+    #   modPipeline / modPipeline2 / modPlayOps が参照するので、この集合にも
+    #   入れないと純層のコンパイルが通らない。
+    "modRibbonWire",
     # core のうちExcel/COMに触れる関数を持つが、テストが呼ぶのは純関数だけの
     # モジュール(技術メモ4。W1のG8/G9/G10/G11が叩く)。
     # modGatewayLink は direct経路への薄い接続点(裁定書30 裁定1(b))。prod の
@@ -278,8 +283,15 @@ PURE_ALLOWLIST = [
     "modTestsPure20",
     # modTestsPureHook: dev専用テストの接続点(裁定書30 裁定1(d))。prod の
     #   ソースは1本も実行しない。dev のソースが modTestsPureDev.RunAll を呼ぶ。
+    # modTestsPure21: W11-c(裁定書33)の純層7本。リボンちゃんの応答抽出の模擬
+    #   (modRibbonSim)で mock 応答の往復を検査し、modRibbonWire.LooksRibbonCut の
+    #   正負を叩く。modTestsPure20.RunAll の末尾から呼ぶ。
+    "modTestsPure21",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
+    # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON
+    #   の逐語模擬。純関数だけなので層(a)から直接叩ける(裁定書33 C-3)。
+    "modRibbonSim",
 ]
 
 # ==============================================================================

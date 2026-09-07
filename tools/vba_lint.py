@@ -200,6 +200,10 @@ MODULE_REGISTRY = {
     #   modNavText = 貼付テキストの純変換(StripDrFooter / PreviewLines /
     #                SplitFieldNotes / JoinFieldNotes。11章§7.2(a))。
     "modUIGeom", "modNavText",
+    # W11-c(裁定書33 C-4)で新設。12章§2のモジュール一覧に追記済み。
+    #   modRibbonWire = 経路側で本文が切られた疑いの判定(LooksRibbonCut)と
+    #                   err_log detail の1語(CutNote)。16章 E-63。
+    "modRibbonWire",
     # ---- test 層 ----
     # modTestsRunnerUi = ブック内テスト実行(17章 T-48・裁定書14 裁定5)。
     #   ターミナルの使えない社内PC向けに ps1 と同じ4条件をブック内で回す。
@@ -210,6 +214,8 @@ MODULE_REGISTRY = {
     #   modTestsPureDev  = dev専用の純層テスト(modGatewayDirect の純関数17本)。
     #                      配布物には載らない(modules.json の ship:false)。
     "modTestsPureHook", "modTestsPureDev",
+    # W11-c(裁定書33 C-3)で新設。リボンちゃんの応答抽出の逐語模擬(純関数)。
+    "modRibbonSim",
 }
 # 分割される可能性のあるモジュール名(末尾に1以上の数字が付く)。
 # modMockLlm1..n は 12章§2(v2.4.1)が 30,000字契約による分割を明記している。

@@ -76,6 +76,11 @@ GATES = [
      r"OK: .*確認しました|生成:"),
     ("render-f",     [sys.executable, "tools/render_report.py", "--faithful"],
      r"OK: .*確認しました|生成:"),
+    # 裁定書33 C-2(W11-c): リボンの抽出切断を招く `"},` の走査。mock 応答
+    #   (モデルが返す本文の模擬)に1件でもあれば赤。15章のJSONフェンスと
+    #   modSchemas は既定 WARN(--strict-docs で昇格。裁定待ちの保留)。
+    ("wire",         [sys.executable, "tools/ribbon_wire_check.py"],
+     r"結果: OK"),
 ]
 
 

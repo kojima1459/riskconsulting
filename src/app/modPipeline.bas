@@ -493,8 +493,10 @@ End Sub
 '   ID幻覚(E-07)なら E0301、それ以外は E0302。
 Private Sub FailStep(ByVal caseId As String, ByRef c As TChkCtx, ByVal rawText As String)
     modCaseStore.SaveData caseId, c.stepName & "_json_failed", rawText
+    ' 16章 E-63: 経路側で本文が切られた疑いがあれば detail に印を1語足す
+    '   (新しいエラーコードは作らない。裁定書33 C-4)。
     modLog.LogError FailCodeOf(c.lastErrs), PL_SRC & "." & c.stepName, _
-                    "validate_failed:" & c.stepName
+                    "validate_failed:" & c.stepName & modRibbonWire.CutNote(rawText)
     ' E-06: failed_step に当該Stepを書き、last_ok_step は更新しない(-1=据置)。
     modCaseStore.SetStepOutcome caseId, -1, c.stepName
     modCaseStore.SetStatus caseId, PL_STATUS_ERROR

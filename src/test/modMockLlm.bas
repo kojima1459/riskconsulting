@@ -286,13 +286,34 @@ End Function
 Public Function BuildS1NewJson() As String
     Dim s As String
 
-    s = s & "{""company_name"":""株式会社浜松スイーツファクトリー"",""business_summary"":""静岡県浜松市に本社を置く洋菓子・和菓子の製造販売企業。自社工場2拠点で焼き菓子を中心に生産し、直営店・卸売に加えEC直販を伸ばしている。"",""main_products"":[""季節限定焼き菓子ギフトセット"",""洋菓子詰め合わせ(EC限定)"",""和菓子詰め合わせ""],""processes"":[""浜松本社工場で主力の焼き菓子を一貫生産している"",""積志第二工場は繁忙期のギフト商品増産に対応している"",""EC直販分は本社工場から直送する体制である""],""locations"":[{""name"":""浜松本社工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""浸水想定区域内(想定浸水深0.5メートルから3.0メートル)との記載あり"",""notes"":""主力ラインを持つ最大拠点""},{""name"":""積志第二工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""不明"",""notes""" & vbLf
-    s = s & ":""繁忙期の増産用ライン""},{""name"":""本社直営店"",""type"":""店舗"",""address"":""不明"",""hazard_note"":""不明"",""notes"":""不明""}],""supply_chain"":{""key_materials"":[""小麦粉"",""バター"",""卵"",""国産果実(みかん・いちご)""],""notes"":""主要原材料は複数の国内商社経由で調達しており、乳製品・果実の一部は季節や産地不作の影響を受けやすいと記載がある""},""customers"":{""segments"":[""個人ギフト需要"",""法人向け贈答需要"",""EC直販の個人顧客""],""channels"":[""直営店"",""卸売(菓子問屋)"",""自社ECサイト""]},""workforce_notes"":""製造ラインはパート従業員の比率が高く、繁忙期は季節雇用で補っていると採用ページに記載がある"",""management_notes"":""EC直販比率の拡大を経営方針として掲げ、直近で自社ECサイトを刷新したと社長挨拶で述べている"",""strategy_outlook"":{""mvv""" & vbLf
-    s = s & ":""地域に根差した菓子づくりで顧客の特別な日に寄り添うことを掲げている"",""aspirations"":[""EC直販比率のさらなる拡大"",""季節限定商品の開発強化"",""衛生管理体制の高度化""],""market_context"":""国内の菓子市場は縮小傾向だがギフト需要とEC市場は堅調に推移していると業界記事にある""},""current_coverage"":[{""line_name"":""労働災害総合保険(見立て)"",""coverage_summary"":""(見立て)元請の包括契約に労災上乗せが乗っている模様"",""limit_note"":""不明"",""special_note"":""不明"",""certainty"":""assumed""}]," & vbLf
-    s = s & """financials"":{""fiscal_year"":""不明"",""net_assets"":""不明"",""sales"":""不明"",""operating_profit"":""不明"",""source"":""unknown"",""note"":""不明""},""field_insights"":[{""note"":""社長は先代からの工場を大事にしており設備更新には慎重だと聞いている"",""tag"":""constraint""},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""},{""note"":""競合の同業他社が値上げに踏み切ったため価格面では当社が優位に見えるとのこと"",""tag"":""competitor""}],""missing_info"":[{""item"":""浜松本社工場の建物構造(耐火・耐震等級)"",""why_needed"":""施設・自然災害リスクの評価に必要なため""}" & vbLf
-    s = s & ",{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため""},{""item"":""直近の食品衛生関連の指摘・自主回収の有無"",""why_needed"":""製造・品質リスクの評価に必要なため""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""},{""aspect"":""business"",""status"":""ok""},{""aspect"":""sites"",""status"":""partial""},{""aspect"":""history"",""status"":""ok""},{""aspect"":""news"",""status"":""partial""},{""aspect"":""hr"",""status"":""partial""},{""aspect"":""finance_risk"",""status"":""missing""},{""aspect"":""sales_memo"",""status"":""ok""},{""aspect"":""sns""" & vbLf
-    s = s & ",""status"":""missing""},{""aspect"":""competitors"",""status"":""missing""},{""aspect"":""market"",""status"":""partial""},{""aspect"":""finance"",""status"":""missing""},{""aspect"":""insurance_ctx"",""status"":""ok""},{""aspect"":""hazard"",""status"":""partial""}],""overall"":""mid"",""advice"":""有価証券報告書相当の財務・リスク情報とSNS評判、競合動向、市況情報を追加すると仮説の精度が上がる""}"
-    s = s & ",""research_requests"":[{""purpose"":""finance_risk観点(財務・事業リスクの記載)を埋めるための調査"",""prompt_text"":""静岡県浜松市の菓子メーカーである株式会社浜松スイーツファクトリー(本社所在地:静岡県浜松市)について、EDINETまたは同社の公式IRページに掲載されている有価証券報告書または決算公告の「事業等のリスク」に相当する記載内容を調査してください。該当する事実が見当たらない場合は「見当たらない」、取得できない項目は「取得できず」と明記してください。各項目には出典URLを付けてください。まとめサイト・就活情報サイト・個人ブログは情報源に使わないでください。有価証券報告書や決算公告が存在しない場合はその旨を報告してください。""" & vbLf
+    s = s & "{""company_name"":""株式会社浜松スイーツファクトリー"",""business_summary"":""静岡県浜松市に本社を置く洋菓子・和菓子の製造販売企業。自社工場2拠点で焼き菓子を中心に生産し、直営店・卸売に加えEC直販を伸ばしている。"",""main_products"":[""季節限定焼き菓子ギフトセット"",""洋菓子詰め合わせ(EC限定)"",""和菓子詰め合わせ""],""processes"":[""浜松本社工場で主力の焼き菓子を一貫生産している"",""積志第二工場は繁忙期のギフト商品増産に対応している"",""EC直販分は本社工場から直送する体制である""],""locations"":[{""name"":""浜松本社工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""浸水想定区域内(想定浸水深0.5メートルから3.0メートル)との記載あり"",""notes"":""主力ラインを持つ最大拠点""" & vbLf
+    s = s & "},{""name"":""積志第二工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""不明"",""notes""" & vbLf
+    s = s & ":""繁忙期の増産用ライン""" & vbLf
+    s = s & "},{""name"":""本社直営店"",""type"":""店舗"",""address"":""不明"",""hazard_note"":""不明"",""notes"":""不明""}],""supply_chain"":{""key_materials"":[""小麦粉"",""バター"",""卵"",""国産果実(みかん・いちご)""],""notes"":""主要原材料は複数の国内商社経由で調達しており、乳製品・果実の一部は季節や産地不作の影響を受けやすいと記載がある""" & vbLf
+    s = s & "},""customers"":{""segments"":[""個人ギフト需要"",""法人向け贈答需要"",""EC直販の個人顧客""],""channels"":[""直営店"",""卸売(菓子問屋)"",""自社ECサイト""]},""workforce_notes"":""製造ラインはパート従業員の比率が高く、繁忙期は季節雇用で補っていると採用ページに記載がある"",""management_notes"":""EC直販比率の拡大を経営方針として掲げ、直近で自社ECサイトを刷新したと社長挨拶で述べている"",""strategy_outlook"":{""mvv""" & vbLf
+    s = s & ":""地域に根差した菓子づくりで顧客の特別な日に寄り添うことを掲げている"",""aspirations"":[""EC直販比率のさらなる拡大"",""季節限定商品の開発強化"",""衛生管理体制の高度化""],""market_context"":""国内の菓子市場は縮小傾向だがギフト需要とEC市場は堅調に推移していると業界記事にある""" & vbLf
+    s = s & "},""current_coverage"":[{""line_name"":""労働災害総合保険(見立て)"",""coverage_summary"":""(見立て)元請の包括契約に労災上乗せが乗っている模様"",""limit_note"":""不明"",""special_note"":""不明"",""certainty"":""assumed""}]," & vbLf
+    s = s & """financials"":{""fiscal_year"":""不明"",""net_assets"":""不明"",""sales"":""不明"",""operating_profit"":""不明"",""source"":""unknown"",""note"":""不明""" & vbLf
+    s = s & "},""field_insights"":[{""note"":""社長は先代からの工場を大事にしており設備更新には慎重だと聞いている"",""tag"":""constraint""" & vbLf
+    s = s & "},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""" & vbLf
+    s = s & "},{""note"":""競合の同業他社が値上げに踏み切ったため価格面では当社が優位に見えるとのこと"",""tag"":""competitor""}],""missing_info"":[{""item"":""浜松本社工場の建物構造(耐火・耐震等級)"",""why_needed"":""施設・自然災害リスクの評価に必要なため""}" & vbLf
+    s = s & ",{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため""" & vbLf
+    s = s & "},{""item"":""直近の食品衛生関連の指摘・自主回収の有無"",""why_needed"":""製造・品質リスクの評価に必要なため""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""business"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""sites"",""status"":""partial""" & vbLf
+    s = s & "},{""aspect"":""history"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""news"",""status"":""partial""" & vbLf
+    s = s & "},{""aspect"":""hr"",""status"":""partial""" & vbLf
+    s = s & "},{""aspect"":""finance_risk"",""status"":""missing""" & vbLf
+    s = s & "},{""aspect"":""sales_memo"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""sns""" & vbLf
+    s = s & ",""status"":""missing""" & vbLf
+    s = s & "},{""aspect"":""competitors"",""status"":""missing""" & vbLf
+    s = s & "},{""aspect"":""market"",""status"":""partial""" & vbLf
+    s = s & "},{""aspect"":""finance"",""status"":""missing""" & vbLf
+    s = s & "},{""aspect"":""insurance_ctx"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""hazard"",""status"":""partial""}],""overall"":""mid"",""advice"":""有価証券報告書相当の財務・リスク情報とSNS評判、競合動向、市況情報を追加すると仮説の精度が上がる""" & vbLf
+    s = s & "},""research_requests"":[{""purpose"":""finance_risk観点(財務・事業リスクの記載)を埋めるための調査"",""prompt_text"":""静岡県浜松市の菓子メーカーである株式会社浜松スイーツファクトリー(本社所在地:静岡県浜松市)について、EDINETまたは同社の公式IRページに掲載されている有価証券報告書または決算公告の「事業等のリスク」に相当する記載内容を調査してください。該当する事実が見当たらない場合は「見当たらない」、取得できない項目は「取得できず」と明記してください。各項目には出典URLを付けてください。まとめサイト・就活情報サイト・個人ブログは情報源に使わないでください。有価証券報告書や決算公告が存在しない場合はその旨を報告してください。""" & vbLf
     s = s & "},{""purpose"":""sns観点(SNS・口コミの評判傾向)を埋めるための調査"",""prompt_text"":""静岡県浜松市の菓子メーカーである株式会社浜松スイーツファクトリー(本社所在地:静岡県浜松市)について、SNSや口コミサイトでの評判傾向(品質・接客・労働環境・炎上の有無)を調査してください。該当する事実が見当たらない場合は「見当たらない」、取得できない項目は「取得できず」と明記してください。各項目には出典URLを付けてください。まとめサイト・就活情報サイト・個人ブログは情報源に使わないでください。""}]}"
 
     BuildS1NewJson = s
@@ -301,11 +322,33 @@ End Function
 Public Function BuildS1RnwJson() As String
     Dim s As String
 
-    s = s & "{""company_name"":""株式会社浜松スイーツファクトリー"",""business_summary"":""静岡県浜松市に本社を置く洋菓子・和菓子の製造販売企業。自社工場2拠点で焼き菓子を中心に生産し、直営店・卸売に加えEC直販を伸ばしている。"",""main_products"":[""季節限定焼き菓子ギフトセット"",""洋菓子詰め合わせ(EC限定)"",""和菓子詰め合わせ""],""processes"":[""浜松本社工場で主力の焼き菓子を一貫生産している"",""積志第二工場は繁忙期のギフト商品増産に対応している"",""EC直販分は本社工場から直送する体制である""],""locations"":[{""name"":""浜松本社工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""浸水想定区域内(想定浸水深0.5メートルから3.0メートル)との記載あり"",""notes"":""主力ラインを持つ最大拠点""},{""name"":""積志第二工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""不明"",""notes""" & vbLf
-    s = s & ":""繁忙期の増産用ライン""},{""name"":""本社直営店"",""type"":""店舗"",""address"":""不明"",""hazard_note"":""不明"",""notes"":""不明""}],""supply_chain"":{""key_materials"":[""小麦粉"",""バター"",""卵"",""国産果実(みかん・いちご)""],""notes"":""主要原材料は複数の国内商社経由で調達しており、乳製品・果実の一部は季節や産地不作の影響を受けやすいと記載がある""},""customers"":{""segments"":[""個人ギフト需要"",""法人向け贈答需要"",""EC直販の個人顧客""],""channels"":[""直営店"",""卸売(菓子問屋)"",""自社ECサイト""]},""workforce_notes"":""製造ラインはパート従業員の比率が高く、繁忙期は季節雇用で補っていると採用ページに記載がある"",""management_notes"":""EC直販比率の拡大を経営方針として掲げ、直近で自社ECサイトを刷新したと社長挨拶で述べている"",""strategy_outlook"":{""mvv""" & vbLf
-    s = s & ":""地域に根差した菓子づくりで顧客の特別な日に寄り添うことを掲げている"",""aspirations"":[""EC直販比率のさらなる拡大"",""季節限定商品の開発強化"",""衛生管理体制の高度化""],""market_context"":""国内の菓子市場は縮小傾向だがギフト需要とEC市場は堅調に推移していると業界記事にある""},""current_coverage"":[{""line_name"":""火災保険(工場物件)"",""coverage_summary"":""浜松本社工場の建物および設備を対象とする火災保険"",""limit_note"":""建物3億円・設備1億円"",""special_note"":""地震保険は付帯なし"",""certainty"":""confirmed""},{""line_name"":""生産物賠償責任保険(PL保険)"",""coverage_summary"":""製造した菓子製品に起因する対人対物賠償を担保"",""limit_note"":""1事故あたり1億円"",""special_note"":""リコール費用特約なし"",""certainty"":""confirmed""},{""line_name"":""労働災害総合保険"",""coverage_summary"":""従業員の業務災害を法定外補償で上乗せ""" & vbLf
-    s = s & ",""limit_note"":""不明"",""special_note"":""パート従業員の加入状況は不明"",""certainty"":""confirmed""}],""financials"":{""fiscal_year"":""2025年3月期"",""net_assets"":""12億円"",""sales"":""85億円"",""operating_profit"":""3億2000万円"",""source"":""kessan_kokoku"",""note"":""決算公告の貸借対照表要旨から転記""},""field_insights"":[{""note"":""社長は先代からの工場を大事にしており設備更新には慎重だと聞いている"",""tag"":""constraint""},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""}],""missing_info"":[{""item"":""止水板などの水災対策の導入状況"",""why_needed"":""施設・自然災害リスクの評価に必要なため""},{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""},{""aspect"":""business"",""status"":""ok""},{""aspect"":""sites"",""status"":""ok""" & vbLf
-    s = s & "},{""aspect"":""history"",""status"":""ok""},{""aspect"":""news"",""status"":""ok""},{""aspect"":""hr"",""status"":""ok""},{""aspect"":""finance_risk"",""status"":""ok""},{""aspect"":""sales_memo"",""status"":""ok""},{""aspect"":""sns"",""status"":""partial""},{""aspect"":""competitors"",""status"":""ok""},{""aspect"":""market"",""status"":""partial""},{""aspect"":""finance"",""status"":""ok""},{""aspect"":""insurance_ctx"",""status"":""ok""},{""aspect"":""hazard"",""status"":""ok""}],""overall"":""high"",""advice"":""追加不要""},""research_requests"":[]}"
+    s = s & "{""company_name"":""株式会社浜松スイーツファクトリー"",""business_summary"":""静岡県浜松市に本社を置く洋菓子・和菓子の製造販売企業。自社工場2拠点で焼き菓子を中心に生産し、直営店・卸売に加えEC直販を伸ばしている。"",""main_products"":[""季節限定焼き菓子ギフトセット"",""洋菓子詰め合わせ(EC限定)"",""和菓子詰め合わせ""],""processes"":[""浜松本社工場で主力の焼き菓子を一貫生産している"",""積志第二工場は繁忙期のギフト商品増産に対応している"",""EC直販分は本社工場から直送する体制である""],""locations"":[{""name"":""浜松本社工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""浸水想定区域内(想定浸水深0.5メートルから3.0メートル)との記載あり"",""notes"":""主力ラインを持つ最大拠点""" & vbLf
+    s = s & "},{""name"":""積志第二工場"",""type"":""工場"",""address"":""不明"",""hazard_note"":""不明"",""notes""" & vbLf
+    s = s & ":""繁忙期の増産用ライン""" & vbLf
+    s = s & "},{""name"":""本社直営店"",""type"":""店舗"",""address"":""不明"",""hazard_note"":""不明"",""notes"":""不明""}],""supply_chain"":{""key_materials"":[""小麦粉"",""バター"",""卵"",""国産果実(みかん・いちご)""],""notes"":""主要原材料は複数の国内商社経由で調達しており、乳製品・果実の一部は季節や産地不作の影響を受けやすいと記載がある""" & vbLf
+    s = s & "},""customers"":{""segments"":[""個人ギフト需要"",""法人向け贈答需要"",""EC直販の個人顧客""],""channels"":[""直営店"",""卸売(菓子問屋)"",""自社ECサイト""]},""workforce_notes"":""製造ラインはパート従業員の比率が高く、繁忙期は季節雇用で補っていると採用ページに記載がある"",""management_notes"":""EC直販比率の拡大を経営方針として掲げ、直近で自社ECサイトを刷新したと社長挨拶で述べている"",""strategy_outlook"":{""mvv""" & vbLf
+    s = s & ":""地域に根差した菓子づくりで顧客の特別な日に寄り添うことを掲げている"",""aspirations"":[""EC直販比率のさらなる拡大"",""季節限定商品の開発強化"",""衛生管理体制の高度化""],""market_context"":""国内の菓子市場は縮小傾向だがギフト需要とEC市場は堅調に推移していると業界記事にある""" & vbLf
+    s = s & "},""current_coverage"":[{""line_name"":""火災保険(工場物件)"",""coverage_summary"":""浜松本社工場の建物および設備を対象とする火災保険"",""limit_note"":""建物3億円・設備1億円"",""special_note"":""地震保険は付帯なし"",""certainty"":""confirmed""" & vbLf
+    s = s & "},{""line_name"":""生産物賠償責任保険(PL保険)"",""coverage_summary"":""製造した菓子製品に起因する対人対物賠償を担保"",""limit_note"":""1事故あたり1億円"",""special_note"":""リコール費用特約なし"",""certainty"":""confirmed""" & vbLf
+    s = s & "},{""line_name"":""労働災害総合保険"",""coverage_summary"":""従業員の業務災害を法定外補償で上乗せ""" & vbLf
+    s = s & ",""limit_note"":""不明"",""special_note"":""パート従業員の加入状況は不明"",""certainty"":""confirmed""}],""financials"":{""fiscal_year"":""2025年3月期"",""net_assets"":""12億円"",""sales"":""85億円"",""operating_profit"":""3億2000万円"",""source"":""kessan_kokoku"",""note"":""決算公告の貸借対照表要旨から転記""" & vbLf
+    s = s & "},""field_insights"":[{""note"":""社長は先代からの工場を大事にしており設備更新には慎重だと聞いている"",""tag"":""constraint""" & vbLf
+    s = s & "},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""}],""missing_info"":[{""item"":""止水板などの水災対策の導入状況"",""why_needed"":""施設・自然災害リスクの評価に必要なため""" & vbLf
+    s = s & "},{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""business"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""sites"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""history"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""news"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""hr"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""finance_risk"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""sales_memo"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""sns"",""status"":""partial""" & vbLf
+    s = s & "},{""aspect"":""competitors"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""market"",""status"":""partial""" & vbLf
+    s = s & "},{""aspect"":""finance"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""insurance_ctx"",""status"":""ok""" & vbLf
+    s = s & "},{""aspect"":""hazard"",""status"":""ok""}],""overall"":""high"",""advice"":""追加不要""" & vbLf
+    s = s & "},""research_requests"":[]}"
 
     BuildS1RnwJson = s
 End Function

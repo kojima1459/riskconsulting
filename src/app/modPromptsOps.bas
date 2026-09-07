@@ -322,7 +322,7 @@ Public Function RepairSuffix() As String
     s = s & "あなたの直前の出力は次の検証エラーで不合格でした:" & vbLf
     s = s & "{{validationErrors}}" & vbLf
     s = s & vbLf
-    s = s & "上記エラーをすべて解消し、指示したJSON形式のみで(説明文なしで)全体を再出力してください。"
+    s = s & "上記エラーをすべて解消し、指示したJSON形式のみで(説明文なしで)全体を再出力してください。出力のJSONは整形し、閉じ括弧の } と ] の直前では必ず改行すること。"
     RepairSuffix = s
 End Function
 

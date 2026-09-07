@@ -45,6 +45,14 @@
       "wave": "T-49"
     },
     {
+      "name": "modRibbonWire",
+      "path": "src/core/modRibbonWire.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-62",
+      "_note": "裁定書33 C-4(W11-c)。経路側で本文が途中から切られた疑いの判定(LooksRibbonCut)と、err_log の detail へ添える1語(CutNote)。16章 E-63。新しいエラーコードは作らない。"
+    },
+    {
       "name": "modJsonLite",
       "path": "src/core/modJsonLite.bas",
       "role": "core",
@@ -698,6 +706,21 @@
       "role": "test",
       "type": "std",
       "wave": "T-48"
+    },
+    {
+      "name": "modTestsPure21",
+      "path": "src/test/modTestsPure21.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-62"
+    },
+    {
+      "name": "modRibbonSim",
+      "path": "src/test/modRibbonSim.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-62",
+      "_note": "裁定書33 C-3(W11-c)。リボンちゃんの parseText / ExtractText / UnEscapeJSON の逐語模擬(純関数)。ship は modMockLlm と同じ扱い(配布物にも載る=ブック内テストの前提。12章§2)。"
     },
     {
       "name": "modMockLlm",

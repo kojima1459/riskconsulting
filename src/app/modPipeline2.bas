@@ -510,7 +510,9 @@ Private Function CallGuarded(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
     End If
 
     ' 不合格。E-35/E-36 の分岐は呼び出し側が行うので、ここではコードだけ残す。
-    modLog.LogError "E0302", P2_SRC & "." & stepKey, "validate_failed:" & stepKey
+    ' 16章 E-63 の印(裁定書33 C-4)。modPipeline.FailStep と同じ1語を添える。
+    modLog.LogError "E0302", P2_SRC & "." & stepKey, _
+                    "validate_failed:" & stepKey & modRibbonWire.CutNote(rawOut)
     CallGuarded = P2_RES_FAILED
 End Function
 

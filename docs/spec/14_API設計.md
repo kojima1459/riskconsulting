@@ -80,7 +80,7 @@ result = Application.Run("ChatGPT", _
 ' 10 effort  11 verbosity(GPT-5系)
 ```
 
-- 戻り値はAzure OpenAI応答の素通し。response_format指定不可 → JSONは15章のプロンプト強制＋§5の防衛線で担保
+- 戻り値は**リボンが加工した本文**である。`parseText` がHTTPボディ全体へ3置換（`": "`→`":"` / `content_filter_results`→`content_filter_result` / `prompt_filter_results`→`prompt_filter_result`）を掛けたうえで、`ExtractText` が始点 `content":"`（無ければ `text":"`）から終点 `","` / `"},` / `"`+LF の**最も手前**までを切り出し、`UnEscapeJSON` で戻す。本文中に `"},` があるとそこで切れる（16章 E-63）。本文中の `: ` は `:` になる（既知の劣化。値の意味は変わらない）。response_format指定不可 → JSONは15章のプロンプト強制＋§5の防衛線で担保
 - アドイン検出: `Application.AddIns` ループ（`ribbon_addin_name` 部分一致＋Installed、セッションキャッシュ）
 - 起動時 `LimitCheck()`（True=続行不可→案内し、実行時に再案内。config limit_check で無効化可）。起動シーケンス上の位置は12章§2.1のmodBoot手順⑦（Trueでも起動は止めない）
 - 温度・MaxTokensはGPT-5系では無視され effort/verbosity が効く（V2実運用で確認済み）。`reasoning_tuning` エスケープハッチはPoC同様に維持
@@ -91,6 +91,7 @@ result = Application.Run("ChatGPT", _
   4. **`LimitCheck()` の意味は「アドインの利用期限切れ」**である（`log.bas` の定数 `LimitDay`＝現版 2026/9/30 を過ぎていると True を返し、リボン側がMsgBoxで更新版の入手を促す）。**日次の利用枠とは別物**であり、実行中に当たる利用上限（レート制限）は §2 のエラー分類の `(error:429` 側で捕まえる（16章 E-15）。`LimitCheck()` が True でも本製品は起動を止めない（12章§2.1 手順⑦）。**この期限切れは E0208**（16章 E-57）で扱い、`(error:429`（本日の利用枠＝E0204・16章 E-15）とは分ける（裁定書24 追補2）。
   5. **未知のモデル名は実行時エラーになる**。リボンの `ChatGPT` はモデル名の `Select Case` に `Case Else` を持たず、一覧に無い名前だとURL・キーが空のまま進んで例外になる。config `recommended_model` には**リボンが知っているモデル名だけ**を置くこと（打鍵ミスは起動時ではなく最初の呼び出しで落ちる）。
   6. **ribbon経路は社内PC専用**である。リボンは呼び出しのたびに社内ログ送信 `SaveLog` を行い、その中で `ADSystemInfo` / `LDAP://` から実行者情報を取る。**ADへ到達できない環境（社外PC・非ドメイン端末）では例外**になるため、社外環境での検証は mock 経路で行う（16章 NFR-S3 の社内ログの段落も参照）。
+  7. **200応答の本文は「素通し」ではなく `parseText` が切り出したものである**（裁定書33・16章 E-63）。`parseText` はHTTPボディ**全体**へ3置換（`": "`→`":"` / `content_filter_results`→`content_filter_result` / `prompt_filter_results`→`prompt_filter_result`）を掛け、`ExtractText` が始点 `content":"`（無ければ `text":"`）から終点 `","` / `"},` / `"`+LF の**最も手前**までを切り出し、`UnEscapeJSON`（`\\` `\"` `\/` `\b` `\f` `\n` `\r` `\t` `\uXXXX`）で戻す。**本文中に `"},` があるとそこで切れる**（ボディ上は `\"},\"` で部分一致するため。`","` は本文中では `\",\"`、LF は `\n` になるので当たらない＝危ないのは `"},` だけ）。**本文中の `: ` は `:` になる**（既知の劣化。値の意味は変わらない）。当方の対策は 15章§1.3 BLOCK_GUARD と §7 RepairSuffix の整形JSON規則・検問 `wire`（`tools/ribbon_wire_check.py`）・純層 W11C（`src/test/modRibbonSim.bas` が相手側の3関数を逐語模擬する）である。
 - **呼出中の画面**: リボン呼出はVBAを同期ブロックするため、呼出の前に `modUIProgress.SetStage` でStep名・開始時刻・最大待ち時間・「画面が白くなっても処理は続いている」旨を確定表示し、config `keep_window_alive`（既定TRUE）で画面ゴースト化を抑止する（16章 E-50）
 - エラー: 空応答=E0202／上限系文字列（LooksLikeLimitError移植）=E0204／アドイン無し=E0201。**リボンは失敗時も空文字を返さず定型の日本語文字列を返す**ため、`modGatewayRPN.RibbonFailureCode` が Trim後の**先頭一致**で分類する（`(error:429`=E0204／`(error:`（429以外）=E0203／`接続切れ`=E0202／`レスポンスから当該テキストを抽出できません`=E0202／`content_filterに該当しました`=E0207。16章 E-15・E-54〜E-56。裁定書24 A-1）。戻り値 `"#ERR:E02xx:説明"`（例外は投げない）。**ただし成否判定は§6の帯域外フラグで行い、文字列プレフィクスを判定に使わない**
 - **社内ディープリサーチ（DR）アプリ側の制約**: 調べる文の**1回の入力2,000字上限**（docs/08・11章§3.2）と、返答末尾に付く**フッター（`役職コード:` ほか）**は、リボンではなく**DRアプリの都合**である（本製品は前者を2,000字以内の調べる文で、後者を `modNavText.StripDrFooter` で受けており、現設計と整合）。
@@ -120,7 +121,7 @@ Authorization: Bearer {keyファイル1行目}   ※ブック・config・ログ�
 - **direct経路は dev ビルド専用である**（W11-a・裁定書30 裁定1）。実体 `modGatewayDirect` は配布ビルド（prod）から外れており（`build/modules.json` の `ship:false`）、`modGatewayRPN.DirectStep` が呼ぶのは接続モジュール `modGatewayLink.CallDirect`（14章§6と同一契約）である。ソースはビルドモードで差し替わり、prod 版は `llm_transport=direct` が設定されていても **E0209**「この配布では direct 経路は使えません。llm_transport=ribbon にしてください」を返す（リボン経路へ黙って倒さない。16章 E-62）。dev 版は`modGatewayDirect` へ転送するだけで、本節の仕様は dev ビルドでそのまま生きている
 - コスト目安: 1案件=4呼び出し・入力 約25k tok・出力 約8k tok → 数十円/案件。PoC全体で数千円以内
 - **コスト前提（発注者確認 2026-08-28）: API利用コストは設計制約としない**。トークン節約のための品質妥協（入力の間引き・批判パスの省略・リトライ回数の切詰め）は行わない。有報級の長文（5万字≒25k tok強）を1呼び出しに載せる設計も可。usage ログ（modLog）は引き続き全呼び出しで記録する（コスト管理でなく挙動監視のため）
-- **長文入力の根拠（2026-08-28実機検証済み）**: リボン側ラッパーは機能制限なし・Azure OpenAI応答素通し（PoC台帳 RIBBON_API_CONFIRMED.md）。上限はモデルのコンテキスト長のみ。**実機テスト合格**: 三菱電機・有報「事業等のリスク」章全文を1呼び出しで構造化、最終項目まで完走・切り捨てなし。Wait（config `llm_wait_sec`）と MaxTokens（config `llm_max_tokens`・Step別上書き可）は長文時に引数で拡張する前提で設計する
+- **長文入力の根拠（2026-08-28実機検証済み）**: リボン側ラッパーは機能制限なし（PoC台帳 RIBBON_API_CONFIRMED.md）。ただし**応答は素通しではなく `parseText` が切り出したもの**であり、3置換と終点規則（上記 7.・16章 E-63）が掛かる。上限はモデルのコンテキスト長のみ。**実機テスト合格**: 三菱電機・有報「事業等のリスク」章全文を1呼び出しで構造化、最終項目まで完走・切り捨てなし。Wait（config `llm_wait_sec`）と MaxTokens（config `llm_max_tokens`・Step別上書き可）は長文時に引数で拡張する前提で設計する
 - **長文出力の既知欠陥（尾部劣化）**: 上記テストで**末尾項目の重複出力＋重複側への他項目引用の誤混入**を観測。**16章 E-49 として登録済み**。対応の実体は§5防衛線の(2.5)＝`modValidate.NormalizeLlmJson(stepName, json, removedCount)` であり、**全step・両経路で必須**（S1だけの対策にしない）。配列要素を `modUtilText.NormalizeForHash` 正規化後の fnv1a64 で重複排除し（PoC modPack の fnv 重複排除を転用。docs/08 実機確認1参照）、除去件数を run_log の detail に記録して E0303（重複除去実施・警告）を残す。黙って畳んで済ませない
 
 ## 4. mock経路（mockは2本立て。同名にしない）

@@ -295,8 +295,9 @@ Private Function CallGuarded(ByVal inboxId As String, ByVal sysText As String, _
 
     ' 不合格。生応答は受信箱の pf_json を汚さない(13章§2.6 の pf_json には
     ' 検証に合格した診断だけを入れる)。内訳のコードだけを err_log へ残す。
+    ' 16章 E-63 の印(裁定書33 C-4)。modPipeline.FailStep と同じ1語を添える。
     modLog.LogError PfFailCodeOf(errText), PO_SRC & "." & PO_STEP_PF, _
-                    "validate_failed:" & inboxId
+                    "validate_failed:" & inboxId & modRibbonWire.CutNote(rawText)
     CallGuarded = PO_RES_FAILED
 End Function
 

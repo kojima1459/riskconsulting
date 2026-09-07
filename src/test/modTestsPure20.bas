@@ -68,6 +68,9 @@ WD:
 WE:
     On Error GoTo FE
     T_W101_JoinPath
+WF:
+    On Error GoTo FF
+    modTestsPure21.RunAll
 WDone:
     Exit Sub
 FA:
@@ -84,6 +87,9 @@ FD:
     Resume WE
 FE:
     GroupFail "W101 パスの連結と分解(裁定書29 W10.1)"
+    Resume WF
+FF:
+    GroupFail "modTestsPure21(W11-c・裁定書33 リボンの抽出切断)"
     Resume WDone
 End Sub
 
