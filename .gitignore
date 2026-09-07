@@ -27,4 +27,9 @@
 __pycache__/
 *.py[cod]
 wintest/result_*.log
-.claude/
+# .claude/ は個人設定なので除外するが、委任スキル(.claude/skills/。姉妹PJから持込・2026-09-07)だけは配る
+.claude/*
+!.claude/skills/
+
+# Gemini APIキー(tools/gemini_worker.py が探すファイル名)。リポジトリのどこにも置かない
+.gemini_key
