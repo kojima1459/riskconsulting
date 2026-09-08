@@ -1,4 +1,6 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.5.4
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.6
+
+> v2.6（W12-A・裁定書34「HTML画面の正式採用と統合」）: §6の登記表へ **navi公開関数**（`modNaviHost` / `modNaviState` / `modNaviActions` / `modNaviChat` / `modNaviStore` / `modBootNavi`。仮置き＝班1報告で最終確定）を追記し、**§8「HTMLとVBAの受け渡し」を新設**した（`vba://dispatch` の疑似ナビゲーション・textarea 2本・JSONの形・多重実行の拒否・action許可リスト・「クリップボードから取り込む」ボタン撤去）。ChatGPT呼出は従来どおり `modGatewayRPN` 経由（navi層から `Application.Run` を直接書かない=R3）。
 
 > v2.5.6（裁定書17 裁定A: W5.2ホットフィックス）: §6の登記表へ本裁定で許可した新設名を登記した。**`modUIToast`**（`ShowToast` / `ShowNext` / `HideToast` / `CancelToast` / `WarnLine`）・Shape接頭辞 **`ts_`**・**`modBoot.KbAutoNote`**（ナレッジブック自動発見の結果の読み出し口。探索本体は modBoot の Private `ResolveKbPath`）・`modUISheet.EnsureButtonEx` の `kind="primary"` を高さ30ptとする寸法規約・**`modUIToast.ShowResearchPrompts`** と名前付きレンジ **`gd_ch7_head`**・HOMEの主要動線5本の新キャプションと図形名 `btn_hm_step1`～`btn_hm_step5`（司令塔追補）。**本波で許可した新設はこの範囲のみ**（公開シグネチャの変更は無い）。
 
@@ -1528,6 +1530,18 @@ Public Function RunExcelTests2() As Long
   | - | `modUIHome.SelectedCaseId()` / `ShowWarning(messageText, [kind])` / `DrawAllSteps(caseId)` / `WriteRoundNo(roundNo)` | 公開関数（ui層内部ヘルパ。呼んでよいのは `modUIHome2` のみ） | 本章§6・13章§2.10 | 分割で `modUIHome2` へ渡す**画面側の口**（Private からの可視性変更3本＋新設1本）。名前付きレンジ名の定数（`hm_case_id` / `hm_warning` / `hm_round_no`）を2モジュールに持たないための一方通行の借り口であり、`WriteRoundNo` は `HomeFreezeRound` が `hm_round_no` を書く1行を包んだだけ（値の決定は `modCaseStore.FreezeRound` が唯一持つ） |
   | - | `modKnowledge2` の公開8本（`PickAt` / `CellAt` / `CellRaw` / `AddIdList` / `ColOf` / `SelectRows` / `MissingColsOf` / `BadRowsOf`） | 公開関数（app層の**純関数**。呼んでよいのは `modKnowledge` のみ） | 本章§6・13章§3・16章 E-34 | **`modKnowledge` からの移設**（30,000字契約。17章§7 Z-13）。分割の軸は「シートに触る側＝`modKnowledge` / **シートを触らない純関数**＝`modKnowledge2`」で、`modKnowledgeFmt` が15章の整形規約を持つのと同じ切り口。Excelトークンを持たないので R4 の許可モジュールへは足さず、層(a)から直接叩ける。絞込スペック `"ind^tgt^act^sts^suf^ref"` の規約は `modKnowledge2` 冒頭が正 |
 
+  **W12-A（HTML画面ホスト層。v2.7・裁定書34。仮置き＝班1報告で最終確定）**。
+
+  | # | 新設した口 | 種別 | 定義の正 | 契約 |
+  |---|---|---|---|---|
+  | - | `modNaviHost.OpenNaviTool()` / `HostDispatchPending()` / `HostRequestJson(jsonText) As String` / `CloseNaviTool()` / `HostWorkbookClose()` | 公開関数（ui層。HTML画面の受付） | 本章§6・§8・11章§0.0・12章§2 | `Workbook_Open` → `modBoot.Boot` の後、`modBootNavi.LaunchIfHtml` が `Application.OnTime Now, "OpenNaviTool"` で予約する。`HostDispatchPending` が `vba://dispatch` の遷移を受け、`textarea#vbaPayload` の `{action,data}` を読み取り消去してから `HostRequestJson` へ渡す。処理中の多重要求は破棄し `{ok:false,busy:true,message:"処理中です"}` を返す（16章 E-11 と同じ `gBusy` 排他） |
+  | - | `modNaviState.BuildAppState()` / `BuildCaseState(caseId)` / `BuildStageList(caseId)` / `BuildPrompts(caseId)` | 公開関数（app層。JSON文字列を返す） | 本章§6・§8 | 既存データから state JSON（§8の形）を組み立てる。S1〜S4は `modCaseStore.ResolveStepJson` の結果を `RestoreNames` した**JSON文字列のまま**格納し、VBA側では構造を解釈しない（§8） |
+  | - | `modNaviActions.ActPasteMaterial` / `ActSaveMaterials` / `ActRunPipeline` / `ActExportReport` 等（action名ごとに1手続き） | 公開関数（app層） | 本章§6・§8 | action名は許可リストと**大文字小文字を含め完全一致**（`IsAllowed`。16章 E-67）。`MsgBox` を書かない（確認は `confirm` 応答で返しHTML側が再送する） |
+  | - | `modNaviChat.BuildChatSystem()` / `Ask(caseId, question, includeFlags) As String` / `History(caseId) As String` / `Clear(caseId)` | 公開関数（app層。案件チャットF-09） | 本章§6・§8 | `modGatewayRPN.CallChat` を使う（`Application.Run` を直接書かない=R3）。run_logは `step=ch`（13章§2.4・19章§4） |
+  | - | `modNaviStore.ListCases()` / `ListInbox()` / `ListJudgements()` / `LogRowsOf(caseId)` / `AppendFeedback(...)` / `SetDisplayName(caseId, name)` / `SetArchived(caseId, archived)` / `ExportCaseJson(caseId)` / `ImportCaseJson(json)` | 公開関数（app層。既存に無い読取・追記アダプタ） | 本章§6・13章§2.1 | `SetArchived` が案件一覧26列目 `archived_at`（13章§2.1）の書込口。`modCaseStore2.SheetOf/LastRowOf/ReadBlock` 等の下位I/Oを使う（新しい下位I/Oは新設しない） |
+  | - | `modBootNavi.LaunchIfHtml()` / `RegisterDefault系`（ui_mode等の既定値登録） | 公開関数（ui層。`modBoot` から1行で呼ぶ） | 本章§6・12章§2.1 | `ui_mode=html` かつ `ui\index.html` が本体と同じフォルダにあるとき起動予約。無ければ `hm_warning` へ「ui フォルダが見つからないため従来画面で起動しました」を出しsheetで続行（16章 E-64） |
+  | - | `modUIResearch.OpenUrl`（**Public化**）／`modUIProgress.ReleaseUiLock`（**Public化**） | 公開範囲の変更のみ | 本章§6 | HTML画面のホスト層から呼ぶために公開範囲だけを変更する（処理内容は不変）。`ReleaseUiLock` は `DrawNav` を呼ばない解放版（HTML画面はナビ全面再描画を必要としないため） |
+
   これ以外の名前（公開関数・名前付きレンジ・シート・列）を実装側で新設しない。必要が生じたら司令塔の裁定を経て本章§6へ先に登録する。
 
 ## 7. スキーマ・レジストリ（modSchemas。本文は15章）
@@ -1550,3 +1564,32 @@ Public Function RunExcelTests2() As Long
 
 - s2r / s3r（入念モードの改訂）はスキーマを新設せず `SchemaS2()` / `SchemaS3()` を再利用する（§1 Stepレジストリ）
 - 1モジュール30,000字契約に収まらない場合は modSchemas を `modSchemas1..n` へ分割してよい（関数名は変えない）
+
+## 8. HTMLとVBAの受け渡し（v2.7・裁定書34 W12-A新設）
+
+HTML画面（`frmNaviHtml`）と業務VBAの間は、`Application.Run` の直接呼出しではなく**疑似ナビゲーション＋DOM textareaのJSON往復**で結ぶ（md-review-tool と同一方式。ChatGPT呼出は従来どおり `modGatewayRPN` 経由のまま＝navi層から `Application.Run` を直接書かない。R3）。
+
+### 8.1 HTML→VBA（`vba://dispatch`）
+
+1. JS側が `{action: "...", data: {...}}` のJSONを `textarea#vbaPayload` の値へ置く。
+2. 40ms後に `location.href = "vba://dispatch"` へ遷移する（実際には遷移しない疑似ナビゲーション）。
+3. VBA側は `BeforeNavigate2` イベントでこの遷移を**キャンセル**し、`modNaviHost.HostDispatchPending` が `textarea#vbaPayload` の値を読み取って**消去**してから `modNaviActions` の対応する `Act*` 手続きへ渡す（§6 W12-A表）。
+4. **多重実行の拒否**: 処理中（`gBusy` またはリボン待ち中の `DoEvents` 再入）に新しい `vba://dispatch` が来たら、`HostDispatchPending` は要求を破棄し `{ok:false, busy:true, message:"処理中です"}` を返す（元の処理のロックは解放しない。16章 E-11 と同じ排他規約）。
+
+### 8.2 VBA→HTML
+
+1. `modNaviHost` が応答JSON（`{ok, message, kind, busy, progress, state, warning, error_code, cancelled, confirm}`。フィールドの意味は仮置き＝班1報告で確定）を `textarea#vbaResponse` へ置く。
+2. `execScript "window.naviApp.receiveFromHost();"` でJS側へ通知する。
+3. `ok`（成否）・`message`（トースト文言。既存のトースト文言をそのまま使う）・`kind`（info/warn/error）・`state`（再描画用の全体状態。§8.3）の4フィールドは**必須**とする。
+
+### 8.3 state（JSONの形。実際の通信型は文字列）
+
+S1〜S4は `modCaseStore.ResolveStepJson` の結果を `RestoreNames`（匿名化復元）した**JSON文字列のまま** `s1`〜`s4` へ格納し、HTML側で `JSON.parse` する（VBA側では構造を解釈しない。`modJsonLite` が構造解釈のできない抽出専用モジュールであるため。12章§4のR3/R4規約と整合）。資料欄は実名表示用の `text` と匿名化済み保存値 `ai_text` の両方を返す。
+
+### 8.4 多重実行の拒否とaction名の許可リスト（E-67）
+
+`modNaviHost` はHTMLから届いた `action` の値を、**大文字小文字を含め完全一致**する許可リスト（`modNaviHost.IsAllowed`）と照合する。一致しないものは実行せず `{ok:false, error_code:"", message:"..."}` で拒否する（16章 E-67）。ホストは受信後に `operator`（config）とWindowsユーザー名を付与し、HTML側の値を権限情報として信用しない。案件IDは必ず `modCaseStore.IsValidCaseId` で検査する。
+
+### 8.5 HTMLの「クリップボードから取り込む」ボタン撤去（裁定書34 §0-5）
+
+IEのゾーン設定に依存し会社PCで動かないため、HTML画面には「クリップボードから取り込む」ボタンを**置かない**。資料登録の入力欄はラベル「**ここをクリックして Ctrl+V**」とし、フォーカス＋Ctrl+Vのみで貼付を受け付ける（11章§0.0b）。
