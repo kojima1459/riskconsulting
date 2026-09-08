@@ -142,7 +142,7 @@ Public Function DataJsonAttack() As String
     s = s & "'s3':{'stories':[{'story_no':1,'proposal_kind':'upsell'," & vbLf
     s = s & "'headline':'物流停止に備える','hook_question':'在庫は何日分ですか'," & vbLf
     s = s & "'target_risk_nos':[1],'target_gap_nos':[],'menu_ids':['M-0012']," & vbLf
-    s = s & "'line_ids':['L-03'],'scheme_id':''," & vbLf
+    s = s & "'line_ids':['L-04'],'scheme_id':''," & vbLf
     s = s & "'pitch':'担当者は\'やる\'と言った\n次の行へ'," & vbLf
     s = s & "'similar_case_id':'K-0003','expected_objection':''," & vbLf
     s = s & "'objection_response':''}],'unmatched_risks':[]," & vbLf

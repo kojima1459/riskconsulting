@@ -167,7 +167,7 @@ Private Sub T_MockNormal()
     ChkN "MKS3_storiesが3件_15章§8.1", ArrCount(js, "stories"), 3
     ' v2.6(裁定書25 S2): talk_script の flow は STEP1-4 相当の4文(15章§8.1)。
     ChkN "MKS3_talk_scriptのflowが4件_15章§8.1", ArrCount(js, "flow"), 4
-    ' 正常系mockが使ってよいIDは M-0012 / L-03 / S-0004 / K-0003 / P9 / MC-0107 のみ。
+    ' 正常系mockが使ってよいIDは M-0012 / L-04 / S-0004 / K-0003 / P9 / MC-0107 のみ。
     ' 障害注入 ghost_id 専用の M-9999 が正常系へ混ざっていないこと。
     modTestRunner.Check "MKS3_幽霊IDを含まない_15章§8.1", _
         (InStr(js, "M-9999") = 0), "M-9999が正常系mockに混入している"
