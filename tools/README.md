@@ -29,7 +29,7 @@ vba_lint.py 緑
   -> app_version 更新 -> 15分スモーク -> 署名 -> 共有フォルダ配置
 ```
 
-- **検問はまとめて `python3 tools/gate.py` で回すのが標準**(全20ゲート・緑は1行/赤だけ末尾ログ+全文ログパス。テストが数千本規模になっても出力が肥大しない非対称出力)。`--only lint,lo-pure` で絞り、`--tail N` で失敗時表示量を調整、`--list` で一覧。個別ツールの直接実行はデバッグ時のみ。
+- **検問はまとめて `python3 tools/gate.py` で回すのが標準**(全21ゲート・緑は1行/赤だけ末尾ログ+全文ログパス。テストが数千本規模になっても出力が肥大しない非対称出力)。`--only lint,lo-pure` で絞り、`--tail N` で失敗時表示量を調整、`--list` で一覧。個別ツールの直接実行はデバッグ時のみ。
 - `vba_lint.py` と `run_lo_tests.py` は**コミット条件**。HTMLテンプレ系(modHtmlTemplate*/modHtmlTheme/modExportHtml)へ触れたコミットは `render_report.py`(standard・--faithful の両方)も**コミット条件**に含める(18章固定文の逐語照合・DATAリテラル検査・SEC-16非描画検査はここが唯一の検問。層(a)のG90/G91は空白畳み照合のため見出し内空白の漂流には盲)。
   これらが緑でも**実機 wintest(層b)を飛ばしてよい理由にはならない**(17章§1)。
 - 検問を1つでも飛ばした版は配布しない。
@@ -178,6 +178,40 @@ HTTPボディ上は `\"},\"` になって部分一致し、**本文がそこで�
   `--strict-docs` を `tools/gate.py` の引数へ足すだけで ERROR へ昇格する**。
 - **自己テスト(骨抜き防止)**: 毎回、負例2(1行詰め・行またぎ)と正例1(改行済み)の
   ダミー `.bas` を走らせ、負例で検出できなければ **exit 2** で止める。
+
+### `ui_check.py` - HTML画面(`ui/` と `src/ui/navi/`)の検問(裁定書34 §1.4・21本目)
+
+```bash
+python3 tools/ui_check.py            # 6条件
+python3 tools/ui_check.py --verbose  # 照合した action 名・Public 名を全部出す
+# exit code: 0 = ERROR 0件 / 1 = ERROR 1件以上 / 2 = 自己テスト失敗
+```
+
+W12-A で「利用者が触る画面」は HTML(モードレスの1枚窓)になった。画面は `ui/` の
+5本、VBA 側の入口は `modNaviHost` の action 許可リストだけで、この2つは別のファイル
+なので**片方だけ直す事故**が起きる。`vba_lint` はVBAしか読まず、LibreOffice は
+UserForm を知らないので、そこは誰も見ていない。本ツールがその隙間だけを埋める。
+
+- **(1) 外部URL無し**(`http://` / `https://` / `//cdn`)。画面は本体と同じフォルダの
+  `ui/` だけで閉じる。例外は HTML の名前空間 URI(`http://www.w3.org/`)のみ。
+- **(2) `eval(` / `new Function(` / `document.write(` 無し**。HTML への差し込みは
+  VBA(`modNaviHost.HostReadPage`)が `<!--INLINE_STYLE-->` / `<!--INLINE_SCRIPT-->`
+  の2箇所で行う。JS が自分で文字列をコードにする口は作らない。
+- **(3) `vbaPayload` / `vbaResponse` の `<textarea>`** が index.html に在る
+  (HTML と VBA の受け渡しはこの2枚だけを通る。14章§7)。
+- **(4) action 名の集合が一致**。JS 側は `send('x', ...)` の第1引数(三項演算子の
+  両側を含む)と `data-action` / `data-confirm-action` 属性から、VBA 側は
+  `modNaviHost.IsAllowed` の `Case` から取り、**両方向とも**食い違いを ERROR に
+  する。例外は `VBA_ONLY_ALLOWED`(第2段の口 `save_step_edit` だけ)に理由つきで。
+- **(5) 実フォームと LOスタブの Public が一致**。`src/ui/navi/frmNaviHtml.frm` と
+  `wintest/lo_stubs/frmNaviHtml_stub.bas`。ずれると「LOでは通るのに実Excelで落ちる」。
+- **(6) `ui/` の合計 300KB 以下**。1枚のHTMLへ全部差し込んでから WebBrowser に
+  食わせるので、大きくすると起動が目に見えて遅くなる。
+- **自己テスト(骨抜き防止)**: 毎回、負例(CDN参照・`eval`・action の食い違い・
+  Public の過不足)を合成データで走らせ、検出できなければ **exit 2** で止める。
+
+**HTML画面が実際に描かれるかどうかは Windows 実機でしか確認できない**(17章§7 Z-43)。
+本ツールが見るのは配線と閉じ込めだけである。
 
 ### `run_lo_tests.py` - LibreOffice実行テスト(層(c))
 

@@ -207,6 +207,34 @@ Public Sub ExitUiLock()
 End Sub
 
 ' ============================================================================
+' ReleaseUiLock - HTML画面(ui_mode=html)から使う ExitUiLock(裁定書34 §1.2)。
+' ----------------------------------------------------------------------------
+'   ExitUiLock との違いは **modUINav.DrawNav を呼ばない**の1点だけである。
+'   HTML画面はシートのナビ帯を描かない(画面の再描画は HTML 側が
+'   modNaviState.BuildAppState の応答を受けて行う)ので、シートを描き直すと
+'   モードレスのフォームの裏でシートが点滅し、しかも DrawNav が
+'   ScreenUpdating を触るぶんだけ遅くなる。
+'   ロックの解除・実行中Stepの消去・待ちカードの撤去・ステータスバーの復帰・
+'   ScreenUpdating の True 復帰は ExitUiLock と同じ順で必ず通す(16章E-50(d))。
+' ============================================================================
+Public Sub ReleaseUiLock()
+    On Error Resume Next
+    gLockStep = vbNullString
+    gLockAt = 0
+
+    modUISheet.WriteNamed UP_NAME_STEP, vbNullString
+
+    modUINavDraw.HideWaitCard
+    Application.StatusBar = False
+    If gBarSaved Then
+        Application.DisplayStatusBar = gBarWas
+        gBarSaved = False
+    End If
+
+    Application.ScreenUpdating = True
+End Sub
+
+' ============================================================================
 ' ParkFocus - 全アクション完了時のフォーカス退避(11章§5・16章E-51(c))。
 ' ----------------------------------------------------------------------------
 '   セル編集モードのままVBAが止まるのを防ぐため、フォーカスを編集対象外の

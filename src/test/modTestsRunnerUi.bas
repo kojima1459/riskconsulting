@@ -45,6 +45,9 @@ Private Const TR_CONFIRM As String = _
 Private Const TR_NO_EXPECTED As String = _
     "期待本数が読めませんでした。開発担当へご連絡ください。"
 
+' RunAllTestsHeadless が作った本文の保管(HTML画面が2回目の呼出で読む)。
+Private mLastReport As String
+
 ' ============================================================================
 ' RunAllTestsFromBook - 使い方タブの[テストを実行]の OnAction。
 '   引数なしなので Alt+F8(マクロ一覧)からも実行できる。
@@ -84,6 +87,72 @@ Public Sub RunAllTestsFromBook()
 Failed:
     NoticeAbort Err.Number
 End Sub
+
+' ============================================================================
+' RunAllTestsHeadless - HTML画面(裁定書34 W12-A)からの自己テスト実行。
+' ----------------------------------------------------------------------------
+' なぜ別の入口が要るのか:
+'   RunAllTestsFromBook は MsgBox で確認してから走り、終わったら MsgBox で
+'   結果を出す。モードレスの HTML 画面はその2つのダイアログを自分で持って
+'   いる(確認は confirm 応答・結果はトースト)ので、**ダイアログを出さない**
+'   同じ4条件のランナーが要る。
+'   結線は R1(製品コードからテスト層を参照しない)を守るため、呼び出し側
+'   (modNaviActions2)は `Application.Run "modTestsRunnerUi.RunAllTestsHeadless"`
+'   の文字列ディスパッチで呼ぶ。判定・集計・gd_test_result への書込は
+'   RunAllTestsFromBook と同じ関数を通す(2つ目の判定ロジックを作らない)。
+'
+' 戻り値: 合否サマリ1行(SummaryText と同一。"全PASS(...)" / "NG(...)")。
+'   期待本数が読めなければテストを走らせずに TR_NO_EXPECTED を返す(fail-closed)。
+'   本文(ReportText)は LastReportText() で別に取る。
+' ============================================================================
+Public Function RunAllTestsHeadless() As String
+    On Error GoTo Failed
+
+    ' 変数名を RunAllTestsFromBook と分けてある理由(tools/t48_check.py):
+    '   合否判定の4条件は「変数の代入元まで遡って役に割り当たること」で検査する。
+    '   同じ名前が2つの手続きで代入されていると、どちらの値か機械に決まらず
+    '   検査が落ちる(fail-closed)。判定そのものは SummaryText の1本だけである。
+    Dim hExpected As Long
+    hExpected = ExpectedCount()
+    If hExpected <= 0 Then
+        mLastReport = vbNullString
+        WriteResult TR_NO_EXPECTED, vbNullString
+        RunAllTestsHeadless = TR_NO_EXPECTED
+        Exit Function
+    End If
+
+    modTestRunner.SetExpectedCount hExpected
+    modTestRunner.RunAllPureTests
+
+    Dim hPure As Long
+    hPure = modTestRunner.ExecutedCount()
+
+    modTestsExcel.RunAllExcelTests
+
+    Dim hExcel As Long
+    hExcel = modTestRunner.ExecutedCount() - hPure
+
+    Dim hSummary As String
+    hSummary = SummaryText(hExpected, hPure, hExcel)
+
+    ClearTestNotices
+    mLastReport = modTestRunner.ReportText()
+    WriteResult hSummary, mLastReport
+    RunAllTestsHeadless = hSummary
+    Exit Function
+
+Failed:
+    mLastReport = vbNullString
+    RunAllTestsHeadless = "NG(テストの実行中に問題が起きました。" & CStr(Err.Number) & ")"
+End Function
+
+' ============================================================================
+' LastReportText - 直前の RunAllTestsHeadless が作った本文(HTML画面の[結果])。
+'   まだ走っていなければ空文字。
+' ============================================================================
+Public Function LastReportText() As String
+    LastReportText = mLastReport
+End Function
 
 ' ============================================================================
 ' ClearTestNotices - テストが画面へ出した警告の後始末(裁定書30 裁定2・Z-28)。

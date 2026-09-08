@@ -255,6 +255,18 @@ Public Sub RunAllPureTests()
     End If
     On Error GoTo 0
 
+    ' HTML画面(裁定書34 W12-A)の純層。modTestsPure* の連鎖とは別に、navi の
+    ' 純関数(JSONの検証と組立・action許可・data_key)を叩く24本を持つ。
+    On Error Resume Next
+    Err.Clear
+    modTestsPureNavi.RunAll
+    If Err.Number <> 0 Then
+        Check "modTestsPureNavi.RunAll", False, _
+              "呼び出しでエラー: " & Err.Description & " (Err=" & Err.Number & ")"
+        Err.Clear
+    End If
+    On Error GoTo 0
+
     ' ---- 実行本数の照合(0件実行の「全緑」を成立させない) ----
     If Not mExpectedSet Then
         AddFailure "NG: tests_expected が未設定です", _

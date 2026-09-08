@@ -47,11 +47,12 @@ Private Const CF3_SHEET_META As String = "dossier_meta"
 Private Const CF3_SHEET_FACTS As String = "dossier_facts"
 
 ' 13章§2.1 案件一覧の全列(物理順。build/sheets_main.json と同じ並び)。
+'   裁定書34 §1.2(W12-A): HTML画面の[案件を削除]が使う archived_at を末尾へ足した。
 Private Const CF3_CASE_COLS As String = _
     "case_id;case_type;dossier_tier;parent_case_id;company;industry_code;" & _
     "industry_name;channel;kanji;bid;reins;other_insurers;status;created_at;" & _
     "updated_at;owner;adopted_story_nos;focus_line_ids;ppt_path;report_path;" & _
-    "note;s4_variant;round_no;last_ok_step;failed_step"
+    "note;s4_variant;round_no;last_ok_step;failed_step;archived_at"
 
 ' 起動時再構成が案件一覧へ組み直す列(13章§2.1)。見出しから読める分だけ。
 Private Const CF3_REBUILD_COLS As String = _
@@ -167,6 +168,12 @@ Public Function HeaderToCaseRow(ByVal headerText As String) As String
         If LenB(acc) > 0 Then acc = acc & vbLf
         acc = acc & cols(i) & vbTab & HeaderValueOf(headerText, cols(i))
     Next i
+    ' 裁定書34 §1.2(W12-A): archived_at は**見出しに値があるときだけ**足す。
+    '   CF3_REBUILD_COLS の6列は「必ず出す(欠けは空行)」契約なので、旧い企業
+    '   ファイルにこの行が増えないよう、固定の並びの外へ付ける。
+    If LenB(HeaderValueOf(headerText, "archived_at")) > 0 Then
+        acc = acc & vbLf & "archived_at" & vbTab & HeaderValueOf(headerText, "archived_at")
+    End If
     HeaderToCaseRow = acc
 End Function
 
@@ -491,6 +498,8 @@ Public Function ReadFileHeader(ByVal filePath As String) As String
     acc = acc & KvLine("case_id", CellOfFirstRow(wb, CF3_SHEET_CASE, "case_id"))
     acc = acc & KvLine("case_type", CellOfFirstRow(wb, CF3_SHEET_CASE, "case_type"))
     acc = acc & KvLine("status", CellOfFirstRow(wb, CF3_SHEET_CASE, "status"))
+    ' 裁定書34 §1.2(W12-A): 削除済み案件を起動時再構成で復活させないための1行。
+    acc = acc & KvLine("archived_at", CellOfFirstRow(wb, CF3_SHEET_CASE, "archived_at"))
 
     modCompanyFile2.DossierClose wb
     Set wb = Nothing

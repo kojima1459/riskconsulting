@@ -38,6 +38,10 @@ Private m3Run As Long
 Public Function RunExcelTests3() As Long
     m3Run = 0
     TestW10CompanyFileRoundTrip
+    ' 裁定書34 §1.1(W12-A): HTML画面の層(b)6本。modTestsExcel は 29,902字で
+    '   満杯のため、結線はここから行う(modTestsExcel には TE_EXPECTED の
+    '   数字1つだけを直す)。戻り値は自分が打った本数へ足して返す。
+    m3Run = m3Run + modTestsExcelNavi.RunExcelTestsNavi()
     RunExcelTests3 = m3Run
 End Function
 

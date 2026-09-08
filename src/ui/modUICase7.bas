@@ -271,8 +271,14 @@ Public Function ClipPasteText(ByRef okFlag As Boolean) As String
     ws.Activate
     ws.Cells(1, 1).Select
 
+    ' 裁定書34 §1.3(b): 会社PCの実走で「書式名を指定した PasteSpecial」が3本とも
+    '   通らない端末があった(Excel の版と言語で書式名が変わる)。書式名を要らない
+    '   Worksheet.Paste を**先に**試し、駄目なら従来の2書式へ落ちる。
+    '   Paste は書式ごと貼るが、ここは使い捨ての受け皿シートで、読み出すのは
+    '   ReadPasteBuf の文字だけなので持ち込む書式は捨てられる。
     Dim pasted As Boolean
-    pasted = TryPasteFormat(ws, U7_FMT_JA)
+    pasted = TryPasteWorksheet(ws)
+    If Not pasted Then pasted = TryPasteFormat(ws, U7_FMT_JA)
     If Not pasted Then pasted = TryPasteFormat(ws, U7_FMT_EN)
     If Not pasted Then GoTo Cleanup
 
@@ -290,6 +296,17 @@ Failed:
     okFlag = False
     ClipPasteText = vbNullString
     Resume Cleanup
+End Function
+
+' 書式名を指定せずに貼ってみる(裁定書34 §1.3(b))。貼るものが無い・貼れない
+'   ときは False を返し、呼び出し側が書式名つきの経路へ落ちる。
+Private Function TryPasteWorksheet(ByVal ws As Object) As Boolean
+    On Error GoTo Failed
+    ws.Paste ws.Cells(1, 1)
+    TryPasteWorksheet = True
+    Exit Function
+Failed:
+    TryPasteWorksheet = False
 End Function
 
 ' 1つの書式名で貼ってみる(名前が通らなければ False)。

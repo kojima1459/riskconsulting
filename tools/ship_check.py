@@ -690,11 +690,189 @@ def check_item8(dist_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+
+# ==============================================================================
+# 第2段(開発PC)の産物の検査: --final(裁定書34 §0.3・§1.4・W12-A)
+# ------------------------------------------------------------------------------
+# 2段ビルドのおさらい:
+#   第1段 = 当方CI(build/build_rpn.py)。標準モジュールだけの
+#           dist/リスク提案ナビ.xlsm。ui_mode=sheet で単体でも動く。
+#   第2段 = Windows 実Excel を持つ開発PC(build/win/import_navi_modules.ps1)。
+#           UserForm(frmNaviHtml)と参照設定を第1段の産物へ組み込み、
+#           dist/final/ へ書き出す。**当方CIでは実行できない**(実Excelが要る)。
+# ここは「第2段の産物が返ってきたときに、当方の目で見る」ための検査である。
+# CI では dist/final/ が無いので SKIP(赤にしない)。
+#
+# 見るもの(4条件):
+#   (1) モジュール集合 = 台帳の ship 集合(標準モジュール) + navi 8本 + フォーム1
+#       -> 第2段が「入れ忘れた」「余計なものを入れた」を止める。
+#   (2) 参照設定が VBA / Excel / stdole / Office / SHDocVw / MSForms の6つだけ
+#       -> 参照が増えると配布先の端末で「参照不可」になって全部動かなくなる。
+#   (3) prod の禁止文字列が bin に無い(⑥と同じ表を共有する)
+#   (4) ui/ の5本が本体と同じフォルダに同梱されている
+# ==============================================================================
+FINAL_DIR_NAME = "final"
+# UserForm の器と、その中で使う HTML 画面の資産。
+FINAL_FORM_NAME = "frmNaviHtml"
+FINAL_UI_FILES = ("index.html", "style.css", "markdown.js", "views.js", "app.js")
+# 第2段が足してよい参照設定(これ以外が1つでもあれば失格)。
+#   VBA/Excel/stdole/Office = どの xlsm にも既定で入っている4つ
+#   SHDocVw  = Microsoft Internet Controls(WebBrowser)
+#   MSForms  = Microsoft Forms 2.0(UserForm)
+FINAL_ALLOWED_REFS = ("VBA", "Excel", "stdole", "Office", "SHDocVw", "MSForms")
+
+
+def _final_expected_modules() -> tuple[set, set]:
+    """(標準モジュール名の集合, フォーム名の集合) を build/modules.json から。"""
+    import json
+    data = json.loads((REPO_ROOT / "build" / "modules.json").read_text(encoding="utf-8"))
+    std, forms = set(), set()
+    for m in data["modules"]:
+        if m.get("ship") is False:
+            continue                      # prod の配布物から外す印(裁定書27)
+        if m.get("type") == "form":
+            forms.add(m["name"])
+        else:
+            std.add(m["name"])
+    return std, forms
+
+
+# 第2段のスクリプト(開発PCでしか動かないので、当方CIは**在ることと形**だけ見る)。
+STAGE2_SCRIPT = REPO_ROOT / "build" / "win" / "import_navi_modules.ps1"
+# 落としてはいけない要素。ここが消えると第2段の産物が静かに欠ける。
+STAGE2_REQUIRED = (
+    ("開発PC専用", "開発PC専用である旨の注記"),
+    ("frmNaviHtml.frm", "UserForm の取り込み"),
+    ("frmNaviHtml.frx", ".frx の対の確認"),
+    ("{EAB22AC0-30C1-11CF-A7EB-0000C05BAE0B}", "Microsoft Internet Controls の参照設定"),
+    ("archived_at", "案件一覧 26列目の追加"),
+    ("tests_expected", "config の期待本数"),
+    ("wintest\\tests_expected.txt", "期待本数を台帳から読むこと(直書き禁止)"),
+    ("BN_DATA_KEYS", "data_key 32値を値源から読むこと(直書き禁止)"),
+    ("'s1,s2,s3,s4,pf,sp,wt,fg,s2c,s3c,s2r,s3r,ch'", "run_log!step に ch を足すこと"),
+    ("リスク提案ナビ.xlsm", "出力の名前を変えないこと"),
+)
+# 第2段のスクリプトに**書いてはいけない**もの(直書きの期待本数など)。
+STAGE2_FORBIDDEN = (
+    ("tests_expected='8", "期待本数の直書き(wintest/tests_expected.txt から読むこと)"),
+    ("Risk-consulting-Navi", "髙橋さん側の製品名(当方の名前は「リスク提案ナビ」)"),
+)
+
+
+def check_stage2_script() -> tuple[bool, list[str]]:
+    """第2段のスクリプトの存在と必須文字列(裁定書34 §1.1)。実行はしない。"""
+    print("\n" + "=" * 78)
+    print("裁定書34 §1.1 第2段のスクリプト(build/win/import_navi_modules.ps1)")
+    print("=" * 78)
+    problems: list[str] = []
+    if not STAGE2_SCRIPT.exists():
+        print(f"  FAIL: {STAGE2_SCRIPT.relative_to(REPO_ROOT)} がありません")
+        return False, ["第2段のスクリプトがありません"]
+    text = STAGE2_SCRIPT.read_text(encoding="utf-8", errors="replace")
+    for needle, why in STAGE2_REQUIRED:
+        if needle not in text:
+            problems.append(f"第2段のスクリプトに {why} がありません(探した語: {needle})")
+    for needle, why in STAGE2_FORBIDDEN:
+        if needle in text:
+            problems.append(f"第2段のスクリプトに書いてはいけないもの: {why}")
+    print(f"  必須 {len(STAGE2_REQUIRED)}項目 / 禁止 {len(STAGE2_FORBIDDEN)}項目 : "
+          f"{'OK' if not problems else f'{len(problems)}件 NG'}")
+    for p in problems:
+        print(f"  FAIL: {p}")
+    return not problems, problems
+
+
+def check_final(book: Path) -> tuple[bool, list[str]]:
+    print("\n" + "=" * 78)
+    print("裁定書34 §0.3 --final 第2段(開発PC)の産物の検査")
+    print("=" * 78)
+
+    problems: list[str] = []
+    if not book.exists():
+        print(f"  SKIP: {book} がありません"
+              "(第2段は Windows 実Excel を持つ開発PCで作ります。CIでは作れません)")
+        return True, []
+
+    sys.path.insert(0, str(REPO_ROOT / "build"))
+    import ovba_write   # noqa: E402
+    import build_rpn    # noqa: E402  (禁止文字列の表を共有する)
+
+    with zipfile.ZipFile(book) as z:
+        names = z.namelist()
+        if "xl/vbaProject.bin" not in names:
+            print("  FAIL: xl/vbaProject.bin がありません")
+            return False, [f"{book.name}: xl/vbaProject.bin がありません"]
+        vba_bin = z.read("xl/vbaProject.bin")
+
+    # --- (1) モジュール集合 ---------------------------------------------------
+    got_info = ovba_write.read_modules(vba_bin)
+    got = set(got_info.keys()) - {"ThisWorkbook"}
+    # シートの文書モジュール(Sheet1 等)は Excel が勝手に作るので数えない。
+    got = {n for n in got
+           if got_info[n].get("type") != "document" or n == FINAL_FORM_NAME}
+    want_std, want_forms = _final_expected_modules()
+    want = want_std | want_forms
+    missing = sorted(want - got)
+    extra = sorted(got - want)
+    print(f"  モジュール: 期待 {len(want)} / 実際 {len(got)}")
+    for n in missing:
+        problems.append(f"第2段の産物にモジュールがありません: {n}")
+    for n in extra:
+        problems.append(f"第2段の産物に台帳に無いモジュールがあります: {n}")
+    if missing:
+        print(f"    不足: {', '.join(missing)}")
+    if extra:
+        print(f"    余分: {', '.join(extra)}")
+
+    # --- (2) 参照設定 ---------------------------------------------------------
+    # dir ストリームの REFERENCENAME レコードから名前を拾う。ライブラリ名は
+    # ASCII なので、bin から直接探すより dir を読むほうが誤検出が少ない。
+    refs = sorted(set(ovba_write.read_reference_names(vba_bin))) \
+        if hasattr(ovba_write, "read_reference_names") else None
+    if refs is None:
+        print("  参照設定  : 読み取り口がありません(ovba_write.read_reference_names 未実装)")
+        problems.append("参照設定を読み取れません"
+                        "(build/ovba_write.py に read_reference_names が要ります)")
+    else:
+        print(f"  参照設定  : {', '.join(refs) if refs else '(なし)'}")
+        for r in refs:
+            if r not in FINAL_ALLOWED_REFS:
+                problems.append(f"許可していない参照設定があります: {r}"
+                                f"(許可: {', '.join(FINAL_ALLOWED_REFS)})")
+        for r in ("SHDocVw", "MSForms"):
+            if r not in refs:
+                problems.append(f"必要な参照設定がありません: {r}"
+                                "(HTML画面が起動しません)")
+
+    # --- (3) 禁止文字列(prod) ------------------------------------------------
+    hits = build_rpn.forbidden_strings_in_bin(vba_bin, prod=True)
+    print(f"  禁止文字列: {hits if hits else 'なし'}")
+    for h in hits:
+        problems.append(f"第2段の産物に配布禁止の文字列があります: {h}")
+
+    # --- (4) ui/ の同梱 -------------------------------------------------------
+    ui_dir = book.parent / "ui"
+    missing_ui = [n for n in FINAL_UI_FILES if not (ui_dir / n).exists()]
+    print(f"  ui/       : {len(FINAL_UI_FILES) - len(missing_ui)}/{len(FINAL_UI_FILES)} 本")
+    for n in missing_ui:
+        problems.append(f"第2段の産物と同じフォルダに ui/{n} がありません")
+
+    for p in problems:
+        print(f"  FAIL: {p}")
+    if not problems:
+        print("  PASS: 4条件(モジュール集合 / 参照設定6つ / 禁止文字列不在 / ui 5本)")
+    return not problems, problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="リスク提案ナビ 出荷前検問(T-46 ①②③ + 裁定書27 ⑥ + 裁定書28 ⑦ + 裁定書31 ⑧)")
     ap.add_argument("--src", default=str(REPO_ROOT / "src"))
     ap.add_argument("--dist", default=str(REPO_ROOT / "dist"))
+    ap.add_argument("--final", nargs="?", const="", default=None,
+                    help="第2段(開発PC)の産物を検査する(裁定書34 §0.3)。"
+                         "パスを省くと <dist>/final/リスク提案ナビ.xlsm。"
+                         "ファイルが無ければ SKIP(CIを赤にしない)")
     args = ap.parse_args()
 
     ok1, _ = check_item1(Path(args.src).resolve())
@@ -703,6 +881,14 @@ def main() -> int:
     ok6, _ = check_item6(Path(args.dist).resolve())
     ok7, _ = check_item7(Path(args.dist).resolve())
     ok8, _ = check_item8(Path(args.dist).resolve())
+
+    ok_final = None
+    if args.final is not None:
+        ok_script, _ = check_stage2_script()
+        final_book = (Path(args.final).resolve() if args.final
+                      else Path(args.dist).resolve() / FINAL_DIR_NAME / PROD_BOOK_NAME)
+        ok_book, _ = check_final(final_book)
+        ok_final = ok_script and ok_book
 
     print("\n" + "-" * 78)
     print(f"① 外部由来テキストの直書き検査 : {'PASS' if ok1 else 'FAIL'}")
@@ -714,7 +900,12 @@ def main() -> int:
     print(f"⑥ 配布物のAV表面積と経路の固定 : {'PASS' if ok6 else 'FAIL'}")
     print(f"⑦ 起動ランチャー(.bat)の形    : {'PASS' if ok7 else 'FAIL'}")
     print(f"⑧ 手順書のbatと配布batの一致   : {'PASS' if ok8 else 'FAIL'}")
+    if ok_final is not None:
+        print(f"⑨ 第2段の産物(--final)        : {'PASS/SKIP' if ok_final else 'FAIL'}")
     print("-" * 78)
+    if ok_final is False:
+        print("結果: NG(exit code 1) - 1つでも落ちたら出荷しない")
+        return 1
     if ok1 and ok2 and ok3 and ok6 and ok7 and ok8:
         print("結果: ①②③⑥⑦⑧ PASS(exit code 0)。**出荷には④⑤の実機確認が別途必要です**")
         return 0

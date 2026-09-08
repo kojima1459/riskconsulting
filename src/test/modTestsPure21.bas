@@ -25,6 +25,7 @@ Option Explicit
 '      `limit` / `ribbon_*` は対象外)。
 '   07 modRibbonWire.LooksRibbonCut の正例2(切れた形)・負例2(閉じている形・空)。
 '
+'   末尾から modTestsPure22.RunAll(W12-A・裁定書34)を呼ぶ。
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
 ' ============================================================================
@@ -49,6 +50,9 @@ WC:
 WD:
     On Error GoTo FD
     T_W11C_LooksRibbonCut
+WE:
+    On Error GoTo FE
+    modTestsPure22.RunAll
 WDone:
     Exit Sub
 FA:
@@ -62,6 +66,9 @@ FC:
     Resume WD
 FD:
     GroupFail "W11C LooksRibbonCut(裁定書33 C-4)"
+    Resume WE
+FE:
+    GroupFail "W12A 純層(裁定書34 §1.3)"
     Resume WDone
 End Sub
 

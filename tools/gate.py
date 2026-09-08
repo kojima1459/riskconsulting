@@ -53,7 +53,10 @@ GATES = [
      r"OK: 全\d+項目一致"),
     ("sheet-kb",     [sys.executable, "tools/sheet_check.py", "--kb"],
      r"OK: 全\d+項目一致"),
-    ("ship",         [sys.executable, "tools/ship_check.py"],
+    # 裁定書34 §1.1/§0.3(W12-A): --final を付けると、第2段のスクリプト
+    #   (build/win/import_navi_modules.ps1)の存在と必須文字列も見る。第2段の
+    #   産物(dist/final/)は CI には無いので SKIP になり、赤にはならない。
+    ("ship",         [sys.executable, "tools/ship_check.py", "--final"],
      r"結果: .*PASS"),
     # 裁定書27 W9-A: 配布 vbaProject.bin を「別実装で読み戻す」2本。
     #   bin-roundtrip = olevba で解凍して src/ とバイト比較(中身の検問)
@@ -81,6 +84,11 @@ GATES = [
     #   modSchemas は既定 WARN(--strict-docs で昇格。裁定待ちの保留)。
     ("wire",         [sys.executable, "tools/ribbon_wire_check.py"],
      r"結果: OK"),
+    # 裁定書34 §1.4(W12-A): HTML画面(ui/ と src/ui/navi/)の配線と閉じ込め。
+    #   lint はVBAしか読まず、LO はフォームを知らないので、その隙間だけを見る。
+    #   HTML画面が実際に描かれるかは Windows 実機でしか確認できない(Z-43)。
+    ("ui",           [sys.executable, "tools/ui_check.py"],
+     r"結果: OK 6条件"),
 ]
 
 

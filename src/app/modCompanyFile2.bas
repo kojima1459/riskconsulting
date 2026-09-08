@@ -37,7 +37,7 @@ Private Const C2_HDR_NOTES As String = "round_no;case_id;note_kind;tag;seq;conte
 ' 裁定書28(W10)の3枚。dossier_case は 13章§2.1 案件一覧の全列(物理順)＋
 '   schema_version、dossier_data は 13章§2.2 case_data と同じ縦持ち、
 '   dossier_judge は 13章§2.7 判断台帳の全列＋case_id/round_no。
-Private Const C2_HDR_CASE As String = "case_id;case_type;dossier_tier;parent_case_id;company;industry_code;industry_name;channel;kanji;bid;reins;other_insurers;status;created_at;updated_at;owner;adopted_story_nos;focus_line_ids;ppt_path;report_path;note;s4_variant;round_no;last_ok_step;failed_step;schema_version;pii_flag"
+Private Const C2_HDR_CASE As String = "case_id;case_type;dossier_tier;parent_case_id;company;industry_code;industry_name;channel;kanji;bid;reins;other_insurers;status;created_at;updated_at;owner;adopted_story_nos;focus_line_ids;ppt_path;report_path;note;s4_variant;round_no;last_ok_step;failed_step;archived_at;schema_version;pii_flag"
 Private Const C2_HDR_DATA As String = "case_id;data_key;seq;content;saved_at"
 Private Const C2_HDR_JUDGE As String = "case_id;round_no;judge_id;judged_at;line_id;recorded_by;case_ref;situation;decision;factor_note;key_reason;result;post_loss"
 
@@ -45,9 +45,11 @@ Private Const C2_HDR_JUDGE As String = "case_id;round_no;judge_id;judged_at;line
 ' 未定義名になるため数値で持つ。
 Private Const C2_XLSX_FORMAT As Long = 51
 Private Const C2_DIR_UP As Long = -4162
+' xlToLeft。EnsureNaviCaseHeader が見出し行の右端を探すために使う(裁定書34)。
+Private Const C2_DIR_LEFT As Long = -4159
 ' 裁定書28: dossier_case が26列(統合W10の pii_flag で27列)になったため 20 -> 30
-'   へ広げた(見出しの右端を
-'   読み落とすと FindHeaderCol が列を見つけられず、その列が黙って空になる)。
+'   へ広げた(裁定書34 で archived_at が入り28列)。見出しの右端を
+'   読み落とすと FindHeaderCol が列を見つけられず、その列が黙って空になる。
 Private Const C2_SCAN_COLS As Long = 30
 Private Const C2_SEP As String = ";"
 
@@ -412,7 +414,12 @@ Private Sub EnsureSheet(ByVal wb As Object, ByVal sheetTitle As String, ByVal hd
 
     Dim ws As Object
     Set ws = DossierSheet(wb, sheetTitle)
-    If Not ws Is Nothing Then Exit Sub
+    If Not ws Is Nothing Then
+        ' 裁定書34 §1.2(W12-A): 既に育っているファイルにも archived_at を足す。
+        '   列を並べ替えず**末尾へ1列足すだけ**なので、旧ファイルの他の列は動かない。
+        If sheetTitle = "dossier_case" Then EnsureNaviCaseHeader ws
+        Exit Sub
+    End If
 
     Set ws = wb.Worksheets.Add(, wb.Worksheets(wb.Worksheets.Count))
     ws.Name = sheetTitle
@@ -488,3 +495,28 @@ Private Function ToLongSafe(ByVal v As Variant) As Long
 Zero0:
     ToLongSafe = 0
 End Function
+
+' ============================================================================
+' EnsureNaviCaseHeader - 旧い企業ファイルの dossier_case へ archived_at を足す
+'   (裁定書34 §1.2・W12-A)。既にあれば何もしない。走査幅 C2_SCAN_COLS を
+'   埋めきっているファイルには足さない(SheetBlock が読めない列を作らない)。
+' ============================================================================
+Private Sub EnsureNaviCaseHeader(ByVal ws As Object)
+    On Error GoTo Failed
+
+    Dim hdr As Variant
+    hdr = SheetBlock(ws, 2)
+    If modUtil.FindHeaderCol(hdr, "archived_at") > 0 Then Exit Sub
+
+    Dim lastCol As Long
+    lastCol = ws.Cells(1, ws.Columns.Count).End(C2_DIR_LEFT).Column
+    If lastCol >= C2_SCAN_COLS Then Err.Raise 5, C2_SRC, "dossier_case_no_free_column"
+
+    modUtilText.SetCellSafe ws.Cells(1, lastCol + 1), "archived_at", "dossier_case/header"
+    Exit Sub
+
+Failed:
+    modLog.LogError "E0603", C2_SRC & ".EnsureNaviCaseHeader", "header_add_failed", Err.Number
+    Resume Ignore1
+Ignore1:
+End Sub

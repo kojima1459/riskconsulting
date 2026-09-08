@@ -287,11 +287,22 @@ PURE_ALLOWLIST = [
     #   (modRibbonSim)で mock 応答の往復を検査し、modRibbonWire.LooksRibbonCut の
     #   正負を叩く。modTestsPure20.RunAll の末尾から呼ぶ。
     "modTestsPure21",
+    # modTestsPure22: W12-A(裁定書34 §1.3)の純層3本。data_dir.txt の1行の
+    #   親フォルダ(modUtil.PointerParentOf)。modTestsPure21.RunAll の末尾から呼ぶ。
+    "modTestsPure22",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON
     #   の逐語模擬。純関数だけなので層(a)から直接叩ける(裁定書33 C-3)。
     "modRibbonSim",
+    # W12-A(裁定書34)。HTML画面(navi)の純層。テストが叩くのは
+    #   modNaviJson  : IsValidJson / Q / StringField / ObjectField / RawField(全部純関数)
+    #   modNaviHost  : IsAllowed(action許可リスト。16章 E-67)/ DisplayMessage(言い換え)
+    #   modGatewayRPN2: TrimHistoryPairs(履歴の切詰め。16章E-44)
+    # だけで、フォーム・WebBrowser・シートに触れる関数は実行に到達しない(技術メモ4)。
+    # modBootNavi は DisplayMessage が製品名を引く AppDisplayName のためだけに要る。
+    "modNaviJson", "modNaviHost", "modGatewayRPN2", "modBootNavi",
+    "modTestsPureNavi",
 ]
 
 # ==============================================================================
@@ -304,6 +315,38 @@ PURE_ALLOWLIST = [
 # ==============================================================================
 DEV_ONLY_EXTRA = ["modGatewayDirect", "modTestsPureDev"]
 DEV_ONLY_ENTRY = "modTestsPureDev"
+
+# ==============================================================================
+# LO専用スタブ(裁定書34 §1.4・W12-A)
+# ------------------------------------------------------------------------------
+# LibreOffice Basic は UserForm(MSForms)も SHDocVw.WebBrowser も知らないので、
+# src/ui/navi/frmNaviHtml.frm は LO へ持ち込めない。ところが modNaviHost は
+# `Private gForm As frmNaviHtml` と型名で参照している。ここで**同名の空の標準
+# モジュール**を LO 側にだけ足して名前を埋める。
+#
+#   ・**LO 経路にしか入らない**(src/ の下に置かない = build/modules.json にも
+#     載らない = 配布 bin にも入らない)。
+#   ・ファイル名は `<モジュール名>_stub.bas`。中の Attribute VB_Name が実名。
+#   ・スタブの Public と実フォームの Public が一致することは
+#     tools/ui_check.py (5) が別に照合する(片方だけ増える事故を止める)。
+#   ・スタブは何も返さない。「LOで通ったから実機でも動く」と読めてしまう
+#     偽の緑を作らないため(HTML画面の描画の確認は Windows 実機だけ。Z-43)。
+LO_STUB_DIR = REPO_ROOT / "wintest" / "lo_stubs"
+LO_STUB_SUFFIX = "_stub.bas"
+
+
+def discover_lo_stubs() -> list[tuple[str, Path]]:
+    """(モジュール名, パス) のリスト。実名は Attribute VB_Name を読む。"""
+    out = []
+    if not LO_STUB_DIR.is_dir():
+        return out
+    for path in sorted(LO_STUB_DIR.glob("*" + LO_STUB_SUFFIX)):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r'^\s*Attribute\s+VB_Name\s*=\s*"([^"]*)"', text, re.MULTILINE)
+        name = m.group(1) if m else path.stem[: -len("_stub")]
+        out.append((name, path))
+    return out
+
 
 TEMPLATE_PROFILE_DIR = Path(tempfile.gettempdir()) / "rpn_lo_template_profile"
 
@@ -811,6 +854,21 @@ def main() -> int:
     template = ensure_template_profile(soffice, args.verbose)
 
     pairs = discover_modules(src_root)
+
+    # LO専用スタブ(裁定書34 §1.4)。src/ に同じ名前が実在するなら、それは
+    # 「スタブが要らなくなった(あるいは名前がぶつかった)」ということなので、
+    # 黙って上書きせずに落とす(合格側へ倒さない)。
+    stubs = discover_lo_stubs()
+    if stubs:
+        src_names = {nm for nm, _ in pairs}
+        clash = sorted(nm for nm, _ in stubs if nm in src_names)
+        if clash:
+            print(f"[run_lo_tests] LO専用スタブの名前が src/ の実モジュールと衝突: "
+                  f"{', '.join(clash)}。wintest/lo_stubs/ から削除してください。")
+            return 2
+        pairs = pairs + stubs
+        print(f"[run_lo_tests] LO専用スタブを注入(配布物には入りません): "
+              f"{', '.join(nm for nm, _ in stubs)}")
 
     # モード別ソース(裁定書30 裁定1(b))。同じモジュール名の .bas が2本ある
     # ことがあり、どちらが prod でどちらが dev かの**唯一の値源は
