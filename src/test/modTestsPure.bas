@@ -233,7 +233,7 @@ Private Sub T_SanitizeInput()
     ChkS "SanitizeInput_制御文字を除去_E04", _
         modUtilText.SanitizeInput("A" & Chr(1) & "B"), "AB"
     ChkS "SanitizeInput_私用領域文字を除去_E04", _
-        modUtilText.SanitizeInput("A" & ChrW(&HE000) & "B"), "AB"
+        modUtilText.SanitizeInput("A" & ChrW(&HE000&) & "B"), "AB"
     ChkS "SanitizeInput_改行は保持_15章原則9の1行属性規定", _
         modUtilText.SanitizeInput("A" & vbLf & "B"), "A" & vbLf & "B"
 End Sub
@@ -303,7 +303,7 @@ Private Sub T_ExtractJsonBlock()
         modJsonLite.ExtractJsonBlock("{" & ChrW(&H201C) & "a" & ChrW(&H201D) & ":1}"), _
         "{""a"":1}"
     ChkS "ExtractJsonBlock_全角二重引用符UFF02を半角化_14章§5P0", _
-        modJsonLite.ExtractJsonBlock("{" & ChrW(&HFF02) & "a" & ChrW(&HFF02) & ":1}"), _
+        modJsonLite.ExtractJsonBlock("{" & ChrW(&HFF02&) & "a" & ChrW(&HFF02&) & ":1}"), _
         "{""a"":1}"
     ChkS "ExtractJsonBlock_全角角括弧と全角読点を半角化_14章§5P0", _
         modJsonLite.ExtractJsonBlock("{""a""：［1，2］}"), "{""a"":[1,2]}"
