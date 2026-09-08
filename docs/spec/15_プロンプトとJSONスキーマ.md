@@ -870,7 +870,7 @@ S2の {{menusText}}（MenusSummaryFor）は **ID・名称・対応カテゴリ�
 例: 整形（modKnowledge。menusText=MenusFor / linesText=LinesText / schemesText=SchemesFor / casesText=CasesFor）。**本文ではない**（§10.1(a)。突合対象外）
 ```
 [M-0012] 食品工場リスク診断サービス | 概要:… | 対応カテゴリ:manufacturing_quality;supply_chain
-[L-03] 生産物賠償責任保険(PL保険) | 市場環境:再保険料率の上昇で限度額に慎重
+[L-04] 賠償責任(一般) | 市場環境:再保険料率の上昇で限度額に慎重な傾向があり、案件による個別判断が求められる。
 [L-07] 企業総合賠償責任保険
 [S-0004] 見守りヤモリ型(P2) | 構造:検知パートナー×有事補償バンドル | 成立条件:…;…;… | 適用シグナル:…
 [K-0003] 業種:09 顧客像:… 提示リスク:… 提案:… 決め手:…
