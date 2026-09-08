@@ -479,6 +479,8 @@ endlocal
 - 利用者にも開発側にも「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」の設定は**不要**（開発担当が検証PCで使う設定は `docs/28_開発担当専用_検証PCの設定.md` へ物理分離した。利用者には配らない。v5.1・裁定書27 W9-C1）。
 - Windowsで焼く／Macで焼かない、という区別も**不要**（ビルドはLinuxで完結する）。
 
+**外部プロセスの起動について（v7.1・姉妹PJ MyBookshelf 実測 2026-09-08）**: Excel マクロから WMI や `cmd.exe` 経由で外部プログラム（例: Ghostscript）を起動すると、Defender の AMSI に検知されて **Office ごと強制終了**した。本製品は外部プロセスを一切起動しない（`Shell`／`WScript.Shell`／WMI／`Declare` は `tools/vba_lint.py` が禁止し、URLは `FollowHyperlink` だけで開く）ので影響はない。将来どうしても必要になった場合は、VBA の `Shell` で exe を直接起動し、終了は kernel32 の `OpenProcess`／`GetExitCodeProcess` で見る形が安全側とされる（`Declare` の例外裁定と会社PCでの実測が前提。ログは Ghostscript なら `-sstdout=` で取れる）。
+
 **当面の運用**: 会社PCでの焼き付けは**行わない**（そもそも作業自体が無くなった）。新方式のファイルが実Excelで正しく開くかは、まず利用者の私物Mac（会社のウイルス対策ソフトの外）で確認し、そのうえで会社PCへ持ち込む。
 
 > **Macは製品としては非対応**である（17章 Z-20）。v3.4・裁定書27 W9-B でWindows前提の部品（クリップボードの遅延バインド・メモ帳の起動・`ADODB.Stream`・`Declare`）はすべて撤去したが、動作を確かめているのはWindowsだけである。私物Macでの確認は「VBAプロジェクトが壊れずに読み込めるか・画面が出るか」を見るためのものであり、機能の検証ではない。
