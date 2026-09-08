@@ -441,7 +441,7 @@ Public Function BuildS3User() As String
     s = s & "      ""target_risk_nos"": [1, 3]," & vbLf
     s = s & "      ""target_gap_nos"": [1]," & vbLf
     s = s & "      ""menu_ids"": [""M-0012""]," & vbLf
-    s = s & "      ""line_ids"": [""L-03""]," & vbLf
+    s = s & "      ""line_ids"": [""L-04""]," & vbLf
     s = s & "      ""scheme_id"": ""S-0004 または \""\""""," & vbLf
     s = s & "      ""pitch"": ""提案の筋書き(リスク→対策→当社の支援、の順で200字以内)""," & vbLf
     s = s & "      ""similar_case_id"": ""K-0003 または \""\""""," & vbLf

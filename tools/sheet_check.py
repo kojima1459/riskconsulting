@@ -63,14 +63,14 @@ PROD_OMITTED_CONFIG_KEYS = ("direct_api_base",)
 SHEETS_KB_JSON = REPO_ROOT / "build" / "sheets_kb.json"
 DEFAULT_KB_BOOKS = (REPO_ROOT / "dist" / "ナレッジブック.xlsx",)
 
-# 15章§8.1「mock応答に現れるIDは…M-0012/L-03/S-0004/K-0003/P9/MC-0107のみ」。
+# 15章§8.1「mock応答に現れるIDは…M-0012/L-04/S-0004/K-0003/P9/MC-0107のみ」。
 # 17章T-14が「mock実行前にこれらの行がナレッジ雛形(T-03)へ投入済みであること」を
 # 前提にしているため、KB照合(--kb)の一部としてここでも突合する(build_rpn.py
 # --kb の自己検証と同じ台帳。二重実装ではなく、13章側とビルド側それぞれの
 # 出口で同じ事実を検査する)。
 KB_MOCK_ROW_IDS = {
     "メニュー一覧": "M-0012",
-    "種目マスタ": "L-03",
+    "種目マスタ": "L-04",
     "型ライブラリ": "S-0004",
     "成功事例": "K-0003",
     "パターンマスタ": "P9",
