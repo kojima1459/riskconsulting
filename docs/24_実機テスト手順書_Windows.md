@@ -481,6 +481,8 @@ endlocal
 
 **外部プロセスの起動について（v7.1・姉妹PJ MyBookshelf 実測 2026-09-08）**: Excel マクロから WMI や `cmd.exe` 経由で外部プログラム（例: Ghostscript）を起動すると、Defender の AMSI に検知されて **Office ごと強制終了**した。本製品は外部プロセスを一切起動しない（`Shell`／`WScript.Shell`／WMI／`Declare` は `tools/vba_lint.py` が禁止し、URLは `FollowHyperlink` だけで開く）ので影響はない。将来どうしても必要になった場合は、VBA の `Shell` で exe を直接起動し、終了は kernel32 の `OpenProcess`／`GetExitCodeProcess` で見る形が安全側とされる（`Declare` の例外裁定と会社PCでの実測が前提。ログは Ghostscript なら `-sstdout=` で取れる）。
 
+**追記（v7.2・姉妹PJ実測 2026-09-08 第2報）**: 姉妹PJが会社PC（同じAIリボン環境・32bit Excel）で上記の安全側の形＝`Shell()` で `gswin32c.exe` を直接起動し、kernel32 の `OpenProcess`／`GetExitCodeProcess`／`WaitForSingleObject`／`QueryFullProcessImageNameA`／`TerminateProcess`／`CloseHandle` を `Declare`（`#If Win64` で `PtrSafe` 分岐）して終了監視する構成＝を実走したところ、**Defender の警告・通知は一切出ず正常に動いた**（`cmd.exe`／WMI（`Win32_Process`）／`WScript.Shell` は経路から全部除去）。解釈: 落とされていたのは `Declare` そのものではなく「マクロ→WMI→`cmd.exe` のバッチ的な1行」という挙動パターン。ただし**1台・1回の実測**であり、会社PCは Defender のバージョン表示画面も閲覧制限で確認できない。本製品の `Declare` 禁止（lint）は**据え置く**。将来緩めるなら「WMI／`cmd.exe`／`WScript` を通さない」を必須条件とし、緩和は裁定書で行う。
+
 **当面の運用**: 会社PCでの焼き付けは**行わない**（そもそも作業自体が無くなった）。新方式のファイルが実Excelで正しく開くかは、まず利用者の私物Mac（会社のウイルス対策ソフトの外）で確認し、そのうえで会社PCへ持ち込む。
 
 > **Macは製品としては非対応**である（17章 Z-20）。v3.4・裁定書27 W9-B でWindows前提の部品（クリップボードの遅延バインド・メモ帳の起動・`ADODB.Stream`・`Declare`）はすべて撤去したが、動作を確かめているのはWindowsだけである。私物Macでの確認は「VBAプロジェクトが壊れずに読み込めるか・画面が出るか」を見るためのものであり、機能の検証ではない。
