@@ -700,6 +700,94 @@ CONTRACT: dict[str, dict] = {
     # modTestsExcel2: 30,000字契約(12章§2)による modTestsExcel の分割先。
     # wintest からの入口は RunAllExcelTests のままで、本数だけ合流させる。
     "modTestsExcel2": {"closed": False, "required": ["RunExcelTests2"]},
+    # ---- 裁定書35 §1: W12-A(HTML画面ホスト層)の22件登記。CONTRACT完全性
+    #   (MODULE_REGISTRY⇔CONTRACT)を満たすために追加した。required に入れて
+    #   よいのは14章§6に逐語で書かれた公開名だけ(「等」「系」表記は入れない)。
+    #   全エントリ closed=False(内部の追加Publicは許容する)。
+    # frmNaviHtml: UserForm(.frm)。14章§6に口の宣言なし(HTML画面の器そのもの)。
+    "frmNaviHtml": {"closed": False, "required": []},
+    # modBootNavi: 14章§6 W12-A表(1542行)。LaunchIfHtml は逐語。
+    #   RegisterDefault系は「系」表記のため required に入れない。
+    "modBootNavi": {"closed": False, "required": ["LaunchIfHtml"]},
+    # modConfig: 14章§6に口の宣言なし(configキーの値源はconfigシートで、
+    #   本モジュールの公開関数は§6の登記表に載っていない)。
+    "modConfig": {"closed": False, "required": []},
+    # modGatewayDirect: 14章§6本文(361-383行)。direct経路の6本は逐語のPublic宣言。
+    "modGatewayDirect": {
+        "closed": False,
+        "required": ["CallDirect", "BackoffMs", "RetryBudgetFor",
+                     "ParseKeyLine", "IsOSeriesModel", "BuildRequestBody"],
+    },
+    # modGatewayLink: 14章§6本文123行「`modGatewayRPN.DirectStep` が呼ぶのは接続
+    #   モジュール `modGatewayLink.CallDirect`(14章§6と同一契約)」で逐語に名指し。
+    "modGatewayLink": {"closed": False, "required": ["CallDirect"]},
+    # modGatewayRPN2: 14章§6に口の宣言なし(W12-A裁定書34。modGatewayRPN の
+    #   30,000字契約分割先で、§6は元モジュール名でしか登記していない)。
+    "modGatewayRPN2": {"closed": False, "required": []},
+    # modLog: 14章§6本文(353-359行)。TruncDetail / ShouldRotate は逐語。
+    "modLog": {
+        "closed": False,
+        "required": ["TruncDetail", "ShouldRotate"],
+    },
+    # modMockLlm: 14章§6本文(1427-1443行)。4本は逐語のPublic宣言。
+    "modMockLlm": {
+        "closed": False,
+        "required": ["MockResponse", "ResponseById", "FaultResponse",
+                     "ResetFaultOnce"],
+    },
+    # modNaviActions: 14章§6 W12-A表(1539行)。4本は逐語(「等」の後続は入れない)。
+    "modNaviActions": {
+        "closed": False,
+        "required": ["ActPasteMaterial", "ActSaveMaterials", "ActRunPipeline",
+                     "ActExportReport"],
+    },
+    # modNaviActions2: 14章§6に口の宣言なし。
+    "modNaviActions2": {"closed": False, "required": []},
+    # modNaviChat: 14章§6 W12-A表(1540行)。4本は逐語。
+    "modNaviChat": {
+        "closed": False,
+        "required": ["BuildChatSystem", "Ask", "History", "Clear"],
+    },
+    # modNaviHost: 14章§6 W12-A表(1537行)。5本は逐語。
+    "modNaviHost": {
+        "closed": False,
+        "required": ["OpenNaviTool", "HostDispatchPending", "HostRequestJson",
+                     "CloseNaviTool", "HostWorkbookClose"],
+    },
+    # modNaviJson: 14章§6に口の宣言なし。
+    "modNaviJson": {"closed": False, "required": []},
+    # modNaviState: 14章§6 W12-A表(1538行)。4本は逐語。
+    "modNaviState": {
+        "closed": False,
+        "required": ["BuildAppState", "BuildCaseState", "BuildStageList",
+                     "BuildPrompts"],
+    },
+    # modNaviState2: 14章§6に口の宣言なし。
+    "modNaviState2": {"closed": False, "required": []},
+    # modNaviStore: 14章§6 W12-A表(1541行)。9本は逐語。
+    "modNaviStore": {
+        "closed": False,
+        "required": ["ListCases", "ListInbox", "ListJudgements", "LogRowsOf",
+                     "AppendFeedback", "SetDisplayName", "SetArchived",
+                     "ExportCaseJson", "ImportCaseJson"],
+    },
+    # modRibbonSim: 14章§6に口の宣言なし(W11-c裁定書33 C-3。リボン応答抽出の
+    #   逐語模擬はMODULE_REGISTRYの説明にのみ載る)。
+    "modRibbonSim": {"closed": False, "required": []},
+    # modRibbonWire: 14章§6に口の宣言なし(W11-c裁定書33 C-4。同上)。
+    "modRibbonWire": {"closed": False, "required": []},
+    # modTestsExcelNavi: 14章§6に口の宣言なし(W12-A裁定書34 §1.1。層(b)の
+    #   HTML画面テスト。§6は名前を登記していない)。
+    "modTestsExcelNavi": {"closed": False, "required": []},
+    # modTestsPureDev: 14章§6に口の宣言なし(dev専用の純層テスト。配布物には
+    #   載らない=ship:false)。
+    "modTestsPureDev": {"closed": False, "required": []},
+    # modTestsPureHook: 14章§6に口の宣言なし(dev専用の純層テストの接続点。
+    #   modGatewayLink と同じ同名2ソース)。
+    "modTestsPureHook": {"closed": False, "required": []},
+    # modTestsPureNavi: 14章§6に口の宣言なし(W12-A裁定書34 §1.1。純層のHTML
+    #   画面テスト2本)。
+    "modTestsPureNavi": {"closed": False, "required": []},
 }
 
 # ==============================================================================
