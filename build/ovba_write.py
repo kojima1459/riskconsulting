@@ -739,7 +739,10 @@ def read_modules(vba_bin: bytes) -> dict:
                            else "procedural")
         elif rid == REC_MODULE_TERMINATOR:
             raw = cfb.read(cur.get("stream", cur["name"]))
-            src = ovba.ovba_decompress(raw)[cur["offset"]:]
+            # MODULEOFFSET より前は Excel が付ける performance cache(p-code)で、
+            # 圧縮コンテナは offset から始まる(MS-OVBA 2.3.4.3)。当方 bin は
+            # offset=0 なので従来どおり。Excel 保存後の bin(第2段)はここが要る。
+            src = ovba.ovba_decompress(raw[cur["offset"]:])
             out[cur["name"]] = {"source": src, "type": cur["type"]}
             cur = None
     # PROJECT ストリームの Document= 行だけが「本当の document module」である。

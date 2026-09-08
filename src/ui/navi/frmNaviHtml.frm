@@ -142,13 +142,15 @@ End Sub
 Public Sub ApplyTextScale(ByVal fontScale As String)
     Dim zoom As Variant
     On Error GoTo Failed
+    ' HTML rem units own small/medium/large. Optical zoom only corrects WebOC DPI.
     Select Case fontScale
     Case "small": zoom = CLng(100)
-    Case "large": zoom = CLng(175)
-    Case Else: fontScale = "medium": zoom = CLng(135)
+    Case "large": zoom = CLng(100)
+    Case Else: fontScale = "medium": zoom = CLng(100)
     End Select
     mTextScale = fontScale
     If mBrowser Is Nothing Then Exit Sub
+    zoom = CLng(BaseOpticalZoom())
     mBrowser.ExecWB 63, 2, zoom
     mOpticalZoom = CLng(zoom)
     Exit Sub
@@ -159,6 +161,21 @@ Failed:
     '   埋めない)。文字の大きさは HTML 側の CSS で付いているので表示は続く。
     modLog.LogUsage "zoom_unsupported", vbNullString, fontScale & ":" & CStr(Err.Number)
 End Sub
+Private Function BaseOpticalZoom() As Long
+    Dim scr As Object, systemDpi As Double, layoutDpi As Double, value As Double
+    BaseOpticalZoom = 100
+    On Error GoTo Done
+    Set scr = mBrowser.Document.parentWindow.screen
+    systemDpi = CDbl(scr.systemXDPI)
+    layoutDpi = CDbl(scr.logicalXDPI)
+    If systemDpi < 96 Or layoutDpi < 96 Then Exit Function
+    ' WebOC without a DPI-aware site maps layout pixels using logical/device DPI.
+    ' Normalize CSS pixels to the Windows logical size, independently of text size.
+    value = 100# * (systemDpi / 96#) * (layoutDpi / 96#)
+    If value > 1000# Then value = 1000#
+    BaseOpticalZoom = CLng(value)
+Done:
+End Function
 Public Sub RequestClose()
     On Error GoTo Failed
     If modNaviHost.HostIsBusy() Then Exit Sub

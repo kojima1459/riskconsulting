@@ -376,6 +376,13 @@ class CFBReader:
             etype = e[66]
             start = struct.unpack('<I', e[116:120])[0]
             size = struct.unpack('<I', e[120:124])[0]
+            # 名前だけで引く平坦な表なので、同名のストレージ(type=1)とストリーム
+            # (type=2)が衝突しうる。Excel 保存後の bin ではフォームのストレージ
+            # `frmNaviHtml`(size 0)と `VBA/frmNaviHtml`(コード)が同名になる。
+            # ストリームを優先し、ストレージで上書きしない(W12-A 第2段の検収で判明)。
+            prev = self.entries.get(name)
+            if prev is not None and prev['type'] == 2 and etype != 2:
+                continue
             self.entries[name] = {'type': etype, 'start': start, 'size': size}
 
         # ルートエントリはミニストリームのコンテナを保持する。
