@@ -30,9 +30,13 @@ Option Explicit
 ' ============================================================================
 
 ' 裁定書28: data_dir\設定.txt から上書きしてよいキー(表はここ1箇所)。
+' 裁定書34 §1.2(W12-A): HTML画面が利用者に触らせる3つの見た目設定
+'   (画面の種類・表示サイズ・案件チャットへ資料を渡すか)を足した。
+'   ch_effort / ch_verbosity / app_display_name は**利用者が触らない**ので
+'   ここへは入れない(config シート側の既定値だけで足りる)。
 Public Const SETTINGS_ALLOWED_KEYS As String = _
     "portal_url;dr_url_menu;dr_url_quick;dr_url_full;dr_open_after_copy;" & _
-    "ui_fullscreen;kb_path;data_dir"
+    "ui_fullscreen;kb_path;data_dir;ui_mode;ui_font_scale;chat_include_materials"
 
 Private Const CFG_SHEET As String = "config"
 Private Const CFG_COL_NAME As Long = 1

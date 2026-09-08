@@ -43,11 +43,8 @@ Private Const GW_RB_ERR As String = "(error:"
 Private Const GW_RB_DISCONN As String = "接続切れ"
 Private Const GW_RB_NOTEXT As String = "レスポンスから当該テキストを抽出できません"
 Private Const GW_RB_FILTER As String = "content_filterに該当しました"
-' 待ち時間の安全域(秒)。既定値は 13章§2.3 の llm_wait_sec と同値で、config が
-' 読めないときの最後の砦(通常はconfigの値が使われる。NFR-M3)。
-Private Const GW_WAIT_MIN As Long = 30
-Private Const GW_WAIT_MAX As Long = 7200
-Private Const GW_WAIT_DEFAULT As Long = 1200
+' 待ち時間の安全域(秒)は modGatewayRPN2.ResolveWaitSec が持つ(裁定書34 §1.2 で
+' 30,000字契約のため移設した。値は 13章§2.3 の llm_wait_sec と同値)。
 
 ' リボン検出のセッションキャッシュ(裁定D2)。
 Private mRibbonChecked As Boolean
@@ -155,8 +152,14 @@ End Function
 ' CallChat - 自由対話(PL-04)専用。リボンの会話継続引数 prevU/prevA を使う
 '            唯一の関数(14章§6)。JSONスキーマは使わない。
 ' ----------------------------------------------
-'   histU/histA: 「新しい順」に GW_HIST_SEP 連結した履歴。config
-'                sparring_max_turns 往復を超える分はここで切り捨てる(16章E-44)。
+'   histU/histA: 「新しい順」に GW_HIST_SEP 連結した履歴。config の
+'                sparring_max_turns(壁打ち)/ chat_max_turns(案件チャット)
+'                往復を超える分はここで切り捨てる(16章E-44)。
+'   stepName   : どちらの自由対話として呼ぶか。"sp"=壁打ち(既定・PL-04)/
+'                "ch"=案件チャット(裁定書34 §1.2・W12-A)。19章§3の step enum の
+'                値であり、**この2値以外は "sp" へ倒す**(未知のStep名で
+'                toolN や *_max_tokens を組み立てさせない fail-safe)。
+'                ch は PL-04 のような台本を持たないので run_log の play は空。
 '   ok         : CallStepと同格の帯域外規約(自由対話は最も偽装しやすい経路)。
 '                DecideOk 経由でしか決めない点も同じ。
 '   errCode    : ok=False のときだけ E02xx を帯域外で返す(E-44の「往復数を
@@ -168,7 +171,8 @@ End Function
 Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
                          ByVal userMsg As String, ByVal histU As String, ByVal histA As String, _
                          ByRef ok As Boolean, Optional ByRef errCode As String = "", _
-                         Optional ByRef latencyMs As Long = 0) As String
+                         Optional ByRef latencyMs As Long = 0, _
+                         Optional ByVal stepName As String = "sp") As String
     Dim t0 As Double
     Dim route As String
     Dim rawBody As String
@@ -187,11 +191,17 @@ Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
 
     On Error GoTo Failed
 
+    If stepName <> "ch" Then stepName = "sp"
+
     FlushPendingRun
 
-    maxTurns = modConfig.GetLong("sparring_max_turns", 12)
-    prevU = TrimHistoryPairs(histU, maxTurns)
-    prevA = TrimHistoryPairs(histA, maxTurns)
+    If stepName = "ch" Then
+        maxTurns = modConfig.GetLong("chat_max_turns", 12)
+    Else
+        maxTurns = modConfig.GetLong("sparring_max_turns", 12)
+    End If
+    prevU = modGatewayRPN2.TrimHistoryPairs(histU, maxTurns)
+    prevA = modGatewayRPN2.TrimHistoryPairs(histA, maxTurns)
 
     route = CurrentTransport()
     Select Case route
@@ -199,11 +209,11 @@ Public Function CallChat(ByVal caseId As String, ByVal systemPrompt As String, _
             modelUsed = GW_MOCK
             rawBody = MockChat()
         Case GW_DIRECT
-            rawBody = DirectStep("sp", systemPrompt, userMsg, "", _
+            rawBody = DirectStep(stepName, systemPrompt, userMsg, "", _
                                  modelUsed, errCode, errMsg)
         Case Else
             rawBody = RibbonChat(systemPrompt, userMsg, prevU, prevA, _
-                                 modelUsed, errCode, errMsg)
+                                 modelUsed, errCode, errMsg, stepName)
     End Select
     GoTo Finish
 
@@ -226,7 +236,8 @@ Finish:
         If transportOk Then
             errMsg = ErrMessageFor(errCode)
             modLog.LogError errCode, "modGatewayRPN.CallChat", _
-                            "step=sp transport=" & route & " len=" & CStr(Len(rawBody))
+                            "step=" & stepName & " transport=" & route & _
+                            " len=" & CStr(Len(rawBody))
         ElseIf LenB(errMsg) = 0 Then
             errMsg = ErrMessageFor(errCode)
         End If
@@ -235,8 +246,9 @@ Finish:
 
     rec.case_id = caseId
     rec.round_no = ""
-    rec.stepName = "sp"
-    rec.play = "PL-04"
+    rec.stepName = stepName
+    ' 案件チャットは 15章の台本(PL-**)を持たない対話なので play は空にする。
+    If stepName = "ch" Then rec.play = vbNullString Else rec.play = "PL-04"
     rec.transport = route
     rec.model = modelUsed
     rec.latency_ms = latencyMs
@@ -387,33 +399,6 @@ Public Function ResolveTransport(ByVal mockLlm As Boolean, ByVal transportCfg As
     End Select
 End Function
 
-' toolN の組立(14章§2・裁定D1)。接頭辞は config app_tool_prefix 由来。core層に
-' 製品名を焼かないため接頭辞が空でも動く(stepNameだけを送る)。
-Public Function BuildToolName(ByVal toolPrefix As String, ByVal stepName As String) As String
-    BuildToolName = Trim$(toolPrefix) & Trim$(stepName)
-End Function
-
-' 待ち時間の解決(秒)。config が 0 や負値・異常値でも呼び出しを壊さない。
-Public Function ResolveWaitSec(ByVal cfgWaitSec As Long) As Long
-    If cfgWaitSec <= 0 Then
-        ResolveWaitSec = GW_WAIT_DEFAULT
-        Exit Function
-    End If
-    ResolveWaitSec = modUtil.ClampLong(cfgWaitSec, GW_WAIT_MIN, GW_WAIT_MAX)
-End Function
-
-' MaxTokens の解決。Step別上書き(s1_max_tokens 等)を優先し、無ければ全体値。
-' 0 は「リボン側の既定に従う」を意味するのでそのまま通す。
-Public Function ResolveMaxTokens(ByVal stepMaxTokens As Long, ByVal globalMaxTokens As Long) As Long
-    If stepMaxTokens > 0 Then
-        ResolveMaxTokens = stepMaxTokens
-    ElseIf globalMaxTokens > 0 Then
-        ResolveMaxTokens = globalMaxTokens
-    Else
-        ResolveMaxTokens = 0
-    End If
-End Function
-
 ' 応答が「利用上限の定型拒否文」か(16章E-15・14章§2)。判定は2条件に固定する:
 '   (1) 先頭が "#LIMIT:"(前後の空白は無視)
 '   (2) 本文に「利用上限に達しました」を含む
@@ -549,31 +534,6 @@ Public Function ResolveMockVariant(ByVal stepName As String, ByVal caseType As S
     End Select
 End Function
 
-' 会話履歴の切詰め(16章E-44)。履歴は「新しい順」に GW_HIST_SEP 連結されて
-' 来るので先頭から maxTurns 個だけ残す。
-Public Function TrimHistoryPairs(ByVal hist As String, ByVal maxTurns As Long) As String
-    Dim parts As Variant
-    Dim i As Long
-    Dim n As Long
-    Dim acc As String
-
-    If LenB(hist) = 0 Then Exit Function
-    If maxTurns <= 0 Then Exit Function
-
-    parts = Split(hist, GW_HIST_SEP)
-    n = UBound(parts) - LBound(parts) + 1
-    If n <= maxTurns Then
-        TrimHistoryPairs = hist
-        Exit Function
-    End If
-
-    For i = 0 To maxTurns - 1
-        If i > 0 Then acc = acc & GW_HIST_SEP
-        acc = acc & parts(LBound(parts) + i)
-    Next i
-    TrimHistoryPairs = acc
-End Function
-
 ' エラーコードに対応する人間向け説明(16章§1)。ok=False のときだけ使う文面で
 ' あって、成否の判定材料ではない。
 Public Function ErrMessageFor(ByVal errCode As String) As String
@@ -679,10 +639,10 @@ Private Function RibbonStep(ByVal stepName As String, ByVal systemPrompt As Stri
     End If
 
     temperature = modConfig.GetDouble("temperature", 0.3)
-    maxTok = ResolveMaxTokens(modConfig.GetLong(stepName & "_max_tokens", 0), _
+    maxTok = modGatewayRPN2.ResolveMaxTokens(modConfig.GetLong(stepName & "_max_tokens", 0), _
                               modConfig.GetLong("llm_max_tokens", 0))
-    waitSec = ResolveWaitSec(modConfig.GetLong("llm_wait_sec", 1200))
-    toolN = BuildToolName(modConfig.GetStr("app_tool_prefix", ""), stepName)
+    waitSec = modGatewayRPN2.ResolveWaitSec(modConfig.GetLong("llm_wait_sec", 1200))
+    toolN = modGatewayRPN2.BuildToolName(modConfig.GetStr("app_tool_prefix", ""), stepName)
     effort = ResolveTuning(stepName, "effort")
     verbosity = ResolveTuning(stepName, "verbosity")
 
@@ -713,7 +673,7 @@ End Function
 Private Function RibbonChat(ByVal systemPrompt As String, ByVal userMsg As String, _
                             ByVal prevU As String, ByVal prevA As String, _
                             ByRef modelUsed As String, ByRef errCode As String, _
-                            ByRef errMsg As String) As String
+                            ByRef errMsg As String, ByVal stepName As String) As String
     Dim temperature As Double
     Dim maxTok As Long
     Dim waitSec As Long
@@ -728,17 +688,18 @@ Private Function RibbonChat(ByVal systemPrompt As String, ByVal userMsg As Strin
     If Not RibbonAvailable() Then
         errCode = "E0201"
         errMsg = ErrMessageFor(errCode)
-        modLog.LogError errCode, "modGatewayRPN.CallChat", "step=sp"
+        modLog.LogError errCode, "modGatewayRPN.CallChat", "step=" & stepName
         Exit Function
     End If
 
     temperature = modConfig.GetDouble("temperature", 0.3)
-    maxTok = ResolveMaxTokens(modConfig.GetLong("sp_max_tokens", 0), _
+    ' 裁定書34 §1.2: Step別のconfig(sp_max_tokens / ch_effort 等)は stepName で引く。
+    maxTok = modGatewayRPN2.ResolveMaxTokens(modConfig.GetLong(stepName & "_max_tokens", 0), _
                               modConfig.GetLong("llm_max_tokens", 0))
-    waitSec = ResolveWaitSec(modConfig.GetLong("llm_wait_sec", 1200))
-    toolN = BuildToolName(modConfig.GetStr("app_tool_prefix", ""), "sp")
-    effort = ResolveTuning("sp", "effort")
-    verbosity = ResolveTuning("sp", "verbosity")
+    waitSec = modGatewayRPN2.ResolveWaitSec(modConfig.GetLong("llm_wait_sec", 1200))
+    toolN = modGatewayRPN2.BuildToolName(modConfig.GetStr("app_tool_prefix", ""), stepName)
+    effort = ResolveTuning(stepName, "effort")
+    verbosity = ResolveTuning(stepName, "verbosity")
 
     On Error GoTo RunFailed
     DoEvents
@@ -750,7 +711,7 @@ Private Function RibbonChat(ByVal systemPrompt As String, ByVal userMsg As Strin
 RunFailed:
     errCode = "E0202"
     errMsg = Err.Description
-    modLog.LogError errCode, "modGatewayRPN.CallChat", "step=sp", Err.Number
+    modLog.LogError errCode, "modGatewayRPN.CallChat", "step=" & stepName, Err.Number
     Resume ExitPoint
 
 Delivered:

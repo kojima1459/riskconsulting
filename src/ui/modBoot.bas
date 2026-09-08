@@ -57,8 +57,8 @@ Option Explicit
 ' ============================================================================
 
 Private Const BOOT_SRC As String = "modBoot"
+Private Const BOOT_ENUM_SHEET As String = "enum_hidden"
 Private Const BOOT_GUARD_SHEET As String = "はじめにお読みください"
-Private Const BOOT_DATA_SHEET As String = "case_data"
 ' 保存先(裁定書27 W9-C2)。既定は空で、値源は data_dir.txt(裁定書31 裁定1)。
 ' html_out_dir に値が入っていればそちらを優先する(分けたい管理者向け)。
 ' 裁定書28: 利用者が値を書き換えられる唯一の場所(data_dir の直下)。
@@ -70,29 +70,11 @@ Private Const BOOT_OUT_DIR_KEY As String = "html_out_dir"
 Private Const BOOT_MSG_NO_DATA_DIR As String = _
     "保存先が確認できません。『リスク提案ナビを起動』から開き直してください。" & _
     "このまま使うと、保存したものはこのパソコンの再起動で消えることがあります。"
-Private Const BOOT_ENUM_SHEET As String = "enum_hidden"
-Private Const BOOT_NAME_DATA_KEY As String = "enum_data_key"
-Private Const BOOT_DATA_SCAN_COLS As Long = 20
 
 ' Excel組み込み定数の数値(名前を書かずLibreOffice側の構文チェックで未定義名に
 ' ならないようにする。core側 modConfig/modLog の CFG_DIR_UP 等と同じ流儀)。
 Private Const BOOT_SHEET_HIDDEN As Long = 0        ' xlSheetHidden
-Private Const BOOT_SHEET_VERY_HIDDEN As Long = 2   ' xlSheetVeryHidden
-Private Const BOOT_DV_TYPE_LIST As Long = 3        ' xlValidateList
-Private Const BOOT_DV_ALERT_STOP As Long = 1       ' xlValidAlertStop
 Private Const BOOT_ENABLE_SELECTION_UNLOCKED As Long = 1   ' xlUnlockedCells
-
-' 19章§3レジストリ(data_key・全29値・13章§2.2と完全一致)の内蔵定数複製。
-' modCaseStore3.DataKeys() と同値だが、本モジュール単体で
-' 起動できるよう独立して保持する(値は19章§3/sheets_main.json enums.data_key
-' と完全一致させること)。
-Private Const BOOT_DATA_KEYS As String = _
-    "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;" & _
-    "input_dossier;input_field_notes;input_coverage_note;input_finance;" & _
-    "input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;" & _
-    "s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;" & _
-    "s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;" & _
-    "s4_json_failed;sparring_u;sparring_a"
 
 ' 起動手順の本数(BootStep の Select Case と一致させること)。
 Private Const BOOT_STEP_COUNT As Long = 11
@@ -190,7 +172,7 @@ Private Sub BootStep(ByVal stepNo As Long)
     Case 4
         ' (4) enum入力規則の隠しレンジ複製(11章§5)。data_key(日本語ラベルを
         '     持たない内部キー)は本モジュールが復元する。
-        RestoreDataKeyHiddenRange
+        modBootNavi.RestoreDataKeyHiddenRange
     Case 5
         '     日本語ラベルを持つ24グループは変換表を持つ modUICase が復元する
         '     (19章§3の値を2箇所に書かないため)。
@@ -300,6 +282,9 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "max_context_chars", "40000"
     modConfig.RegisterDefault "t2_max_context_chars", "100000"
     modConfig.RegisterDefault "sparring_max_turns", "12"
+    ' 裁定書34 §1.2: HTML画面・案件チャット・表示名の既定値(30,000字契約のため
+    '   実体は modBootNavi。13章§2.3 と 19章§3 の正はドキュメント側)。
+    modBootNavi.RegisterNaviDefaults
     ' quality_modeはティア連動が既定(下流がdossier_tierから算出)であり単一の
     ' 固定既定値を持たないため、未設定を示す空文字を登録する。
     modConfig.RegisterDefault "quality_mode", vbNullString
@@ -369,76 +354,6 @@ Private Sub ApplyGhostingGuard()
         On Error Resume Next
         DoEvents
     End If
-End Sub
-
-' ----------------------------------------------------------------------------
-' (4) case_data!data_key の入力規則を隠しレンジ参照で有効化する。
-'     veryHiddenシート enum_hidden へ19章§3内蔵定数(全28値)を複製し、
-'     その範囲を指す名前付きレンジをdata_key列のFormula1に張る
-'     (セル参照は入力規則インライン255字制限の対象外。11章§5)。
-' ----------------------------------------------------------------------------
-Private Sub RestoreDataKeyHiddenRange()
-    On Error Resume Next
-    Dim ws As Object
-    Set ws = EnsureEnumHiddenSheet()
-    If ws Is Nothing Then Exit Sub
-
-    Dim vals() As String
-    vals = Split(BOOT_DATA_KEYS, ";")
-
-    Dim i As Long
-    For i = LBound(vals) To UBound(vals)
-        modUtilText.SetCellSafe ws.Cells(i + 1, 1), vals(i), "modBoot/enum_data_key"
-    Next i
-
-    Dim n As Long
-    n = UBound(vals) - LBound(vals) + 1
-    Dim target As Object
-    Set target = ws.Range(ws.Cells(1, 1), ws.Cells(n, 1))
-    ThisWorkbook.Names.Add Name:=BOOT_NAME_DATA_KEY, RefersTo:=target
-
-    ApplyDataKeyValidation
-    On Error GoTo 0
-End Sub
-
-Private Function EnsureEnumHiddenSheet() As Object
-    On Error Resume Next
-    Dim ws As Object
-    Set ws = ThisWorkbook.Worksheets(BOOT_ENUM_SHEET)
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add( _
-            After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-        If Not ws Is Nothing Then
-            ws.Name = BOOT_ENUM_SHEET
-            ws.Visible = BOOT_SHEET_VERY_HIDDEN
-        End If
-    End If
-    Set EnsureEnumHiddenSheet = ws
-    On Error GoTo 0
-End Function
-
-Private Sub ApplyDataKeyValidation()
-    On Error Resume Next
-    Dim ws As Object
-    Set ws = ThisWorkbook.Worksheets(BOOT_DATA_SHEET)
-    If ws Is Nothing Then Exit Sub
-
-    Dim hdr As Variant
-    hdr = ws.Range(ws.Cells(1, 1), ws.Cells(1, BOOT_DATA_SCAN_COLS)).Value
-
-    Dim col As Long
-    col = modUtil.FindHeaderCol(hdr, "data_key")
-    If col <= 0 Then Exit Sub
-
-    Dim target As Object
-    Set target = ws.Range(ws.Cells(2, col), ws.Cells(ws.Rows.Count, col))
-    target.Validation.Delete
-    target.Validation.Add Type:=BOOT_DV_TYPE_LIST, AlertStyle:=BOOT_DV_ALERT_STOP, _
-        Formula1:="=" & BOOT_NAME_DATA_KEY
-    target.Validation.IgnoreBlank = True
-    target.Validation.ErrorTitle = BOOT_DV_ERROR_TITLE
-    target.Validation.ErrorMessage = BOOT_DV_ERROR_MSG
-    On Error GoTo 0
 End Sub
 
 ' ----------------------------------------------------------------------------

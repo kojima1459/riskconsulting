@@ -86,7 +86,9 @@ End Function
 ' 既定ブラウザで開く(Hyperlinks.Add は使わない。11章§8.6 禁忌1)。
 '   開けたら True。EDR等で開けないことがあるので、呼び出し側は必ず
 '   「開けなかったとき」の案内を出す。
-Private Function OpenUrl(ByVal url As String) As Boolean
+'   裁定書34 §1.2: HTML画面(modNaviActions の open_url / open_report)も同じ
+'   1本を通すため Public にした(URLの開き方をもう1つ作らない)。
+Public Function OpenUrl(ByVal url As String) As Boolean
     On Error GoTo Failed
     ThisWorkbook.FollowHyperlink url
     OpenUrl = True

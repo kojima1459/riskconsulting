@@ -691,6 +691,27 @@ def build_vba_project(template_bin: bytes, modules,
 # ===========================================================================
 # 5. 読み戻し(検証用)
 # ===========================================================================
+def read_reference_names(vba_bin: bytes) -> list:
+    """完成品 vbaProject.bin の dir から、参照設定の名前を並び順で返す。
+
+    裁定書34 §1.4(W12-A)。第2段(開発PCの import_navi_modules.ps1)が
+    参照設定を足したあと、増えたのが SHDocVw と MSForms の2つだけであることを
+    tools/ship_check.py --final が確かめるための読み出し口。
+
+    REFERENCENAME(0x0016)の本体が MBCS のライブラリ名そのものである
+    ([MS-OVBA] 2.3.4.2.2.2)。続く 0x003E は同じ名前の UTF-16 版なので読まない。
+    """
+    cfb = ovba.CFBReader(vba_bin)
+    dir_dec = ovba.ovba_decompress(cfb.read("dir"))
+    out = []
+    for _off, rid, _size, body in iter_dir_records(dir_dec):
+        if rid == REC_MODULENAME:
+            break                       # MODULE 群に入ったら参照は終わり
+        if rid == REC_REFERENCENAME:
+            out.append(body.decode("cp932", errors="replace"))
+    return out
+
+
 def read_modules(vba_bin: bytes) -> dict:
     """完成品 vbaProject.bin を読み戻し、モジュール名 -> ソース(bytes)を返す。
 

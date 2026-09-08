@@ -38,10 +38,12 @@ Private Const CS3_SRC As String = "modCaseStore3"
 Private Const CS3_FLD As String = vbVerticalTab
 Private Const CS3_KV As String = vbFormFeed
 
-' 13章§2.2 の data_key(**全29値**。19章§3と完全一致させる)。v2.6 で
+' 13章§2.2 の data_key(**全32値**。19章§3と完全一致させる)。v2.6 で
 '   `input_finance`(決算・財務。裁定書25 S3)を input_coverage_note の次へ足した。
 '   並びは13章§2.2 の列挙順そのままで、modCaseStore.SaveData の許可リストになる。
-Private Const CS3_DATA_KEYS As String = "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;input_dossier;input_field_notes;input_coverage_note;input_finance;input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;s4_json_failed;sparring_u;sparring_a"
+'   裁定書34 §1.2(W12-A): HTML画面の案件チャット(chat_u / chat_a)と、会社情報の
+'   下書き(nav_basics)を末尾へ足して 29 -> 32 値になった。
+Private Const CS3_DATA_KEYS As String = "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;input_dossier;input_field_notes;input_coverage_note;input_finance;input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;s4_json_failed;sparring_u;sparring_a;chat_u;chat_a;nav_basics"
 
 ' DataKeys - 13章§2.2 の data_key 一覧(「;」区切り)。値源はここ1箇所。
 Public Function DataKeys() As String

@@ -81,6 +81,14 @@
       "wave": "T-12"
     },
     {
+      "name": "modGatewayRPN2",
+      "path": "src/core/modGatewayRPN2.bas",
+      "role": "core",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.2(W12-A)。modGatewayRPN が 29,952字で満杯だったため、引数だけで答えが決まる4本(BuildToolName / ResolveWaitSec / ResolveMaxTokens / TrimHistoryPairs)を移した。挙動は移設前と同じで、純層テストの参照先だけが変わる。"
+    },
+    {
       "name": "modGatewayLink",
       "path": "src/core/modGatewayLink.bas",
       "dev_src": "src/core/dev/modGatewayLink.bas",
@@ -366,6 +374,14 @@
       "wave": "T-16"
     },
     {
+      "name": "modBootNavi",
+      "path": "src/ui/modBootNavi.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.2(W12-A)。modBoot の分割先(残り357字だった)。HTML画面の config 既定値(RegisterNaviDefaults)・ui_mode=html の起動判断(LaunchIfHtml。16章 E-64)・case_data!data_key の入力規則(RestoreDataKeyHiddenRange)。"
+    },
+    {
       "name": "modBootData",
       "path": "src/ui/modBootData.bas",
       "role": "ui",
@@ -512,6 +528,78 @@
       "role": "ui",
       "type": "std",
       "wave": "W6.1"
+    },
+    {
+      "name": "modNaviJson",
+      "path": "src/ui/navi/modNaviJson.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。HTML と VBA の間で運ぶ JSON の検証(IsValidJson)と組立(Q/Flag)・取り出し(StringField / ObjectField / RawField)。純関数だけ。"
+    },
+    {
+      "name": "modNaviHost",
+      "path": "src/ui/navi/modNaviHost.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。HTML画面の要求1回ぶんの寿命を持つ唯一のモジュール。action の許可リスト(IsAllowed。16章 E-67)・多重実行の拒否・ui/ の3ファイルを1枚のHTMLへ差し込む(HostReadPage)。"
+    },
+    {
+      "name": "modNaviState",
+      "path": "src/ui/navi/modNaviState.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。画面へ返す状態(BuildAppState)の組立。"
+    },
+    {
+      "name": "modNaviState2",
+      "path": "src/ui/navi/modNaviState2.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。modNaviState の分割先(ビュー別の部分状態)。"
+    },
+    {
+      "name": "modNaviStore",
+      "path": "src/ui/navi/modNaviStore.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。案件一覧・受信箱・判断台帳・ログの読み書き(modCaseStore/modCaseRead 経由)。"
+    },
+    {
+      "name": "modNaviChat",
+      "path": "src/ui/navi/modNaviChat.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。案件チャット(step=ch)。履歴の保管(chat_u/chat_a)と modGatewayRPN.CallChat の呼び出し。"
+    },
+    {
+      "name": "modNaviActions",
+      "path": "src/ui/navi/modNaviActions.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。action のディスパッチ本体(前半)。"
+    },
+    {
+      "name": "modNaviActions2",
+      "path": "src/ui/navi/modNaviActions2.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。action のディスパッチ本体(後半)。受信箱・判断台帳・設定・自己テスト。"
+    },
+    {
+      "name": "frmNaviHtml",
+      "path": "src/ui/navi/frmNaviHtml.frm",
+      "role": "ui",
+      "type": "form",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1/§0.3(W12-A)。HTML画面の器(UserForm + WebBrowser)。**type=form なので第1段ビルド(build_rpn.py の ovba_write)は読み飛ばす**。組み込みは第2段(開発PCの build/win/import_navi_modules.ps1)が行い、その産物は tools/ship_check.py --final が検査する。対になる frmNaviHtml.frx はバイナリなので台帳には載せない(.frm と同じ場所に置く)。"
     },
     {
       "name": "modTestRunner",
@@ -701,6 +789,14 @@
       "_note": "裁定書28(W10)。企業ファイルの往復一致と変異注入。modTestsExcel2 が30,000字契約で満杯のため3本目を切った。"
     },
     {
+      "name": "modTestsExcelNavi",
+      "path": "src/test/modTestsExcelNavi.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1(W12-A)。HTML画面の層(b)6本。modTestsExcel3.RunExcelTests3 から結線する。"
+    },
+    {
       "name": "modTestsRunnerUi",
       "path": "src/test/modTestsRunnerUi.bas",
       "role": "test",
@@ -713,6 +809,22 @@
       "role": "test",
       "type": "std",
       "wave": "T-62"
+    },
+    {
+      "name": "modTestsPure22",
+      "path": "src/test/modTestsPure22.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.3/§1.5(W12-A)。data_dir ポインタの親フォルダ(modUtil.PointerParentOf)の純層3本。modTestsPure21.RunAll の末尾から呼ぶ。"
+    },
+    {
+      "name": "modTestsPureNavi",
+      "path": "src/test/modTestsPureNavi.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "T-63",
+      "_note": "裁定書34 §1.1/§1.5(W12-A)。HTML画面の純層。modTestRunner.RunAllPureTests から結線する。"
     },
     {
       "name": "modRibbonSim",

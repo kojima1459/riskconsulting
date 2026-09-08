@@ -727,12 +727,51 @@ Public Function ReadDataDirPointer(ByVal bookDir As String) As String
 
     lineText = TrimTrailingSep(Trim$(Replace(Replace(lineText, vbCr, " "), vbLf, " ")))
     If LenB(lineText) = 0 Then Exit Function
-    If Not FolderExists(lineText) Then Exit Function
+    ' 裁定書34 §1.3(a): 「フォルダが実在」に加えて「**親フォルダが実在**」でも
+    '   採る。bat が `%SRC%データ` を先に作るようになったが、旧い bat で配った
+    '   フォルダや、配布フォルダを手で置き換えた端末では「データ」がまだ無い。
+    '   そこで親(=配布フォルダ)さえ在れば行き先として採用し、実際に作るのは
+    '   ResolveDataDir の EnsureFolder に任せる(作れなければ次の候補へ落ちる)。
+    If Not FolderExists(lineText) Then
+        If Not FolderExists(PointerParentOf(lineText)) Then Exit Function
+    End If
     ReadDataDirPointer = lineText
     Exit Function
 Failed:
     CloseQuiet fileNo
     ReadDataDirPointer = vbNullString
+End Function
+
+' ============================================================================
+' PointerParentOf - data_dir.txt の1行の親フォルダ(純関数。裁定書34 §1.3(a))
+' ----------------------------------------------------------------------------
+'   ポインタに書かれるのは bat が組み立てた Windows のパス("\" 区切り。UNC を
+'   含む)だが、手で書き換えられることも Mac の実Excel で読まれることもあるので
+'   **"\" と "/" の両方**で最後の1段を落とす。落とせない(段が1つしかない)
+'   ときは空文字を返す = 呼び出し側は「親も見つからない」として次の候補へ落ちる。
+'
+'   例: \\srv\share\x\データ -> \\srv\share\x
+'       D:\a\データ             -> D:\a
+'       D:                        -> ""(ドライブ名だけの親は無い)
+' ============================================================================
+Public Function PointerParentOf(ByVal lineText As String) As String
+    Dim viaBack As String
+    Dim viaFwd As String
+
+    viaBack = ParentDirOf(lineText, "\")
+    viaFwd = ParentDirOf(lineText, "/")
+
+    ' 区切りが混在する("D:\a/データ" のような)ときは、**右にある区切り**で
+    ' 落とした側が正しい親である。右で落とすほど残りは長くなるので長いほうを採る。
+    If LenB(viaBack) = 0 Then
+        PointerParentOf = viaFwd
+    ElseIf LenB(viaFwd) = 0 Then
+        PointerParentOf = viaBack
+    ElseIf Len(viaFwd) > Len(viaBack) Then
+        PointerParentOf = viaFwd
+    Else
+        PointerParentOf = viaBack
+    End If
 End Function
 
 ' 親フォルダ(純関数)。区切り sep で最後の1段を落とす。段が1つしか無いとき

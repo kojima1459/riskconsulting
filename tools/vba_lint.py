@@ -134,6 +134,17 @@ MODULE_REGISTRY = {
     #                 modBoot は 30,000字契約を超えているため実体を置けず、
     #                 起動シーケンスからは手順(3)の1行だけで呼ぶ。
     "modBootData",
+    # W12-A(裁定書34)で新設。12章§2のモジュール一覧は班2が追記する。
+    #   modBootNavi = modBoot の分割先(30,000字契約)。HTML画面まわりの config
+    #                 既定値・ui_mode=html の起動判断(LaunchIfHtml)・
+    #                 case_data!data_key の入力規則(11章§5)。
+    #   modNavi*    = HTML画面(モードレスの1枚窓)の実装。髙橋さん版 v0.3 を
+    #                 当方規約へ寄せて取り込んだ。ui 層なので R4 の
+    #                 Excelトークンは許可(許可モジュール表は増やさない)。
+    #                 frmNaviHtml(UserForm)は .frm なので本表とは別扱い。
+    "modBootNavi",
+    "modNaviHost", "modNaviJson", "modNaviState", "modNaviState2",
+    "modNaviStore", "modNaviChat", "modNaviActions", "modNaviActions2",
     # (W9.3 で clsAppEvents を撤去。ブックイベントは ThisWorkbook 文書モジュール
     #  が受ける。クラスの焼き方の不一致は 17章 Z-24 で解決済みだが、配布物は
     #  **可動部品を減らす**ためクラスを持たない。理由と経緯は 17章 Z-24 と
@@ -185,6 +196,10 @@ MODULE_REGISTRY = {
     #                    へ転送する。どちらを使うかは build/modules.json の
     #                    dev_src が決める(実行時の名前ディスパッチはしない)。
     "modGatewayLink",
+    # W12-A(裁定書34 §1.2)で新設。modGatewayRPN の分割先(30,000字契約)。
+    #   引数だけで答えが決まる4本(BuildToolName / ResolveWaitSec /
+    #   ResolveMaxTokens / TrimHistoryPairs)。挙動は移設前と同じ。
+    "modGatewayRPN2",
     "modUtil", "modUtilText", "modTypes",
     # W10.1(裁定書29 T-60)で新設。12章§2のモジュール一覧に追記済み。
     #   modUtilPath = パスの連結(JoinPathWith/JoinPath)・分解(FileNameOf)・
@@ -216,6 +231,13 @@ MODULE_REGISTRY = {
     "modTestsPureHook", "modTestsPureDev",
     # W11-c(裁定書33 C-3)で新設。リボンちゃんの応答抽出の逐語模擬(純関数)。
     "modRibbonSim",
+    # ---- フォーム(.frm) ----
+    # W12-A(裁定書34)。HTML画面の器(UserForm + WebBrowser)。標準モジュールでは
+    #   ないが、Attribute 行より後は同じ規則で検査する(discover_module_files)。
+    "frmNaviHtml",
+    # W12-A(裁定書34 §1.1)。HTML画面のテスト2本。純層は modTestRunner から、
+    #   層(b)は modTestsExcel3 から結線する(modTestsExcel は 29,902字で満杯)。
+    "modTestsPureNavi", "modTestsExcelNavi",
 }
 # 分割される可能性のあるモジュール名(末尾に1以上の数字が付く)。
 # modMockLlm1..n は 12章§2(v2.4.1)が 30,000字契約による分割を明記している。
@@ -789,6 +811,13 @@ CELL_WRITE_PATTERNS = [
     re.compile(r"(Cells|Range|Offset)\([^)]*\)\s*="),
 ]
 CELL_WRITE_EXEMPT_MODULES = {"modUtilText"}
+# NFR-S7① の「セルへの直接書込」検査を掛けない代入先(裁定書34 §1.4・W12-A)。
+# frmNaviHtml が触る `field` は **HTML(WebBrowser)の textarea 要素**であって
+# Excel のセルではない。SetCellSafe(Excelのセルへ外部由来テキストを書くときの
+# 唯一の口)を通しようがないので、変数名を名指しで外す。
+# 変数名でしか区別できないため、**その変数が DOM 要素であることが読んで分かる
+# モジュール**に限る(ここでは frmNaviHtml の2箇所だけ)。
+CELL_WRITE_DOM_TARGETS = {("frmNaviHtml", "field")}
 SAFE_CONST_MARKER = "' SAFE:const"
 CELL_WRITE_SAFE_CALL = re.compile(r"\bSetCellSafe\s*\(", re.IGNORECASE)
 
@@ -849,12 +878,27 @@ CORE_PRODUCT_VOCAB = [
 R1_TEST_LAYER_EXCEPTIONS = {
     ("modGatewayRPN", "modMockLlm", "MockResponse"),
     ("modUIGuide", "modTestsRunnerUi", "RunAllTestsFromBook"),
+    # 裁定書34 §1.2(W12-A)。HTML画面の[テストを実行](action="run_tests")。
+    #   使い方タブの図形ボタン(modUIGuide の上の行)とまったく同じ性格の参照で、
+    #   17章 T-48 が「利用者がブックの中だけで検問を回せること」を求めている以上、
+    #   画面がテストの入口を1つ持つのは避けられない。
+    #   幅を広げないための条件を2つ守っている:
+    #     (1) 呼ぶ先は modTestsRunnerUi の2本だけ(modTestRunner / modTestsExcel を
+    #         直に叩かせない。合否の4条件と集計はテスト層の中に閉じる)
+    #     (2) 配布物から test 層を外したときは modTestsRunnerUi ごと消えるので、
+    #         参照が残らない(ship 集合の判断は build/modules.json 側)
+    ("modNaviActions2", "modTestsRunnerUi", "RunAllTestsHeadless"),
+    ("modNaviActions2", "modTestsRunnerUi", "LastReportText"),
 }
 
 # 型落ち検出: Dim/Static文
 DIM_STMT_PATTERN = re.compile(r"^(Dim|Static)\s+(.*)$", re.IGNORECASE)
 AS_KEYWORD_PATTERN = re.compile(r"\bAs\b", re.IGNORECASE)
 AS_INTEGER_PATTERN = re.compile(r"\bAs\s+Integer\b", re.IGNORECASE)
+# UserForm のイベント署名(VBA が形を決めているので Integer を Long にできない)。
+# 裁定書34 §1.4(W12-A)。ここに足すのは「VBAの仕様でそう書くしかない」ものだけ。
+FORM_EVENT_INTEGER_SIG = re.compile(
+    r"^(?:Public\s+|Private\s+)?Sub\s+UserForm_(QueryClose|Error)\s*\(", re.IGNORECASE)
 
 # ReDim x(0 To -1) / (5 To 2) 等の「上限が負」の負範囲(実機VBAで実行時エラー9)。
 NEGATIVE_REDIM_PATTERN = re.compile(
@@ -1010,13 +1054,52 @@ class ModuleInfo:
         self.findings.append(Finding(level, line, message))
 
 
+# ==============================================================================
+# .frm(UserForm)のデザイナヘッダ(裁定書34 §1.4)
+# ------------------------------------------------------------------------------
+# VBE の .frm エクスポートは
+#     VERSION 5.00
+#     Begin {GUID} frmXxx
+#        Caption = "..."          <- 画面の属性。ソースではない
+#     End
+#     Attribute VB_Name = "frmXxx"
+#     ...(属性行が続く)
+#     Option Explicit             <- ここからがソース
+# という形をしている。前半をそのまま lint に食わせると「宣言の位置」等の検査が
+# 誤爆するので、**先頭の連続した非ソース行だけ**を空行へ置き換えて落とす
+# (行番号がずれないよう、削らずに空にする)。
+# 本文の途中に現れる `Attribute mBrowser.VB_VarHelpID = -1` のような行は
+# 「先頭の連続」ではないので残る(.bas でも同じ扱い)。
+FORM_HEADER_LINE = re.compile(
+    r"^\s*(VERSION\s|Begin\b|End\s*$|Attribute\s|[A-Za-z_]\w*\s*=\s|\})",
+    re.IGNORECASE)
+
+
+def strip_form_header(raw_text: str) -> str:
+    lines = raw_text.split("\n")
+    last_attr = -1
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s == "":
+            continue
+        if not FORM_HEADER_LINE.match(line):
+            break
+        if s.lower().startswith("attribute "):
+            last_attr = i
+    if last_attr < 0:
+        return raw_text
+    return "\n".join([""] * (last_attr + 1) + lines[last_attr + 1:])
+
+
 def load_module(path: Path, src_root: Path) -> ModuleInfo:
     raw_text = path.read_text(encoding="utf-8", errors="replace")
+    if path.suffix.lower() == ".frm":
+        raw_text = strip_form_header(raw_text)
     raw_lines = raw_text.splitlines()
     stmts = iter_statements(raw_lines)
 
     vb_name = ""
-    for line in raw_lines[:10]:
+    for line in path.read_text(encoding="utf-8", errors="replace").split("\n")[:20]:
         m = ATTRIBUTE_VBNAME_PATTERN.match(line)
         if m:
             vb_name = m.group(1)
@@ -2290,6 +2373,13 @@ def _check_resume_next_in_proc(info: ModuleInfo, lines, start: int, end: int) ->
 def check_dim_type_drop_and_integer(info: ModuleInfo) -> None:
     for lineno, stmt in info.statements:
         if AS_INTEGER_PATTERN.search(stmt):
+            if FORM_EVENT_INTEGER_SIG.match(stmt.strip()):
+                # 裁定書34 §1.4(W12-A): UserForm のイベントは**VBAが署名を決めて
+                # いる**。`UserForm_QueryClose(Cancel As Integer, CloseMode As
+                # Integer)` を Long にすると VBE がイベントとして結びつけず、
+                # 閉じる操作を捕まえられなくなる(=画面が勝手に閉じる)。
+                # 直せない形なので、**この2つのイベント署名だけ**を通す。
+                continue
             info.add("ERROR", lineno, f"Integer型は禁止(Longを使う): 「{stmt.strip()[:80]}」")
 
         # ReDim x(0 To -1) 等の「上限<下限」は LibreOffice Basic では0要素配列と
@@ -3152,6 +3242,9 @@ def check_cell_write_guard(info: ModuleInfo) -> None:
             # 代入の左辺 + "=" に検出パターンを当てる(比較 `If .Value = "" Then`
             # を書き込みと誤認しないため。書き込みは必ず代入の形になる)。
             lhs = stmt[:eq] + "="
+            lhs_head = lhs.strip().split(".")[0].strip()
+            if (name, lhs_head) in CELL_WRITE_DOM_TARGETS:
+                continue
             if not any(p.search(lhs) for p in CELL_WRITE_PATTERNS):
                 continue
             if CELL_WRITE_SAFE_CALL.search(stmt):
@@ -3443,7 +3536,17 @@ def check_raw_activate(info: ModuleInfo) -> None:
 # メイン
 # ==============================================================================
 def discover_module_files(src_root: Path) -> list[Path]:
-    files = sorted(src_root.rglob("*.bas")) + sorted(src_root.rglob("*.cls"))
+    """検査対象のソース。
+
+    裁定書34 §1.4(W12-A)で **.frm(UserForm)** を足した。.frm は先頭に
+    VBE のデザイナ情報(VERSION / Begin...End / Attribute 行)が付いた形で
+    エクスポートされる。そこはソースではないので `strip_form_header` が
+    落とし、**Attribute 行より後だけ**を .bas と同じ規則で検査する。
+    対になる .frx はバイナリなので触らない。
+    """
+    files = (sorted(src_root.rglob("*.bas"))
+             + sorted(src_root.rglob("*.cls"))
+             + sorted(src_root.rglob("*.frm")))
     return sorted(set(files))
 
 
