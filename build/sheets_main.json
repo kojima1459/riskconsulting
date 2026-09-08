@@ -98,7 +98,10 @@
       "s3_json_failed",
       "s4_json_failed",
       "sparring_u",
-      "sparring_a"
+      "sparring_a",
+      "chat_u",
+      "chat_a",
+      "nav_basics"
     ],
     "run_step": [
       "s1",
@@ -112,7 +115,8 @@
       "s2c",
       "s3c",
       "s2r",
-      "s3r"
+      "s3r",
+      "ch"
     ],
     "play": [
       "PL-01",
@@ -2558,6 +2562,12 @@
           "width": 12,
           "dv": "failed_step",
           "header_note": "空 or s1/s2/s3/s4/s2c/s3c。RepairStates は書き換えない"
+        },
+        {
+          "name": "archived_at",
+          "type": "String",
+          "width": 20,
+          "header_note": "26列目(裁定書34 W12-A)。論理削除の日時(空=非表示でない)。書込口は modNaviStore.SetArchived。物理削除はしない"
         }
       ]
     },
@@ -2579,7 +2589,7 @@
           "type": "String",
           "width": 24,
           "dv": "data_key",
-          "header_note": "enum 全28値(19章§3と完全一致)"
+          "header_note": "enum 全32値(19章§3と完全一致)"
         },
         {
           "name": "seq",
@@ -2873,6 +2883,41 @@
           "note": "フッター[© リスクコンサルティング支援部]を押したときに開く部のポータル"
         },
         {
+          "name": "ui_mode",
+          "value": "html",
+          "note": "画面の方式 html/sheet。既定 html(HTML画面)。ui\\index.html が無い(E-64)・Shell.Explorer.2 生成失敗(E-65)は sheet へ自動フォールバック(裁定書34 W12-A)"
+        },
+        {
+          "name": "ui_font_scale",
+          "value": "medium",
+          "note": "HTML画面の表示倍率 small(100%)/medium(135%)/large(175%)。zoom非対応環境は E-66"
+        },
+        {
+          "name": "chat_max_turns",
+          "value": 12,
+          "note": "案件チャット(F-09)でリボンへ渡す履歴の最大往復数。超過は古い順に切捨て。全履歴は case_data の chat_u/chat_a に保存"
+        },
+        {
+          "name": "chat_include_materials",
+          "value": false,
+          "note": "案件チャットへ貼付資料(匿名化済み)を注入するかの既定。TRUEのとき t2_max_context_chars 予算内に切詰めて注入"
+        },
+        {
+          "name": "ch_effort",
+          "value": "medium",
+          "note": "案件チャット呼出(step=ch)の reasoning_effort 上書き"
+        },
+        {
+          "name": "ch_verbosity",
+          "value": "low",
+          "note": "案件チャット呼出の reasoning_verbosity 上書き"
+        },
+        {
+          "name": "app_display_name",
+          "value": "リスク提案ナビ",
+          "note": "表示名の唯一の値源(HTML画面のブランド表示・frmNaviHtml.Caption・表示名置換)。製品名のPJ正式決定までは既定のまま。決定後はこの1行で切替"
+        },
+        {
           "name": "tests_expected",
           "value": 0,
           "note": "ブック内テスト(17章 T-48)の期待本数。値源は wintest/tests_expected.txt でビルドが焼く(旧 vba_src!E2。裁定書27 W9-A で config へ移設)。空・非数値なら modTestsRunnerUi はテストを実行しない(fail-closed)"
@@ -2979,7 +3024,7 @@
           "type": "String",
           "width": 8,
           "dv": "run_step",
-          "header_note": "全12値(19章§4と完全一致)"
+          "header_note": "全13値(19章§4と完全一致)"
         },
         {
           "name": "play",
