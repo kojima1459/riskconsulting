@@ -302,6 +302,7 @@ PURE_ALLOWLIST = [
     # だけで、フォーム・WebBrowser・シートに触れる関数は実行に到達しない(技術メモ4)。
     # modBootNavi は DisplayMessage が製品名を引く AppDisplayName のためだけに要る。
     "modNaviJson", "modNaviHost", "modGatewayRPN2", "modBootNavi",
+    "modNaviStore",   # 裁定書36: InWindow(純関数)だけを叩く
     "modTestsPureNavi",
 ]
 
