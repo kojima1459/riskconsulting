@@ -83,3 +83,19 @@ Public Function TrimHistoryPairs(ByVal hist As String, ByVal maxTurns As Long) A
     Next i
     TrimHistoryPairs = acc
 End Function
+
+' リボン定型失敗文(E0203/E0204/E0207)の先頭80字。err_log detail に残し原因を
+' 追えるようにする(裁定書36)。改行/タブは半角空白へ均してから
+' modUtilText.SanitizeInput(私用領域除去・■■■置換)を通し、最後にLeft$で
+' 80字へ切る(NFR-S3: 本文ではないが必ず切る)。空応答なら空文字を返す。
+Public Function RibbonHead(ByVal response As String) As String
+    Dim t As String
+    t = Trim$(response)
+    If LenB(t) = 0 Then Exit Function
+    t = Replace(t, vbCr, " ")
+    t = Replace(t, vbLf, " ")
+    t = Replace(t, vbTab, " ")
+    t = modUtilText.SanitizeInput(t)
+    If Len(t) > 80 Then t = Left$(t, 80)
+    RibbonHead = t
+End Function

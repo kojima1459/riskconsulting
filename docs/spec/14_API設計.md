@@ -214,6 +214,10 @@ Public Function RibbonFailureCode(ByVal response As String) As String
 ' 判定は **Trim後の先頭一致のみ**（本文中の出現では判定しない）:
 '   "(error:429"->E0204 / "(error:"（429以外）->E0203 / "接続切れ"->E0202 /
 '   "レスポンスから当該テキストを抽出できません"->E0202 / "content_filterに該当しました"->E0207
+' === core: modGatewayRPN2 ===
+Public Function RibbonHead(ByVal response As String) As String
+' 定型失敗文の先頭80字（err_log detail の `rb=`。E0203/E0204/E0207用。裁定書36）。
+' Trim -> vbCr/vbLf/vbTab を半角空白へ -> modUtilText.SanitizeInput -> Left$(80)。空なら空。
 Public Function DecideOk(ByVal transportSucceeded As Boolean, ByVal rawBody As String, _
                          ByRef errCode As String) As Boolean
 ' **帯域外成否（ok）の唯一の判定点**。CallStep / CallChat は ok を直接代入せず必ず本関数の
@@ -1538,7 +1542,7 @@ Public Function RunExcelTests2() As Long
   | - | `modNaviState.BuildAppState()` / `BuildCaseState(caseId)` / `BuildStageList(caseId)` / `BuildPrompts(caseId)` | 公開関数（app層。JSON文字列を返す） | 本章§6・§8 | 既存データから state JSON（§8の形）を組み立てる。S1〜S4は `modCaseStore.ResolveStepJson` の結果を `RestoreNames` した**JSON文字列のまま**格納し、VBA側では構造を解釈しない（§8） |
   | - | `modNaviActions.ActPasteMaterial` / `ActSaveMaterials` / `ActRunPipeline` / `ActExportReport` 等（action名ごとに1手続き） | 公開関数（app層） | 本章§6・§8 | action名は許可リストと**大文字小文字を含め完全一致**（`IsAllowed`。16章 E-67）。`MsgBox` を書かない（確認は `confirm` 応答で返しHTML側が再送する） |
   | - | `modNaviChat.BuildChatSystem()` / `Ask(caseId, question, includeFlags) As String` / `History(caseId) As String` / `Clear(caseId)` | 公開関数（app層。案件チャットF-09） | 本章§6・§8 | `modGatewayRPN.CallChat` を使う（`Application.Run` を直接書かない=R3）。run_logは `step=ch`（13章§2.4・19章§4） |
-  | - | `modNaviStore.ListCases()` / `ListInbox()` / `ListJudgements()` / `LogRowsOf(caseId)` / `AppendFeedback(...)` / `SetDisplayName(caseId, name)` / `SetArchived(caseId, archived)` / `ExportCaseJson(caseId)` / `ImportCaseJson(json)` | 公開関数（app層。既存に無い読取・追記アダプタ） | 本章§6・13章§2.1 | `SetArchived` が案件一覧26列目 `archived_at`（13章§2.1）の書込口。`modCaseStore2.SheetOf/LastRowOf/ReadBlock` 等の下位I/Oを使う（新しい下位I/Oは新設しない） |
+  | - | `modNaviStore.ListCases()` / `ListInbox()` / `ListJudgements()` / `LogRowsOf(caseId)` / `AppendFeedback(...)` / `SetDisplayName(caseId, name)` / `SetArchived(caseId, archived)` / `ExportCaseJson(caseId)` / `ImportCaseJson(json)` / `InWindow(loggedAt, fromAt, toAt) As Boolean` | 公開関数（app層。既存に無い読取・追記アダプタ） | 本章§6・13章§2.1 | `SetArchived` が案件一覧26列目 `archived_at`（13章§2.1）の書込口。`modCaseStore2.SheetOf/LastRowOf/ReadBlock` 等の下位I/Oを使う（新しい下位I/Oは新設しない）。`InWindow` は純関数で `LogRowsOf` の `err_log` 範囲判定（run_log の run_at ±60秒窓）に使う（裁定書36） |
   | - | `modBootNavi.LaunchIfHtml()` / `RegisterDefault系`（ui_mode等の既定値登録） | 公開関数（ui層。`modBoot` から1行で呼ぶ） | 本章§6・12章§2.1 | `ui_mode=html` かつ `ui\index.html` が本体と同じフォルダにあるとき起動予約。無ければ `hm_warning` へ「ui フォルダが見つからないため従来画面で起動しました」を出しsheetで続行（16章 E-64） |
   | - | `modUIResearch.OpenUrl`（**Public化**）／`modUIProgress.ReleaseUiLock`（**Public化**） | 公開範囲の変更のみ | 本章§6 | HTML画面のホスト層から呼ぶために公開範囲だけを変更する（処理内容は不変）。`ReleaseUiLock` は `DrawNav` を呼ばない解放版（HTML画面はナビ全面再描画を必要としないため） |
 
