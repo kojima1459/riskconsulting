@@ -116,13 +116,18 @@ Public Function LogRowsOf(ByVal caseId As String) As String
                 ",""usage_log"":" & RowsJson("usage_log", caseId) & "}"
 End Function
 
+' err_log has no case_id column. Associate rows two ways(裁定書36): detail に
+' caseId を含む行(従来どおり) / その案件の run_log 行の run_at ±60秒の窓に
+' logged_at が入る行(modPipeline・modGatewayRPN が書く原因行を拾うため)。
+' run_log 行が1本もない案件は従来どおり detail 一致だけで判定する。
 Private Function ErrorRowsOf(ByVal caseId As String) As String
-    ' err_log has no case_id column. Associate only explicit IDs in detail.
     On Error GoTo Failed
     Dim ws As Object, blk As Variant, lastRow As Long, r As Long
     Dim buf() As String, n As Long
+    Dim fromAt As String, toAt As String
     ErrorRowsOf = "[]"
     If LenB(caseId) = 0 Then Exit Function
+    RunLogWindowOf caseId, fromAt, toAt
     Set ws = modCaseStore2.SheetOf("err_log")
     If ws Is Nothing Then Exit Function
     lastRow = modCaseStore2.LastRowOf(ws)
@@ -130,7 +135,8 @@ Private Function ErrorRowsOf(ByVal caseId As String) As String
     If IsEmpty(blk) Then Exit Function
     modUtil.BufInit buf, n
     For r = 2 To lastRow
-        If InStr(1, CellValue(blk, r, "detail"), caseId, 0) > 0 Then
+        If InStr(1, CellValue(blk, r, "detail"), caseId, 0) > 0 _
+                Or InWindow(CellValue(blk, r, "logged_at"), fromAt, toAt) Then
             If n > 0 Then modUtil.BufAdd buf, n, ","
             modUtil.BufAdd buf, n, RowJson(blk, r)
         End If
@@ -139,6 +145,52 @@ Private Function ErrorRowsOf(ByVal caseId As String) As String
     Exit Function
 Failed:
     ErrorRowsOf = "[]"
+End Function
+
+' RunLogWindowOf - 案件 caseId の run_log 行(13章§2.4: run_at / case_id 列)から
+' run_at の最小値-60秒・最大値+60秒を求める(±60秒の加減は呼び出し側で
+' DateAdd する方式を選択。理由は最終報告に記載)。行が無ければ両方空文字。
+' 変換は Format$ ではなく modUtilText.IsoDateTime を使う(和暦端末対策。
+' modUtil.NowStamp の既存注記と同じ理由)。
+Private Sub RunLogWindowOf(ByVal caseId As String, ByRef fromAt As String, ByRef toAt As String)
+    Dim ws As Object, blk As Variant, lastRow As Long, r As Long
+    Dim runAt As String
+    fromAt = vbNullString
+    toAt = vbNullString
+    Set ws = modCaseStore2.SheetOf("run_log")
+    If ws Is Nothing Then Exit Sub
+    lastRow = modCaseStore2.LastRowOf(ws)
+    blk = modCaseStore2.ReadBlock(ws, lastRow)
+    If IsEmpty(blk) Then Exit Sub
+    For r = 2 To lastRow
+        If CellValue(blk, r, "case_id") = caseId Then
+            runAt = CellValue(blk, r, "run_at")
+            If IsDate(runAt) Then
+                If LenB(fromAt) = 0 Then
+                    fromAt = runAt
+                    toAt = runAt
+                Else
+                    If CDate(runAt) < CDate(fromAt) Then fromAt = runAt
+                    If CDate(runAt) > CDate(toAt) Then toAt = runAt
+                End If
+            End If
+        End If
+    Next r
+    If LenB(fromAt) > 0 Then
+        fromAt = modUtilText.IsoDateTime(DateAdd("s", -60, CDate(fromAt)))
+        toAt = modUtilText.IsoDateTime(DateAdd("s", 60, CDate(toAt)))
+    End If
+End Sub
+
+' InWindow - loggedAt が [fromAt, toAt] の範囲内(両端含む)かどうか。
+' すべて "yyyy-mm-dd hh:nn:ss" の文字列。IsDate で変換できないものは
+' すべて False(不正日付は「窓に入らない」= fail-closed。裁定書36)。
+Public Function InWindow(ByVal loggedAt As String, ByVal fromAt As String, ByVal toAt As String) As Boolean
+    If LenB(loggedAt) = 0 Or LenB(fromAt) = 0 Or LenB(toAt) = 0 Then Exit Function
+    If Not IsDate(loggedAt) Then Exit Function
+    If Not IsDate(fromAt) Then Exit Function
+    If Not IsDate(toAt) Then Exit Function
+    InWindow = (CDate(loggedAt) >= CDate(fromAt)) And (CDate(loggedAt) <= CDate(toAt))
 End Function
 
 Public Function LastErrorJson() As String

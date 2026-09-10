@@ -136,7 +136,7 @@ Finish:
             errMsg = ErrMessageFor(errCode)
             modLog.LogError errCode, "modGatewayRPN.CallStep", _
                             "step=" & stepName & " transport=" & route & _
-                            " len=" & CStr(Len(rawBody))
+                            " len=" & CStr(Len(rawBody)) & RbSuffix(rawBody)
         ElseIf LenB(errMsg) = 0 Then
             errMsg = ErrMessageFor(errCode)
         End If
@@ -237,7 +237,7 @@ Finish:
             errMsg = ErrMessageFor(errCode)
             modLog.LogError errCode, "modGatewayRPN.CallChat", _
                             "step=" & stepName & " transport=" & route & _
-                            " len=" & CStr(Len(rawBody))
+                            " len=" & CStr(Len(rawBody)) & RbSuffix(rawBody)
         ElseIf LenB(errMsg) = 0 Then
             errMsg = ErrMessageFor(errCode)
         End If
@@ -301,6 +301,15 @@ DetectFail:
     modLog.LogUsage "ribbon_detect_fail", "", "AddIns走査に失敗: " & Err.Description
     mRibbonAvailable = False
     RibbonAvailable = False
+End Function
+
+' RbSuffix - err_log detail へ足す " rb=<定型失敗文の先頭80字>" (裁定書36)。
+'   E0202(空応答)は rawBody が空なので head も空になり、接頭辞ごと付かない
+'   (rb= だけが残ってしまうのを防ぐ。NFR-S3は80字切詰めで担保)。
+Private Function RbSuffix(ByVal rawBody As String) As String
+    Dim head As String
+    head = modGatewayRPN2.RibbonHead(rawBody)
+    If LenB(head) > 0 Then RbSuffix = " rb=" & head
 End Function
 
 ' RunLimitCheck - リボン公式 LimitCheck() の唯一の呼び出し口(裁定D3)。

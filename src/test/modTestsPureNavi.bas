@@ -2,6 +2,7 @@ Attribute VB_Name = "modTestsPureNavi"
 Option Explicit
 
 ' Spec 7.2/7.5/8.3/10. 24 assertions; baseline 780 -> tests_expected 804.
+' 裁定書36で RibbonHead/InWindow を追加(+8 assertions -> tests_expected 812)。
 Public Sub RunAll()
     On Error GoTo Failed
     CheckN "NAVI-P01 empty object", modNaviJson.IsValidJson("{}")
@@ -28,6 +29,24 @@ Public Sub RunAll()
     CheckN "NAVI-P22 data keys", KeyCountAndPresence()
     CheckN "NAVI-P23 setting whitelist", modConfig.IsSettingsKeyAllowed("ui_mode") And modConfig.IsSettingsKeyAllowed("ui_font_scale") And modConfig.IsSettingsKeyAllowed("chat_include_materials") And Not modConfig.IsSettingsKeyAllowed("ch_effort")
     CheckN "NAVI-P24 keep newest history", modGatewayRPN2.TrimHistoryPairs("new;;;middle;;;old", 2) = "new;;;middle"
+    CheckN "NAVI-P25 RibbonHead trims normal text", modGatewayRPN2.RibbonHead(" (error:500) timeout ") = "(error:500) timeout"
+    CheckN "NAVI-P26 RibbonHead collapses CR/LF/tab to space", _
+        modGatewayRPN2.RibbonHead("a" & vbCr & "b" & vbLf & "c" & vbTab & "d") = "a b c d"
+    CheckN "NAVI-P27 RibbonHead truncates over 80 chars", _
+        modGatewayRPN2.RibbonHead(String$(90, "x")) = String$(80, "x")
+    CheckN "NAVI-P28 RibbonHead empty for blank input rejected", _
+        modGatewayRPN2.RibbonHead(vbNullString) = vbNullString And modGatewayRPN2.RibbonHead("   ") = vbNullString
+    CheckN "NAVI-P29 InWindow inside window", _
+        modNaviStore.InWindow("2026-01-01 10:00:00", "2026-01-01 09:59:00", "2026-01-01 10:01:00")
+    CheckN "NAVI-P30 InWindow boundary exact both ends", _
+        modNaviStore.InWindow("2026-01-01 09:59:00", "2026-01-01 09:59:00", "2026-01-01 10:01:00") And _
+        modNaviStore.InWindow("2026-01-01 10:01:00", "2026-01-01 09:59:00", "2026-01-01 10:01:00")
+    CheckN "NAVI-P31 InWindow one second outside rejected", _
+        Not modNaviStore.InWindow("2026-01-01 09:58:59", "2026-01-01 09:59:00", "2026-01-01 10:01:00") And _
+        Not modNaviStore.InWindow("2026-01-01 10:01:01", "2026-01-01 09:59:00", "2026-01-01 10:01:00")
+    CheckN "NAVI-P32 InWindow invalid date rejected", _
+        Not modNaviStore.InWindow("not-a-date", "2026-01-01 09:59:00", "2026-01-01 10:01:00") And _
+        Not modNaviStore.InWindow("2026-01-01 10:00:00", vbNullString, "2026-01-01 10:01:00")
     Exit Sub
 Failed:
     modTestRunner.Check "NAVI pure unexpected error", False, CStr(Err.Number) & " " & Err.Description
