@@ -8,8 +8,8 @@ Option Explicit
 '   18章§2・§3.5 だけ**から手で書き出した(17章§1。実装の出力を見てから期待値を
 '   合わせない)。
 '
-' 対象と根拠(全33本。W15 Round 2 の G6 10本は裁定書39 §1・裁定書40 §1 だけを
-'   根拠に追記した):
+' 対象と根拠(全35本。W15 Round 2 の G6 10本は裁定書39 §1・裁定書40 §1 だけを、
+'   G7 2本は裁定書42 §2 だけを根拠に追記した):
 '   G1 原文照合(modGround。B-03 のテスト観点6つをそのまま置いた)
 '     01 引用の**先頭20字より後ろ**を1字変えても照合できる(表記揺れ耐性)
 '     02 丸ごと捏造した引用は未照合として検出する
@@ -33,6 +33,8 @@ Option Explicit
 '   G6 W15 Round 2(裁定書39 班Q / 裁定書40 班Q2)
 '     23/24 R2-04  25/26 R2-05  27 R1-05  28 R1-08(Q-M2で論理へ)  29/30 R1-07
 '     31 Q-m1(E-02の帯は実行直後のS1だけ)  32 Q-m3(E-02の帯とdeepを併記)
+'   G7 W15 最終是正(裁定書42 §2。確認導線の一本化)
+'     33 空白類に NBSP/ZWSP/BOM を含める  34 レポートと提案書の判定が対称
 '
 ' 変異注入(出来レース禁止・裁定書37 §2):
 '   (a) modGround.QuoteFound を常に True にすると 02 と 07 が落ちる。
@@ -63,7 +65,7 @@ Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
 
-    For i = 1 To 6
+    For i = 1 To 7
         grpName = "W14-G" & CStr(i)
         On Error Resume Next
         Err.Clear
@@ -84,6 +86,7 @@ Private Sub RunGroup(ByVal idx As Long)
     Case 4: T_ReportCss
     Case 5: T_SourceColumn
     Case 6: T_W15Round2
+    Case 7: T_W15Final
     End Select
 End Sub
 
@@ -513,3 +516,75 @@ Private Function DocOfCompany(ByVal company As String) As String
     DocOfCompany = modExportHtml.BuildReportHtml(metaJson, _
                                                  "{""company_name"":""x""}", "", "", "standard")
 End Function
+
+' ============================================================================
+' G7 W15 最終是正(裁定書42 §2)。確認導線の一本化。
+' ----------------------------------------------------------------------------
+'   33 空白類の一覧は modUtilText.HasVisibleText が唯一持ち、NBSP(U+00A0)・
+'      ZWSP(U+200B)・BOM(U+FEFF)も空白類として数える。
+'   34 **レポートと提案書の判定が対称**であること。空白類の表を1つ持ち、
+'      10種すべてで「レポートは未確認・提案書は生成しない」を同時に見る。
+'      裁定書40 S-m では提案書側だけへ NBSP の前処理を足したため、NBSP だけの
+'      確認者名でレポートが「担当者が確認・編集したもの」に切り替わっていた
+'      (=「片方だけ直す」型の3回目)。表を1つにすれば非対称は作れない。
+'   変異注入: modUtilText.HasVisibleText の Select Case から ChrW$(160) か
+'      ChrW$(8203) か ChrW$(65279) を1つ削ると 33 と 34 が落ちる。
+'      modExportProposal.NeedsReviewMessage に前処理(Replace)を挟み直すと
+'      34 が落ちる(レポート側だけが通す形に戻るため)。
+' ============================================================================
+
+' 空白類の表(10種)。modUtilText.HasVisibleText の Select Case と**同じ数**で
+'   あることを 33 が見る。追加するときは両方へ足すこと。
+Private Function BlankKinds() As Variant
+    BlankKinds = Array(" ", "　", vbTab, vbLf, vbCr, Chr$(11), Chr$(12), _
+                       ChrW$(160), ChrW$(8203), ChrW$(65279))
+End Function
+
+Private Sub T_W15Final()
+    Dim kinds As Variant
+    Dim i As Long
+    Dim mixed As String
+    Dim okBlank As Boolean, okSym As Boolean
+    Dim ngName As String
+
+    kinds = BlankKinds()
+    okBlank = True
+    mixed = ""
+    For i = LBound(kinds) To UBound(kinds)
+        mixed = mixed & CStr(kinds(i))
+        If modUtilText.HasVisibleText(CStr(kinds(i))) Then
+            okBlank = False
+            ngName = ngName & "[" & CStr(i) & "]"
+        End If
+    Next i
+
+    ' 33 空白類だけなら False。可視文字が1つでもあれば True(落としすぎない)。
+    ChkB "Test_W15_33_HasVisibleTextはNBSPとZWSPとBOMも空白類に数える_裁定書42", _
+        okBlank And _
+        (modUtilText.HasVisibleText(mixed) = False) And _
+        (modUtilText.HasVisibleText(ChrW$(160) & "田" & ChrW$(8203)) = True) And _
+        (modUtilText.HasVisibleText(ChrW$(65279) & "山田") = True), _
+        "Trueになった空白類=" & ngName & " 混在=" & _
+        CStr(modUtilText.HasVisibleText(mixed))
+
+    ' 34 レポート(ReviewerOf)と提案書(NeedsReviewMessage)が**同じ表で対称**。
+    okSym = True
+    ngName = ""
+    For i = LBound(kinds) To UBound(kinds)
+        If modExportHtml.ReviewerOf(CStr(kinds(i))) <> "" Then
+            okSym = False
+            ngName = ngName & "report[" & CStr(i) & "]"
+        End If
+        If modExportProposal.NeedsReviewMessage(CStr(kinds(i))) = "" Then
+            okSym = False
+            ngName = ngName & "proposal[" & CStr(i) & "]"
+        End If
+    Next i
+    ChkB "Test_W15_34_確認者名の空白判定がレポートと提案書で対称_裁定書42", _
+        okSym And _
+        (modExportHtml.ReviewerOf(mixed) = "") And _
+        (modExportProposal.NeedsReviewMessage(mixed) <> "") And _
+        (modExportHtml.ReviewerOf(ChrW$(160) & "山田") <> "") And _
+        (modExportProposal.NeedsReviewMessage(ChrW$(160) & "山田") = ""), _
+        "非対称だった空白類=" & ngName
+End Sub

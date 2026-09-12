@@ -403,6 +403,23 @@ Public Function OpenTargetOf(ByVal reportPath As String, ByVal proposalPath As S
     If LenB(reportPath) > 0 And givenPath = reportPath Then OpenTargetOf = reportPath
 End Function
 
+' OpenLabelOf - [ブラウザで開く]/[フォルダを開く]が返す文言の**出力の種類名**
+'   (裁定書42 §2-2)。裁定書39 R2-06 で提案書の行も ActOpenReport を通るように
+'   したのに、返る文言は「レポート」固定だった。区画④で「提案書(お客さま向け)」
+'   の[ブラウザで開く]を押したのに「この案件に登録されたレポートがありません。」
+'   と返るので、利用者は自分が何を開こうとしたのか分からなくなる(会社PCは
+'   エクスプローラ操作が限られるため、この文言が唯一の手掛かり)。
+'   判断の材料は OpenTargetOf と同じ2つ(案件の提案書パスと画面から来たパス)。
+'   提案書の行から来たときだけ「提案書」、それ以外(行を指定しない呼び・
+'   レポートの行・登録された2本のどちらとも一致しないパス)は「レポート」。
+'   ヒアリングシートは出力一覧に[開く]を持たない(Excelのシートとして開く=
+'   modNaviActions.ActExportHearing)ので、ここでは扱わない。
+'   文言の値源はこの1本で、ActOpenReport の4つの文言すべてがこれを使う。
+Public Function OpenLabelOf(ByVal proposalPath As String, ByVal givenPath As String) As String
+    OpenLabelOf = "レポート"
+    If LenB(proposalPath) > 0 And givenPath = proposalPath Then OpenLabelOf = "提案書"
+End Function
+
 ' 区画①[調査ページを開く]/[クイック調査を開く](12章§2 の分割。裁定書39 R1-06 と同時)。
 Public Function ActOpenUrl(ByVal data As String) As String
     Dim kind As String, url As String
