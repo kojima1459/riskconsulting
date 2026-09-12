@@ -8,7 +8,7 @@
 # modTestRunner と tools/run_lo_tests.py が即FAILとして可視化する。17章§4-1)。
 <<<<<<< HEAD
 <<<<<<< HEAD
-prod=PLACEHOLDER
+prod=1028
 =======
 prod=999
 >>>>>>> worktree-wf_a664856f-020-3
