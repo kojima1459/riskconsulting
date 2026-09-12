@@ -65,8 +65,12 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
     On Error GoTo Failed
     outPath = vbNullString
 
+    ' 確認者名は**入口で1回だけ**整える(レポート側 modExportHtml.ReviewerOf と
+    ' 同じ順序: 無害化 -> 区切りを落とす -> 前後の空白を落とす)。ここで落として
+    ' おくと、表紙(coverFields)にもDATAの meta.reviewed_by にも TAB/LF が
+    ' 入らない(裁定書40 Q-M1)。
     Dim reviewer As String
-    reviewer = Trim$(modUtilText.SanitizeInput(reviewedBy))
+    reviewer = Trim$(StripFieldSeps(modUtilText.SanitizeInput(reviewedBy)))
     If LenB(NeedsReviewMessage(reviewer)) > 0 Then
         modLog.LogUsage "proposal_skipped", caseId, "not_reviewed"
         GenerateProposalHtml = NeedsReviewMessage(reviewer)
@@ -90,7 +94,10 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
     Dim s2Text As String, s5Text As String
     s2Text = modCaseStore.ResolveStepJson(caseId, 2)
     s5Text = ResolveProposalJson(caseId)
-    If LenB(Trim$(s5Text)) = 0 Then
+    ' 空判定は Trim$ ではなく modUtilText.HasVisibleText(裁定書39 R2-04 と
+    ' 同型。Trim$ は Chr(32) しか落とさないので、TAB や全角空白だけの
+    ' s5_edited を「作成済み」と誤認して E0502 の分かりにくい失敗になる)。
+    If Not modUtilText.HasVisibleText(s5Text) Then
         modLog.LogUsage "proposal_skipped", caseId, "s5_empty"
         GenerateProposalHtml = "先にお客さま向け提案書の作成を実行してください。"
         Exit Function
@@ -122,7 +129,8 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
 
     Dim docText As String
     Dim softened As Long
-    docText = BuildProposalHtmlEx(metaJson, s2Text, s5Text, softened)
+    Dim tabooLeft As String
+    docText = BuildProposalHtmlEx(metaJson, s2Text, s5Text, softened, tabooLeft)
     If LenB(docText) = 0 Then
         modLog.LogError EP_CODE_FAIL, EP_SRC & ".GenerateProposalHtml", "build_failed"
         GenerateProposalHtml = "提案書の組み立てに失敗しました。"
@@ -154,6 +162,10 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
     ' 対訳表の機械置換を**必ず1行残す**(裁定書39 R2-11。docs/29 §5.3
     ' 「黙って直さない」。0件のときも記録して「1件も直していない」を示す)。
     modLog.LogUsage "proposal_taboo_softened", caseId, "n=" & CStr(softened)
+    ' 置換しても残った社内語は**警告**として残す(裁定書40 S-M1。一般語と
+    ' サ変語幹を機械置換の対象から外した代償。警告なので生成は止めず、
+    ' 戻り値(=呼出側が失敗として扱う経路)にも載せない)。
+    TabooLeftNote caseId, tabooLeft
     outPath = pathText
     Exit Function
 
@@ -175,20 +187,39 @@ Public Function NeedsReviewMessage(ByVal reviewedBy As String) As String
     If Not HasVisibleName(reviewedBy) Then NeedsReviewMessage = EP_NEED_REVIEW
 End Function
 
-' 空白類(半角空白・TAB・LF・CR・全角空白)を除いて1文字以上あるか。
-'   **班Q が modUtilText.HasVisibleText を新設したら、そちらへ寄せること**
-'   (裁定書39 R2-04。レポートと提案書で同じ1本を使う)。
+' 空白類を除いて1文字以上あるか。判定の実体は**レポートと同じ1本**
+'   modUtilText.HasVisibleText(半角空白・全角空白・TAB・LF・CR・VT(11)・
+'   FF(12))であり、ここはそこへ寄せる薄い入口である(裁定書39 R2-04)。
+'   NBSP(U+00A0=160)だけは HasVisibleText がまだ空白類に数えないため、
+'   渡す前に落とす(裁定書40 S-m。Word やブラウザからの貼り付けで容易に
+'   混入し、見た目が空の確認者名で顧客提示物が「確認済み」になる)。
+'   **handoff**: modUtilText.HasVisibleText の Select Case へ ChrW$(160) を
+'   足したら、この Replace は不要になるので1行消して直接呼ぶこと
+'   (modUtilText は班Q2 の担当ファイルのため本波では触っていない)。
 Private Function HasVisibleName(ByVal t As String) As Boolean
-    Dim i As Long
-    Dim c As Long
+    HasVisibleName = modUtilText.HasVisibleText(Replace(t, ChrW$(160), vbNullString))
+End Function
 
-    For i = 1 To Len(t)
-        c = AscW(Mid$(t, i, 1))
-        If c <> 32 And c <> 9 And c <> 10 And c <> 13 And c <> 12288 Then
-            HasVisibleName = True
-            Exit Function
-        End If
-    Next i
+' ==========================================================
+' StripFieldSeps - coverFields(EP_SEP=vbTab 区切り)へ入れる前の後始末。
+' ----------------------------------------------------------
+'   フィールドの**中身**が区切りを騙ると、modProposalHtml1.FieldAt が返す値が
+'   1つずつずれる(会社名に vbTab を混ぜるだけで <title> と <noscript> の題が
+'   会社名の後半に化け、日付・確認者まで全部ずれる。裁定書39 R2-05 と同型で、
+'   顧客提示物である提案書側に残っていた=裁定書40 Q-M1)。
+'   modUtilText.SanitizeInput は TAB と LF を「本文の構造」として**意図的に
+'   残す**ので、区切りを使う側が落とす。落とすのは vbTab / vbLf / vbCr の
+'   3つだけで、本文の他の文字には触れない。
+'   **handoff**: 実装はレポート側 modExportHtml.StripFieldSeps(Private)と
+'   逐語で同じである。司令塔が modUtilText へ1本に寄せたら、両方から
+'   そちらを呼ぶこと(裁定書39 R2-04 が確認者名の判定でやったのと同じ整理。
+'   modUtilText / modExportHtml は班Q2 の担当ファイルなので本波では触らない)。
+' ==========================================================
+Private Function StripFieldSeps(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, EP_SEP, vbNullString)
+    t = Replace(t, vbCr, vbNullString)
+    StripFieldSeps = Replace(t, vbLf, vbNullString)
 End Function
 
 ' ==========================================================
@@ -219,30 +250,39 @@ End Function
 Public Function BuildProposalHtml(ByVal metaJson As String, ByVal s2Json As String, _
                                   ByVal s5Json As String) As String
     Dim softened As Long
-    BuildProposalHtml = BuildProposalHtmlEx(metaJson, s2Json, s5Json, softened)
+    Dim tabooLeft As String
+    BuildProposalHtml = BuildProposalHtmlEx(metaJson, s2Json, s5Json, softened, tabooLeft)
 End Function
 
 ' ==========================================================
-' BuildProposalHtmlEx - 上と同じだが、対訳表の機械置換の**箇所数**を
-'   softened へ返す(裁定書39 R2-11。呼出側が usage_log へ1行残すため)。
+' BuildProposalHtmlEx - 上と同じだが、呼出側が記録に使う2つを返す。
+'   softened  : 対訳表の機械置換の**箇所数**(裁定書39 R2-11)
+'   tabooLeft : 置換しても顧客向け本文に**残った**社内語(";"区切り。裁定書40
+'               S-M1)。一般語・サ変語幹は機械置換の対象外なので残りうる。
+'               これは**警告であって不合格ではない**ので戻り値には載せず、
+'               呼出側が usage_log へ記録する(裁定書40 §0 の警告チャネル規約)。
 ' ==========================================================
 Public Function BuildProposalHtmlEx(ByVal metaJson As String, ByVal s2Json As String, _
                                     ByVal s5Json As String, _
-                                    ByRef softened As Long) As String
+                                    ByRef softened As Long, _
+                                    ByRef tabooLeft As String) As String
     On Error GoTo Failed
     softened = 0
+    tabooLeft = vbNullString
     If LenB(Trim$(metaJson)) = 0 Then Exit Function
 
     Dim dataJson As String
-    dataJson = BuildProposalDataEx(metaJson, s2Json, s5Json, softened)
+    dataJson = BuildProposalDataEx(metaJson, s2Json, s5Json, softened, tabooLeft)
     If LenB(dataJson) = 0 Then Exit Function
 
+    ' 5項目とも**必ず** StripFieldSeps を通してから並べる(裁定書40 Q-M1)。
+    ' 通し忘れが1項目でもあると、そこから後ろが全部1つずつずれる。
     Dim coverFields As String
-    coverFields = modJsonLite.GetStr(metaJson, "company") & EP_SEP
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "title") & EP_SEP
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "subtitle") & EP_SEP
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "date") & EP_SEP
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "reviewed_by")
+    coverFields = StripFieldSeps(modJsonLite.GetStr(metaJson, "company")) & EP_SEP
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "title")) & EP_SEP
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "subtitle")) & EP_SEP
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "date")) & EP_SEP
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "reviewed_by"))
 
     BuildProposalHtmlEx = modProposalHtml1.BuildProposalDocument(dataJson, coverFields)
     Exit Function
@@ -280,19 +320,29 @@ End Function
 Public Function BuildProposalData(ByVal metaJson As String, ByVal s2Json As String, _
                                   ByVal s5Json As String) As String
     Dim softened As Long
-    BuildProposalData = BuildProposalDataEx(metaJson, s2Json, s5Json, softened)
+    Dim tabooLeft As String
+    BuildProposalData = BuildProposalDataEx(metaJson, s2Json, s5Json, softened, tabooLeft)
 End Function
 
 ' ==========================================================
-' BuildProposalDataEx - 上と同じだが、S2 由来の自由文に掛けた対訳表の機械置換の
-'   **箇所数**を softened へ返す(裁定書39 R2-11)。置換したのに誰も数えて
-'   いなかったため、顧客文面が黙って書き換わっていた。
+' BuildProposalDataEx - 上と同じだが、呼出側が記録に使う2つを返す。
+'   softened  : S2 由来の自由文に掛けた対訳表の機械置換の**箇所数**
+'               (裁定書39 R2-11。置換したのに誰も数えていなかったため、
+'                顧客文面が黙って書き換わっていた)
+'   tabooLeft : 組み上がったDATA(=顧客の目に触れる本文のすべて)に**残った**
+'               社内語(";"区切り。空=1語も残っていない。裁定書40 S-M1)。
+'               一般語・サ変語幹は機械置換の対象外なので残りうるし、
+'               `s5_edited` を人が直した経路は CheckS5 を通らないので S5 側の
+'               本文にも残りうる。**DATA全体**を見るのはこの2経路を1箇所で
+'               押さえるためである。
 ' ==========================================================
 Public Function BuildProposalDataEx(ByVal metaJson As String, ByVal s2Json As String, _
                                     ByVal s5Json As String, _
-                                    ByRef softened As Long) As String
+                                    ByRef softened As Long, _
+                                    ByRef tabooLeft As String) As String
     Dim p As String
     softened = 0
+    tabooLeft = vbNullString
     p = modJsonLite.ExtractJsonBlock(s5Json)
     If LenB(Trim$(p)) = 0 Then Exit Function
 
@@ -306,6 +356,9 @@ Public Function BuildProposalDataEx(ByVal metaJson As String, ByVal s2Json As St
     s = s & ",""categories"":[" & CategoriesBody(items, n) & "]"
     s = s & ",""risks"":[" & RisksBody(items, n, softened) & "]"
     s = s & ",""p"":" & p & "}"
+    ' 顧客向け本文に残った社内語を**最後に1回だけ**数える(裁定書40 S-M1)。
+    ' 不合格にはしない(ここで止めると語1つで提案書が作れなくなる)。
+    tabooLeft = modValidate4.TabooHit(s)
     BuildProposalDataEx = s
 End Function
 
@@ -539,11 +592,13 @@ Public Function ClassLabelOf(ByVal transferability As String) As String
     End Select
 End Function
 
-' 13章§2.2 の解決順(s5_edited > s5_json)。
+' 13章§2.2 の解決順(s5_edited > s5_json)。**空白類だけの s5_edited は
+'   「直していない」として扱い s5_json へ落とす**(裁定書39 R2-04 と同型。
+'   Trim$ だけだと TAB/全角空白だけの編集が本文を上書きしてしまう)。
 Private Function ResolveProposalJson(ByVal caseId As String) As String
     Dim t As String
     t = modCaseStore.LoadData(caseId, "s5_edited")
-    If LenB(Trim$(t)) > 0 Then
+    If modUtilText.HasVisibleText(t) Then
         ResolveProposalJson = t
         Exit Function
     End If
@@ -559,6 +614,38 @@ Private Function DateHeadOf(ByVal stampText As String) As String
     Else
         DateHeadOf = stampText
     End If
+End Function
+
+' ==========================================================
+' TabooLeftNote - 顧客向け本文に**残った**社内語を usage_log へ1行残す
+'   (裁定書40 S-M1)。一般語(移転・保有・抜け)とサ変語幹(付保・保険化ほか)を
+'   機械置換の対象から外した代償として裁定が求めた警告であり、
+'   **件数**(n=)と V-S5-12 の警告文(語の一覧)の両方を残す。
+'   出力は止めない: ここは検証ではなく注記のチャネルである(裁定書40 §0)。
+'   機械置換が責任を持つ語(TabooHitStrict)が残っていたら、それは置換の
+'   取りこぼし=実装の欠陥なので**別の行**で区別して残す(strict=)。
+' ==========================================================
+Private Sub TabooLeftNote(ByVal caseId As String, ByVal tabooLeft As String)
+    If LenB(tabooLeft) = 0 Then Exit Sub
+
+    modLog.LogUsage "proposal_taboo_left", caseId, _
+        "n=" & CStr(SepCount(tabooLeft)) & " " & modValidate4.TabooWarnLine(tabooLeft)
+
+    Dim strictLeft As String
+    strictLeft = modValidate4.TabooHitStrict(tabooLeft)
+    If LenB(strictLeft) > 0 Then
+        modLog.LogUsage "proposal_taboo_left", caseId, "strict=" & strictLeft
+    End If
+End Sub
+
+' ";" 区切りの語数(空なら0)。Split() の戻り値へ直接添字を付けない
+'   (LibreOffice Basic が解さない。他のモジュールと同じ書き方)。
+Private Function SepCount(ByVal listText As String) As Long
+    Dim parts() As String
+
+    If LenB(listText) = 0 Then Exit Function
+    parts = Split(listText, EP_SEMI)
+    SepCount = UBound(parts) - LBound(parts) + 1
 End Function
 
 ' PII走査(16章 E-05(6))。検知種別と箇所だけを記録する(本文は残さない
