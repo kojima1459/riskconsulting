@@ -34,7 +34,9 @@ Option Explicit
 
 Private Const EX_SRC As String = "modExportHtml"
 Private Const EX_EXT As String = ".html"
-Private Const EX_TAIL As String = "リスクレポート"
+' W12-c(裁定書38 §1 班C 3): ファイル名の先頭語。旧「リスクレポート」は
+' 末尾語だったが、`レポート_<会社名>_<yyyymmdd>_v<app_version>` の形へ改めた。
+Private Const EX_TAIL As String = "レポート"
 Private Const EX_SEP As String = vbTab
 Private Const EX_WARN_SEP As String = vbLf
 Private Const EX_PH_COMPANY As String = "{{COMPANY}}"
@@ -438,13 +440,20 @@ Private Function JStr(ByVal keyName As String, ByVal valueText As String) As Str
     JStr = """" & keyName & """:""" & modJsonLite.EscapeJsonStr(valueText) & """" ' SAFE:html
 End Function
 
-' ファイル名(拡張子を除く)。規則の正は 13章§2.8 / modUtilText 側。
-'   裁定書9 B4: 末尾は「リスクレポート_<yyyymmdd>」(IsoDateCompact)。日付を
-'   落とすと同一案件の再生成が同名になる(13章§2.8のテンプレートの一部)。
+' ファイル名(拡張子を除く)。規則の正は 13章§2.8。
+'   **W12-c(裁定書38 §1 班C 3)で `レポート_<会社名>_<yyyymmdd>_v<app_version>`
+'   へ改めた**(顧客向け提案書と同じ形にし、受け取った人がファイル名だけで
+'   「いつの・どの版の」出力かを判別できるようにする)。組立の実体は
+'   modUtilPath.BuildVersionedFileName の1本で、提案書と共有する。
+'   日付は従来どおりテンプレートの一部として必ず付ける(裁定書9 B4。落とすと
+'   同一案件の再生成が同名になる)。同名が既に在れば _2 _3 の連番を探す。
+'   caseId は名前に入らなくなったが、案件との対応は案件一覧の report_path が
+'   持つ(13章§2.1)。
 Private Function FileNameOf(ByVal company As String, ByVal caseId As String, _
                             ByVal dirText As String) As String
-    FileNameOf = modUtilText.BuildFileNameSafe(company, caseId, _
-                     EX_TAIL & "_" & modUtilText.IsoDateCompact(Date), dirText, EX_EXT) ' SAFE:html ファイル名(HTMLへは入らない)
+    FileNameOf = modUtilPath.BuildVersionedFileName(EX_TAIL, company, _
+                     modUtilText.IsoDateCompact(Date), _
+                     modConfig.GetStr("app_version", EX_VER_DEFAULT), dirText, EX_EXT) ' SAFE:html ファイル名(HTMLへは入らない)
 End Function
 
 ' 裁定書9 B4(13章§2.8): 存在しないパスが見つかるまで _2 _3 と連番を探す。

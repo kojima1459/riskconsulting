@@ -319,8 +319,26 @@ PURE_ALLOWLIST = [
     #   (19/20/21字境界)を叩く。modTestRunner.RunAllPureTests から
     #   modTestsPure* の連鎖とは別に呼ぶ(他班の連鎖と衝突させない)。
     "modTestsPure26",
+    # modTestsPure27: W15(裁定書38 班C)の純層。CheckS5(15章§5.6 の13件)・
+    #   提案書テンプレの登録表とDATA(20章)・確認必須とファイル名(W12-c)・
+    #   対訳表(modValidate4.TabooPairs / SoftenTaboo / TabooHit)を叩く。
+    #   modTestRunner.RunAllPureTests から modTestsPure* の連鎖とは別に呼ぶ。
+    "modTestsPure27",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
+    # W15(裁定書38 班C)。MK-S5(15章§5.6)の本体。
+    "modMockLlm4",
+    # W15(裁定書38 班C)。S5 と顧客向け提案書(20章)。いずれも純文字列か、
+    #   テストが叩くのは純関数だけ(技術メモ4):
+    #     modPromptsS5 / modSchemas2 = 15章§5.6 の本文とスキーマ(全体が純文字列)
+    #     modValidate4 = CheckS5 / TabooPairs / SoftenTaboo / TabooHit / ObjBlock
+    #     modProposalHtml1..4 = 提案書テンプレ(全体が純文字列。R4)
+    #     modExportProposal = NeedsReviewMessage / BuildProposalMetaJson /
+    #       BuildProposalData / BuildProposalHtml / StatsText(純組立)。
+    #       GenerateProposalHtml はファイルとstoreに触れるが実行に到達しない
+    "modPromptsS5", "modSchemas2", "modValidate4",
+    "modProposalHtml1", "modProposalHtml2", "modProposalHtml3", "modProposalHtml4",
+    "modExportProposal",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON
     #   の逐語模擬。純関数だけなので層(a)から直接叩ける(裁定書33 C-3)。
     "modRibbonSim",

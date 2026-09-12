@@ -1329,6 +1329,323 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 補足: V-S4-06 は file_title が出力ファイル名の元になるため（`modUtilText.SanitizeFileName` を通す。14章§6）。CheckS4 は s4_variant によって分岐しない。
 
+---
+
+## 5.6 Step5 顧客向け提案書生成（S5。W15・裁定書38 班C で新設）
+
+**節の置き場所について**: 裁定書38 §1 班C は「15章に §5.6 を**末尾に追記**（既存節は触らない）」と指示したが、`tools/validate_check.py` は**各Check節の検証ルール表を §11 より前からしか読まない**（`parse_rule_tables`）ため、本章末尾へ置くと CheckS5 の表が検問の対象外になる。そこで**§5 と §6 のあいだ**という本来の位置へ置き、「既存節は触らない」（§5・§6 の本文を1文字も変えない挿入）の方だけを守った。追加したのは本節と、§10.2 対応表の3行・§11 の CheckS5 行と合計値である。
+
+**位置づけ**（docs/29 §5・20章）: S1からS4 が**営業担当者向け**の分析であるのに対し、S5 は**お客さまへそのままお渡しする提案書**（Wide 22枚）の文章だけを作る。HTML は VBA が固定テンプレ（20章）で組み、**LLM に HTML を書かせない**。呼び出しは**1回（フラッグシップ）＋修復1回**。件数・スコア・順位・IDといった数値は **VBA が S2/S3 から数えて埋める**（AI に数えさせない）ため、Schema-S5 に `stats` は無い。
+
+**入力**: S1＋S2＋S3（18章 DATA と同じ解決順＝`sN_edited > sNr_json > sN_json`）。S4 があれば骨子の見出しも参考として渡す（無くても生成できる）。
+
+### system（BuildS5System）
+
+```
+あなたは大手損害保険グループのコンサルタントです。お客さまの経営層にそのままお渡しできる提案書の文章を作ります。
+
+【1. 読み手と立場】
+読み手はお客さまの経営層です。宛先は「御中」、お客さまのことは「貴社」、自社のことは「当社」と書きます。文体は敬体(です・ます)で統一します。
+
+【2. 書いてはいけない型】
+・「『保険の見直し』ではなく」のように、否定で始めて枠組みを語る書き方。貴社にとっての意味を述べる文に書き換えてください。
+・社内のラベル(提案の核／対話の順序／攻めの／発散段階／仕分け)。
+・お客さまの認識を評価する表現(「と思われがちですが」「限定されません」)。
+・当社の作業を主語にした説明(方法論・判定・開発・組成)。
+
+【3. 用語】
+次の対訳に従い、左の語を本文に書かず、右の語で書いてください。略語は本文で日本語にし、用語集の脚注に頼りません。
+付保 -> 保険のご加入
+未付保 -> 保険に入っていない状態
+付保ギャップ -> 保険で手当てできていない部分
+未充足 -> 保険の手当てが無い
+移転 -> 保険で備える
+保有 -> 自社で負担する
+トリガー -> 保険金をお支払いする条件
+サブリミット -> 補償項目ごとの支払限度額
+待機期間 -> 補償が始まるまでの期間
+保険化 -> 保険での備え方の設計
+特約開発 -> 補償内容の新しい設計
+組成 -> 仕組みづくり
+募集スキーム -> ご加入の手続きの流れ
+料率 -> 保険料の水準
+相関損失 -> 同時に起きる損害
+引受 -> 保険のお引き受け
+過少保険 -> 補償額が損害に届かない状態
+抜け -> 補償されない部分
+免責金額 -> ご負担いただく金額
+支払限度額 -> お支払いの上限額
+リスクユニバース -> リスクの全体像
+ニューリスク -> 新しく生まれているリスク
+座組 -> ご提案の構成
+ヒアリング -> お伺いしたい事項
+提案の核 -> ご提案の前提
+攻めの保険活用 -> 成長を後押しする保険の活用
+発散段階 -> 構想段階
+実装難度 -> 実現までの難易度
+顕在化 -> 実際に起きること
+打ち手 -> 対策
+商材 -> 保険商品
+リスク移転可能性 -> 保険での備えやすさ
+与信 -> 取引先の支払い能力
+座組パターン -> ご提案の型
+PML -> 想定最大損害額
+CBI -> 取引先の被災による損害
+BI -> 事業が止まったことによる利益の減少
+RTO -> 復旧までの目標時間
+BCP -> 事業継続計画
+OT -> 工場の制御システム
+MFA -> 多要素認証
+EDR -> 端末の不審な動きを検知する仕組み
+KRI -> リスクの予兆指標
+SLA -> サービス水準の取り決め
+D&O -> 会社役員賠償責任保険
+PL保険 -> 生産物賠償責任保険
+次の3語は言い換えずに削ってください: 対話の順序 / クロスセル / 仕分け。
+
+【4. 事実の扱い】
+入力にある事実だけを使い、足しません。入力から導ける整理(比較表・対応表・参照)は書いてよい。契約が未確認であること、評価が仮のものであることの断り書きは残します。出典は本文で使ったものだけを載せます。
+
+【5. 一貫性】
+テーマ名と順序、評価のラベル、3分類のラベル、カテゴリー名は全ページで統一します。リスク番号を使う場合は、巻末の一覧に必ず載っている番号だけを使います。
+
+【6. 標準構成】
+表紙 -> ご提案の要旨(3テーマ＋実数の指標帯＋前提＋本資料の構成) -> Section 1から5 -> 提案テーマ -> 進め方(役割と費用の扱い) -> 本日ご判断いただきたいこと -> ご共有いただきたい事項(優先の印) -> 巻末リスク一覧 -> 本資料の前提と出典 -> 裏表紙。この22枚の構成は固定です。
+
+【7. 1枚の設計】
+各ページの見出し(headline)は結論の一文にします。1行に収まる45文字程度、60文字を超えないこと。1枚1メッセージ、データは左・示唆は右に置く前提で書きます。
+
+【8. 分量の上限】
+表は8行程度、カードは4行から6行を上限として書きます。1つの文は80字を超えないようにします。
+
+【9. 当社サービスの記載条件】
+入力に当社の支援メニューの記載がない限り、当社のサービスとして書きません。対策は「貴社側の対策(例)」として書きます。
+
+【出力の形式】
+指定したJSON形式だけを出力します(説明文を付けません)。出力のJSONは整形し、閉じ括弧の } と ] の直前では必ず改行してください。
+```
+（末尾に BLOCK_GUARD）
+
+### user（BuildS5User）
+
+```
+■■■お客さまここから■■■
+{{company}}
+■■■お客さまここまで■■■
+
+■■■企業プロファイル(S1)ここから■■■
+{{s1Json}}
+■■■企業プロファイル(S1)ここまで■■■
+
+■■■リスク仮説と付保ギャップ(S2)ここから■■■
+{{s2Json}}
+■■■リスク仮説と付保ギャップ(S2)ここまで■■■
+
+■■■提案ストーリー(S3)ここから■■■
+{{s3Json}}
+■■■提案ストーリー(S3)ここまで■■■
+
+■■■当社が数えた実数ここから■■■
+{{statsText}}
+■■■当社が数えた実数ここまで■■■
+
+上の実数は当社が数えた値です。件数・順位・スコアを自分で数え直さず、必要なときはこの値をそのまま文章に使ってください。
+
+22枚の提案書の文章を、指定のJSON形式で出力してください。
+
+出力するJSONの形式:
+{
+  "title": "表紙の題(例 経営リスク分析と保険活用のご提案)",
+  "subtitle": "表紙の副題(貴社の強みを一文で。40字以内)",
+  "themes": [
+    {"name": "テーマ名(10字以内)", "headline": "そのテーマの結論の一文", "body": "本文(120字以内)"}
+  ],
+  "premise": "本資料の前提と留意事項(200字以内)",
+  "structure": ["本資料の構成(1項目20字以内)"],
+  "business": {
+    "areas": [{"name": "事業領域の名称", "desc": "説明(60字以内)"}],
+    "factors": [{"name": "リスク要因の名称", "tag": "公開情報より または 当社の想定", "desc": "説明(60字以内)"}],
+    "facts": [{"label": "項目名", "value": "値", "note": "補足(30字以内)"}]
+  },
+  "categories_note": {"heavy": "件数の多いカテゴリーについての一文", "meaning": "貴社にとっての意味(80字以内)"},
+  "headline": {
+    "riskmap": "リスクマップ頁の結論の一文",
+    "classes": "3分類の頁の結論の一文",
+    "priority": "優先リスクの頁の結論の一文",
+    "hard": "保険だけでは備えにくいリスクの頁の結論の一文",
+    "ideas": "成長支援アイデアの頁の結論の一文",
+    "four": "優先4案の頁の結論の一文",
+    "themes": "提案テーマの頁の結論の一文",
+    "steps": "進め方の頁の結論の一文",
+    "decide": "本日ご判断いただきたいことの頁の結論の一文",
+    "share": "ご共有いただきたい事項の頁の結論の一文",
+    "appendix": "巻末リスク一覧の頁の結論の一文"
+  },
+  "hard_risks": [
+    {"risk_no": 1, "horizon": "現在 または 3年 または 5年 または 10年", "background": "背景(80字以内)", "approach": "備え方(80字以内)"}
+  ],
+  "ideas": [
+    {"title": "アイデアの題", "aim": "狙い(60字以内)", "effect": 3, "difficulty": "低 または 中 または 高", "priority": true}
+  ],
+  "four": [
+    {"title": "優先案の題", "aim": "狙い(60字以内)", "mechanism": "仕組み(100字以内)", "insurance": "想定する保険(一般名称)"}
+  ],
+  "theme_table": [
+    {"theme": "テーマ名", "issues": "経営課題", "insurance": "対応する保険(一般名称)", "kpi": "経営指標"}
+  ],
+  "steps": [
+    {"title": "ステップの題", "who": "当社 または 当社と貴社", "desc": "内容(80字以内)", "ref": "本資料での該当箇所"}
+  ],
+  "decisions": [
+    {"title": "ご判断いただきたいこと", "options": "選択肢(80字以内)", "note": "確認したい点(60字以内)"}
+  ],
+  "share_items": [
+    {"text": "ご共有いただきたい事項", "group": "区分(例 事業・生産)", "priority": true}
+  ],
+  "notes": [
+    {"slide_no": 1, "read": "読み上げ(120字以内)", "ask": "問いかけ(40字以内)", "probe": ["更問"], "follow": ["フォロー"]}
+  ]
+}
+```
+
+`{{statsText}}` は `AsmS5User` が**展開済みの文字列**を埋める（プレースホルダの入れ子にしない）。値は VBA が S2/S3 から数えた実数を1行1項目で並べたもの（`リスク総数=24` / `保険で備えやすい=8` / `補償条件の設計が必要=10` / `保険以外の対策が中心=6` / `成長支援アイデア=8` / `優先候補=4`）であり、実体は `modExportProposal.StatsText`（20章§3）。
+
+### Schema-S5（`SchemaS5()`）
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {"type": "string"},
+    "subtitle": {"type": "string"},
+    "themes": {"type": "array", "items": {"type": "object", "properties": {
+      "name": {"type": "string"},
+      "headline": {"type": "string"},
+      "body": {"type": "string"}
+    }, "required": ["name", "headline", "body"], "additionalProperties": false}},
+    "premise": {"type": "string"},
+    "structure": {"type": "array", "items": {"type": "string"}},
+    "business": {"type": "object", "properties": {
+      "areas": {"type": "array", "items": {"type": "object", "properties": {
+        "name": {"type": "string"},
+        "desc": {"type": "string"}
+      }, "required": ["name", "desc"], "additionalProperties": false}},
+      "factors": {"type": "array", "items": {"type": "object", "properties": {
+        "name": {"type": "string"},
+        "tag": {"type": "string", "enum": ["公開情報より", "当社の想定"]},
+        "desc": {"type": "string"}
+      }, "required": ["name", "tag", "desc"], "additionalProperties": false}},
+      "facts": {"type": "array", "items": {"type": "object", "properties": {
+        "label": {"type": "string"},
+        "value": {"type": "string"},
+        "note": {"type": "string"}
+      }, "required": ["label", "value", "note"], "additionalProperties": false}}
+    }, "required": ["areas", "factors", "facts"], "additionalProperties": false},
+    "categories_note": {"type": "object", "properties": {
+      "heavy": {"type": "string"},
+      "meaning": {"type": "string"}
+    }, "required": ["heavy", "meaning"], "additionalProperties": false},
+    "headline": {"type": "object", "properties": {
+      "riskmap": {"type": "string"},
+      "classes": {"type": "string"},
+      "priority": {"type": "string"},
+      "hard": {"type": "string"},
+      "ideas": {"type": "string"},
+      "four": {"type": "string"},
+      "themes": {"type": "string"},
+      "steps": {"type": "string"},
+      "decide": {"type": "string"},
+      "share": {"type": "string"},
+      "appendix": {"type": "string"}
+    }, "required": ["riskmap", "classes", "priority", "hard", "ideas", "four", "themes", "steps", "decide", "share", "appendix"], "additionalProperties": false},
+    "hard_risks": {"type": "array", "items": {"type": "object", "properties": {
+      "risk_no": {"type": "integer"},
+      "horizon": {"type": "string", "enum": ["現在", "3年", "5年", "10年"]},
+      "background": {"type": "string"},
+      "approach": {"type": "string"}
+    }, "required": ["risk_no", "horizon", "background", "approach"], "additionalProperties": false}},
+    "ideas": {"type": "array", "items": {"type": "object", "properties": {
+      "title": {"type": "string"},
+      "aim": {"type": "string"},
+      "effect": {"type": "integer"},
+      "difficulty": {"type": "string", "enum": ["低", "中", "高"]},
+      "priority": {"type": "boolean"}
+    }, "required": ["title", "aim", "effect", "difficulty", "priority"], "additionalProperties": false}},
+    "four": {"type": "array", "items": {"type": "object", "properties": {
+      "title": {"type": "string"},
+      "aim": {"type": "string"},
+      "mechanism": {"type": "string"},
+      "insurance": {"type": "string"}
+    }, "required": ["title", "aim", "mechanism", "insurance"], "additionalProperties": false}},
+    "theme_table": {"type": "array", "items": {"type": "object", "properties": {
+      "theme": {"type": "string"},
+      "issues": {"type": "string"},
+      "insurance": {"type": "string"},
+      "kpi": {"type": "string"}
+    }, "required": ["theme", "issues", "insurance", "kpi"], "additionalProperties": false}},
+    "steps": {"type": "array", "items": {"type": "object", "properties": {
+      "title": {"type": "string"},
+      "who": {"type": "string", "enum": ["当社", "当社と貴社"]},
+      "desc": {"type": "string"},
+      "ref": {"type": "string"}
+    }, "required": ["title", "who", "desc", "ref"], "additionalProperties": false}},
+    "decisions": {"type": "array", "items": {"type": "object", "properties": {
+      "title": {"type": "string"},
+      "options": {"type": "string"},
+      "note": {"type": "string"}
+    }, "required": ["title", "options", "note"], "additionalProperties": false}},
+    "share_items": {"type": "array", "items": {"type": "object", "properties": {
+      "text": {"type": "string"},
+      "group": {"type": "string"},
+      "priority": {"type": "boolean"}
+    }, "required": ["text", "group", "priority"], "additionalProperties": false}},
+    "notes": {"type": "array", "items": {"type": "object", "properties": {
+      "slide_no": {"type": "integer"},
+      "read": {"type": "string"},
+      "ask": {"type": "string"},
+      "probe": {"type": "array", "items": {"type": "string"}},
+      "follow": {"type": "array", "items": {"type": "string"}}
+    }, "required": ["slide_no", "read", "ask", "probe", "follow"], "additionalProperties": false}}
+  },
+  "required": ["title", "subtitle", "themes", "premise", "structure", "business", "categories_note", "headline", "hard_risks", "ideas", "four", "theme_table", "steps", "decisions", "share_items", "notes"],
+  "additionalProperties": false
+}
+```
+
+### CheckS5 検証ルール表（modValidate4.CheckS5）
+
+`CheckS5(ByVal jsonText As String, ByVal s2Json As String) As String` - ""=合格。`s2Json` は `risk_no` の実在検査に使う一覧であり、**非空の `risk_no` を持つのに `s2Json` が空**のときは V-S5-03 で不合格にする（§11「一覧未提供時も不合格」の fail-closed 規約と同じ）。
+
+| ケースID | 対象キー | 条件（これに該当したら発火） | 判定 | エラー文テンプレ |
+|---|---|---|---|---|
+| V-S5-01 | themes | 件数が3でない | 不合格 | `[V-S5-01] themes が{n}件です(3件固定)` |
+| V-S5-02 | headline | 11キーのいずれかが空、または60字超 | 不合格 | `[V-S5-02] headline.{key} が{n}字です(空にせず60字以内)` |
+| V-S5-03 | hard_risks[].risk_no | S2 の `risks[].risk_no` に実在しない（一覧未提供時も不合格） | 不合格 | `[V-S5-03] hard_risks の risk_no {value} がS2に実在しません` |
+| V-S5-04 | hard_risks | 件数が1未満または6超 | 不合格 | `[V-S5-04] hard_risks が{n}件です(1から6件)` |
+| V-S5-05 | ideas | 件数が1未満または8超 | 不合格 | `[V-S5-05] ideas が{n}件です(1から8件)` |
+| V-S5-06 | ideas[].effect | 1から5の整数でない | 不合格 | `[V-S5-06] ideas の effect が{value}です(1から5の整数)` |
+| V-S5-07 | four | 件数が1未満または4超 | 不合格 | `[V-S5-07] four が{n}件です(1から4件)` |
+| V-S5-08 | steps | 件数が4でない | 不合格 | `[V-S5-08] steps が{n}件です(4件固定)` |
+| V-S5-09 | decisions | 件数が3でない | 不合格 | `[V-S5-09] decisions が{n}件です(3件固定)` |
+| V-S5-10 | notes | 件数が22でない（22枚ぶんの発表者ノート） | 不合格 | `[V-S5-10] notes が{n}件です(22件固定)` |
+| V-S5-11 | business.areas / business.factors | どちらかの件数が5でない | 不合格 | `[V-S5-11] business.{key} が{n}件です(5件固定)` |
+| V-S5-12 | 本文全体 | 対訳表の社内語（禁止語）が本文に残っている | 不合格 | `[V-S5-12] 顧客向けに書き換えていない語があります: {value}` |
+| V-S5-13 | share_items[].priority | 全件 false（優先の印が1つも無い） | 警告 | `[V-S5-13] share_items に優先の印がありません(4件程度に印を付けてください)` |
+
+- **V-S5-12 の砦（docs/29 §5.3）**: 禁止語が残れば修復1回を掛ける。**修復後も V-S5-12 だけが残る場合は、`modValidate4.SoftenTaboo` が対訳表で機械置換して生成を続行し、run_log の detail へ `taboo_softened=n` を残す**（生成を止めない。置換したことを黙らせない）。V-S5-12 以外の不合格が残っている場合は通常どおり失敗させる。
+- 禁止語の値源は `modValidate4.TabooPairs()`（`社内語<TAB>顧客語` を vbLf で並べた1本の文字列）であり、`docs/design/提案書_wide/対訳表_社内語から顧客語.md` と `tools/render_proposal.py` が突き合わせる。
+
+### mock 応答（MK-S5）
+
+§8.1 の表に **12本目**として `MK-S5`（step=`s5` / バリアント=共通）を加える。実体は `modMockLlm4.BuildS5Json`（`modMockLlm.ResponseById("MK-S5")` から委譲）。内容の要点は次のとおりで、**CheckS5 が1件も発火しない**こと（V-S5-13 の警告も出ないこと）を受入条件とする。
+
+- `themes` 3件（事業を止めない／ブランドを守る／成長を後押しする）、`headline` 11キーすべて非空で60字以内。
+- `business.areas` 5件・`business.factors` 5件（`tag` は公開情報より／当社の想定の両方を含む）・`facts` 4件。
+- `hard_risks` 4件（`risk_no` は MK-S2-RNW の 2/4/6/8＝`transferability` が `hard` または `partial` のもの）。
+- `ideas` 8件（うち `priority=true` が4件・`effect` は1から5）、`four` 4件、`theme_table` 3件、`steps` 4件（`who` は両方の値を含む）、`decisions` 3件、`share_items` 10件（うち `priority=true` が4件）、`notes` 22件（`slide_no` 1から22）。
+- 本文に対訳表の社内語を1語も含まない（V-S5-12 が発火しない）。
+- `"},` を含まない整形JSON（16章 E-63・`tools/ribbon_wire_check.py`）。
+
 ## 6. プリフライト診断（PF・PL-03）
 
 ### system（BuildPFSystem）
@@ -1657,6 +1974,9 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | §6 system / user / スキーマ | `BuildPFSystem()` / `BuildPFUser()` / `SchemaPF()` | modPromptsOps / modSchemas |
 | §6.5 system | `BuildSparringSystem()` | modPromptsOps |
 | §7 修復リトライ | `RepairSuffix()` | modPromptsOps |
+| §5.6 system | `BuildS5System()` | modPromptsS5 |
+| §5.6 user | `BuildS5User()` | modPromptsS5 |
+| §5.6 Schema-S5 | `SchemaS5()` | modSchemas2 |
 | §9 WT / FG（Phase 1.5） | `SchemaWT()` / `SchemaFG()` | modSchemas ※本節はまだコードフェンスを持たず要旨のみのため、**Phase 1.5の全文昇格（T-50）まで `prompt_diff.py` の突合対象外**とする |
 
 `Block*` の9関数（`BlockCtx` / `BlockRenewalS1` / `BlockRenewalS2` / `BlockRenewalS3` / `BlockNewS2` / `BlockRound2Focus` / `BlockGuard` / `BlockS4Proposal` / `BlockS4Alliance`）は14章§6に宣言のない modPromptsBlocks 内部の関数であり、いずれも**引数なしでテンプレート文字列（`{{...}}` を含んだまま）を返す**。
@@ -1676,8 +1996,9 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | CheckPF | V-PF-01 ～ V-PF-07（7件） | 01/02/03/04/05/06/07（03は一覧未提供時も不合格） | - | - |
 | CheckS2C | V-S2C-01 ～ V-S2C-05（5件） | 01/02/03（03は審査対象S2の未提供時も不合格） | 04 | 05（issues 0件=改訂スキップ） |
 | CheckS3C | V-S3C-01 ～ V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
+| CheckS5 | V-S5-01 ～ V-S5-13（13件） | 01/02/03/04/05/06/07/08/09/10/11/12（03は一覧未提供時も不合格） | 13 | - |
 
-**合計77件**（不合格61件 / 警告14件 / 合格判定2件）。ケースIDは削除する場合も番号を再利用しない（追番のみ）。
+**合計90件**（不合格73件 / 警告15件 / 合格判定2件）。W15・裁定書38 班C で CheckS5（V-S5-01 から V-S5-13。13件＝不合格12件・警告1件）を追加した。ケースIDは削除する場合も番号を再利用しない（追番のみ）。
 
 **枝番 `V-S2-12b` と欠番 `V-S2-12` の扱い（v2.6・裁定書25 S1）**: 旧 `V-S2-12`（新規案件で gaps が1件以上→不合格）は撤回した。**番号 `V-S2-12` は永久欠番**とし再利用しない。その位置に新しい条件を置くため、裁定書25の指定どおり**枝番 `V-S2-12b`** を新設した（CheckS2 の実体は 01..11 / **12b** / 13..18 の18件）。上の表の範囲表記が `V-S2-01 ～ V-S2-18` の連番形なのは照合器（`tools/validate_check.py`）が範囲を機械展開するためであり、**12 の位置に立つ実体は `V-S2-12b` である**。照合器は枝番と欠番をまだ解さないため、**この2つを解釈できるようにするのは実装側の作業**（17章 T-55）である。それまで `validate` ゲートは `V-S2-12` を要求して赤くなるが、それは仕様の誤りではない。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
 

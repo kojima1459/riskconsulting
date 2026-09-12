@@ -924,6 +924,94 @@
       "role": "test",
       "type": "std",
       "wave": "T-55"
+    },
+    {
+      "name": "modPromptsS5",
+      "path": "src/app/modPromptsS5.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。15章§5.6 の S5 system/user テンプレート(純文字列)。prompt_diff の SECTION_MAP に登録済み。"
+    },
+    {
+      "name": "modSchemas2",
+      "path": "src/app/modSchemas2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。Schema-S5(15章§5.6)。modSchemas が30,000字契約に対して余白不足のため分割した。"
+    },
+    {
+      "name": "modValidate4",
+      "path": "src/app/modValidate4.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。CheckS5(15章§5.6 の13件)・対訳表(TabooPairs)・機械置換(SoftenTaboo)。modValidate/2 は満杯、modValidate3 は班A が使う。"
+    },
+    {
+      "name": "modPipeline5",
+      "path": "src/app/modPipeline5.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。S5 の実行(1呼び出し+修復1回)と AsmS5User。"
+    },
+    {
+      "name": "modProposalHtml1",
+      "path": "src/app/modProposalHtml1.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。提案書 Wide の骨格・スライド登録表(22枚)・ランタイム。20章§4。"
+    },
+    {
+      "name": "modProposalHtml2",
+      "path": "src/app/modProposalHtml2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。提案書 Wide の CSS(RootCss/FormatCss/ContentCss)。20章§5・§6。"
+    },
+    {
+      "name": "modProposalHtml3",
+      "path": "src/app/modProposalHtml3.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。提案書 Wide の描画(1枚目から11枚目)。"
+    },
+    {
+      "name": "modProposalHtml4",
+      "path": "src/app/modProposalHtml4.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。提案書 Wide の描画(13枚目から22枚目)と免責の固定文。"
+    },
+    {
+      "name": "modExportProposal",
+      "path": "src/app/modExportProposal.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。提案書の DATA 組立・書出。reviewedBy が空なら生成しない。"
+    },
+    {
+      "name": "modMockLlm4",
+      "path": "src/test/modMockLlm4.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。mock 応答 MK-S5(15章§5.6)。"
+    },
+    {
+      "name": "modTestsPure27",
+      "path": "src/test/modTestsPure27.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班C。CheckS5 の13件・スライド登録表・DATA の内部値排除・reviewedBy 空・ファイル名規則。modTestRunner.RunAllPureTests から結線する。"
     }
   ]
 }

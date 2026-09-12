@@ -231,6 +231,15 @@ MODULE_REGISTRY = {
     #   modNavText = 貼付テキストの純変換(StripDrFooter / PreviewLines /
     #                SplitFieldNotes / JoinFieldNotes。11章§7.2(a))。
     "modUIGeom", "modNavText",
+    # W15(裁定書38 班C)で新設。12章§2のモジュール一覧に追記済み。
+    #   modPromptsS5 / modSchemas2 = 15章§5.6 の S5 プロンプトとスキーマ
+    #   modValidate4 = CheckS5(modValidate/2 は満杯・3 は班A が使用)
+    #   modPipeline5 = S5 の実行(1呼び出し+修復1回)
+    #   modProposalHtml1..4 = 顧客向け提案書 Wide 22枚のテンプレ(20章)
+    #   modExportProposal   = 提案書の DATA 組立・書出(reviewedBy 必須)
+    "modPromptsS5", "modValidate4", "modPipeline5",
+    "modProposalHtml1", "modProposalHtml2", "modProposalHtml3",
+    "modProposalHtml4", "modExportProposal",
     # W11-c(裁定書33 C-4)で新設。12章§2のモジュール一覧に追記済み。
     #   modRibbonWire = 経路側で本文が切られた疑いの判定(LooksRibbonCut)と
     #                   err_log detail の1語(CutNote)。16章 E-63。

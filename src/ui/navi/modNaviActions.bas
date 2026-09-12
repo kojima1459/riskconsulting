@@ -98,6 +98,8 @@ Public Function Dispatch(ByVal action As String, ByVal data As String, ByRef cas
         response = PhaseTwoStepEdit(caseId, data)
     Case "export_report"
         response = ActExportReport(caseId, modJsonLite.GetStr(data, "reviewedBy"))
+    Case "export_proposal"
+        response = ActExportProposal(caseId, modJsonLite.GetStr(data, "reviewedBy"))
     Case "export_hearing"
         response = ActExportHearing(caseId, data)
     Case "report_mail"
@@ -188,7 +190,7 @@ End Function
 Public Function NeedsCase(ByVal action As String) As Boolean
     Select Case action
     Case "open_case", "clear_material", "run_pipeline", "open_step_sheet", "save_step_edit", _
-         "export_report", "open_report", "export_hearing", "chat", "clear_chat", "report_mail", _
+         "export_report", "export_proposal", "open_report", "export_hearing", "chat", "clear_chat", "report_mail", _
          "sparring_resume", "sparring_send", "sparring_to_inbox", "start_round2", _
          "company_save", "company_open", "feedback_add", "rename_case", "archive_case", "export_case"
         NeedsCase = True
@@ -510,6 +512,30 @@ Public Function ActExportReport(ByVal caseId As String, ByVal reviewedBy As Stri
     status = modCaseRead.CaseColumnOf(caseId, "status")
     If modCaseStore.CanTransition(status, "exported") Then modCaseStore.SetStatus caseId, "exported"
     ActExportReport = SavedResult(caseId, "レポートを出力しました。")
+End Function
+
+' ActExportProposal - 顧客向け提案書(Wide 22枚)の出力(裁定書38 §1 班C 4)。
+'   レポートとの違いは**確認が必須**であること: reviewedBy が空なら
+'   modExportProposal 側が生成せず案内文を返す。UI側でも先に弾くが、
+'   判断の正は modExportProposal の1箇所である(画面を直しても抜けない)。
+'   案件の status は動かさない(提案書の出力は段の進行ではない。16章 E-48)。
+Public Function ActExportProposal(ByVal caseId As String, ByVal reviewedBy As String) As String
+    Dim path As String, reason As String
+    If Not FlushOwnedSheets(caseId, 5, reason) Then
+        ActExportProposal = Failure(reason, "E0302")
+        Exit Function
+    End If
+    If LenB(modCaseStore.LoadData(caseId, "s5_json")) = 0 And _
+       LenB(modCaseStore.LoadData(caseId, "s5_edited")) = 0 Then
+        ActExportProposal = Failure("先にお客さま向け提案書の作成を実行してください。", "E0101")
+        Exit Function
+    End If
+    reason = modExportProposal.GenerateProposalHtml(caseId, path, reviewedBy)
+    If LenB(reason) > 0 Or LenB(path) = 0 Then
+        ActExportProposal = Failure(reason, "E0603")
+        Exit Function
+    End If
+    ActExportProposal = SavedResult(caseId, "提案書を出力しました。内容をご確認のうえお渡しください。")
 End Function
 
 ' 裁定書37 B-06(UI側)。reviewedBy が空なら従来どおり確認前の免責のまま出す
