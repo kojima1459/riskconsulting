@@ -434,15 +434,17 @@ Public Function ActRunPipeline(ByVal caseId As String, ByVal data As String) As 
         If saveResult <> "saved" Then warning = "企業ファイルへの自動保存に失敗しました。保存先を確認してください。"
         If n = 1 Then
             ' 裁定書37 B-05(表示側)。S1成功直後に充足度を見て iq=low なら
-            ' 16章 E-02 の警告(逐語)を warning へ足し、続行する(モーダル無し)。
-            ' TODO(W14 merge): 班2の modPipeline3.SufficiencyNoteOf(s1Json) が
-            ' マージされたらコメントを外す("iq=low;miss=7" 形式が正)。
-            ' Dim suffNote As String
-            ' suffNote = modPipeline3.SufficiencyNoteOf(modCaseStore.ResolveStepJson(caseId, 1))
-            ' If Left$(suffNote, 6) = "iq=low" Then
-            '     If LenB(warning) > 0 Then warning = warning & vbLf
-            '     warning = warning & "一般論に近い出力になります。"
-            ' End If
+            ' 16章 E-02 の警告(一般論に近い出力になります+advice)を warning へ
+            ' 足し、続行する(モーダル無し)。値源は modPipeline3.SufficiencyNoteOf。
+            Dim suffNote As String, s1Now As String, adviceText As String
+            s1Now = modCaseStore.ResolveStepJson(caseId, 1)
+            suffNote = modPipeline3.SufficiencyNoteOf(s1Now)
+            If Left$(suffNote, 6) = "iq=low" Then
+                adviceText = Trim$(modJsonLite.GetStr(s1Now, "advice"))
+                If LenB(warning) > 0 Then warning = warning & vbLf
+                warning = warning & "入力が薄いため、一般論に近い出力になります。"
+                If LenB(adviceText) > 0 Then warning = warning & " 助言: " & adviceText
+            End If
         End If
         DoEvents
     Next n
@@ -484,14 +486,12 @@ End Function
 ' (GenerateHtmlReport)。非空なら班2の GenerateHtmlReportEx(caseId, reviewedBy)
 ' で確認済みの免責へ切り替える契約(裁定書37 §2 班2欄)。呼び分けはこの1関数に
 ' 閉じ、マージ時はここだけを差し替える。
-' TODO(W14 merge): 班2の modExportHtml.GenerateHtmlReportEx(caseId, reviewedBy, path)
-' がマージされたら下のコメントを外し、この関数全体を差し替える。
 Private Function ExportWithReview(ByVal caseId As String, ByVal reviewedBy As String, ByRef path As String) As String
-    ' If LenB(reviewedBy) > 0 Then
-    '     ExportWithReview = modExportHtml.GenerateHtmlReportEx(caseId, reviewedBy, path)
-    ' Else
+    If LenB(reviewedBy) > 0 Then
+        ExportWithReview = modExportHtml.GenerateHtmlReportEx(caseId, path, reviewedBy)
+    Else
         ExportWithReview = modExportHtml.GenerateHtmlReport(caseId, path)
-    ' End If
+    End If
 End Function
 
 Public Function ActExportHearing(ByVal caseId As String, ByVal data As String) As String

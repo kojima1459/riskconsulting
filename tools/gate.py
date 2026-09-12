@@ -67,6 +67,8 @@ GATES = [
      r"結果: OK 3条件"),
     ("prompt-diff",  [sys.executable, "tools/prompt_diff.py", "--strict"],
      r"一致: \d+件"),
+    ("dossier",      [sys.executable, "tools/dossier_check.py"],
+     r"\[dossier_check\] OK: 全\d+本"),  # docs/08 が15章ルール5bの4点を含む(裁定書37 B-07)
     ("validate",     [sys.executable, "tools/validate_check.py"],
      r"結果: OK|ケース: 計\d+件"),
     ("enum",         [sys.executable, "tools/enum_check.py"],
