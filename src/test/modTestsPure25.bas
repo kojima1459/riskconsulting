@@ -143,9 +143,12 @@ End Sub
 Private Sub T_Prefix()
     Dim bare As String, marked As String, fin As String
 
-    bare = "{""current_coverage"":[{""line_name"":""労働災害総合保険"",""coverage_summary"":" & _
-           """元請の包括契約に上乗せが乗っている"",""limit_note"":""不明"",""special_note"":" & _
-           """不明"",""certainty"":""assumed""}]}"
+    ' 検体は**正規化の後**のS1応答を模す(裁定書40 P-M1 で V-S1-16 も同じ注記
+    '   チャネルへ移ったので、sources を欠いた検体だと V-S1-15 の判定に
+    '   V-S1-16 の1行が混ざる。実運用では PostNormalize が空配列を補う)。
+    bare = "{""sources"":[],""current_coverage"":[{""line_name"":""労働災害総合保険""," & _
+           """coverage_summary"":""元請の包括契約に上乗せが乗っている""," & _
+           """limit_note"":""不明"",""special_note"":""不明"",""certainty"":""assumed""}]}"
     marked = Replace(bare, """労働災害総合保険""", """労働災害総合保険(見立て)""")
 
     ' 05 assumed なのに接頭辞が1つも無い要素は警告にする。
@@ -157,7 +160,7 @@ Private Sub T_Prefix()
         modValidate3.CheckS1Notes(marked, W15_HAY), ""
 
     ' 07 出所を名乗っているのに4項目すべて「不明」は食い違い。
-    fin = "{""financials"":{""fiscal_year"":""不明"",""net_assets"":""不明""," & _
+    fin = "{""sources"":[],""financials"":{""fiscal_year"":""不明"",""net_assets"":""不明""," & _
           """sales"":""不明"",""operating_profit"":""不明"",""source"":""yuho""," & _
           """note"":""不明""}}"
     ChkB "Test_W15_07_出所を名乗るのに全項目不明なら警告_裁定書38B-12", _
@@ -296,31 +299,43 @@ Private Sub T_Round2Fixes()
     Dim j As String, r As String, norm As String
     Dim removed As Long
 
-    ' 20 sources 欠落は V-S1-16(警告)であり、V-S1-01(必須キー欠落=不合格)には
-    '    しない。ここが不合格だと修復リトライ地獄になる。
+    ' 20 sources 欠落は V-S1-16(警告)。**警告は CheckS1 の戻り値に載せない**
+    '    (戻り値は modPipeline.Defend の errText = 修復リトライ -> FailStep の
+    '    fail-closed 経路。裁定書40 P-M1)。出口は注記チャネル(CheckS1Notes)
+    '    1本であり、sources があるときは注記も出ない(両方向で固定する)。
     j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B"",""kind"":""not_found""}]}"
     r = modValidate.CheckS1(j, "new")
-    ChkB "Test_V-S1-16_sources欠落は不合格ではなく警告へ降格_裁定書39R1-09", _
-        Ctn(r, "[V-S1-16] ") And Not Ctn(r, "必須キー sources がありません"), _
-        "実際=[" & r & "]"
+    ChkB "Test_V-S1-16_sources欠落は警告チャネルだけに出す_裁定書40P-M1", _
+        Not Ctn(r, "[V-S1-16] ") And Not Ctn(r, "必須キー sources がありません") And _
+        Ctn(modValidate3.CheckS1Notes(j, W15_HAY), "[V-S1-16] ") And _
+        Not Ctn(modValidate3.CheckS1Notes( _
+            Replace(j, "{""missing_info""", "{""sources"":[],""missing_info"""), _
+            W15_HAY), "[V-S1-16] "), _
+        "実際=[" & r & "] 注記=[" & modValidate3.CheckS1Notes(j, W15_HAY) & "]"
 
     ' 21 補填: NormalizeLlmJson("s1") を通すと空配列の sources が入り、
     '    以降の経路(HTMLレポート SEC-14 の出典表)が「キーが無い」で割れない。
+    '    補填後は注記チャネルの V-S1-16 も鳴らない(補填が効かない壊れたJSONの
+    '    ときだけ鳴る安全網であること)。
     norm = modValidate.NormalizeLlmJson("s1", j, removed)
     ChkB "Test_W15R2_21_S1の正規化が欠落したsourcesへ空配列を補填する_裁定書39R1-09", _
         (InStr(norm, """sources""") > 0) And _
         (modJsonLite.GetArrayItems(norm, "sources").Count = 0) And _
-        Not Ctn(modValidate.CheckS1(norm, "new"), "[V-S1-16] "), _
+        Not Ctn(modValidate3.CheckS1Notes(norm, W15_HAY), "[V-S1-16] "), _
         "実際=[" & norm & "]"
 
     ' 22 missing_info[].kind の enum 検査(警告)。リボン経路はスキーマ強制が
-    '    無いので、conflicted のような値が素通りしていた。
+    '    無いので、conflicted のような値が素通りしていた。これも**注記チャネル
+    '    だけ**に出す(CheckS1 の戻り値に載せると kind を落とす/間違えるモデルで
+    '    案件が二度と S1 を通せない。裁定書40 P-M1)。
     j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B"",""kind"":""conflicted""}]," & _
         """sources"":[]}"
-    r = modValidate.CheckS1(j, "new")
-    ChkB "Test_V-S1-17_missing_infoのkindがenum外なら警告_裁定書39X-1", _
+    r = modValidate3.CheckS1Notes(j, W15_HAY)
+    ChkB "Test_V-S1-17_kindのenum外は警告チャネルだけに出す_裁定書40P-M1", _
         Ctn(r, "[V-S1-17] missing_info[0].kind が不正です: conflicted") And _
-        Not Ctn(modValidate.CheckS1(Replace(j, "conflicted", "conflict"), "new"), "[V-S1-17] "), _
+        Not Ctn(modValidate.CheckS1(j, "new"), "[V-S1-17] ") And _
+        Not Ctn(modValidate3.CheckS1Notes(Replace(j, "conflicted", "conflict"), W15_HAY), _
+                "[V-S1-17] "), _
         "実際=[" & r & "]"
 
     ' 23 financials の外にある source を読まない(W14 で潰した「スキーマ順に
@@ -350,4 +365,27 @@ Private Sub T_Round2Fixes()
     ChkB "Test_W15R2_25_対象外フィールドの見立ては接頭辞とみなさない_裁定書39G-2", _
         Ctn(modValidate3.CheckS1Notes(j, W15_HAY), "[V-S1-15] "), _
         "スキーマ外のフィールドにある「(見立て)」を拾って警告を握りつぶしている"
+
+    ' 26 kind の**欠落**(と空・空白だけ)は不正ではない。v2.7 の新設キーを
+    '    モデルが落とすのは常態であり、not_found とみなして黙って続ける
+    '    (FillEmptySources と同じ fail-open。裁定書40 P-M1)。**値が enum 外の
+    '    ときだけ**警告する、の両方向を1本で押さえる。
+    j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B""}],""sources"":[]}"
+    ChkB "Test_W15R3_26_kindの欠落と空は警告にしない_裁定書40P-M1", _
+        Not Ctn(modValidate3.CheckS1Notes(j, W15_HAY), "[V-S1-17] ") And _
+        Not Ctn(modValidate3.CheckS1Notes( _
+            Replace(j, """why_needed"":""B""", """why_needed"":""B"",""kind"":"" """), _
+            W15_HAY), "[V-S1-17] ") And _
+        Ctn(modValidate3.CheckS1Notes( _
+            Replace(j, """why_needed"":""B""", """why_needed"":""B"",""kind"":""conflicted"""), _
+            W15_HAY), "[V-S1-17] "), _
+        "kind の欠落/空を不正扱いしている(または enum 外を見逃している)"
+
+    ' 27 警告の出口が注記チャネル1本であること: V-S1-16/17 も WarnNoteOf が
+    '    畳み、run_log の detail と meta.s1_warn(18章§2)へ届く。並びは
+    '    modValidate3 の V3_CASE_IDS の順(実行ごとに揺れない)。
+    j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B"",""kind"":""conflicted""}]}"
+    ChkS "Test_W15R3_27_s1_warnはsources欠落とkind不正も畳む_裁定書40P-M1", _
+        modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(j, W15_HAY)), _
+        "V-S1-16:1,V-S1-17:1"
 End Sub

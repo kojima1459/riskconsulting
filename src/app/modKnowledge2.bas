@@ -145,14 +145,23 @@ End Function
 ' 絞込の純部。blk の2行目以降から条件に合う行を最大 maxRows 件選び、
 '   「見出し行 + 選ばれた行」だけの2次元配列を selOut へ返す(整形は
 '   modKnowledgeFmt の責務)。戻り=選ばれた行数。注入IDもここで積む。
-'   totalHits(裁定書38 B-10 / 裁定書39 R1-04): 打切り前に条件へ合致した総行数
-'   (ByRef)。**並べ替え補充が走ったときは「完全一致の該当総数 + 補充候補の
-'   総数」**を返す。補充で使った行を分母に数えないと、run_log の
-'   `kb_cut:cases=5/2`(「該当2件のうち5件を使用」)という読めない値になり、
-'   `meta.kb_usage`(SEC-14。`cases_total > cases_used` のときだけ出す)が
+'   totalHits(裁定書38 B-10 / 裁定書39 R1-04 / 裁定書40 P-M2): 打切り前に条件へ
+'   合致した総行数(ByRef)。**並べ替え補充が走ったときは「完全一致の該当総数 +
+'   実際に補充で採用した行数」**を返す。補充で使った行を分母に数えないと、
+'   run_log の `kb_cut:cases=5/2`(「該当2件のうち5件を使用」)という読めない値に
+'   なり、`meta.kb_usage`(SEC-14。`cases_total > cases_used` のときだけ出す)が
 '   **補充の起きた案件では必ず消える**=最も起きやすい打切りが見えなくなる。
+'   逆に**候補を作っただけで足してもいけない**(裁定書40 P-M2): 補充候補は業種
+'   完全一致を外した行=実質シートの残り全部なので、1件も採らなかった案件でも
+'   分母がシート行数近くまで膨らみ、SEC-14 が常時「該当N件のうちM件を使用」と
+'   嘘をつく。数えるのは**採用した行だけ**である。
 '   caseChars/rowChars(裁定書39 R1-03): n-gram 比較に掛ける字数上限
 '   (案件側 config `kb_rank_case_chars`・行側 `kb_rank_row_chars`)。0=無制限。
+'   maxCandRows/candSeenOut(裁定書40 P-M3): 並べ替えに掛ける**候補行数**の上限
+'   (config `kb_rank_max_rows`)と、上限を掛ける前の候補総数(ByRef)。0=無制限。
+'   上限を超えた分は**シート順で先頭 maxCandRows 行**を採る(順位付けの前に
+'   落とすので、KB が育っても並べ替えの手間が増えない)。呼出側は
+'   candSeenOut > maxCandRows で「打ち切った」ことを run_log へ残す。
 '   caseText/rankCols(同B-10・並べ替え): 完全一致(cInd)の該当数が maxRows に
 '   満たないとき、全業種の行から caseText との 2〜3字 n-gram 重なり数
 '   (modKnowledgeRank)が高い順に不足分を補う。rankCols は補充候補の本文列を
@@ -165,10 +174,18 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
                             Optional ByVal caseText As String = vbNullString, _
                             Optional ByVal rankCols As String = vbNullString, _
                             Optional ByVal caseChars As Long = 0, _
-                            Optional ByVal rowChars As Long = 0) As Long
+                            Optional ByVal rowChars As Long = 0, _
+                            Optional ByVal maxCandRows As Long = 0, _
+                            Optional ByRef candSeenOut As Long = 0) As Long
     selOut = Empty
     totalHits = 0
+    candSeenOut = 0
     If Not IsArray(blk) Then Exit Function
+    ' 裁定書40 P-m2: データ行が1行も無い(lastRow<2)なら、下の
+    '   ReDim hits(1 To lastRow + 1) が lastRow<0 で実行時エラー9 を投げる。
+    '   本関数は 14章§6 の公開口であり呼び出し側がエラーを握らないので、
+    '   入口で静かに0件で返す(lastRow=0/1 のときの従来の戻り値と同じ)。
+    If lastRow < 2 Then Exit Function
 
     Dim cId As Long, cInd As Long, cTgt As Long, cAct As Long
     Dim cSt As Long, cSuf As Long, cRef As Long
@@ -229,9 +246,13 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
 
         Dim candRows() As Long
         Dim candTexts() As String
-        Dim candN As Long
+        Dim candN As Long, candSeen As Long, candCap As Long
         ReDim candRows(1 To lastRow)
         ReDim candTexts(1 To lastRow)
+        ' 裁定書40 P-M3(b): 並べ替えに掛ける候補行数の上限(config
+        '   kb_rank_max_rows。0=無制限)。超えた分はシート順で切る。
+        candCap = maxCandRows
+        If candCap <= 0 Or candCap > lastRow Then candCap = lastRow
         Dim already As Boolean, h As Long
         For r = 2 To lastRow
             idText = CellAt(blk, r, cId)
@@ -249,22 +270,27 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
                     If okAll And cAct > 0 Then okAll = modConfig.ParseBoolText(CellAt(blk, r, cAct), True)
                     If okAll And cSt > 0 Then okAll = IsListed(KB_SCHEME_STATUS, CellAt(blk, r, cSt))
                     If okAll Then
-                        candN = candN + 1
-                        candRows(candN) = r
-                        Dim rowText As String
-                        rowText = vbNullString
-                        For rc = LBound(rCols) To UBound(rCols)
-                            If rCols(rc) > 0 Then rowText = rowText & KB_SPACE & CellAt(blk, r, rCols(rc))
-                        Next rc
-                        candTexts(candN) = CapText(rowText, rowChars)
+                        candSeen = candSeen + 1
+                        ' 上限を超えた候補は**本文を組み立てずに数だけ数える**
+                        '   (組立と CapText が候補1行あたりの主費用。裁定書40 P-M3)。
+                        If candN < candCap Then
+                            candN = candN + 1
+                            candRows(candN) = r
+                            Dim rowText As String
+                            rowText = vbNullString
+                            For rc = LBound(rCols) To UBound(rCols)
+                                If rCols(rc) > 0 Then rowText = rowText & KB_SPACE & CellAt(blk, r, rCols(rc))
+                            Next rc
+                            candTexts(candN) = CapText(rowText, rowChars)
+                        End If
                     End If
                 End If
             End If
         Next r
 
-        ' 裁定書39 R1-04: 補充候補の総数も「該当総数」に数える(分母が使用数を
-        ' 下回らないようにする)。候補0件なら従来どおり完全一致の該当数のまま。
-        totalHits = totalHits + candN
+        ' 裁定書40 P-M3(b): 上限を掛ける前の候補総数を呼出側へ返す
+        '   (candSeenOut > 上限 なら呼出側が run_log へ「打ち切った」と残す)。
+        candSeenOut = candSeen
 
         If candN > 0 Then
             Dim candTextsUsed() As String
@@ -283,9 +309,17 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
             For ci = 1 To rn
                 If taken >= need Then Exit For
                 pickIdx = order(ci)
-                scoreCheck = modKnowledgeRank.NgramOverlap(rankText, candTextsUsed(pickIdx), 2) + _
-                             modKnowledgeRank.NgramOverlap(rankText, candTextsUsed(pickIdx), 3)
+                ' 関連度0の行は補わない(13章§3.1)。点数は「2字+3字」だが、
+                '   3字が一致するなら先頭2字も必ず一致するので、**2字が0なら
+                '   点数も0**である。1行につき2回だった呼び出しを1回にする
+                '   (裁定書40 P-M3 と同型の「ループの中で案件側の索引を作り直す」
+                '   を半減させる。呼出は need(<=kb_case_rows)回で止まる)。
+                scoreCheck = modKnowledgeRank.NgramOverlap(rankText, candTextsUsed(pickIdx), 2)
                 If scoreCheck <= 0 Then Exit For ' 降順なのでここで以降も0
+                ' 裁定書39 R1-04 / 裁定書40 P-M2: 分母に数えるのは**採用した行だけ**。
+                '   候補を作った時点で足すと、1件も採っていない案件でも
+                '   `cases_total > cases_used` が真になり SEC-14 が嘘をつく。
+                totalHits = totalHits + 1
                 n = n + 1
                 hits(n) = candRows(pickIdx)
                 idText = CellAt(blk, candRows(pickIdx), cId)

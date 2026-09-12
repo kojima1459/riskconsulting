@@ -106,9 +106,8 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
         End If
     Next i
 
-    ' --- V-S1-16 / V-S1-17: 実体は modValidate3(裁定書39 R1-09/X-1) ---
-    sVal = modValidate3.SoftNotesS1(json)
-    If LenB(sVal) > 0 Then Ap r, sVal
+    ' V-S1-16/17 は警告なので**ここに載せない**(裁定書40 P-M1)。戻り値は
+    '   Defend の errText=修復リトライ->失敗。出口は modValidate3.CheckS1Notes。
 
     ' --- V-S1-02: locations[].type が enum 外 ---
     Set itemsCol = modJsonLite.GetArrayItems(json, "locations")

@@ -12,18 +12,25 @@ Option Explicit
 '   V-S1-15(B-12): 接頭辞・出所の不整合(「(見立て)」の欠落・financials の
 '                  出所と値の食い違い)。
 '   V-S1-16 / V-S1-17(R1-09 / X-1): sources の欠落と missing_info[].kind の
-'                  enum 外。**この2件だけは modValidate.CheckS1 の戻り値に載る**
-'                  (15章§11 の CheckS1 表に載せた警告なので、判定の出口は
-'                  CheckS1 で1つに保つ)。置き場所がこちらなのは modValidate が
-'                  30,000字契約に達しているためであり、責務の移動ではない。
+'                  enum 外。**この2件も他の警告と同じ注記チャネル**に出す
+'                  (裁定書40 P-M1。当初は modValidate.CheckS1 の戻り値へ
+'                  連結していたが、それは下の「混ぜない」規約に反していた)。
 '   PostNormalize(R1-09): S1 の正規化直後に sources の空配列を補う fail-open。
 '
 ' **戻り値を modValidate.CheckS1 に混ぜない**: CheckS1 の戻り値は
-'   modPipeline.Defend の errText となり、非空なら修復リトライと
-'   validate_result=failed を引き起こす。この2件は15章§11で「警告」であり、
-'   出力を落としてはならないので、呼び出しは modPipeline3.DefendNotes(S1成功時)
-'   からの**注記経路**だけとする(run_log の detail と HTMLレポートの
-'   meta.s1_warn へ印を残す)。15章§2 の注記が正。
+'   modPipeline.Defend の errText となり、非空なら修復リトライ1回と
+'   PL_RES_FAILED -> FailStep(案件 status=error)を引き起こす。本モジュールの
+'   4件は15章§11で「警告」であり、出力を落としてはならない。したがって出口は
+'   CheckS1Notes 1本(呼ぶのは modPipeline3.S1Notes(S1成功時)と
+'   modExportHtml)とし、run_log の detail と HTMLレポートの meta.s1_warn へ
+'   印を残すだけにする。15章§2 の注記が正。
+'
+' **新設キーの欠落を不合格にしない(fail-open)**: sources(v2.7)も
+'   missing_info[].kind(v2.7)も、実運用のリボン経路ではスキーマを強制できない
+'   ためモデルが落としうる。落としたことを不合格・警告のどちらにしても案件が
+'   前へ進まなくなる/警告が常時鳴って本物が埋もれるので、**欠落は既定値で
+'   補って黙って続け、値が壊れているときだけ警告する**(sources は
+'   PostNormalize が空配列を補填、kind の欠落と空は not_found とみなす)。
 '
 ' 裁定書39 R1-10 / G-2: 値は**対象オブジェクトを切り出してから**読む。
 '   json 全体へ GetStr(json,"source") を掛けると「最初に現れた同名キー」(15章§14)
@@ -43,7 +50,8 @@ Option Explicit
 Private Const V3_SEP As String = ","
 
 ' 検査するケースIDの並び(WarnNoteOf の出力順。追番のみ・番号は再利用しない)。
-Private Const V3_CASE_IDS As String = "V-S1-14|V-S1-15"
+'   裁定書40 P-M1 で V-S1-16 / V-S1-17 も注記チャネルへ移したので並びへ足す。
+Private Const V3_CASE_IDS As String = "V-S1-14|V-S1-15|V-S1-16|V-S1-17"
 
 ' URLの末尾に付きやすい句読点・括弧(文末の「。」や引用の「）」まで含んだ
 '   URLを返してくる回があるため、照合の前に落とす)。半角空白・タブも含む。
@@ -71,16 +79,19 @@ Private Const V3_MI_KIND As String = "|conflict|undisclosed|not_found|hearing_on
 Private Const V3_WS As String = " " & vbTab & vbCr & vbLf
 
 ' ============================================================================
-' CheckS1Notes - V-S1-14 / V-S1-15 の警告行(改行区切り)を返す。空=指摘なし。
-'   各行は15章§0 原則10 のとおり "[ケースID] " で始まる。
+' CheckS1Notes - V-S1-14 / V-S1-15 / V-S1-16 / V-S1-17 の警告行(改行区切り)を
+'   返す。空=指摘なし。各行は15章§0 原則10 のとおり "[ケースID] " で始まる。
 '   haystack が空のときは V-S1-14 を**検査しない**(貼付が空のときに全件を
 '   未照合で埋めない。modPipeline3.GroundHook と同じ fail-open)。
+'   V-S1-16 / V-S1-17 は haystack を使わない(貼付原文と無関係の構造検査)ので
+'   haystack が空でも判定する。
 ' ============================================================================
 Public Function CheckS1Notes(ByVal json As String, ByVal haystack As String) As String
     Dim r As String
 
     r = UrlNotes(json, haystack)
     r = Join2(r, PrefixNotes(json))
+    r = Join2(r, SoftNotesS1(json))
     CheckS1Notes = r
 End Function
 
@@ -338,8 +349,10 @@ Private Function CountOf(ByVal hay As String, ByVal needle As String) As Long
 End Function
 
 ' ============================================================================
-' SoftNotesS1 - V-S1-16 / V-S1-17(裁定書39 R1-09 / X-1)。modValidate.CheckS1 が
-'   自分の戻り値へ連結する。空="指摘なし"。
+' SoftNotesS1 - V-S1-16 / V-S1-17(裁定書39 R1-09 / X-1)。**警告**なので
+'   CheckS1Notes(注記チャネル)からだけ呼ぶ(裁定書40 P-M1)。空="指摘なし"。
+'   modValidate.CheckS1 の戻り値には**載せない**(載せると修復リトライ ->
+'   FailStep で案件 status=error になる)。
 ' ============================================================================
 Public Function SoftNotesS1(ByVal json As String) As String
     Dim r As String, it As Variant, idx As Long, kindText As String
@@ -355,11 +368,18 @@ Public Function SoftNotesS1(ByVal json As String) As String
     ' V-S1-17: missing_info[].kind の enum。リボン経路はスキーマを強制しないので
     '   "conflicted" のような値が素通りし、SEC-03/04 の分離表示(kind==='conflict')
     '   から静かに外れていた。
+    '   **欠落・空は不正としない**(裁定書40 P-M1): kind は v2.7 の新設キーで、
+    '   モデルが落とすのは常態である。未記入は not_found(見つからない)とみなして
+    '   黙って続ける(sources を空配列で補うのと同じ fail-open)。kind!=="conflict"
+    '   なので SEC-03/04 の分離表示でも通常の不足情報として扱われ、辻褄が合う。
+    '   **値が enum 外のときだけ**警告する。
     idx = 0
     For Each it In modJsonLite.GetArrayItems(json, "missing_info")
-        kindText = modJsonLite.GetStr(CStr(it), "kind")
-        If InStr(1, V3_MI_KIND, "|" & kindText & "|", vbBinaryCompare) = 0 Then
-            r = Join2(r, "[V-S1-17] missing_info[" & idx & "].kind が不正です: " & kindText)
+        kindText = Trim$(modJsonLite.GetStr(CStr(it), "kind"))
+        If LenB(kindText) > 0 Then
+            If InStr(1, V3_MI_KIND, "|" & kindText & "|", vbBinaryCompare) = 0 Then
+                r = Join2(r, "[V-S1-17] missing_info[" & idx & "].kind が不正です: " & kindText)
+            End If
         End If
         idx = idx + 1
     Next it
