@@ -49,8 +49,8 @@ Private Const VE_KIND As String = "|upsell|cross_sell|scheme|"
 Private Const VE_CERTAINTY As String = "|confirmed|assumed|"
 Private Const VE_FIN_SOURCE As String = "|yuho|kessan_kokoku|tdb|view|memo|unknown|"
 
-' --- 15章 Schema-S1 の required 17キー(V-S1-01。v2.7 で sources 追加) ---
-Private Const VS1_REQUIRED As String = "company_name|business_summary|main_products|processes|locations|supply_chain|customers|workforce_notes|management_notes|strategy_outlook|current_coverage|financials|field_insights|missing_info|input_quality|research_requests|sources"
+' --- V-S1-01 の必須16キー(sources は V-S1-16 へ降格。裁定書39 R1-09) ---
+Private Const VS1_REQUIRED As String = "company_name|business_summary|main_products|processes|locations|supply_chain|customers|workforce_notes|management_notes|strategy_outlook|current_coverage|financials|field_insights|missing_info|input_quality|research_requests"
 
 ' --- 件数・字数のしきい値(15章の各ルール表) ---
 Private Const VS1_ASPECT_N As Long = 14
@@ -71,9 +71,11 @@ Private Const V_NOLIST As String = "ID実在検査が実行できません(ID一
 
 ' NormalizeLlmJson - 尾部劣化(同名項目の重複出力)の正規化(14章§5(2.5)・16章E-49)
 '   本体は modValidate2.NormalizeCore(30,000字契約による分割)。
+'   裁定書39 R1-09: S1 の sources 欠落は modValidate3 が空配列で補う(fail-open)。
 Public Function NormalizeLlmJson(ByVal stepName As String, ByVal json As String, _
                                  ByRef removedCount As Long) As String
-    NormalizeLlmJson = modValidate2.NormalizeCore(stepName, json, removedCount)
+    NormalizeLlmJson = modValidate3.PostNormalize(stepName, _
+                           modValidate2.NormalizeCore(stepName, json, removedCount))
 End Function
 
 ' CheckS1 - 企業プロファイル構造化の検証(15章§2 CheckS1 検証ルール表。11件)
@@ -96,13 +98,17 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
 
     ctype = LCase$(Trim$(caseType))
 
-    ' --- V-S1-01: required 17キーのいずれかが欠落 ---
+    ' --- V-S1-01: required 16キーのいずれかが欠落 ---
     keyList = Split(VS1_REQUIRED, "|")
     For i = LBound(keyList) To UBound(keyList)
         If Not TopKeyExists(json, keyList(i)) Then
             Ap r, "[V-S1-01] 必須キー " & keyList(i) & " がありません"
         End If
     Next i
+
+    ' --- V-S1-16 / V-S1-17: 実体は modValidate3(裁定書39 R1-09/X-1) ---
+    sVal = modValidate3.SoftNotesS1(json)
+    If LenB(sVal) > 0 Then Ap r, sVal
 
     ' --- V-S1-02: locations[].type が enum 外 ---
     Set itemsCol = modJsonLite.GetArrayItems(json, "locations")

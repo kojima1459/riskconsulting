@@ -43,6 +43,12 @@ Private Const KB_SHEET_GAP As String = "新サービス候補"
 Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_risk,operator"
 
 ' --- 絞込スペック(1行書式そのものは modKnowledgeFmt が持つ) ---
+' 裁定書39 R1-03: 並べ替え補充(modKnowledgeRank)の n-gram 比較に掛ける字数上限の
+'   既定値。config `kb_rank_case_chars` / `kb_rank_row_chars` が正(13章§2.3)。
+'   上限が無いと案件本文2万字 x 全業種の行 の比較で Excel が数分〜数十分固まる。
+Private Const KB_RANK_CASE_CHARS As Long = 3000
+Private Const KB_RANK_ROW_CHARS As Long = 2000
+
 Private Const KB_F_MENU As String = "^target_industries^is_active"
 Private Const KB_F_SCHEME As String = "^target_industries^^status^pattern_id"
 
@@ -295,8 +301,15 @@ Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSp
     Dim sel As Variant
     Dim n As Long
     Dim totalHits As Long
+    ' 裁定書39 R1-03: n-gram 比較に掛ける字数上限。並べ替え補充が走るとき
+    ' (caseText 非空)だけ読む。0 を渡すと modKnowledge2 側で無制限になる。
+    Dim caseChars As Long, rowChars As Long
+    If LenB(caseText) > 0 Then
+        caseChars = CapCfg(0, "kb_rank_case_chars", KB_RANK_CASE_CHARS)
+        rowChars = CapCfg(0, "kb_rank_row_chars", KB_RANK_ROW_CHARS)
+    End If
     n = modKnowledge2.SelectRows(gKbBlocks(idx), gKbRows(idx), idCol, filterSpec, industryCode, _
-                   capRows, sel, ids, totalHits, caseText, rankCols)
+                   capRows, sel, ids, totalHits, caseText, rankCols, caseChars, rowChars)
     Inject = FormatBy(fieldName, sel)
     RecordKbCut fieldName, n, totalHits
     If n <= 0 Then

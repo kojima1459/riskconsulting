@@ -82,6 +82,12 @@ Private Const PII_POLICY_MIN_DIGITS As Long = 6
 ' 二重の保険として直前1字の除外にも加える)。
 Private Const PII_POLICY_DENY_PREV As String = "/?=&#_"
 
+' URLスパンの終端とみなす文字(裁定書39 R1-02。詳細は MatchUrlSpan の注記)。
+'   半角空白・全角空白・" < > と、ASCII の閉じ記号 ) ] } , ; ' 、日本語の約物
+'   (括弧は開きも閉じも入れる。URLはASCIIしか取りえないので、全角の約物が
+'    URLの一部であることは無い。`.../ir.html（担当:佐藤様）` の再現例)。
+Private Const PII_URL_STOP As String = " 　""<>)]},;'。、，．・（）「」『』【】〈〉《》？！；：…"
+
 ' 敬称の直前1字がこれらなら人名ではない(「仕様」「お客様」「同様」…)。
 ' 敬称ごとに分けてあるのは、同じ字でも敬称によって危険度が違うため。
 Private Const PII_DENY_BEFORE_SAMA As String = "仕客皆同多模異一様王神殿社御貴各奥若子姫人有何那種者長"
@@ -329,9 +335,24 @@ End Function
 
 ' ----------------------------------------------------------------------------
 ' MatchUrlSpan - 位置iから始まるURLらしき文字列の長さ(0=不一致。16章E-05注記・
-'   裁定書37 A-08/C-2)。"http://"/"https://" から、空白・全角空白・引用符・
-'   "<" ">" ・改行に当たるまでを1スパンとして返す。検知種別としては記録せず
-'   読み飛ばすためだけに使う(出典URLの連番をpolicy_no等と誤検知しないため)。
+'   裁定書37 A-08/C-2)。"http://"/"https://" から、PII_URL_STOP の文字または
+'   改行に当たるまでを1スパンとして返す。検知種別としては記録せず読み飛ばす
+'   ためだけに使う(出典URLの連番をpolicy_no等と誤検知しないため)。
+'
+' 裁定書39 R1-02(重大・実退行): 終端が「半角空白・全角空白・"・<・>・改行」しか
+'   無かったため、日本語の文中では **URL より後ろの同一行のPIIが全部見えなく
+'   なる**(`参考 https://example.com/ir。担当は山田様です` で person 検知0)。
+'   日本語では URL の直後に半角空白を置かない書き方が普通であり、7経路すべて
+'   (貼付・受信箱・壁打ち・判断台帳・feedback・HTML出力前・企業ドシエ)が同時に
+'   穴になっていた。終端集合に日本語の約物と ASCII の閉じ記号を足して塞ぐ。
+'
+' 足さない文字(意図的): ASCII の `.` `:` `?` `!` `=` `&` `#` `%` `+` `-` `_`
+'   `/` `~` `(` `[` `{` はURLの正当な構成要素なので終端にしない。逆に `)` `,`
+'   `;` `'` は「URLの一部でありうる」が、文中の閉じ括弧・読点である方が桁違いに
+'   多いので終端に入れる。この割り切りにより Wikipedia 形式の `..._(bar)` は
+'   末尾1字ぶん短く切れるが、切れた先は記号だけなので誤検知にはならない。
+'   URL の途中に `,` を含む形(`.../x,AB-1234567/`)は以降を本文として走査する
+'   ため検知が増える側(fail-closed)へ倒れる。両方向を modTestsPure23 が固定する。
 ' ----------------------------------------------------------------------------
 Private Function MatchUrlSpan(ByVal sText As String, ByVal i As Long) As Long
     Dim nLen As Long
@@ -351,8 +372,8 @@ Private Function MatchUrlSpan(ByVal sText As String, ByVal i As Long) As Long
     Do While p <= nLen
         Dim c As String
         c = Mid$(sText, p, 1)
-        If c = " " Or c = "　" Or c = """" Or c = "<" Or c = ">" Or _
-           c = vbLf Or c = vbCr Then Exit Do
+        If c = vbLf Or c = vbCr Then Exit Do
+        If InStr(1, PII_URL_STOP, c, vbBinaryCompare) > 0 Then Exit Do
         p = p + 1
     Loop
     MatchUrlSpan = p - i

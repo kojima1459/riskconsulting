@@ -2815,6 +2815,16 @@
           "note": "事故事例(13章§3.11)の注入上限。切詰め順は15章§0.7(成功事例の次に削る)"
         },
         {
+          "name": "kb_rank_case_chars",
+          "value": 3000,
+          "note": "並べ替え補充のn-gram比較に掛ける案件本文の字数上限(裁定書39 R1-03)"
+        },
+        {
+          "name": "kb_rank_row_chars",
+          "value": 2000,
+          "note": "並べ替え補充のn-gram比較に掛ける行本文の字数上限(裁定書39 R1-03)"
+        },
+        {
           "name": "json_repair_retry",
           "value": 1,
           "note": "JSON修復リトライ回数"

@@ -391,7 +391,11 @@ CONTRACT: dict[str, dict] = {
     #   modPipeline3(注記経路)と modExportHtml(meta.s1_warn)だけ。
     "modValidate3": {
         "closed": True,
-        "required": ["CheckS1Notes", "WarnNoteOf", "TrimUrl"],
+        "required": ["CheckS1Notes", "WarnNoteOf", "TrimUrl",
+                     # 裁定書39 R1-09 / X-1: modValidate が30,000字契約に達した
+                     # ため、V-S1-16 / V-S1-17 と S1 の後正規化(sources 補填)の
+                     # 実体をこちらへ置いた(呼ぶのは modValidate だけ)。
+                     "SoftNotesS1", "PostNormalize"],
     },
     "modKnowledge": {
         "closed": False,

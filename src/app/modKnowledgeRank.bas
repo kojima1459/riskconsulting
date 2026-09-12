@@ -24,6 +24,20 @@ Option Explicit
 '   貪欲マッチング(先勝ち)で数える。b 側の同じ位置を二重に使わない。
 '   n<=0、または a か b が n文字未満のときは 0。大小文字・かな漢字はそのまま
 '   比較する(正規化は呼び出し側の責務。ここは純粋な文字列比較のみ)。
+'
+' 裁定書39 R1-03(重大・性能): 旧実装は二重ループで O(|a|x|b|) だった。案件本文
+'   20,000字 x 行500字 x 200行で Python 実測278秒(VBAはこれが下限)であり、
+'   S2・S3・HTMLレポートの計3回掛かるため KB が育つほど Excel が固まる。
+'   a 側の n-gram を **Collection で索引化**(キー=グラム・値=残り個数)し、
+'   b を1回舐めるだけの O(|a|+|b|) へ置き換えた。
+'   数え方は不変: 貪欲先勝ちの結果は「グラムごとの min(a の個数, b の個数)の
+'   総和」と一致するため、残り個数を1つずつ減らすだけで同じ値になる
+'   (modTestsPure26 が素朴版の参照実装と突き合わせて固定する)。
+'
+' キーに生のグラム文字列を使わない理由: VBA/Basic の Collection のキー照合は
+'   **大小文字を区別しない**(さらにロケールによっては半角全角・かなカナも
+'   畳む)。本関数の契約は「そのまま比較する」なので、グラムを UTF-16 の
+'   コードポイント16進(1文字=4桁)へ直した文字列をキーにする。
 ' ============================================================================
 Public Function NgramOverlap(ByVal a As String, ByVal b As String, ByVal n As Long) As Long
     If n <= 0 Then Exit Function
@@ -32,24 +46,63 @@ Public Function NgramOverlap(ByVal a As String, ByVal b As String, ByVal n As Lo
     lb = Len(b) - n + 1
     If la < 1 Or lb < 1 Then Exit Function
 
-    Dim used() As Boolean
-    ReDim used(1 To lb)
+    Dim idx As Collection
+    Set idx = New Collection
 
     Dim i As Long, j As Long, cnt As Long
-    Dim gramA As String
+    Dim keyText As String
+    Dim leftN As Long
+    Dim hasKey As Boolean
+
     For i = 1 To la
-        gramA = Mid$(a, i, n)
-        For j = 1 To lb
-            If Not used(j) Then
-                If gramA = Mid$(b, j, n) Then
-                    used(j) = True
-                    cnt = cnt + 1
-                    Exit For
-                End If
-            End If
-        Next j
+        keyText = GramKey(a, i, n)
+        leftN = KeyCount(idx, keyText, hasKey)
+        If hasKey Then idx.Remove keyText
+        idx.Add leftN + 1, keyText
     Next i
+
+    For j = 1 To lb
+        keyText = GramKey(b, j, n)
+        leftN = KeyCount(idx, keyText, hasKey)
+        If hasKey Then
+            If leftN > 0 Then
+                idx.Remove keyText
+                idx.Add leftN - 1, keyText
+                cnt = cnt + 1
+            End If
+        End If
+    Next j
     NgramOverlap = cnt
+End Function
+
+' GramKey - 位置 pos から n文字ぶんのグラムを、コードポイント16進(1文字4桁)の
+'   キー文字列へ直す。Collection のキー照合が大小文字を区別しないための措置
+'   (上の注記)。AscW は符号付き16bitを返すので 65536 を足して正の値に直す
+'   (modPii.CodePointOf と同じ作法)。
+Private Function GramKey(ByVal s As String, ByVal pos As Long, ByVal n As Long) As String
+    Dim k As String, i As Long, v As Long
+    For i = 0 To n - 1
+        v = AscW(Mid$(s, pos + i, 1))
+        If v < 0 Then v = v + 65536
+        k = k & Right$("000" & Hex$(v), 4)
+    Next i
+    GramKey = k
+End Function
+
+' KeyCount - Collection に keyText があればその値(残り個数)を、無ければ 0 を
+'   返す存在チェック用ヘルパ。Collection は存在確認の口を持たず、無いキーの
+'   Item はエラーになるため、**この1本の中だけ**でエラーを捕まえる
+'   (呼び出し側に On Error Resume Next を撒かない)。
+Private Function KeyCount(ByRef col As Collection, ByVal keyText As String, _
+                          ByRef foundOut As Boolean) As Long
+    foundOut = False
+    On Error GoTo NoKey
+    KeyCount = CLng(col.Item(keyText))
+    foundOut = True
+    Exit Function
+NoKey:
+    foundOut = False
+    KeyCount = 0
 End Function
 
 ' ============================================================================

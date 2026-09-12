@@ -94,6 +94,21 @@ Public Sub AddIdList(ByRef idsOut As String, ByVal listText As String)
     Next i
 End Sub
 
+' 裁定書39 R1-03: n-gram 比較に掛ける字数の上限。maxChars<=0 は無制限
+'   (既存の呼出と挙動を変えないため)。切るのは**比較に使う複製だけ**で、
+'   注入する本文(整形は modKnowledgeFmt)は1字も削らない。
+Private Function CapText(ByVal t As String, ByVal maxChars As Long) As String
+    If maxChars <= 0 Then
+        CapText = t
+        Exit Function
+    End If
+    If Len(t) <= maxChars Then
+        CapText = t
+        Exit Function
+    End If
+    CapText = Left$(t, maxChars)
+End Function
+
 ' ";"区切りリストに値が含まれるか(前後空白は無視・大小文字は区別)。
 Private Function IsListed(ByVal listText As String, ByVal valueText As String) As Boolean
     Dim v As String
@@ -130,7 +145,14 @@ End Function
 ' 絞込の純部。blk の2行目以降から条件に合う行を最大 maxRows 件選び、
 '   「見出し行 + 選ばれた行」だけの2次元配列を selOut へ返す(整形は
 '   modKnowledgeFmt の責務)。戻り=選ばれた行数。注入IDもここで積む。
-'   totalHits(裁定書38 B-10): 打切り前に条件へ合致した総行数(ByRef)。
+'   totalHits(裁定書38 B-10 / 裁定書39 R1-04): 打切り前に条件へ合致した総行数
+'   (ByRef)。**並べ替え補充が走ったときは「完全一致の該当総数 + 補充候補の
+'   総数」**を返す。補充で使った行を分母に数えないと、run_log の
+'   `kb_cut:cases=5/2`(「該当2件のうち5件を使用」)という読めない値になり、
+'   `meta.kb_usage`(SEC-14。`cases_total > cases_used` のときだけ出す)が
+'   **補充の起きた案件では必ず消える**=最も起きやすい打切りが見えなくなる。
+'   caseChars/rowChars(裁定書39 R1-03): n-gram 比較に掛ける字数上限
+'   (案件側 config `kb_rank_case_chars`・行側 `kb_rank_row_chars`)。0=無制限。
 '   caseText/rankCols(同B-10・並べ替え): 完全一致(cInd)の該当数が maxRows に
 '   満たないとき、全業種の行から caseText との 2〜3字 n-gram 重なり数
 '   (modKnowledgeRank)が高い順に不足分を補う。rankCols は補充候補の本文列を
@@ -141,7 +163,9 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
                             ByVal maxRows As Long, ByRef selOut As Variant, _
                             ByRef idsOut As String, ByRef totalHits As Long, _
                             Optional ByVal caseText As String = vbNullString, _
-                            Optional ByVal rankCols As String = vbNullString) As Long
+                            Optional ByVal rankCols As String = vbNullString, _
+                            Optional ByVal caseChars As Long = 0, _
+                            Optional ByVal rowChars As Long = 0) As Long
     selOut = Empty
     totalHits = 0
     If Not IsArray(blk) Then Exit Function
@@ -189,7 +213,11 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
 
     ' 並べ替え補充(裁定書38 B-10): 完全一致(cInd)がある絞込で、かつ件数が
     ' maxRows に満たないときだけ、全業種の行から関連度上位を補う。
-    If n < maxRows And cInd > 0 And LenB(caseText) > 0 And LenB(rankCols) > 0 Then
+    ' lastRow >= 2(データ行が1行以上ある)を条件に加える(裁定書39 G-1): 無いと
+    ' 下の ReDim candRows(1 To lastRow) が lastRow=0 で実行時エラー9 を投げる
+    ' (本関数は 14章§6 の公開口であり、呼び出し側がエラーを握らない)。
+    If lastRow >= 2 And n < maxRows And cInd > 0 And _
+       LenB(caseText) > 0 And LenB(rankCols) > 0 Then
         Dim rcNames As Variant
         rcNames = Split(rankCols, KB_SEMI)
         Dim rCols() As Long
@@ -228,11 +256,15 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
                         For rc = LBound(rCols) To UBound(rCols)
                             If rCols(rc) > 0 Then rowText = rowText & KB_SPACE & CellAt(blk, r, rCols(rc))
                         Next rc
-                        candTexts(candN) = rowText
+                        candTexts(candN) = CapText(rowText, rowChars)
                     End If
                 End If
             End If
         Next r
+
+        ' 裁定書39 R1-04: 補充候補の総数も「該当総数」に数える(分母が使用数を
+        ' 下回らないようにする)。候補0件なら従来どおり完全一致の該当数のまま。
+        totalHits = totalHits + candN
 
         If candN > 0 Then
             Dim candTextsUsed() As String
@@ -241,16 +273,18 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
             For ci = 1 To candN
                 candTextsUsed(ci) = candTexts(ci)
             Next ci
+            Dim rankText As String
+            rankText = CapText(caseText, caseChars)
             Dim order() As Long
             Dim rn As Long
-            rn = modKnowledgeRank.RankRows(caseText, candTextsUsed, order)
+            rn = modKnowledgeRank.RankRows(rankText, candTextsUsed, order)
             Dim need As Long, taken As Long, pickIdx As Long, scoreCheck As Long
             need = maxRows - n
             For ci = 1 To rn
                 If taken >= need Then Exit For
                 pickIdx = order(ci)
-                scoreCheck = modKnowledgeRank.NgramOverlap(caseText, candTextsUsed(pickIdx), 2) + _
-                             modKnowledgeRank.NgramOverlap(caseText, candTextsUsed(pickIdx), 3)
+                scoreCheck = modKnowledgeRank.NgramOverlap(rankText, candTextsUsed(pickIdx), 2) + _
+                             modKnowledgeRank.NgramOverlap(rankText, candTextsUsed(pickIdx), 3)
                 If scoreCheck <= 0 Then Exit For ' 降順なのでここで以降も0
                 n = n + 1
                 hits(n) = candRows(pickIdx)

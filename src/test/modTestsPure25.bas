@@ -22,6 +22,14 @@ Option Explicit
 '     09 件数を "V-S1-14:2,V-S1-15:1" の形へ  10 指摘なしなら空文字
 '   G4 S1再実行の揺れ(modPipeline3.S1DiffCount。B-14)
 '     11 同一=0  12 1項目違い=1  13 主要8項目すべて違う=8  14 片方が空=0
+'   G6 W15 Round2(裁定書39 §1)で追加した6本
+'     20 sources 欠落は**不合格ではなく警告**(V-S1-16)へ降格する【R1-09】
+'     21 NormalizeLlmJson(s1) が欠落した sources に空配列を補填する【R1-09】
+'     22 missing_info[].kind の enum 検査(V-S1-17)【X-1】
+'     23 financials の外にある source を読まない(スキーマ順に依存しない)【R1-10】
+'     24 financials の外にある fiscal_year 等を読まない【R1-10】
+'     25 対象外フィールドの「(見立て)」を接頭辞とみなさない【G-2】
+'
 '   G5 スキーマ・mock・描画の結線(B-04 / B-11)
 '     15 SchemaS1 が sources と missing_info[].kind を required で持つ
 '     16 mock の S1応答2本が CheckS1 を**警告も含めて0件**で通る
@@ -48,7 +56,7 @@ Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
 
-    For i = 1 To 5
+    For i = 1 To 6
         grpName = "W15-G" & CStr(i)
         On Error Resume Next
         Err.Clear
@@ -68,6 +76,7 @@ Private Sub RunGroup(ByVal idx As Long)
     Case 3: T_WarnNote
     Case 4: T_Diff
     Case 5: T_Wiring
+    Case 6: T_Round2Fixes
     End Select
 End Sub
 
@@ -273,4 +282,72 @@ Private Sub T_Wiring()
         Ctn(js, "資料間で値が食い違っています") And Ctn(js, "CONFBOX(el,s1);") And _
         Ctn(js, "LB(LMK,mi[k].kind)") And Ctn(js, "'不足している情報','なぜ必要か','種別'"), _
         "最上段の分離表示と、表の種別列"
+End Sub
+
+' ============================================================================
+' G6 W15 Round2 の是正(裁定書39 §1 R1-09 / R1-10 / G-2 / X-1)
+' ----------------------------------------------------------------------------
+' 期待値の出典: 裁定書39 §1 の該当行と 15章§11(V-S1-16 / V-S1-17)だけ。
+'   実リボンのモデルは 15章§2 ルール11 を落とすことがあり、sources を required の
+'   ままにすると S1 が「修復リトライ1回 -> 失敗」で毎回落ちる(mock は必ず返すので
+'   ゲートでは絶対に露見しない)。fail-open へ倒す。
+' ============================================================================
+Private Sub T_Round2Fixes()
+    Dim j As String, r As String, norm As String
+    Dim removed As Long
+
+    ' 20 sources 欠落は V-S1-16(警告)であり、V-S1-01(必須キー欠落=不合格)には
+    '    しない。ここが不合格だと修復リトライ地獄になる。
+    j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B"",""kind"":""not_found""}]}"
+    r = modValidate.CheckS1(j, "new")
+    ChkB "Test_V-S1-16_sources欠落は不合格ではなく警告へ降格_裁定書39R1-09", _
+        Ctn(r, "[V-S1-16] ") And Not Ctn(r, "必須キー sources がありません"), _
+        "実際=[" & r & "]"
+
+    ' 21 補填: NormalizeLlmJson("s1") を通すと空配列の sources が入り、
+    '    以降の経路(HTMLレポート SEC-14 の出典表)が「キーが無い」で割れない。
+    norm = modValidate.NormalizeLlmJson("s1", j, removed)
+    ChkB "Test_W15R2_21_S1の正規化が欠落したsourcesへ空配列を補填する_裁定書39R1-09", _
+        (InStr(norm, """sources""") > 0) And _
+        (modJsonLite.GetArrayItems(norm, "sources").Count = 0) And _
+        Not Ctn(modValidate.CheckS1(norm, "new"), "[V-S1-16] "), _
+        "実際=[" & norm & "]"
+
+    ' 22 missing_info[].kind の enum 検査(警告)。リボン経路はスキーマ強制が
+    '    無いので、conflicted のような値が素通りしていた。
+    j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B"",""kind"":""conflicted""}]," & _
+        """sources"":[]}"
+    r = modValidate.CheckS1(j, "new")
+    ChkB "Test_V-S1-17_missing_infoのkindがenum外なら警告_裁定書39X-1", _
+        Ctn(r, "[V-S1-17] missing_info[0].kind が不正です: conflicted") And _
+        Not Ctn(modValidate.CheckS1(Replace(j, "conflicted", "conflict"), "new"), "[V-S1-17] "), _
+        "実際=[" & r & "]"
+
+    ' 23 financials の外にある source を読まない(W14 で潰した「スキーマ順に
+    '    依存した読み」の再導入。sources[] の要素が financials より前に来ると
+    '    V-S1-15 が別の値を見ていた)。
+    j = "{""sources"":[{""label"":""会社概要"",""url"":""https://example.co.jp/company/""," & _
+        """aspect"":""profile"",""source"":""yuho""}]," & _
+        """financials"":{""fiscal_year"":""不明"",""net_assets"":""不明"",""sales"":""不明""," & _
+        """operating_profit"":""不明"",""source"":""unknown"",""note"":""不明""}}"
+    r = modValidate3.CheckS1Notes(j, W15_HAY)
+    ChkS "Test_W15R2_23_financialsの外のsourceを読まない_裁定書39R1-10", r, ""
+
+    ' 24 AllUnknown も financials の中だけを見る(外側に fiscal_year があっても
+    '    financials の4項目が全て「不明」なら食い違いとして警告する)。
+    j = "{""x"":{""fiscal_year"":""2025年3月期""}," & _
+        """financials"":{""fiscal_year"":""不明"",""net_assets"":""不明"",""sales"":""不明""," & _
+        """operating_profit"":""不明"",""source"":""yuho"",""note"":""不明""}}"
+    ChkB "Test_W15R2_24_financialsの外のfiscal_yearを読まない_裁定書39R1-10", _
+        Ctn(modValidate3.CheckS1Notes(j, W15_HAY), "[V-S1-15] "), _
+        "financials の4項目が全て不明なのに警告が出ていない"
+
+    ' 25 対象外フィールドの「(見立て)」を接頭辞とみなさない(生JSON片への
+    '    InStr をやめ、値を切り出してから判定する)。
+    j = "{""current_coverage"":[{""line_name"":""火災保険"",""coverage_summary"":""建物と設備""," & _
+        """limit_note"":""不明"",""special_note"":""不明"",""certainty"":""assumed""," & _
+        """memo"":""(見立て)による補足""}]}"
+    ChkB "Test_W15R2_25_対象外フィールドの見立ては接頭辞とみなさない_裁定書39G-2", _
+        Ctn(modValidate3.CheckS1Notes(j, W15_HAY), "[V-S1-15] "), _
+        "スキーマ外のフィールドにある「(見立て)」を拾って警告を握りつぶしている"
 End Sub
