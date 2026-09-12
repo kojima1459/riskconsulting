@@ -76,6 +76,8 @@ GATES = [
      r"一致: \d+件"),
     ("dossier",      [sys.executable, "tools/dossier_check.py"],
      r"\[dossier_check\] OK: 全\d+本"),  # docs/08 が15章ルール5bの4点を含む(裁定書37 B-07)
+    ("config",       [sys.executable, "tools/config_check.py"],
+     r"結果: OK"),  # config の5点一致(sheets_main/RegisterDefault/読取/13章/19章。裁定書38 班D・班H)
     ("orphan",       [sys.executable, "tools/orphan_check.py"],
      r"結果: OK \(孤児Public 0件"),  # 呼ばれない Public を機械で数える(裁定書38 班D)
     ("doc-gate",     [sys.executable, "tools/doc_gate.py"],
