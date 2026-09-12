@@ -235,21 +235,13 @@ Failed:
     ReadDirectPaste = vbNullString
 End Function
 
-' SentinelCheck - 見張り行が空でない(=枠に入りきらなかった)か。True=はみ出した。
-Public Function SentinelCheck(ByVal areaKey As String) As Boolean
-    Dim a As String, d As String, l As String, p As String
-    Dim rw As String, sn As String, ct As String
-    SplitArea AreaLineOf(areaKey), a, d, l, p, rw, sn, ct
-    If LenB(a) = 0 Then Exit Function
-    SentinelCheck = (LenB(modUISheet.ReadNamed(sn)) > 0)
-End Function
-
-' MergedOrShapeCheck - 直貼り枠に結合セル・図形・画像が入っていないか。
-'   True=入っている。実体は modUICase7.MergedOrShapeAt(裁定書22 m2 で図形の
-'   交差検知を足したため、30,000字契約により分割先へ置いた)。
-Public Function MergedOrShapeCheck(ByVal areaKey As String) As Boolean
-    MergedOrShapeCheck = modUICase7.MergedOrShapeAt(areaKey)
-End Function
+' W15 Round3(裁定書41 §1): SentinelCheck / MergedOrShapeCheck を撤去した。
+'   どちらも呼出元が0件の**通過口**だった:
+'     はみ出し判定 = ReadDirectPaste(rawRange, sentRange, overflow) が見張り行を
+'                    見て overflow を ByRef で返す。取り込みの唯一の経路である
+'                    modUICase7.ImportDirectPastes がこれを使う。
+'     結合セル・図形 = modUICase7.MergedOrShapeAt を ImportDirectPastes が直接
+'                    呼ぶ(同モジュール内の呼出なので中継が要らない)。
 
 ' PasteIntoArea - [ここに貼る]の本体(11章§3.3.4(1)。順序が正)。
 Public Sub PasteIntoArea(ByVal areaKey As String)

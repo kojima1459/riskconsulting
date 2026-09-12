@@ -51,17 +51,15 @@ Public Sub EnsureSparringButtons()
 End Sub
 
 ' ============================================================================
-' OpenSparring - HOMEから開く(ロックは呼び出し側が保持している)。
+' OpenSparring の撤去(W15 Round3・裁定書41 §1)
+' ----------------------------------------------------------------------------
+' 唯一の呼出元は v3.2 で廃止した HOMEシートのハンドラ modUIHome2.HomeOpenSparring
+' であり、それを落としたので本Subも一緒に落とした。現行の入口は
+'   使い方タブ⑦上級の[表示する](modUIGuide.ShowAdvanced1 -> 壁打ちシートを可視化)
+'   -> 壁打ちシートの[壁打ちを開始/再開](SparringResume)
+' で、対象案件は CaseIdOnSheet() が sp_case_id -> hm_case_id の順で解決するため
+' 動作は変わらない。
 ' ============================================================================
-Public Sub OpenSparring(ByVal caseId As String)
-    On Error Resume Next
-
-    If modCaseStore.IsValidCaseId(caseId) Then
-        modUISheet.WriteNamed "sp_case_id", caseId
-        StartOrResume caseId
-    End If
-    modUISheet.ShowSheet US2_SHEET
-End Sub
 
 ' ============================================================================
 ' [壁打ちを開始/再開](11章)。dossier_tier の t3_sparring 昇格は 14章§6 の
