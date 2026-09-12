@@ -59,6 +59,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import gate_count  # noqa: E402  (要点行の契約。W15 §3 X3-3)
+
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 
@@ -108,8 +112,13 @@ def load_config_defaults() -> dict[str, object]:
 
 
 def check_default_values(text: str, config_defaults: dict[str, object],
-                         known_keys: set[str]) -> list[tuple[str, str, str]]:
-    """戻り値: (キー, 文書記載, build実値) の不一致リスト。"""
+                         known_keys: set[str],
+                         seen: list | None = None) -> list[tuple[str, str, str]]:
+    """戻り値: (キー, 文書記載, build実値) の不一致リスト。
+
+    seen を渡すと**実際に照合したキー**を積む(W15 §3 X3-3。要点行に
+    「何件見たか」を出すため。0件なら検査していない=赤)。
+    """
     mismatches = []
     for row in TABLE_ROW.finditer(text):
         col1, rest = row.group(1), row.group(2)
@@ -126,6 +135,8 @@ def check_default_values(text: str, config_defaults: dict[str, object],
         else:
             doc_val = m.group(1) if m.group(1) is not None else (
                 m.group(2) if m.group(2) is not None else m.group(3))
+        if seen is not None:
+            seen.append(key)
         real = config_defaults.get(key)
         real_str = "" if real is None else (
             "TRUE" if real is True else "FALSE" if real is False else str(real))
@@ -249,7 +260,8 @@ def _strip_historical_paragraphs(text: str) -> str:
 
 
 def check_bracket_names(text: str, haystack: str, navi_haystack: str | None = None,
-                        navi_end: "re.Pattern | None" = None) -> list[tuple[str, bool]]:
+                        navi_end: "re.Pattern | None" = None,
+                        seen: list | None = None) -> list[tuple[str, bool]]:
     """戻り値: (見つからなかった名前, ナビ画面の区画の文脈か) のリスト。
 
     navi_haystack を渡すと、**ナビ画面の区画の文脈**の行だけはそちら
@@ -283,18 +295,23 @@ def check_bracket_names(text: str, haystack: str, navi_haystack: str | None = No
                 continue
             if name in NATIVE_OS_UI_ALLOWLIST:
                 continue
+            if seen is not None:
+                seen.append(name)
             if name not in hay:
                 missing.append((name, navi_ctx))
     return missing
 
 
-def check_tab_names(text: str, haystack: str) -> list[str]:
+def check_tab_names(text: str, haystack: str,
+                    seen: list | None = None) -> list[str]:
     text = _strip_historical_paragraphs(text)
     missing = []
     for m in TAB_NAME.finditer(text):
         name = m.group(1)
         if name in NATIVE_OS_TAB_ALLOWLIST:
             continue
+        if seen is not None:
+            seen.append(name)
         if name not in haystack:
             missing.append(name)
     return missing
@@ -318,7 +335,10 @@ def spec16_section1(text: str) -> str:
 # ---------------------------------------------------------------------------
 # 本検査
 # ---------------------------------------------------------------------------
-def run_checks(verbose: bool) -> int:
+def run_checks(verbose: bool,
+               checked: "gate_count.Checked | None" = None) -> int:
+    if checked is None:
+        checked = gate_count.Checked()
     errors = 0
 
     def err(msg: str) -> None:
@@ -353,6 +373,8 @@ def run_checks(verbose: bool) -> int:
         err("(4) 対象文書 docs/25 が誤って除外されています(設計)")
         n4 += 1
     print("  (4) 対象外判定の自己確認         不一致 %d件" % n4)
+    checked.record("対象外判定", 4)
+    checked.record("対象文書", len(docs_texts))
 
     if not SHEETS_JSON.exists():
         err("build/sheets_main.json がありません")
@@ -361,12 +383,16 @@ def run_checks(verbose: bool) -> int:
     known_keys = set(config_defaults)
 
     n1 = 0
+    seen1: list = []
     for rel, text in docs_texts.items():
-        for key, doc_val, real_val in check_default_values(text, config_defaults, known_keys):
+        for key, doc_val, real_val in check_default_values(
+                text, config_defaults, known_keys, seen1):
             err('(1) %s: `%s` の「既定%s」が build 実値「%s」と食い違います'
                 % (rel, key, doc_val, real_val))
             n1 += 1
-    print("  (1) 既定値の食い違い             %d件" % n1)
+    print("  (1) 既定値の食い違い             照合 %d件 / 不一致 %d件"
+          % (len(seen1), n1))
+    checked.record("既定値", len(seen1))
 
     ui_texts = {
         "index.html": (UI_DIR / "index.html").read_text(encoding="utf-8")
@@ -379,12 +405,14 @@ def run_checks(verbose: bool) -> int:
     # 区画の文脈は ui/ だけを照合する(T-M2)。配線は build_haystacks が持つ。
     haystack, navi_haystack = build_haystacks(ui_texts)
     n2 = 0
+    seen2: list = []
+    seen2t: list = []
     for rel, text in docs_texts.items():
         is_navi_doc = rel in NAVI_DOC_REGIONS
         for name, navi_ctx in check_bracket_names(
                 text, haystack,
                 navi_haystack if is_navi_doc else None,
-                NAVI_DOC_REGIONS.get(rel)):
+                NAVI_DOC_REGIONS.get(rel), seen2):
             if navi_ctx:
                 err('(2) %s: 区画の説明にある `[%s]` が **ui/** に見つかりません'
                     "(旧シート画面 modUI*.bas の名前のままの疑い。HTML画面の"
@@ -393,10 +421,13 @@ def run_checks(verbose: bool) -> int:
                 err('(2) %s: `[%s]` が画面(ui/・sheets_main.json・modUI*.bas)の'
                     "どこにも見つかりません" % (rel, name))
             n2 += 1
-        for name in check_tab_names(text, haystack):
+        for name in check_tab_names(text, haystack, seen2t):
             err('(2) %s: 「%s」タブ が画面のどこにも見つかりません' % (rel, name))
             n2 += 1
-    print("  (2) ボタン名・タブ名の不在        %d件" % n2)
+    print("  (2) ボタン名・タブ名の不在        照合 %d件(ボタン %d・タブ %d) "
+          "/ 不在 %d件" % (len(seen2) + len(seen2t), len(seen2), len(seen2t), n2))
+    checked.record("ボタン名", len(seen2))
+    checked.record("タブ名", len(seen2t))
 
     src_codes: set[str] = set()
     for path in sorted((REPO_ROOT / "src").rglob("*.bas")):
@@ -416,6 +447,7 @@ def run_checks(verbose: bool) -> int:
             n3 += 1
     print("  (3) エラーコード ⊆16章§1         src %d件・16章 %d件 / 不一致 %d件"
           % (len(src_codes), len(spec16_codes), n3))
+    checked.record("エラーコード", len(src_codes))
     if verbose:
         print("      src codes  : " + ", ".join(sorted(src_codes)))
         print("      16章 codes : " + ", ".join(sorted(spec16_codes)))
@@ -562,7 +594,18 @@ def self_test() -> bool:
     for name in bad:
         print("  自己テスト NG: %s" % name)
     print("  自己テスト: %d/%d" % (len(cases) - len(bad), len(cases)))
+    _SELFTEST_N[0] = 0 if bad else len(cases)
     return not bad
+
+
+# 直近の自己テストで**実際に通った本数**(0 = 失敗)。要点行に出す。
+_SELFTEST_N = [0]
+
+
+def self_test_count() -> int:
+    _SELFTEST_N[0] = 0
+    self_test()
+    return _SELFTEST_N[0]
 
 
 def main() -> int:
@@ -579,11 +622,21 @@ def main() -> int:
             return 2
         print("結果: 自己テストOK")
         return 0
-    errors = run_checks(args.verbose)
+    checked = gate_count.Checked()
+    errors = run_checks(args.verbose, checked)
 
-    if not self_test():
+    n_self = self_test_count()
+    if n_self <= 0:
         print("結果: 自己テスト失敗(検出器が壊れています)")
         return 2
+    checked.record("自己テスト", n_self)
+
+    # 「検査していないのに緑」を止める要点行(W15 §3 X3-3)。4条件のうち
+    # 1つでも**0件しか見ていない**なら、この行で赤になる。
+    if gate_count.report(checked, required=("対象文書", "既定値", "ボタン名",
+                                            "エラーコード", "対象外判定",
+                                            "自己テスト")):
+        return 1
 
     if errors:
         print("ERROR: %d 件" % errors)

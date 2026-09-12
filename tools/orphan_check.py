@@ -21,8 +21,20 @@
         緑になる」という穴があった(実測で発見)。OnAction/OnTime の宛先は
         `"モジュール名.名前"` という**完全な**文字列なので、この規則では
         落ちない(同一モジュール内の宛先登録は従来どおり救済される)。
-    (b) build/ tools/ 配下のテキストファイル(手順書・ビルド入力の
-        文字列から呼ばれる入口を救済する)
+    (b) build/ tools/ 配下のテキストファイルの**実行される部分**
+        (手順書・ビルド入力の文字列から呼ばれる入口を救済する)
+        **コメントと docstring は救済しない**(W15 §3 X3-2): docs/ を外した
+        のと同じ理屈で、`tools/` `build/` の**散文**に名前が出ることも
+        「使っている」ことではない。実測: 呼出0件の Public が
+        `tools/*.py` の説明コメントや docstring・`tools/README.md` の地の文
+        だけで緑になりうる状態だった(docs/ を外したのに同じ性質が残っていた)。
+        救済に数えるのは次だけ(`strip_nonexecutable_text`):
+          - .py … コメント(`#`)と docstring を落とした残り
+                  (**文字列リテラルと実コードだけ**)
+          - .md … フェンス付きコードブロックとインラインコード(`` ` ``)だけ
+                  (地の文は散文=コメントと同じ)
+          - .ps1/.bat/.yml/.ini/.cfg … 行コメント(`#` `REM` `::` `;`)を落とす
+          - .json/.csv/.txt … データなのでそのまま(散文の器ではない)
         **docs/ は救済しない**(W15 Round2 R1-01): 仕様書に名前を書くことは
         「使っている」ことではない。仕様を先に書く本PJの手順では、
         docs/ を救済集合に入れると**仕様書に書いた瞬間に検出不能**になる
@@ -46,12 +58,26 @@
             と、モジュール台帳 `build/modules.json` 全体)。
         この線引きは「呼ばれているか」を見る本検査の目的そのものであり、
         登記の有無は 14章§6 との突合(vba_lint の契約検査)が別に見る。
-    (c) 動的連結の救済(C_evidence A-1で確認した2パターン):
-        - `"接頭辞" & 式` 型: 接頭辞文字列(モジュール修飾があれば末尾の
-          ローカル名も)を「有効な接頭辞」として集め、その接頭辞で始まる
-          識別子は救済する(modUIResearch.CopyPrompt / modUIGuide.ShowAdvanced)
-        - `HandlerName("接頭辞", ...)` 型: 名前組立関数への第1引数の
-          文字列リテラルも同様に「有効な接頭辞」として集める(modUICase6)
+    (c) 動的連結の救済(C_evidence A-1で確認した2パターン)。
+        **救済は「宛先モジュール」と「接尾辞の形」の両方で閉じる**
+        (W15 §3 X3-1)。以前は接頭辞の**前方一致だけ**で、モジュールも
+        接尾辞も問わなかったため、src のどこかに `"ShowArea" & 式` が1つ
+        あれば**無関係なモジュール**の `ShowAreaZzzNotWired` まで永久に
+        救済された(統合レビューが実測で再現)。いまの規則:
+        - `"モジュール名.接頭辞" & 式` 型 … 宛先 = その**モジュール名**、
+          接頭辞 = ドットより後ろ(modUIResearch.CopyPrompt /
+          modUIGuide.ShowAdvanced)
+        - `"接頭辞" & 式` 型(モジュール修飾なし) … 宛先 = **その連結を
+          書いているモジュール自身**
+        - `モジュール名.HandlerName("接頭辞", …)` 型 … 宛先 = その
+          モジュール(修飾が無ければ書いているモジュール。modUICase6)
+        接尾辞(名前から接頭辞を除いた残り)は**必ず1文字以上**で、かつ
+        - 連番型(`& CStr(n)` `& Format$(n, "00")` など数へ変換する式) …
+          **数字だけ**
+        - 名前組立型(それ以外の式・HandlerName) … 宛先モジュールか連結を
+          書いたモジュールの**文字列リテラルに出てくる snake_case 語**を
+          パスカル化した集合に**完全一致**(field_notes -> FieldNotes)
+        でなければならない。
 
 例外: 定義直前5行以内に `' @unused:理由` があれば SKIP(ERRORにしない)。
 
@@ -79,6 +105,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 sys.path.insert(0, str(TOOLS_DIR))
 
+import gate_count  # noqa: E402  (要点行の契約。W15 §3 X3-3)
 import vba_lint  # noqa: E402  (既存の解析ヘルパを再利用)
 
 DEFAULT_SRC_ROOT = REPO_ROOT / "src"
@@ -204,23 +231,129 @@ def find_unused_reason(raw_lines: list[str], lineno: int) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# 動的連結の救済(2パターン)
+# 動的連結の救済(W15 §3 X3-1 で「宛先モジュール × 接尾辞の形」へ閉じた)
 # ---------------------------------------------------------------------------
-CONCAT_PREFIX = re.compile(r'"([^"]+)"\s*&')
-HANDLER_NAME_CALL = re.compile(r"\bHandlerName\s*\(\s*\"([^\"]+)\"", re.IGNORECASE)
+CONCAT_PREFIX = re.compile(r'"([^"]*)"\s*&')
+# 名前組立関数(第1引数の文字列が接頭辞になる)。モジュール修飾は任意。
+NAME_BUILDERS = ("HandlerName",)
+HANDLER_NAME_CALL = re.compile(
+    r"(?:(\w+)\s*\.\s*)?\b(?:%s)\s*\(\s*\"([^\"]*)\""
+    % "|".join(NAME_BUILDERS), re.IGNORECASE)
+# `& CStr(n)` `& Format$(n, "00")` のように**数へ変換する式**で終わる連結。
+# このときハンドラ名の接尾辞は連番(数字だけ)にしかならない。
+NUMERIC_TAIL = re.compile(
+    r"^\s*(?:CStr|CLng|CInt|CDbl|CByte|Str\$?|Format\$?|Trim\$?)\s*\(|^\s*\d",
+    re.IGNORECASE)
+# 文字列リテラルの中から拾う snake_case 語(欄キー・data_key の類)。
+SNAKE_TOKEN = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
+
+MIN_PREFIX_LEN = 3
 
 
-def collect_dynamic_prefixes(all_statements: list[str]) -> set[str]:
-    prefixes: set[str] = set()
-    for stmt in all_statements:
-        for lit in CONCAT_PREFIX.findall(stmt):
-            prefixes.add(lit)
-            if "." in lit:
-                prefixes.add(lit.rsplit(".", 1)[-1])
-        for lit in HANDLER_NAME_CALL.findall(stmt):
-            prefixes.add(lit)
-    # 空文字列や短すぎる接頭辞は誤救済(全部を救済してしまう)のもとなので除外。
-    return {p for p in prefixes if len(p) >= 3}
+def pascalize(token: str) -> str:
+    """snake_case をハンドラ名の接尾辞と同じ形へ(field_notes -> FieldNotes)。
+
+    製品側の組立(modUICase6.HandlerName)と同じ変換であることが救済の前提。
+    自己テストが両者の一致を固定している。
+    """
+    return "".join(p[:1].upper() + p[1:] for p in token.split("_") if p)
+
+
+def module_key_suffixes(stmts: list[tuple[int, str]]) -> set[str]:
+    """そのモジュールの文字列リテラルに出てくる snake_case 語のパスカル形。"""
+    out: set[str] = set()
+    for _lineno, stmt in stmts:
+        for lit in STRING_LITERAL.findall(stmt):
+            for tok in SNAKE_TOKEN.findall(lit[1:-1]):
+                out.add(pascalize(tok))
+    return out
+
+
+class DynRule:
+    """動的連結1件ぶんの救済規則。
+
+    module = 救済してよい**宛先モジュール**(ここ以外の同名接頭辞は救済しない)
+    prefix = 接頭辞 / kind = "num"(連番) or "key"(名前組立)
+    keys   = kind="key" のときに許す接尾辞の集合(完全一致)
+    origin = この連結が書かれているモジュール(表示用)
+    """
+
+    __slots__ = ("module", "prefix", "kind", "keys", "origin")
+
+    def __init__(self, module, prefix, kind, keys, origin):
+        self.module = module
+        self.prefix = prefix
+        self.kind = kind
+        self.keys = keys
+        self.origin = origin
+
+    def label(self) -> str:
+        where = self.module if self.module == self.origin else (
+            "%s <- %s" % (self.module, self.origin))
+        return "%s + %s (%s)" % (
+            self.prefix, "連番" if self.kind == "num" else "欄キー", where)
+
+
+def collect_dynamic_rules(module_stmts: dict[str, list[tuple[int, str]]]
+                          ) -> list[DynRule]:
+    """全モジュールの statement から救済規則を組む(宛先モジュール付き)。"""
+    known = set(module_stmts)
+    keys_by_module = {m: module_key_suffixes(st) for m, st in module_stmts.items()}
+    rules: list[DynRule] = []
+
+    def allowed(target: str, origin: str) -> frozenset:
+        return frozenset(keys_by_module.get(target, set())
+                         | keys_by_module.get(origin, set()))
+
+    # テストモジュールは最後に見る(救済の根拠としては本番の配線を先に出す)。
+    ordered = sorted(module_stmts.items(),
+                     key=lambda kv: (kv[0].lower().startswith("modtests"), kv[0]))
+    for mod, stmts in ordered:
+        for _lineno, stmt in stmts:
+            for m in CONCAT_PREFIX.finditer(stmt):
+                lit = m.group(1)
+                kind = "num" if NUMERIC_TAIL.match(stmt[m.end():]) else "key"
+                if "." in lit:
+                    qual, local = lit.rsplit(".", 1)
+                    qual = qual.rsplit(".", 1)[-1]
+                    # 修飾が実在のモジュール名でなければ救済しない
+                    # (`"copied_" & n` のようなキー組立を宛先と誤解しない)。
+                    if qual not in known:
+                        continue
+                    target, prefix = qual, local
+                else:
+                    target, prefix = mod, lit
+                if len(prefix) < MIN_PREFIX_LEN:
+                    continue
+                rules.append(DynRule(target, prefix, kind, allowed(target, mod), mod))
+            for m in HANDLER_NAME_CALL.finditer(stmt):
+                qual, lit = m.group(1), m.group(2)
+                target = qual if (qual and qual in known) else mod
+                if len(lit) < MIN_PREFIX_LEN:
+                    continue
+                rules.append(DynRule(target, lit, "key", allowed(target, mod), mod))
+    return rules
+
+
+def rescue_rule_for(module: str, name: str,
+                    rules: list[DynRule]) -> DynRule | None:
+    """その Public を救済してよい規則(無ければ None)。VBA は大小同一視。"""
+    low = name.lower()
+    for r in rules:
+        if r.module != module:
+            continue
+        if not low.startswith(r.prefix.lower()):
+            continue
+        suffix = name[len(r.prefix):]
+        if not suffix:
+            continue  # 接頭辞そのものは動的連結では作られない
+        if r.kind == "num":
+            if suffix.isdigit():
+                return r
+            continue
+        if suffix.lower() in {k.lower() for k in r.keys}:
+            return r
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +414,97 @@ def blank_assignment_block(text: str, var_name: str) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# 実行されない散文の除去(W15 §3 X3-2)
+# ---------------------------------------------------------------------------
+# docs/ を救済集合から外した理由(「名前を書くことは使うことではない」)は、
+# build/ tools/ の**コメント・docstring・README の地の文**にもそのまま当たる。
+# ここで落とすのは「人へ向けた散文」だけで、文字列リテラル・コード・データは
+# 残す(残さないと本物の配線まで赤くなる)。
+LINE_COMMENT_EXTS = {".ps1": ("#",), ".bat": ("REM ", "::", "rem "),
+                     ".yml": ("#",), ".yaml": ("#",),
+                     ".ini": ("#", ";"), ".cfg": ("#", ";")}
+MD_FENCE = re.compile(r"^\s*(?:```|~~~)")
+MD_INLINE_CODE = re.compile(r"`([^`\n]+)`")
+
+
+def strip_py_prose(text: str) -> str:
+    """Python から コメントと docstring を落とす(行数は変えない)。
+
+    読めない Python は **fail-closed**(全部落とす)。読めないものを
+    「使用あり」の方向へ倒さない(blank_assignment_block と同じ方針)。
+    """
+    import tokenize  # 局所import(このツールの他の経路では使わない)
+
+    try:
+        toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return ""
+    lines = text.split("\n")
+
+    def blank(srow, scol, erow, ecol):
+        for r in range(srow, erow + 1):
+            i = r - 1
+            if i < 0 or i >= len(lines):
+                continue
+            a = scol if r == srow else 0
+            b = ecol if r == erow else len(lines[i])
+            lines[i] = lines[i][:a] + " " * max(0, b - a) + lines[i][b:]
+
+    for tok in toks:
+        if tok.type == tokenize.COMMENT:
+            blank(tok.start[0], tok.start[1], tok.end[0], tok.end[1])
+    # docstring = 式文になっている文字列定数(モジュール/クラス/関数のどこでも)。
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return ""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) \
+                and isinstance(node.value.value, str):
+            c = node.value
+            blank(c.lineno, c.col_offset,
+                  c.end_lineno or c.lineno, c.end_col_offset or 0)
+    return "\n".join(lines)
+
+
+def strip_md_prose(text: str) -> str:
+    """Markdown はコードブロックとインラインコードだけを残す(地の文=散文)。"""
+    kept: list[str] = []
+    in_fence = False
+    for line in text.split("\n"):
+        if MD_FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            kept.append(line)
+        else:
+            kept.extend(MD_INLINE_CODE.findall(line))
+    return "\n".join(kept)
+
+
+def strip_line_comments(text: str, markers: tuple) -> str:
+    out = []
+    for line in text.split("\n"):
+        st = line.lstrip()
+        if any(st.startswith(mk) for mk in markers):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def strip_nonexecutable_text(rel_path: str, text: str) -> str:
+    """救済集合から「実行されない散文」を落とす(拡張子ごと)。"""
+    ext = ("." + rel_path.rsplit(".", 1)[-1]).lower() if "." in rel_path else ""
+    if ext == ".py":
+        return strip_py_prose(text)
+    if ext == ".md":
+        return strip_md_prose(text)
+    if ext in LINE_COMMENT_EXTS:
+        return strip_line_comments(text, LINE_COMMENT_EXTS[ext])
+    return text  # .json / .csv / .txt はデータ。散文の器ではないのでそのまま。
+
+
 def strip_registry_text(rel_path: str, text: str) -> str | None:
     """登記だけのテキストを救済集合から落とす。None = ファイルごと落とす。"""
     if rel_path not in REGISTRY_ONLY_TEXT:
@@ -296,7 +520,8 @@ def strip_registry_text(rel_path: str, text: str) -> str | None:
 # ---------------------------------------------------------------------------
 # 外部テキスト(build/tools と docs)の読み込み
 # ---------------------------------------------------------------------------
-def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS) -> str:
+def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS,
+                       strip_prose: bool = True) -> str:
     chunks = []
     for d in dirs:
         base = repo_root / d
@@ -318,6 +543,8 @@ def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS) -> str:
             text = strip_registry_text(rel, text)
             if text is None:
                 continue  # 登記だけのファイル(救済しない)
+            if strip_prose:
+                text = strip_nonexecutable_text(rel, text)
             chunks.append(text)
     return "\n".join(chunks)
 
@@ -325,11 +552,16 @@ def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS) -> str:
 # ---------------------------------------------------------------------------
 # 本検査
 # ---------------------------------------------------------------------------
-def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
+def run_checks(src_root: Path, verbose: bool,
+               checked: "gate_count.Checked | None" = None
+               ) -> tuple[int, int, int]:
     """戻り値: (ERROR件数, SKIP件数, 救済件数)
 
     ERROR件数には「docs/ にしか名前が無いもの」(ERROR(docs-only))も含む。
+    checked を渡すと**実際に検査した項目数**を積む(W15 §3 X3-3)。
     """
+    if checked is None:
+        checked = gate_count.Checked()
     files = vba_lint.discover_module_files(src_root)
     if not files:
         print("[orphan_check] 対象ファイルがありません: %s" % src_root)
@@ -344,13 +576,11 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
     decls: dict[tuple[str, str], Decl] = {}
     # モジュールごとの statements(検索対象)
     module_stmts: dict[str, list[tuple[int, str]]] = {}
-    all_stmt_texts: list[str] = []
 
     for info in modules:
         stmts = vba_lint.iter_statements(info.raw_text.split("\n"))
         module_stmts[info.vb_name] = stmts
         for lineno, stmt in stmts:
-            all_stmt_texts.append(stmt)
             for kind, name in extract_decls(stmt):
                 key = (info.vb_name, name)
                 d = decls.get(key)
@@ -363,12 +593,14 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
     for (module, name), d in decls.items():
         d.unused_reason = find_unused_reason(raw_lines_by_module[module], d.lineno)
 
-    # 動的連結の救済接頭辞
-    dyn_prefixes = collect_dynamic_prefixes(all_stmt_texts)
+    # 動的連結の救済規則(宛先モジュール × 接尾辞の形。X3-1)
+    dyn_rules = collect_dynamic_rules(module_stmts)
 
     # 外部テキスト(救済する build/tools と、救済しない docs を分けて持つ)
     ext_text = load_external_text(REPO_ROOT, EXTERNAL_DIRS)
-    doc_text = load_external_text(REPO_ROOT, DOC_DIRS)
+    # docs/ は「名前がそこにしか無い」を言い当てるためだけに読むので、
+    # 散文を落とさない(落とすと docs-only の診断そのものが効かなくなる)。
+    doc_text = load_external_text(REPO_ROOT, DOC_DIRS, strip_prose=False)
 
     errors: list[Decl] = []
     doc_only: list[Decl] = []
@@ -408,10 +640,10 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
         if pat.search(ext_text):
             continue
 
-        # (c) 動的連結の救済
-        rescue_hit = next((p for p in dyn_prefixes if name.startswith(p)), None)
-        if rescue_hit is not None:
-            rescued.append((d, rescue_hit))
+        # (c) 動的連結の救済(宛先モジュールと接尾辞の形が合うものだけ)
+        rule = rescue_rule_for(module, name, dyn_rules)
+        if rule is not None:
+            rescued.append((d, rule.label()))
             continue
 
         # docs/ にしか名前が無いもの。救済せず、理由を分けて赤にする(R1-01)。
@@ -434,7 +666,7 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
     if verbose:
         for d, prefix in rescued:
             kind = "/".join(sorted(KIND_LABELS[k] for k in d.kinds))
-            print("RESCUED %s:%d %s %s (動的連結の接頭辞: %r)" %
+            print("RESCUED %s:%d %s %s (動的連結: %s)" %
                   (d.module, d.lineno, kind, d.name, prefix))
 
     for d in doc_only:
@@ -449,6 +681,10 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
         rel = _module_relpath(files, d.module, src_root)
         print("ERROR %s:%d %s %s (呼び出し元・文字列リテラル・build/tools "
               "のいずれにも出現しません)" % (rel, d.lineno, kind, d.name))
+
+    checked.record("モジュール", len(modules))
+    checked.record("Public宣言", len(decls))
+    checked.record("動的連結規則", len(dyn_rules))
 
     n_error = len(errors) + len(doc_only)
     print("孤児Public候補(機械検出): %d件 (うち docs/ のみ %d件) / "
@@ -635,19 +871,100 @@ def self_test() -> bool:
     cases.append(("Sub誤検出しない(Function定義)",
                   ("sub", "Bar") not in extract_decls("Public Function Bar() As String")))
 
-    # 動的連結の救済
-    prefixes = collect_dynamic_prefixes([
-        '"modUIResearch.CopyPrompt" & CStr(n2)',
-        '"modUIGuide.ShowAdvanced" & CStr(i + 1)',
-        'x = modUICase6.HandlerName("PasteInto", areaKey) & ";96"',
-    ])
-    cases.append(("動的連結 接頭辞(モジュール修飾込み)",
-                  "modUIResearch.CopyPrompt" in prefixes))
-    cases.append(("動的連結 接頭辞(ローカル名)", "CopyPrompt" in prefixes))
-    cases.append(("動的連結 接頭辞(ShowAdvanced)", "ShowAdvanced" in prefixes))
-    cases.append(("HandlerName第1引数の救済", "PasteInto" in prefixes))
-    cases.append(("動的連結 短すぎる接頭辞は救済しない(誤爆防止)",
-                  collect_dynamic_prefixes(['"ab" & x']) == set()))
+    # 動的連結の救済(W15 §3 X3-1: 宛先モジュール × 接尾辞の形で閉じる)。
+    # **識別子は `ZzT` の合成名だけを書く**(冒頭の自己言及の罠。実在の
+    # Public 名をこのファイルに書くと、このファイル自身が tools/ の外部
+    # テキストとしてその名前を救済してしまう。実測で1度踏んだ)。
+    synth_stmts = {
+        "modZzTa": [
+            (10, '"modZzTa.ZzTCopyIt" & CStr(n2)'),
+            (11, 'Public Sub ZzTCopyIt1()'),
+        ],
+        "modZzTb": [(20, '"modZzTb.ZzTShowIt" & CStr(i + 1)')],
+        "modZzTdraw": [
+            (30, 'x = modZzTc.HandlerName("ZzTPasteTo", areaKey) & ";96"')],
+        "modZzTc": [
+            (40, 's = s & "field_notes|input_memo|現場メモ" & vbLf'),
+            (41, 'Public Function HandlerName(ByVal stem As String)')],
+        "modZzTother": [(50, 'Dim i As Long')],
+    }
+    rules = collect_dynamic_rules(synth_stmts)
+
+    def rescued_name(module, name):
+        return rescue_rule_for(module, name, rules) is not None
+
+    # 正例(いま実際に救済されている3型が、宛先モジュールで救済されること)
+    cases.append(("動的連結 連番(同一モジュール)",
+                  rescued_name("modZzTa", "ZzTCopyIt1")))
+    cases.append(("動的連結 連番(別の接頭辞)",
+                  rescued_name("modZzTb", "ZzTShowIt5")))
+    cases.append(("動的連結 名前組立(HandlerName+欄キー)",
+                  rescued_name("modZzTc", "ZzTPasteToFieldNotes")))
+    # X3-1(1) 宛先モジュールで閉じる: 同じ接頭辞でも**別モジュール**は救済しない。
+    cases.append(("X3-1 無関係モジュールの同名接頭辞は救済しない",
+                  not rescued_name("modZzTother", "ZzTCopyIt1")))
+    cases.append(("X3-1 無関係モジュールの名前組立も救済しない",
+                  not rescued_name("modZzTother", "ZzTPasteToFieldNotes")))
+    # X3-1(2) 接尾辞の形で閉じる: 連番の宛先に非数字の接尾辞は通さない。
+    cases.append(("X3-1 連番の宛先に非数字の接尾辞は救済しない",
+                  not rescued_name("modZzTa", "ZzTCopyItNotWired")))
+    # X3-1(3) 名前組立の宛先でも、欄キー集合に無い接尾辞は通さない。
+    cases.append(("X3-1 未知の欄キーの接尾辞は救済しない",
+                  not rescued_name("modZzTc", "ZzTPasteToNotWired")))
+    cases.append(("X3-1 接頭辞そのもの(接尾辞なし)は救済しない",
+                  not rescued_name("modZzTa", "ZzTCopyIt")))
+    # 短すぎる接頭辞は規則にしない(誤爆防止。従来どおり)。
+    cases.append(("動的連結 短すぎる接頭辞は規則にしない",
+                  collect_dynamic_rules({"modZzTa": [(1, '"ab" & x')]}) == []))
+    # 修飾が実在モジュールでない連結を宛先と誤解しない。
+    cases.append(("動的連結 実在しない修飾は宛先にしない",
+                  all(r.module == "modZzTa" for r in
+                      collect_dynamic_rules({"modZzTa": [(1, '"copied_x.y" & n')]}))))
+    # 接尾辞の作り方が製品側(欄キーのパスカル化)と同じであること。
+    cases.append(("パスカル化が製品の組立と同じ",
+                  pascalize("hearing_answers") == "HearingAnswers" and
+                  pascalize("dossier") == "Dossier"))
+    cases.append(("欄キー集合は文字列リテラルの snake_case から作る",
+                  "FieldNotes" in module_key_suffixes(
+                      [(1, 's = "dossier|input_dossier|x" & vbLf & "field_notes|y"')])))
+
+    # X3-2: build/ tools/ の**散文**では救済しない(コメント・docstring・地の文)。
+    cases.append(("X3-2 Python のコメントは落ちる",
+                  "ZzTInPyComment" not in
+                  strip_nonexecutable_text("tools/z.py", "x = 1  # ZzTInPyComment\n")))
+    cases.append(("X3-2 Python の docstring は落ちる",
+                  "ZzTInDocstring" not in
+                  strip_nonexecutable_text("tools/z.py",
+                                           '"""ZzTInDocstring を呼ぶ。"""\nx = 1\n')))
+    cases.append(("X3-2 関数の docstring も落ちる",
+                  "ZzTInFuncDoc" not in
+                  strip_nonexecutable_text("tools/z.py",
+                                           'def f():\n    "ZzTInFuncDoc"\n    return 1\n')))
+    cases.append(("X3-2 Python の文字列リテラルは残る",
+                  "ZzTInPyString" in
+                  strip_nonexecutable_text("tools/z.py", "x = 'ZzTInPyString'\n")))
+    cases.append(("X3-2 Python のコードは残る",
+                  "ZzTPyIdent" in
+                  strip_nonexecutable_text("tools/z.py", "ZzTPyIdent = 1\n")))
+    cases.append(("X3-2 読めない Python は fail-closed",
+                  strip_nonexecutable_text("tools/z.py", "def (:\n") == ""))
+    cases.append(("X3-2 Markdown の地の文は落ちる",
+                  "ZzTInProse" not in
+                  strip_nonexecutable_text("tools/README.md", "ZzTInProse を呼びます。\n")))
+    cases.append(("X3-2 Markdown のコードブロックは残る",
+                  "ZzTInFence" in
+                  strip_nonexecutable_text("tools/README.md",
+                                           "説明\n```\nZzTInFence\n```\n")))
+    cases.append(("X3-2 Markdown のインラインコードは残る",
+                  "ZzTInBacktick" in
+                  strip_nonexecutable_text("tools/README.md",
+                                           "手順: `ZzTInBacktick` を押す。\n")))
+    cases.append(("X3-2 ps1 の行コメントは落ちる",
+                  "ZzTInPs1Comment" not in
+                  strip_nonexecutable_text("build/win/z.ps1", "# ZzTInPs1Comment\n$a=1\n")))
+    cases.append(("X3-2 json はデータなのでそのまま",
+                  "ZzTInJson" in
+                  strip_nonexecutable_text("build/z.json", '{"a": "ZzTInJson"}')))
 
     # 自分の名札(W15 Round2 R2-16)。名札だけの出現は使用に数えない。
     label_stmt = 'modLog.LogError "E0101", MOD_SRC & ".Foo", "bad"'
@@ -742,7 +1059,18 @@ def self_test() -> bool:
     for name in bad:
         print("  自己テスト NG: %s" % name)
     print("  自己テスト: %d/%d" % (len(cases) - len(bad), len(cases)))
+    _SELFTEST_N[0] = 0 if bad else len(cases)
     return not bad
+
+
+# 直近の自己テストで**実際に通った本数**(0 = 失敗 or 未実行)。要点行に出す。
+_SELFTEST_N = [0]
+
+
+def self_test_count() -> int:
+    _SELFTEST_N[0] = 0
+    self_test()
+    return _SELFTEST_N[0]
 
 
 def main() -> int:
@@ -767,11 +1095,19 @@ def main() -> int:
         print("[orphan_check] 対象ディレクトリが存在しません: %s" % src_root)
         return 1
 
-    n_error, n_skip, n_rescued = run_checks(src_root, args.verbose)
+    checked = gate_count.Checked()
+    n_error, n_skip, n_rescued = run_checks(src_root, args.verbose, checked)
 
-    if not self_test():
+    n_self = self_test_count()
+    if n_self <= 0:
         print("結果: 自己テスト失敗(検出器が壊れています)")
         return 2
+    checked.record("自己テスト", n_self)
+
+    # 「検査していないのに緑」を止める要点行(W15 §3 X3-3)。**実際に見た数**
+    # だけを名乗り、0件なら赤で止まる。
+    if gate_count.report(checked, required=("Public宣言", "自己テスト")):
+        return 1
 
     if n_error:
         print("結果: NG (孤児Public %d件)" % n_error)
