@@ -211,7 +211,7 @@ End Function
 ' BuildMetaJson - 18章§2の meta を組み立てる純関数。
 '   reviewedBy / reviewedAt は裁定書37 B-06 の確認フラグ(未確認は両方空文字)。
 
-'   s1WarnNote は裁定書38 班A の s1_warn("V-S1-14:2;V-S1-15:1" 形式・";" 区切り。
+'   s1WarnNote は裁定書38 班A の s1_warn("V-S1-14:2,V-S1-15:1" 形式・";" 区切り。
 '   空=指摘なし)。値源は modValidate3.WarnNoteOf。
 '   groundNote は裁定書37 B-03 の未照合 risk_no(";" 区切り。空=全件照合できた
 '   か、検査していない)。

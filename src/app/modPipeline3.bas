@@ -39,7 +39,7 @@ Private Const P3_FOCUS_NONE As String = "指定なし"
 '   他に無い)。読む口は LastGroundNote のみ。書くのは GroundHook のみ。
 Private mLastGroundNote As String
 
-' 直近のS1で立った警告の集計("V-S1-14:2;V-S1-15:1" 形式。""=指摘なし)。
+' 直近のS1で立った警告の集計("V-S1-14:2,V-S1-15:1" 形式。""=指摘なし)。
 '   mLastGroundNote と同型・同じ理由(RunStep の戻り値の契約を変えずに HTML へ
 '   渡す口が他に無い)。読む口は LastS1Notes のみ。書くのは S1Notes のみ。
 Private mLastS1Note As String
