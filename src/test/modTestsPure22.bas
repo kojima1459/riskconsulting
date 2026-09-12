@@ -17,6 +17,7 @@ Option Explicit
 '      あわせて区切りが「/」のもの・混在するものも見る(Mac の実Excel と、
 '      利用者が手で書き換えた data_dir.txt のため)。
 '
+'   末尾から modTestsPure23.RunAll(W14 裁定書37 班1)を呼ぶ。
 ' グループ単位の失敗隔離: modTestsPure21 と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
 ' ============================================================================
@@ -24,10 +25,16 @@ Option Explicit
 Public Sub RunAll()
     On Error GoTo FA
     T_W12A_PointerParentOf
+WB:
+    On Error GoTo FB
+    modTestsPure23.RunAll
 WDone:
     Exit Sub
 FA:
     GroupFail "W12A data_dir ポインタの親(裁定書34 §1.3(a))"
+    Resume WB
+FB:
+    GroupFail "W14 班1(裁定書37)への結線"
     Resume WDone
 End Sub
 

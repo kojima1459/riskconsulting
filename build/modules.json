@@ -819,6 +819,14 @@
       "_note": "裁定書34 §1.3/§1.5(W12-A)。data_dir ポインタの親フォルダ(modUtil.PointerParentOf)の純層3本。modTestsPure21.RunAll の末尾から呼ぶ。"
     },
     {
+      "name": "modTestsPure23",
+      "path": "src/test/modTestsPure23.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W14",
+      "_note": "裁定書37 班1(B-01/A-08/C-2)。BlockGuard配線(7 step種+壁打ち非配線)とmodPii.MatchUrlSpan(URL誤検知対策)の純層。modTestsPure22.RunAll の末尾から呼ぶ。"
+    },
+    {
       "name": "modTestsPureNavi",
       "path": "src/test/modTestsPureNavi.bas",
       "role": "test",

@@ -217,11 +217,11 @@ Private Function RunCritique(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
     Dim rawText As String
 
     If d.stepNo = 2 Then
-        sysText = modPromptsOps.BuildS2CriticSystem()
+        sysText = modPromptsOps.AsmGuarded(modPromptsOps.BuildS2CriticSystem())
         userText = modPromptsOps.AsmS2CriticUser(d.s1Json, d.baseJson, d.riskLibText)
         schemaText = modSchemas.SchemaS2C()
     Else
-        sysText = modPromptsOps.BuildS3CriticSystem()
+        sysText = modPromptsOps.AsmGuarded(modPromptsOps.BuildS3CriticSystem())
         userText = modPromptsOps.AsmS3CriticUser(ctx, modPipeline.S1SummaryOf(d.s1Json), _
                                                  d.s2Json, d.baseJson)
         schemaText = modSchemas.SchemaS3C()
@@ -251,13 +251,13 @@ Private Function RunRevision(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
     Dim rawText As String
 
     If d.stepNo = 2 Then
-        sysText = modPromptsCore.BuildS2System()
+        sysText = modPromptsOps.AsmGuarded(modPromptsCore.BuildS2System())
         userText = modPipeline3.S2UserText(ctx, d.caseId, d.s1Json, d.riskLibText, _
                                            d.menusText, d.prevS2Json, HearingOf(d.caseId), _
                                            d.incidentsText)
         schemaText = modSchemas.SchemaS2()
     Else
-        sysText = modPromptsCore.BuildS3System()
+        sysText = modPromptsOps.AsmGuarded(modPromptsCore.BuildS3System())
         userText = modPipeline3.S3UserText(ctx, d.caseId, modPipeline.S1SummaryOf(d.s1Json), _
                                            d.s2Json, d.menusText, d.linesText, _
                                            d.schemesText, d.casesText)
@@ -563,7 +563,7 @@ Private Function Defend(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
     If extraCount > 0 Then AddNote detailAcc, "extra_json=" & CStr(extraCount)
 
     If LenB(extracted) = 0 Then
-        Defend = "[E0302] 応答からJSONを抽出できませんでした（説明文のみ・括弧の欠落など）"
+        Defend = modPipeline3.MsgE0302()
         Exit Function
     End If
 

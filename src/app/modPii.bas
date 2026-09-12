@@ -77,6 +77,11 @@ Private Const PII_POLICY_MIN_LETTERS As Long = 2
 Private Const PII_POLICY_MAX_LETTERS As Long = 6
 Private Const PII_POLICY_MIN_DIGITS As Long = 6
 
+' 裁定書37 A-08/C-2(保険): 直前がこれらの記号ならURLパスの断片である疑いが
+' 強いので証券番号として検知しない(MatchUrlSpanで大半は既に読み飛ばすが、
+' 二重の保険として直前1字の除外にも加える)。
+Private Const PII_POLICY_DENY_PREV As String = "/?=&#_"
+
 ' 敬称の直前1字がこれらなら人名ではない(「仕様」「お客様」「同様」…)。
 ' 敬称ごとに分けてあるのは、同じ字でも敬称によって危険度が違うため。
 Private Const PII_DENY_BEFORE_SAMA As String = "仕客皆同多模異一様王神殿社御貴各奥若子姫人有何那種者長"
@@ -243,48 +248,88 @@ Private Function ScanSpans(ByVal sText As String) As String
     Dim i As Long
     i = 1
     Do While i <= nLen
-        Dim spanLen As Long
-        Dim posStart As Long
-        Dim kindText As String
-        spanLen = 0
-        posStart = i
-        kindText = vbNullString
-
-        spanLen = MatchEmail(sText, i)
-        If spanLen > 0 Then kindText = PII_KIND_EMAIL
-
-        If spanLen = 0 Then
-            spanLen = MatchPhone(sText, i)
-            If spanLen > 0 Then kindText = PII_KIND_PHONE
-        End If
-
-        If spanLen = 0 Then
-            spanLen = MatchPolicy(sText, i)
-            If spanLen > 0 Then kindText = PII_KIND_POLICY
-        End If
-
-        If spanLen = 0 Then
-            spanLen = MatchPerson(sText, i, posStart)
-            If spanLen > 0 Then kindText = PII_KIND_PERSON
-        End If
-
-        If spanLen > 0 Then
-            If cnt < PII_MAX_SPANS Then
-                modUtil.BufAdd buf, cnt, _
-                    kindText & PII_FLD & CStr(posStart) & PII_FLD & CStr(spanLen)
-            End If
-            If kindText = PII_KIND_PERSON Then
-                ' 敬称の直後から再開する(遡った名前部を二度読まない)。
-                i = i + (posStart + spanLen - i)
-            Else
-                i = i + spanLen
-            End If
+        ' 伝書鳩20260912 3-2 / 裁定書37 A-08・C-2: URLは他の全種別より先に
+        ' 試し、当たれば検知種別を記録せず読み飛ばす(出典URLの連番を
+        ' 証券番号等と誤検知しないため。16章E-05注記)。
+        Dim urlLen As Long
+        urlLen = MatchUrlSpan(sText, i)
+        If urlLen > 0 Then
+            i = i + urlLen
         Else
-            i = i + 1
+            Dim spanLen As Long
+            Dim posStart As Long
+            Dim kindText As String
+            spanLen = 0
+            posStart = i
+            kindText = vbNullString
+
+            spanLen = MatchEmail(sText, i)
+            If spanLen > 0 Then kindText = PII_KIND_EMAIL
+
+            If spanLen = 0 Then
+                spanLen = MatchPhone(sText, i)
+                If spanLen > 0 Then kindText = PII_KIND_PHONE
+            End If
+
+            If spanLen = 0 Then
+                spanLen = MatchPolicy(sText, i)
+                If spanLen > 0 Then kindText = PII_KIND_POLICY
+            End If
+
+            If spanLen = 0 Then
+                spanLen = MatchPerson(sText, i, posStart)
+                If spanLen > 0 Then kindText = PII_KIND_PERSON
+            End If
+
+            If spanLen > 0 Then
+                If cnt < PII_MAX_SPANS Then
+                    modUtil.BufAdd buf, cnt, _
+                        kindText & PII_FLD & CStr(posStart) & PII_FLD & CStr(spanLen)
+                End If
+                If kindText = PII_KIND_PERSON Then
+                    ' 敬称の直後から再開する(遡った名前部を二度読まない)。
+                    i = i + (posStart + spanLen - i)
+                Else
+                    i = i + spanLen
+                End If
+            Else
+                i = i + 1
+            End If
         End If
     Loop
 
     ScanSpans = modUtil.BufText(buf, cnt)
+End Function
+
+' ----------------------------------------------------------------------------
+' MatchUrlSpan - 位置iから始まるURLらしき文字列の長さ(0=不一致。16章E-05注記・
+'   裁定書37 A-08/C-2)。"http://"/"https://" から、空白・全角空白・引用符・
+'   "<" ">" ・改行に当たるまでを1スパンとして返す。検知種別としては記録せず
+'   読み飛ばすためだけに使う(出典URLの連番をpolicy_no等と誤検知しないため)。
+' ----------------------------------------------------------------------------
+Private Function MatchUrlSpan(ByVal sText As String, ByVal i As Long) As Long
+    Dim nLen As Long
+    nLen = Len(sText)
+
+    Dim schemeLen As Long
+    If Mid$(sText, i, 8) = "https://" Then
+        schemeLen = 8
+    ElseIf Mid$(sText, i, 7) = "http://" Then
+        schemeLen = 7
+    Else
+        Exit Function
+    End If
+
+    Dim p As Long
+    p = i + schemeLen
+    Do While p <= nLen
+        Dim c As String
+        c = Mid$(sText, p, 1)
+        If c = " " Or c = "　" Or c = """" Or c = "<" Or c = ">" Or _
+           c = vbLf Or c = vbCr Then Exit Do
+        p = p + 1
+    Loop
+    MatchUrlSpan = p - i
 End Function
 
 ' ----------------------------------------------------------------------------
@@ -422,7 +467,10 @@ Private Function MatchPolicy(ByVal sText As String, ByVal i As Long) As Long
     nLen = Len(sText)
     If Not IsAlphaChar(Mid$(sText, i, 1)) Then Exit Function
     If i > 1 Then
-        If IsAlnumChar(Mid$(sText, i - 1, 1)) Then Exit Function
+        Dim prevCh2 As String
+        prevCh2 = Mid$(sText, i - 1, 1)
+        If IsAlnumChar(prevCh2) Then Exit Function
+        If InStr(1, PII_POLICY_DENY_PREV, prevCh2, vbBinaryCompare) > 0 Then Exit Function
     End If
 
     Dim p As Long

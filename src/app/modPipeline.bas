@@ -249,7 +249,7 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
     Select Case c.stepNo
     Case 1
         LoadPasted caseId, limitChars, pasted, detailAcc, c
-        sysText = modPromptsCore.BuildS1System()
+        sysText = modPromptsOps.AsmGuarded(modPromptsCore.BuildS1System())
         userText = modPipeline3.S1UserText(ctx, caseId, pasted)
         schemaText = modSchemas.SchemaS1()
 
@@ -257,7 +257,7 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
         LoadKb ctx, c, limitChars, detailAcc
         c.prevS2Json = OrNone(modCaseStore.LoadData(caseId, "s2_prev_json"))
         hearing = OrNone(Sanitized(caseId, "input_hearing_answers", detailAcc))
-        sysText = modPromptsCore.BuildS2System()
+        sysText = modPromptsOps.AsmGuarded(modPromptsCore.BuildS2System())
         userText = modPipeline3.S2UserText(ctx, caseId, c.s1Json, c.riskLibText, _
                                            c.menusText, c.prevS2Json, hearing, _
                                            c.incidentsText)
@@ -265,7 +265,7 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
 
     Case 3
         LoadKb ctx, c, limitChars, detailAcc
-        sysText = modPromptsCore.BuildS3System()
+        sysText = modPromptsOps.AsmGuarded(modPromptsCore.BuildS3System())
         userText = modPipeline3.S3UserText(ctx, caseId, S1SummaryOf(c.s1Json), c.s2Json, _
                                            c.menusText, c.linesText, c.schemesText, c.casesText)
         schemaText = modSchemas.SchemaS3()
@@ -449,7 +449,7 @@ Private Function Defend(ByRef c As TChkCtx, ByVal rawText As String, _
     If extraCount > 0 Then AddNote detailAcc, "extra_json=" & CStr(extraCount)
 
     If LenB(extracted) = 0 Then
-        Defend = "[E0302] 応答からJSONを抽出できませんでした（説明文のみ・括弧の欠落など）"
+        Defend = modPipeline3.MsgE0302()
         Exit Function
     End If
 
