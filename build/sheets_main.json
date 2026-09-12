@@ -2798,6 +2798,16 @@
           "note": "HTMLレポートの配色・体裁テーマ(18章の定数モジュールが持つテーマ名)"
         },
         {
+          "name": "ground_check",
+          "value": true,
+          "note": "S2の evidence.quote を貼付原文と照合するか(裁定書37 B-03)。FALSEで照合をやめる。落とさない・リトライしない"
+        },
+        {
+          "name": "ground_head_chars",
+          "value": 20,
+          "note": "原文照合で見る引用の先頭字数(裁定書37 B-03)。20字未満の引用は全長一致"
+        },
+        {
           "name": "mock_fault",
           "value": "",
           "note": "mock時の障害注入(15章§8)。enum: (空)/broken_json/broken_json_once/enum_violation/ghost_id/count_violation/empty/limit/fake_err"

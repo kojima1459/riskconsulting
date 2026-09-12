@@ -868,6 +868,60 @@ Public Function S3UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
                            ByVal schemes As String, ByVal cases As String) As String
 ' `AsmS3User` へ focusIds / roundNo を足して渡す
 
+' --- 裁定書37 B-03/B-05（W14）。原文照合と充足度の run_log 記録 ---
+Public Sub DefendNotes(ByVal stepNo As Long, ByVal caseId As String, _
+                       ByVal stepJson As String, ByVal s1Json As String, _
+                       ByVal validateOk As Boolean, ByRef detailAcc As String)
+' `modPipeline` が JSON防衛線（14章§5）の**検証の直後**に1行で呼ぶ唯一の入口。
+'   `validateOk=False` なら何もしない。stepNo=1 で充足度（`SufficiencyNoteOf`）、
+'   stepNo=2 で原文照合（`GroundHook`）を `detailAcc`（run_log の detail）へ足す。
+'   **戻り値を持たない＝Stepの成否を左右しない。修復リトライも起こさない**
+Public Sub GroundHook(ByVal caseId As String, ByVal s2Json As String, _
+                      ByVal s1Json As String, ByRef detailAcc As String)
+' S2の `evidence.quote` を貼付原文と突き合わせ、detail へ `ground_unmatched=n`
+'   （**0件でも必ず記録する**）または `ground_skipped`（貼付原文が空）を足す。
+'   config `ground_check`（既定TRUE）/ `ground_head_chars`（既定20）＝13章§2.3
+Public Function LastGroundNote() As String
+' 直近の照合で未照合だった risk_no の一覧（";" 区切り。""＝全件照合できたか、
+'   検査していない）。**モジュール変数による状態保持の例外3例目**
+'   （`modPipeline2.LastDeepOutcome` と同型・同理由）。リセットは
+'   `ResetGroundNote` の1点のみ
+Public Sub ResetGroundNote()
+Public Function BuildHaystack(ByVal caseId As String, ByVal s1Json As String) As String
+' 照合される「原文」。`case_data` の `input_*` 全欄（値源は
+'   `modCaseStore3.DataKeys` の接頭辞 `input_` 1箇所）＋ `s1Json` の連結。
+'   `modExportHtml` もレポート生成時の再計算でこの1本を呼ぶ
+Public Function SufficiencyNoteOf(ByVal s1Json As String) As String
+' S1の `input_quality` を run_log 用の1語 `"iq=low;miss=7"` へ（overall と
+'   `coverage[].status<>ok` の観点数）。**読めなければ `"iq=?"`**（黙って mid に
+'   しない）。HTML画面の充足度警告（16章 E-02）もこの1本を呼ぶ
+
+' === app: modGround（引用の原文照合。W14。裁定書37 B-03）===
+' app層の**純文字列**モジュール（12章§2 R4）。Excelトークン・案件データ・config の
+'   どれにも触れない。値源の解決と注記の保持は `modPipeline3`、呼び出しは
+'   `modPipeline.Defend` の後ろ1行と `modExportHtml`（meta の再計算）。
+' **落とさない・修復リトライを起こさない**。結果は run_log の detail と
+'   18章§2 `meta.ground_unmatched`（→ SEC-14 の「原文照合」列）にだけ出る。
+Public Function NormalizeForMatch(ByVal t As String) As String
+' 照合用の正規化。全角英数記号→半角、空白・改行・句読点・鍵括弧・中黒・カンマ・
+'   ピリオド・長音の除去、英字の小文字化。**数字は落とさない**（金額・年月の桁が
+'   捏造の出どころなので残す）
+Public Function QuoteFound(ByVal quote As String, ByVal haystack As String, _
+                           ByVal headChars As Long) As Boolean
+' 正規化した `quote` の先頭 `headChars` 字を、正規化した `haystack` から探す。
+'   `headChars` が1未満なら20。`quote` が `headChars` 未満なら**全長一致**。
+'   quote が空・haystack が空のときは **False**（「見つかった」にしない）
+Public Function GroundNotes(ByVal s2Json As String, ByVal haystack As String, _
+                            ByVal headChars As Long) As String
+' `risks[]`（`evidence.quote`/`evidence.source`）と `emerging_risks[]`
+'   （`evidence_quote`/`evidence_source`）を走査し、source が `inference` /
+'   `knowledge` **以外**のものだけ照合して、見つからなかったものを ";" 区切りで
+'   返す。`risks[]` は `risk_no`、`emerging_risks[]` は出現順の `E1` `E2`。
+'   **`haystack` が空なら何も返さない**（貼付が空のときに全件未照合で埋めない
+'   ＝ fail-open。落とすのが目的ではないため）
+Public Function NoteCount(ByVal noteText As String) As Long   ' run_log の n
+Public Function NoteJsonArray(ByVal noteText As String) As String ' 18章§2 用の配列本体
+
 ' === app: modPipeline4（15章§0.7 ナレッジ側の切詰め。T-57。裁定書25 S6）===
 ' 30,000字契約による modPipeline の分割先（12章§2）。切詰め表が5段から**6段**（事故事例が
 '   順2）へ増えたのを機に、計画（`TrimPlan`。modKnowledgeFmt から移設）と適用
@@ -1371,6 +1425,13 @@ Public Function RoomOf(ByVal anchorName As String) As Long
 
 ' === app: modExportHtml / modExportPpt / modExportHearing ===
 Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
+Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As String, _
+                                     ByVal reviewedBy As String) As String
+' 裁定書37 B-06。`reviewedBy` は**内容を確認・編集した担当者の表示名**。空なら
+'   18章§3.5 の既定文（AI生成・担当者確認前）、非空なら `meta.reviewed_by` /
+'   `reviewed_at`（生成側が `modUtil.NowStamp` で打つ）が入り、免責1行目・
+'   `<noscript>`・表紙チップが同時に「確認済」へ切り替わる。
+'   `GenerateHtmlReport` は `reviewedBy=""` で本関数へ委譲するだけ（実装は1本）
     ' ""=成功 / 非空=失敗理由（コードは E0502。16章E-48）。S1+S2+S3のJSONを固定HTMLテンプレート
     ' (高橋PLプロト準拠・10章FR-37)に流し込み、自己完結HTML 1ファイルを出力(LLM不使用)。
     ' v2.3で主力出力(旧GenerateReportを置換)

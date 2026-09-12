@@ -109,25 +109,36 @@ Public Function SecSourceJs() As String
     s = s & "function renderSource(D,el){var rs=RISKS(D);var rows=[];" & vbLf
     s = s & "var a=rs.slice(0);" & vbLf
     s = s & "a.sort(function(x,y){return (x.risk_no||0)-(y.risk_no||0);});" & vbLf
+    s = s & "var gu=AR((D.meta||{}).ground_unmatched);var gm={};" & vbLf
+    s = s & "for(var g=0;g<gu.length;g++){gm[S(gu[g])]=1;}" & vbLf
     s = s & "for(var i=0;i<a.length;i++){var ev=a[i].evidence||{};" & vbLf
     s = s & "if(!NB(ev.quote)&&!NB(ev.source)){continue;}" & vbLf
     s = s & "rows.push([S(a[i].risk_no),S(a[i].risk_name),S(ev.quote)," & vbLf
-    s = s & "LB(LSRC,ev.source)]);}" & vbLf
+    s = s & "LB(LSRC,ev.source),gm[S(a[i].risk_no)]?'原文未照合':'']);}" & vbLf
     s = s & "if(!rows.length){return;}" & vbLf
     s = s & "T(el,'p','muted','各リスクの根拠にした記述と、その出どころです。"
-    s = s & "「推定」は入力に直接の記述が無く当社が置いた仮定であることを示します。');" & vbLf
-    s = s & "TBL(el,['No','リスク名','引用した記述','出所'],rows);}" & vbLf
+    s = s & "「推定」は入力に直接の記述が無く当社が置いた仮定であることを示します。"
+    s = s & "「原文未照合」は、貼り付けた資料の中にその記述を見つけられなかった"
+    s = s & "ことを示します（表記の違いで見つからないこともあります）。');" & vbLf
+    s = s & "TBL(el,['No','リスク名','引用した記述','出所','原文照合'],rows);}" & vbLf
     SecSourceJs = s
 End Function
 
 ' SEC-15 disclaimer(18章§3.5)。この4行を必ず含める。**常に表示**。
 '   1行目は16章NFR-S5の必須表記(<noscript>側にも同じ1行を静的に置いてある)。
+'   裁定書37 B-06: 1行目は meta.reviewed_by の**空/非空で3項分岐**する。担当者の
+'   確認を通していない書き出しで「人が確認・編集した」と名乗らない(社内IT環境
+'   v1.1 §7.3 は顧客提示物に利用者の確認を必須と定めるが、製品側にその担保が
+'   無かった)。2行目以降(仮説である旨・保険料試算は対象外・署名)は不変。
 Public Function SecDisclaimerJs() As String
     Dim s As String
     s = s & "function renderDisclaimer(D,el){var m=D.meta||{};" & vbLf
-    s = s & "var d=T(el,'div','disc');" & vbLf
-    s = s & "T(d,'p',null,'本資料はAI支援により作成した骨子を人が確認・編集した"
-    s = s & "ものです。');" & vbLf
+    s = s & "var d=T(el,'div','disc');var rb=S(m.reviewed_by);" & vbLf
+    s = s & "T(d,'p',null,rb?('本資料はAI支援により作成した骨子を担当者が確認・"
+    s = s & "編集したものです（確認: '+rb+' / '+S(m.reviewed_at)+'）。'):"
+    s = s & "'本資料はAIが公開情報等から作成した営業担当者向けの分析資料です"
+    s = s & "（AI生成・担当者確認前）。お客さまへ提示する前に、担当者が内容を"
+    s = s & "確認・編集してください。');" & vbLf
     s = s & "T(d,'p',null,'記載のリスクは公開情報と当社担当者の見立てに基づく仮説で"
     s = s & "あり、引受可否・保険料・幹事構成を確約するものではありません。');" & vbLf
     s = s & "T(d,'p',null,'保険料の試算は本資料の対象外です（要見積）。');" & vbLf

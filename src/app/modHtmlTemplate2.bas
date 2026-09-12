@@ -31,6 +31,9 @@ Public Function SecCoverJs() As String
     s = s & "if(NB(m.dossier_tier)){CHIP(c,'ドシエ '+LB(LTIER,m.dossier_tier));}" & vbLf
     s = s & "if(NB(m.quality_mode)){CHIP(c,'モード '+LB(LQM,m.quality_mode));}" & vbLf
     s = s & "if(m.round_no){CHIP(c,'第'+S(m.round_no)+'ラウンド');}" & vbLf
+    ' 裁定書37 B-06: 担当者の確認を通したかを表紙のチップで最初に見せる。
+    s = s & "CHIP(c,NB(m.reviewed_by)?('確認済 '+S(m.reviewed_by)):'確認前'," & vbLf
+    s = s & "NB(m.reviewed_by)?'chip-brand':null);" & vbLf
     s = s & "var s1=D.s1||{};" & vbLf
     s = s & "if(NB(s1.company_name)&&S(s1.company_name)!==S(m.company)){" & vbLf
     s = s & "T(el,'p','muted','Step1が読み取った社名: '+S(s1.company_name));}}" & vbLf
@@ -80,7 +83,7 @@ Public Function SecProfileJs() As String
     s = s & "var so=s1.strategy_outlook||{};" & vbLf
     s = s & "var map=T(el,'div','company-map');" & vbLf
     s = s & "var lf=T(map,'div','card');" & vbLf
-    s = s & "T(T(lf,'div',null),'span','tag fact','Public facts');" & vbLf
+    s = s & "T(T(lf,'div',null),'span','tag fact','公開情報に基づく事実');" & vbLf
     s = s & "T(lf,'h3',null,'公開情報から確認できる事実');" & vbLf
     s = s & "DLIST(lf,[['事業概要',S(s1.business_summary)]," & vbLf
     s = s & "['主要製品',JOIN(s1.main_products,'／')]," & vbLf
@@ -92,7 +95,7 @@ Public Function SecProfileJs() As String
     s = s & "['人員・労務',S(s1.workforce_notes)]," & vbLf
     s = s & "['経営の動き',S(s1.management_notes)]]);" & vbLf
     s = s & "var rt=T(map,'div','card');" & vbLf
-    s = s & "T(T(rt,'div',null),'span','tag infer','Risk implications');" & vbLf
+    s = s & "T(T(rt,'div',null),'span','tag infer','想定される事業影響');" & vbLf
     s = s & "T(rt,'h3',null,'リスクを生む構造の見立て');" & vbLf
     s = s & "DLIST(rt,[['理念(MVV)',S(so.mvv)]," & vbLf
     s = s & "['目指す姿',JOIN(so.aspirations,'／')]," & vbLf
