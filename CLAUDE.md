@@ -12,6 +12,6 @@
 
 ## 2. 検問と規約(要点。正は docs/spec/12章・17章)
 
-- 全ゲート一括: `python3 tools/gate.py`(19ゲート・約5分。`--only` で絞れる)。
+- 全ゲート一括: `python3 tools/gate.py`(全ゲート一括・約4〜5分。一覧は gate.py の GATES が正。`--only` で絞れる)。
 - ソース(.bas)は **UTF-8**(ビルドが CP932 化する)。1モジュール 30,000字・1物理行 1,000 バイト以下。
 - 社内環境の確定事実(ターミナル/PowerShell/Python 不可、信頼できる場所は D: のみ、AV が重く見る書き方、配布は SharePoint/Teams の zip)は `docs/24` と `docs/29` を正とする。
