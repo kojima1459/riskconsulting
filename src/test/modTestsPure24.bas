@@ -8,7 +8,7 @@ Option Explicit
 '   18章§2・§3.5 だけ**から手で書き出した(17章§1。実装の出力を見てから期待値を
 '   合わせない)。
 '
-' 対象と根拠(全23本):
+' 対象と根拠(全31本。W15 Round 2 の G6 8本は裁定書39 §1 だけを根拠に追記した):
 '   G1 原文照合(modGround。B-03 のテスト観点6つをそのまま置いた)
 '     01 引用の**先頭20字より後ろ**を1字変えても照合できる(表記揺れ耐性)
 '     02 丸ごと捏造した引用は未照合として検出する
@@ -28,6 +28,8 @@ Option Explicit
 '     19/20/21
 '   G5 SEC-14 の「原文照合」列(B-03)
 '     22
+'   G6 W15 Round 2(裁定書39 班Q)
+'     23/24 R2-04  25/26 R2-05  27 R1-05  28 R1-08  29/30 R1-07
 '
 ' 変異注入(出来レース禁止・裁定書37 §2):
 '   (a) modGround.QuoteFound を常に True にすると 02 と 07 が落ちる。
@@ -49,11 +51,16 @@ Private Const W14_HAY As String = _
 Private Const W14_BY As String = "浜松支店 山田"
 Private Const W14_AT As String = "2026/09/12 10:05:00"
 
+' 偽の確認日時(裁定書39 R2-05)。確認者名に vbTab を混ぜると <noscript> の免責へ
+'   任意の日時を差し込めた。W15_CASE_ID は表紙のフィールドずれ(26)の照合用。
+Private Const W15_FAKE_AT As String = "9999/12/31 00:00:00"
+Private Const W15_CASE_ID As String = "C-20260912-001"
+
 Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
 
-    For i = 1 To 5
+    For i = 1 To 6
         grpName = "W14-G" & CStr(i)
         On Error Resume Next
         Err.Clear
@@ -73,6 +80,7 @@ Private Sub RunGroup(ByVal idx As Long)
     Case 3: T_Disclaimer
     Case 4: T_ReportCss
     Case 5: T_SourceColumn
+    Case 6: T_W15Round2
     End Select
 End Sub
 
@@ -333,3 +341,129 @@ Private Sub T_SourceColumn()
         Ctn(js, "['No','リスク名','引用した記述','出所','原文照合']"), _
         "SEC-14 の見出し5列と meta.ground_unmatched の参照"
 End Sub
+
+' ============================================================================
+' G6 W15 Round 2(裁定書39 班Q): R2-04 / R2-05 / R1-05 / R1-07 / R1-08
+' ----------------------------------------------------------------------------
+' 期待値の根拠は**裁定書39 §1 の裁定欄と 16章 E-02 / 18章§2・§3・§4.1 の逐語**
+'   だけで、実装の出力を見てから合わせたものは1つも無い。
+'   23/24 R2-04 確認者名の空判定(空白類を除いて1文字以上)
+'   25/26 R2-05 表紙の vbTab 区切りをフィールドの中身が騙れない
+'   27    R1-05 原文(haystack)を1回だけ組み立てて使い回す
+'   28    R1-08 SEC-09 にニューリスクの「原文未照合」を出す
+'   29/30 R1-07 シート画面にも 16章 E-02 の警告帯を出す
+'
+' 変異注入(出来レース禁止・裁定書39 §3):
+'   (c) modUtilText.HasVisibleText を `LenB(Trim$(s))>0` へ戻すと 23/24 が落ちる。
+'   (d) modExportHtml.StripFieldSeps の vbTab 除去をやめると 25/26 が落ちる。
+'   (e) modHtmlTemplate4 の E採番の行を消すと 28 が落ちる。
+'   (f) modUICase.IqBannerTextOf を常に "" にすると 29 が落ちる。
+' ============================================================================
+
+Private Sub T_W15Round2()
+    T_R2_04
+    T_R2_05
+    T_R1_05
+    T_R1_08
+    T_R1_07
+End Sub
+
+' ---- R2-04 確認者名の空判定 ------------------------------------------------
+Private Sub T_R2_04()
+    ' 23 空白類(半角/全角/TAB/LF/CR)だけなら「入力あり」にしない。
+    '    Trim$ は Chr(32) しか落とさないので、この4つが素通りしていた。
+    ChkB "Test_W15_23_HasVisibleTextは空白類だけをFalseにする_裁定書39R2-04", _
+        (modUtilText.HasVisibleText("") = False) And _
+        (modUtilText.HasVisibleText(" ") = False) And _
+        (modUtilText.HasVisibleText("　") = False) And _
+        (modUtilText.HasVisibleText(vbTab) = False) And _
+        (modUtilText.HasVisibleText(vbLf) = False) And _
+        (modUtilText.HasVisibleText(vbCr) = False) And _
+        (modUtilText.HasVisibleText(vbTab & "　" & vbLf & vbCr & " ") = False) And _
+        (modUtilText.HasVisibleText("山") = True) And _
+        (modUtilText.HasVisibleText(vbTab & "山田" & vbLf) = True), _
+        "空白類=False / 1文字でも可視文字があれば True"
+
+    ' 24 レポート側の唯一の判断点。空白類だけの確認者名は**未確認**にする。
+    ChkB "Test_W15_24_ReviewerOfは空白類だけの確認者名を未確認にする_裁定書39R2-04", _
+        (modExportHtml.ReviewerOf(vbTab) = "") And _
+        (modExportHtml.ReviewerOf("　") = "") And _
+        (modExportHtml.ReviewerOf(vbLf & vbCr) = "") And _
+        (modExportHtml.ReviewerOf(" ") = "") And _
+        (modExportHtml.ReviewerOf(" 山田 ") = "山田"), _
+        "TAB=[" & modExportHtml.ReviewerOf(vbTab) & "] 全角空白=[" & _
+        modExportHtml.ReviewerOf("　") & "] 氏名=[" & _
+        modExportHtml.ReviewerOf(" 山田 ") & "]"
+End Sub
+
+' ---- R2-05 表紙の区切りを騙れない ------------------------------------------
+Private Sub T_R2_05()
+    Dim ns As String, doc As String
+
+    ' 25 確認者名に vbTab を入れても <noscript> の確認日時は meta.reviewed_at の
+    '    ままであること(偽の日時に差し替えられない)。18章§4.1 の3項分岐。
+    ns = NoScriptOf(DocOf("山田" & vbTab & W15_FAKE_AT, W14_AT))
+    ChkB "Test_W15_25_確認者名のTABで確認日時を偽装できない_裁定書39R2-05", _
+        Ctn(ns, W14_AT) And Ctn(ns, "担当者が確認・編集したものです"), _
+        "noscript=[" & Left$(ns, 200) & "]"
+
+    ' 26 会社名に vbTab が混じっても表紙の案件IDがずれないこと。
+    doc = DocOfCompany("甲斐" & vbTab & "商店")
+    ChkB "Test_W15_26_会社名のTABで表紙のフィールドがずれない_裁定書39R2-05", _
+        Ctn(doc, "案件ID " & W15_CASE_ID), _
+        "案件IDのピルが会社名の後半で上書きされない"
+End Sub
+
+' ---- R1-05 原文(haystack)の1回組み立て ------------------------------------
+Private Sub T_R1_05()
+    ' 27 S2照合用の原文 = 貼付原文 + S1出力(modPipeline3.BuildHaystack の
+    '    `sb & s1Json` と同値)。この同値が崩れると使い回しが誤りになる。
+    ChkB "Test_W15_27_GroundHaystackは貼付原文の末尾にS1を足したもの_裁定書39R1-05", _
+        (modExportHtml.GroundHaystack("原文", "{""a"":1}") = "原文{""a"":1}") And _
+        (modExportHtml.GroundHaystack("原文", "") = "原文") And _
+        (modExportHtml.GroundHaystack("", "{}") = "{}"), _
+        "実際=[" & modExportHtml.GroundHaystack("原文", "{""a"":1}") & "]"
+End Sub
+
+' ---- R1-08 SEC-09 の「原文未照合」 ------------------------------------------
+Private Sub T_R1_08()
+    Dim js As String
+
+    ' 28 modGround.GroundNotes が emerging_risks を "E1" "E2" で採番して
+    '    meta.ground_unmatched へ入れる(18章§2)以上、SEC-09 はその番号で
+    '    突き合わせて印を出す。SEC-14(risks[])側だけでは出ない。
+    js = modHtmlTemplate4.SecNewRiskJs()
+    ChkB "Test_W15_28_SEC09にニューリスクの原文未照合を出す_裁定書39R1-08", _
+        Ctn(js, "ground_unmatched") And Ctn(js, "'E'+(i+1)") And _
+        Ctn(js, "原文未照合"), _
+        "renderNewRisk が meta.ground_unmatched を E採番で引く"
+End Sub
+
+' ---- R1-07 シート画面の iq=low 警告帯 --------------------------------------
+Private Sub T_R1_07()
+    Dim lowText As String
+
+    ' 29 iq=low のときだけ 16章 E-02(実行後)の1文を返す。
+    lowText = modUICase.IqBannerTextOf(IqJson("low", "missing;partial"))
+    ChkB "Test_W15_29_シート画面もiq_lowでE02の警告文を出す_裁定書39R1-07", _
+        Ctn(lowText, "一般論に近い出力になります") And Ctn(lowText, "助言"), _
+        "banner=[" & lowText & "]"
+
+    ' 30 low 以外・読めないときは**何も出さない**(他の警告を消さない)。
+    ChkB "Test_W15_30_iq_low以外では警告帯を出さない_裁定書39R1-07", _
+        (modUICase.IqBannerTextOf(IqJson("high", "ok")) = "") And _
+        (modUICase.IqBannerTextOf(IqJson("mid", "partial")) = "") And _
+        (modUICase.IqBannerTextOf("") = ""), _
+        "high/mid/読めない はすべて空"
+End Sub
+
+' 会社名だけを差し替えたレポート全文(R2-05 の26用)。
+Private Function DocOfCompany(ByVal company As String) As String
+    Dim metaJson As String
+    metaJson = modExportHtml.BuildMetaJson(W15_CASE_ID, company, "09", _
+                                           "食料品製造業", "renewal", "t2_full", "deep", 1, _
+                                           "proposal", "2026/09/12 10:05:00", "2.0.0", _
+                                           "standard", "", "", "", "")
+    DocOfCompany = modExportHtml.BuildReportHtml(metaJson, _
+                                                 "{""company_name"":""x""}", "", "", "standard")
+End Function

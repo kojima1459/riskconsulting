@@ -27,8 +27,15 @@ Option Explicit
 ' ==========================================================
 
 ' coverFields の書式(§4.1(b)の3値を1本で渡す取り決め)。vbTab区切りで [0]=会社名
-'   [1]=案件ID [2]=生成日時。vbTab が安全なのは modUtilText.SanitizeInput が
-'   制御文字を除去するため(案件データ側に残らない)。
+'   [1]=案件ID [2]=生成日時。
+'   **vbTab を区切りに使える根拠**(裁定書39 R2-05 で事実へ訂正した): 連結する側
+'   の modExportHtml.BuildReportHtml が、各フィールドから vbTab / vbLf / vbCr を
+'   落としてから(同モジュールの StripFieldSeps)並べるためである。
+'   旧注記の「SanitizeInput が制御文字を除去するため案件データ側に残らない」は
+'   **事実と異なっていた**: modUtilText.SanitizeInput は TAB と LF を「本文の
+'   構造」として**意図的に残す**(modUtilText の SanitizeInput(1))ので、確認者名
+'   に TAB を1つ入れるだけで下の FieldAt が返す値が1つずつずれ、<noscript> の
+'   確認日時を任意の文字列へ差し替えられた。区切りを守る責任は連結側にある。
 '   裁定書37 B-06 で [3]=確認者(meta.reviewed_by) [4]=確認日時(reviewed_at)を
 '   足した(<noscript> の免責を SEC-15 と同じ3項分岐にするため)。無い場合は
 '   FieldAt が空文字を返すので、旧来の3値だけを渡す呼出も壊れない。

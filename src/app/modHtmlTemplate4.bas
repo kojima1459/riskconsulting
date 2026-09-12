@@ -28,6 +28,12 @@ Public Function SecNewRiskJs() As String
     Dim s As String
     s = s & "function renderNewRisk(D,el){var s2=D.s2||{};" & vbLf
     s = s & "var er=AR(s2.emerging_risks);if(!er.length){return;}" & vbLf
+    ' 裁定書39 R1-08: modGround.GroundNotes は emerging_risks を配列の出現順で
+    ' "E1" "E2" と採番して meta.ground_unmatched へ入れる(18章§2)。SEC-14 は
+    ' risks[] しか描かないので、ニューリスクの未照合はこの節で出す。捏造が最も
+    ' 出やすいのが emerging_risks(一般論を書きやすい)なので、見せたい所に出す。
+    s = s & "var gu=AR((D.meta||{}).ground_unmatched);var gm={};" & vbLf
+    s = s & "for(var g2=0;g2<gu.length;g2++){gm[S(gu[g2])]=1;}" & vbLf
     s = s & "var g=T(el,'div','radar');" & vbLf
     s = s & "for(var i=0;i<er.length;i++){var x=er[i];" & vbLf
     s = s & "var it=T(g,'div','radar-item');" & vbLf
@@ -42,6 +48,11 @@ Public Function SecNewRiskJs() As String
     s = s & "T(it,'div','mini','近さの目安: '+LB(LHZ,x.horizon));" & vbLf
     s = s & "if(NB(x.evidence_quote)){T(it,'p','mini','根拠: 「'+S(x.evidence_quote)" & vbLf
     s = s & "+'」('+LB(LSRC,x.evidence_source)+')');}" & vbLf
+    ' 裁定書39 R1-08: 採番は modGround と同じ「配列の出現順」。文言は SEC-14 の
+    ' 「原文未照合」と同じ語にし、読み手が2箇所で同じ意味に読めるようにする。
+    s = s & "if(gm['E'+(i+1)]){T(it,'div','mini','原文未照合: 貼り付けた資料の中に"
+    s = s & "この根拠を見つけられませんでした（表記の違いで見つからないことも"
+    s = s & "あります）。');}" & vbLf
     s = s & "if(NB(x.proposal_hint)){" & vbLf
     s = s & "T(it,'p','mini','提案の糸口: '+S(x.proposal_hint));}}}" & vbLf
     SecNewRiskJs = s

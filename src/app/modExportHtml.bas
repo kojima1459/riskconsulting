@@ -80,7 +80,7 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
     outPath = vbNullString
 
     Dim reviewer As String, reviewedAt As String
-    reviewer = Trim$(modUtilText.SanitizeInput(reviewedBy))
+    reviewer = ReviewerOf(reviewedBy)
     If LenB(reviewer) > 0 Then reviewedAt = modUtil.NowStamp()
 
     If Not modCaseStore.IsValidCaseId(caseId) Then
@@ -109,13 +109,20 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
         Exit Function
     End If
 
+    ' 裁定書39 R1-05: 原文(haystack)は**このレポート生成で1回だけ**組み立てる。
+    ' 貼付10欄は1欄100,000字まで入りうる(modNaviActions.ActPasteMaterial)ので、
+    ' 2回組み立てると最大1,000,000字の文字列が2本できて32bit Excel が保たない。
+    ' 貼付原文だけの版を作り、S2照合用は GroundHaystack で末尾に S1 を足す
+    ' (modPipeline3.BuildHaystack の `貼付原文 & s1Json` と同値)。
+    Dim hayBase As String
+    hayBase = modPipeline3.BuildHaystack(caseId, vbNullString)
+
     ' 裁定書37 B-03: 原文照合は**匿名化の復元より前**に行う(貼付原文もS2も
     ' 保存時の表記のまま突き合わせる。復元後に照合すると社名の置換で全件が
     ' 未照合になる)。config ground_check=FALSE なら測らない=空のまま。
     Dim groundNote As String
     If modConfig.GetBool("ground_check", True) Then
-        groundNote = modGround.GroundNotes(s2Text, _
-            modPipeline3.BuildHaystack(caseId, s1Text), _
+        groundNote = modGround.GroundNotes(s2Text, GroundHaystack(hayBase, s1Text), _
             modConfig.GetLong("ground_head_chars", modGround.GR_HEAD_DEFAULT))
     End If
 
@@ -150,9 +157,9 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
     ' 照合する原文は貼付原文だけ(BuildHaystack の第2引数に s1 を渡さない)。
     ' 匿名化の復元より前の s1Text を使う(復元でURLは変わらないが、社名の置換で
     ' 前後が動くため、run_log と同じ土俵で数えるには復元前が正しい)。
+    ' 裁定書39 R1-05: 上で1回だけ組み立てた hayBase を使い回す(2本目を作らない)。
     Dim s1WarnNote As String
-    s1WarnNote = modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(s1Text, _
-                     modPipeline3.BuildHaystack(caseId, vbNullString)))
+    s1WarnNote = modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(s1Text, hayBase))
     ' 裁定書38 B-10: 成功事例の選抜状況(SEC-14付近「該当N件のうちM件を使用」)。
     ' 生成の成否には影響しない(取れなければ0/0のまま=何も出さない)。
     Dim kbCasesUsed As Long, kbCasesTotal As Long
@@ -214,6 +221,59 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
 Failed:
     modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReportEx", "unexpected", Err.Number
     GenerateHtmlReportEx = "レポート生成中にエラーが発生しました。"
+End Function
+
+' ==========================================================
+' GroundHaystack - 原文照合(裁定書37 B-03)へ渡す原文。**純関数**。
+' ----------------------------------------------------------------------------
+'   modPipeline3.BuildHaystack は `貼付原文(input_* 全欄) & s1Json` を返すので、
+'   S2照合用(S1込み)と S1出典点検用(貼付原文だけ)は**末尾に S1 を足すかどうか**
+'   しか違わない。1回のレポート生成で BuildHaystack を2回組み立てると、
+'   貼付10欄が各100,000字(modNaviActions.ActPasteMaterial の上限)のとき最大
+'   1,000,000字の文字列を2本作ることになり、32bit Excel では致命的である
+'   (裁定書39 R1-05)。呼出側は BuildHaystack を**1回だけ**呼び、S2照合用は
+'   この関数で足す。
+' ==========================================================
+Public Function GroundHaystack(ByVal hayBase As String, ByVal s1Json As String) As String
+    GroundHaystack = hayBase & s1Json ' SAFE:html 照合用の原文(HTMLへは入らない)
+End Function
+
+' ==========================================================
+' ReviewerOf - 確認者名の正規化(裁定書39 R2-04 / R2-05)。**純関数**。
+' ----------------------------------------------------------------------------
+'   顧客提示物を「担当者が確認・編集したもの」と名乗らせるかどうかを決める
+'   唯一の判断点(18章§3.5・§4.1 の3項分岐はこの戻り値の空/非空だけを見る)。
+'     (1) 16章 E-04 の無害化(modUtilText.SanitizeInput)を通す。
+'     (2) 表紙の区切り(EX_SEP=vbTab)と改行を落とす。SanitizeInput は TAB と LF を
+'         「本文の構造」として**意図的に残す**ため、ここで落とさないと確認者名
+'         1つで coverFields のフィールドがずれ、<noscript> の確認日時を任意の
+'         文字列に偽装できる(裁定書39 R2-05)。
+'     (3) 空白類(半角/全角/TAB/LF/CR)だけなら**未確認**として空文字を返す。
+'         Trim$ は Chr(32) しか落とさないので、判定は modUtilText.HasVisibleText
+'         の1本に寄せる(裁定書39 R2-04。提案書側も同じ1本を呼ぶ)。
+' ==========================================================
+Public Function ReviewerOf(ByVal reviewedBy As String) As String
+    Dim t As String
+    t = StripFieldSeps(modUtilText.SanitizeInput(reviewedBy))
+    If Not modUtilText.HasVisibleText(t) Then Exit Function
+    ReviewerOf = Trim$(t)
+End Function
+
+' ==========================================================
+' StripFieldSeps - coverFields(EX_SEP=vbTab 区切り)へ入れる前の後始末。
+' ----------------------------------------------------------------------------
+'   フィールドの**中身**が区切りを騙ると、modHtmlTemplate1.FieldAt が返す値が
+'   1つずつずれる(会社名に vbTab が1つ混じるだけで表紙の案件ID欄に会社名の
+'   後半が出て、確認者名に混ぜれば <noscript> の確認日時を任意の文字列へ
+'   差し替えられた。裁定書39 R2-05)。modUtilText.SanitizeInput は TAB と LF を
+'   「本文の構造」として**意図的に残す**ので、区切りを使う側が落とす。
+'   落とすのは vbTab / vbLf / vbCr の3つだけで、本文の他の文字には触れない。
+' ==========================================================
+Private Function StripFieldSeps(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, EX_SEP, vbNullString)
+    t = Replace(t, vbCr, vbNullString)
+    StripFieldSeps = Replace(t, vbLf, vbNullString)
 End Function
 
 ' ==========================================================
@@ -305,14 +365,16 @@ Public Function BuildReportHtml(ByVal metaJson As String, ByVal s1Json As String
 
     ' 表紙の3値。HTMLへ差し込むのは BodyShellHtml / HeadHtml の中であり、
     ' いずれも modUtilText.HtmlSafe を通ってから入る(18章§4.1・§5.3(2))。
+    ' 裁定書39 R2-05: 各フィールドから区切り(vbTab)と改行を落としてから連結する。
+    ' 落とさないと中身が区切りを騙り、FieldAt の返す値が1つずつずれる。
     Dim coverFields As String
-    coverFields = modJsonLite.GetStr(metaJson, "company") & EX_SEP ' SAFE:html
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "case_id") & EX_SEP ' SAFE:html
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "generated_at") & EX_SEP ' SAFE:html
+    coverFields = StripFieldSeps(modJsonLite.GetStr(metaJson, "company")) & EX_SEP ' SAFE:html
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "case_id")) & EX_SEP ' SAFE:html
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "generated_at")) & EX_SEP ' SAFE:html
     ' 裁定書37 B-06: <noscript>(JSが動かない環境)の免責も同じ3項分岐にするため、
     ' 確認者と確認日時を静的HTML側へも渡す(差込は HtmlSafe を通る。18章§4.1)。
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "reviewed_by") & EX_SEP ' SAFE:html
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "reviewed_at") ' SAFE:html
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "reviewed_by")) & EX_SEP ' SAFE:html
+    coverFields = coverFields & StripFieldSeps(modJsonLite.GetStr(metaJson, "reviewed_at")) ' SAFE:html
 
     BuildReportHtml = modHtmlTemplate1.BuildDocument(themeName, dataJson, coverFields)
     Exit Function
