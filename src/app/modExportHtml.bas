@@ -144,11 +144,19 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
     Dim themeName As String
     themeName = ResolveTheme(modConfig.GetStr("html_theme", EX_THEME_DEFAULT), caseId)
 
+    ' 裁定書38 B-10: 成功事例の選抜状況(SEC-14付近「該当N件のうちM件を使用」)。
+    ' 生成の成否には影響しない(取れなければ0/0のまま=何も出さない)。
+    Dim kbCasesUsed As Long, kbCasesTotal As Long
+    modKnowledge.CasesFor ctx.industry_code, 0, modPipeline.CaseTextFor(s1Text, ctx.industry_name)
+    kbCasesUsed = modKnowledge.LastCasesUsed()
+    kbCasesTotal = modKnowledge.LastCasesTotal()
+
     Dim metaJson As String
     metaJson = BuildMetaJson(caseId, ctx.company, ctx.industry_code, ctx.industry_name, _
                              ctx.case_type, tierText, qualityMode, roundNo, s4Variant, _
                              modUtil.NowStamp(), modConfig.GetStr("app_version", EX_VER_DEFAULT), _
-                             themeName, warnText, reviewer, reviewedAt, groundNote)
+                             themeName, warnText, reviewer, reviewedAt, groundNote, _
+                             kbCasesUsed, kbCasesTotal)
 
     ' (4)(5) DATA組立とテンプレ組立。どちらの失敗も E0502(16章 E-48)。
     Dim docText As String
@@ -207,6 +215,9 @@ End Function
 '   warnText は EX_WARN_SEP 区切りの警告文(空なら warnings は空配列)。
 '   warnings は18章§4.1が静的HTMLの差込口を3箇所に限っているため、警告バナーの
 '   本文もDATA経由でJS側へ渡す(textContent で描くのでエスケープ経路が増えない)。
+'   kbCasesUsed/kbCasesTotal(裁定書38 B-10・任意): 成功事例の(使用/該当)。
+'   totalが0(未計測・または該当0)のときは meta.kb_usage を出さない(SEC-14は
+'   その場合何も足さない=挙動不変)。
 ' ==========================================================
 Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
                               ByVal industryCode As String, ByVal industryName As String, _
@@ -216,7 +227,9 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
                               ByVal appVersion As String, ByVal themeName As String, _
                               ByVal warnText As String, ByVal reviewedBy As String, _
                               ByVal reviewedAt As String, _
-                              ByVal groundNote As String) As String
+                              ByVal groundNote As String, _
+                              Optional ByVal kbCasesUsed As Long = 0, _
+                              Optional ByVal kbCasesTotal As Long = 0) As String
     Dim s As String
     s = s & "{" & JStr("case_id", caseId) ' SAFE:html
     s = s & "," & JStr("company", company) ' SAFE:html
@@ -236,7 +249,15 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
     s = s & "," & JStr("reviewed_at", reviewedAt) ' SAFE:html
     ' 裁定書37 B-03(18章§2): 原文と照合できなかった risk_no の一覧。
     s = s & ",""ground_unmatched"":[" & modGround.NoteJsonArray(groundNote) & "]" ' SAFE:html
-    s = s & ",""warnings"":[" & WarnArrayBody(warnText) & "]}" ' SAFE:html
+    s = s & ",""warnings"":[" & WarnArrayBody(warnText) & "]" ' SAFE:html
+    ' 裁定書38 B-10: 成功事例の該当総数が使用数を上回るとき(=静かな打切りが
+    ' 起きたとき)だけ kb_usage を置く。両方0/一致は「補足するほどではない」
+    ' として省く(SEC-14 は kb_usage が無い/cases_total<=cases_used なら出さない)。
+    If kbCasesTotal > kbCasesUsed Then
+        s = s & ",""kb_usage"":{""cases_used"":" & CStr(kbCasesUsed) & _
+                ",""cases_total"":" & CStr(kbCasesTotal) & "}" ' SAFE:html
+    End If
+    s = s & "}" ' SAFE:html
     BuildMetaJson = s
 End Function
 

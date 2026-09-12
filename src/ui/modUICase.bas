@@ -723,8 +723,3 @@ End Function
 Public Function SerializeSheet(ByVal stepNo As Long) As String
     SerializeSheet = modUICase2.SerializeStep(stepNo)
 End Function
-
-' JSON -> シート。参照優先の解決は modCaseStore.ResolveStepJson が行う。
-Public Function DrawSheet(ByVal caseId As String, ByVal stepNo As Long) As Boolean
-    DrawSheet = modUICase2.DrawStep(caseId, stepNo)
-End Function

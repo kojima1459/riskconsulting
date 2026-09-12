@@ -94,7 +94,9 @@ Public Function Ask(ByVal caseId As String, ByVal question As String, ByVal incl
     End If
     company = modCaseRead.CaseColumnOf(caseId, "company")
     safe = modUICase.AnonymizeText(safe, company, hits)
-    systemText = BuildChatSystem(caseId, includeJson)
+    ' 裁定書38 Z-52: 案件チャットの system も他Step同様 AsmGuarded で包む
+    ' (貼付資料を注入する経路のため。15章§1.3 直後の注記)。
+    systemText = modPromptsOps.AsmGuarded(BuildChatSystem(caseId, includeJson))
     If LenB(systemText) = 0 Then
         errCode = "E0101"
         Exit Function

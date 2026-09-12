@@ -228,6 +228,32 @@ Public Function MaskText(ByVal sText As String) As String
 End Function
 
 ' ============================================================================
+' SharesLongFragment - 裁定書38 Z-49(伝書鳩と同型の「調べて貼ったのに」を
+'   避けるための下見)。text の中に、source(現契約サマリ・営業メモ等)へ
+'   そのまま存在する minLen 文字以上の連続断片があるか(貼付経路の外へ
+'   コピーする前の下見。ブロックはしない=呼び出し側が警告に使うだけ)。
+' ----------------------------------------------------------------------------
+'   実装: text を minLen 文字の窓でずらしながら source へ InStr する。1件でも
+'   当たれば True(それだけで「minLen文字以上一致」が成立するため、それ以上
+'   長い断片を探す必要はない)。minLen<=0、または text/source が minLen 未満
+'   なら False。大小文字・かな漢字はそのまま比較する(正規化なし)。
+' ============================================================================
+Public Function SharesLongFragment(ByVal bodyText As String, ByVal source As String, _
+                                   ByVal minLen As Long) As Boolean
+    If minLen <= 0 Then Exit Function
+    If Len(source) < minLen Then Exit Function
+    Dim n As Long, i As Long
+    n = Len(bodyText) - minLen + 1
+    If n < 1 Then Exit Function
+    For i = 1 To n
+        If InStr(1, source, Mid$(bodyText, i, minLen), vbBinaryCompare) > 0 Then
+            SharesLongFragment = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' ============================================================================
 ' ScanSpans - 走査の本体。"種別:開始位置:長さ" を vbLf 区切りで返す(内部表現)。
 ' ----------------------------------------------------------------------------
 '   先頭から1文字ずつ前進し、その位置から始まる検知を順に試す。当たったら

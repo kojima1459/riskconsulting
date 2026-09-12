@@ -64,6 +64,13 @@ Private gKbRows(1 To KB_N) As Long
 Private gKbLoaded As Boolean
 Private gInjectedIds As String
 
+' --- kb_cut集計(裁定書38 B-10)。4種のみ追跡(cases/incidents/schemes/risks。
+'   いずれも industryCode で絞る種別。0=cases 1=incidents 2=schemes 3=risks)。
+Private Const KB_CUT_LABELS As String = "cases|incidents|schemes|risks"
+Private gKbCutUsed(0 To 3) As Long
+Private gKbCutTotal(0 To 3) As Long
+Private gKbCutSeen(0 To 3) As Boolean
+
 ' === 公開関数(14章§6のmodKnowledge節。ここに無い名前は公開しない) ===
 
 ' LoadKnowledge - kb_path を参照専用で開いて全シートを読み、E-34を検査し、隠し
@@ -143,9 +150,15 @@ Public Function LinesText(Optional ByVal maxRows As Long = 0) As String
 End Function
 
 ' CasesFor - S3用の成功事例(15章§4)。無い場合は「なし」(S3 userの見出し規約)。
-Public Function CasesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+'   caseText(裁定書38 B-10・任意): 業種コード完全一致の該当が maxRows に
+'   満たないとき、全業種の成功事例から customer_profile / risk_presented との
+'   n-gram重なりで上位を補う。空文字なら補充なし(挙動不変)。
+Public Function CasesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0, _
+                          Optional ByVal caseText As String = vbNullString) As String
+    Dim rankCols As String
+    If LenB(caseText) > 0 Then rankCols = "customer_profile;risk_presented"
     CasesFor = Inject(KB_I_CASE, "case_lib_id", "industry_code", industryCode, _
-                      CapCfg(maxRows, "kb_case_rows", 5), "cases")
+                      CapCfg(maxRows, "kb_case_rows", 5), "cases", caseText, rankCols)
 End Function
 
 ' SchemesFor - S3用の型ライブラリ(status=proven/adopted のみ。15章§4)。
@@ -195,7 +208,43 @@ End Function
 ' ResetInjectedIds - Step開始時に modPipeline / modPlayOps が呼ぶ。
 Public Sub ResetInjectedIds()
     gInjectedIds = vbNullString
+    Dim i As Long
+    For i = 0 To 3
+        gKbCutUsed(i) = 0
+        gKbCutTotal(i) = 0
+        gKbCutSeen(i) = False
+    Next i
 End Sub
+
+' ============================================================================
+' LastKbCutNote - 裁定書38 B-10: run_log detail へ積む
+'   "kb_cut:cases=5/23;incidents=…;schemes=…;risks=…" の1行(直近の
+'   ResetInjectedIds 以降にInjectした種別だけを載せる。何も注入していなければ
+'   ""(記録しない=検討不要)。
+' ============================================================================
+Public Function LastKbCutNote() As String
+    Dim acc As String
+    Dim labels As Variant
+    labels = Split(KB_CUT_LABELS, "|")
+    Dim i As Long
+    For i = 0 To 3
+        If gKbCutSeen(i) Then
+            If LenB(acc) > 0 Then acc = acc & ";"
+            acc = acc & CStr(labels(i)) & "=" & CStr(gKbCutUsed(i)) & "/" & CStr(gKbCutTotal(i))
+        End If
+    Next i
+    If LenB(acc) > 0 Then LastKbCutNote = "kb_cut:" & acc
+End Function
+
+' LastCasesUsed/LastCasesTotal - HTML SEC-14(裁定書38 B-10)向けの単発参照。
+'   直近の CasesFor 呼出結果(未実行なら 0/0)。
+Public Function LastCasesUsed() As Long
+    If gKbCutSeen(0) Then LastCasesUsed = gKbCutUsed(0)
+End Function
+
+Public Function LastCasesTotal() As Long
+    If gKbCutSeen(0) Then LastCasesTotal = gKbCutTotal(0)
+End Function
 
 ' 実在チェック5種(16章 E-07。ホワイトリスト=ナレッジブックの当該ID列)。メニュー
 '   だけは is_active も見る(無効化したサービスを提案させないため)。
@@ -235,15 +284,21 @@ End Sub
 
 ' 公開の注入関数の共通部: 絞込(SelectRows) -> 整形(modKnowledgeFmt) -> 0行処理
 '   (16章 E-09)と注入IDの累積。整形の書式は本モジュールが持たない。
+'   caseText/rankCols(裁定書38 B-10・任意): SelectRows の並べ替え補充へ
+'   そのまま渡す(空なら補充なし=挙動不変)。
 Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSpec As String, _
                         ByVal industryCode As String, ByVal capRows As Long, _
-                        ByVal fieldName As String) As String
+                        ByVal fieldName As String, _
+                        Optional ByVal caseText As String = vbNullString, _
+                        Optional ByVal rankCols As String = vbNullString) As String
     Dim ids As String
     Dim sel As Variant
     Dim n As Long
+    Dim totalHits As Long
     n = modKnowledge2.SelectRows(gKbBlocks(idx), gKbRows(idx), idCol, filterSpec, industryCode, _
-                   capRows, sel, ids)
+                   capRows, sel, ids, totalHits, caseText, rankCols)
     Inject = FormatBy(fieldName, sel)
+    RecordKbCut fieldName, n, totalHits
     If n <= 0 Then
         ' 0行は未装填文言(modKnowledgeFmt が返す)のまま usage_log へ記録する
         ' (16章 E-09。ナレッジ整備の優先度シグナル)
@@ -253,6 +308,22 @@ Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSp
     End If
     modKnowledge2.AddIdList gInjectedIds, ids
 End Function
+
+' RecordKbCut - 裁定書38 B-10: cases/incidents/schemes/risk_lib の4種だけ
+'   (used, totalHits)を記録する(LastKbCutNote が読む)。他の種別は対象外。
+Private Sub RecordKbCut(ByVal fieldName As String, ByVal usedN As Long, ByVal totalN As Long)
+    Dim i As Long
+    Select Case fieldName
+        Case "cases": i = 0
+        Case "incidents": i = 1
+        Case "schemes": i = 2
+        Case "risk_lib": i = 3
+        Case Else: Exit Sub
+    End Select
+    gKbCutUsed(i) = usedN
+    gKbCutTotal(i) = totalN
+    gKbCutSeen(i) = True
+End Sub
 
 ' 種類名から modKnowledgeFmt の整形関数へ振り分ける(書式の正は15章・実装は
 '   modKnowledgeFmt。ここには書式を書かない)。

@@ -493,7 +493,11 @@ Public Function MenusSummaryFor(ByVal industryCode As String, Optional ByVal max
 Public Function MenusFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
 ' S3用のメニュー一覧（実在するサービス。S2の要約とは別テキスト。書式の正は15章§4）
 Public Function LinesText(Optional ByVal maxRows As Long = 0) As String
-Public Function CasesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
+Public Function CasesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0, _
+                          Optional ByVal caseText As String = "") As String
+' caseText（裁定書38 B-10・任意）: 業種完全一致の該当が maxRows に満たないとき、全業種の
+' 成功事例から customer_profile/risk_presented との n-gram 重なり（modKnowledgeRank）で
+' 上位を補う。空文字なら補充なし（挙動不変）
 Public Function SchemesFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
 ' status∈{proven,adopted}のみ
 Public Function PatternsText(Optional ByVal maxRows As Long = 0) As String   ' P1-P15全件（PF/FG用）
@@ -505,6 +509,12 @@ Public Function MechsText(Optional ByVal maxRows As Long = 0) As String
 Public Function LastInjectedIds() As String
 ' 直近の ResetInjectedIds 以降に各注入関数が実際に使ったナレッジIDの累積（";"区切り）。
 ' run_log.injected_kb_ids（13章§2.4・10章FR-10）はこの値で埋める
+Public Function LastKbCutNote() As String
+' 裁定書38 B-10。直近の ResetInjectedIds 以降に Inject した cases/incidents/schemes/
+' risk_lib の(使用/該当)を "kb_cut:cases=5/23;incidents=…;schemes=…;risks=…" の1行に
+' して返す（何も注入していなければ ""）。run_log detail へそのまま積む
+Public Function LastCasesUsed() As Long   ' 直近の CasesFor の使用行数（HTML SEC-14向け）
+Public Function LastCasesTotal() As Long  ' 同・打切り前の該当総数（未実行時は0）
 Public Sub ResetInjectedIds()   ' Step開始時に modPipeline / modPlayOps が呼び、累積を初期化する
 Public Function MenuIdExists(ByVal id As String) As Boolean
 Public Function LineIdExists(ByVal id As String) As Boolean
@@ -1585,6 +1595,7 @@ Public Function RunExcelTests2() As Long
   | - | **`modUIResearch.OpenDrFull()` / `OpenDrQuick()` / `DrUrlOf(kind, cfgText) As String` / `DrUrlDefaultOf(kind) As String`** ＋ 図形 **`btn_nv_dr_full` / `btn_nv_dr_quick`** | 公開関数・図形（ui層。`DrUrlOf` / `DrUrlDefaultOf` は**純関数**） | 本章§6・11章§3.2・13章§2.3・§2.10 | 区画①の見出しの直下の2本。`DrUrlOf` は config が空・欠落のとき `DrUrlDefaultOf` の既定URLへ倒す（設定を消しただけで導線が死なない）。開く手段は `ThisWorkbook.FollowHyperlink` で、**`Hyperlinks.Add` は使わない**。[コピー]の直後にも `dr_url_full` を開く（config `dr_open_after_copy`） |
   | - | **`modUINav.NavRowSec1B() As String` / `NavRowFooter() As String` / `FooterCaption() As String` / `DrawNavFooter()` / `OpenPortal()`** ＋ **`modUIGuide.EnsureFooterButton()`** ＋ **`modUISheet.EnsureFooterButton(ws, shapeKey, caption, anchorRow, anchorCol, widthPt, onActionName) As Boolean`** ＋ 図形 **`btn_nv_footer` / `btn_gd_footer`** | 公開関数・図形（ui層） | 本章§6・11章§3.1・13章§2.10 | 最下部のフッター[© リスクコンサルティング支援部]（淡色・枠なし・中央）。キャプションの値源は `FooterCaption()` 1本で、丸C は CP932 に無いため `ChrW(169)` で組む。押すと config `portal_url` を既定ブラウザで開く。`modUISheet.EnsureFooterButton` が唯一の描き口 |
   | - | config `ui_fullscreen` / `dr_url_menu` / `dr_url_quick` / `dr_url_full` / `dr_open_after_copy` / `portal_url` | configキー | 13章§2.3・19章§4 | 既定値と意味は13章§2.3が正 |
+  | - | **`modKnowledgeRank.NgramOverlap(a, b, n) As Long` / `RankRows(caseText, rowTexts(), ByRef order()) As Long`** ＋ `modKnowledge2.SelectRows` の `ByRef totalHits` と任意引数 `caseText` / `rankCols` ＋ `modKnowledge.LastKbCutNote() As String` / `LastCasesUsed() As Long` / `LastCasesTotal() As Long` ＋ `CasesFor` の任意引数 `caseText` | 新設（app層。`NgramOverlap`/`RankRows`は**純関数**） | 本章§6・13章§3.1・15章§0.7・16章 E-09 | 裁定書38 B-10（伝書鳩3-3）。業種コード完全一致で `kb_case_rows` 等の上限に満たないとき、全業種の行から案件本文（`business_summary`＋業種名＋`field_insights`原文。`modPipeline.CaseTextFor`）と行本文の2〜3字n-gram重なり数で上位を補う。`totalHits`（打切り前の該当総数）は `kb_cut:cases=使用/該当` として run_log detail へ、`meta.kb_usage` としてHTML SEC-14へ渡す |
   | - | **`ThisWorkbook`（文書モジュール。`Workbook_Open` / `Workbook_Activate` / `Workbook_Deactivate` / `Workbook_BeforeClose`。すべて `Private`）** | 文書モジュール（ビルドが焼く。ソースの値源は `build/build_rpn.py` の `_BAKED_THISWORKBOOK_TEXT`） | 本章§6・11章§3.1・12章§2・13章§2.9 | ブックイベントを受ける唯一の口（v3.4・W9.3）。`Workbook_Open` は `modBoot.Boot` を直接呼ぶ（文字列でのブック名解決を使わない。W9.2）。`Workbook_Activate` は `modUIViewport.ApplyFullScreen`、`Workbook_Deactivate` と `Workbook_BeforeClose` は `modUIToast.CancelToast` → `modUIViewport.RestoreScreen` の順に呼ぶ。4本とも `On Error Resume Next` の配下で、**判断は持たない**。**本文は ASCII のみ**（非ASCIIをホストに解釈させない）。**旧 `clsAppEvents`（`WithEvents` を持つ唯一の `.cls`）と `modBoot.AppEventsReady` は撤去した**（Mac の実Excel でクラスモジュールを含むだけで読み込み時に「実行時エラー 5」が出た。焼き方の不一致そのものは 17章 Z-24 で解決したが、配布物は可動部品を減らすためクラスを持たない）。焼き込まれたスタブの形は `tools/bin_roundtrip.py` [4b] が検査する |
 
   **登記の移設（v3.0・17章§7 Z-13の30,000字契約分割）**: 下表は**新機能ではなく移設**である。移設した公開名は移設先モジュールへ読み替える（挙動・シグネチャ・文言は1字も変えていない）。

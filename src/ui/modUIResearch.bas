@@ -358,6 +358,11 @@ Public Sub CopyPrompt(ByVal n As Long)
         Exit Sub
     End If
 
+    ' 裁定書38 Z-49: [コピー]の直前に(a)modPii走査 (b)現契約・営業メモとの
+    ' 20字以上一致断片の検出を行う(コピー自体は止めない。16章 E-69)。
+    Dim warnText As String
+    warnText = ResearchWarningOf(body)
+
     If Not modUISheet.CopyToClipboard(body) Then
         modUIToast.ShowToast UR_MSG_COPY_NG, "error"
         Exit Sub
@@ -365,7 +370,11 @@ Public Sub CopyPrompt(ByVal n As Long)
 
     modUISheet.WriteNamed "dr_copied_seq", "つぎは " & CStr(n + 1) & "本目です"
     MarkNextFrame n + 1
-    modUIToast.ShowToast CopiedTextOf(n), "info"
+    If LenB(warnText) > 0 Then
+        modUIToast.ShowToast warnText, "warn"
+    Else
+        modUIToast.ShowToast CopiedTextOf(n), "info"
+    End If
 
     ' 写した直後に調査ページを開く(裁定書26 C)。開けなかった(EDR等)ときは
     ' URLを逐語で案内する。**写せたこと自体は取り消さない**。
@@ -385,6 +394,29 @@ Failed:
 End Sub
 
 ' 写したあとのトースト(11章§2.2 #3-#5 の逐語)。
+' ResearchWarningOf - 裁定書38 Z-49。現在の案件(hm_case_id。未確定なら検査を
+'   省く)の input_contract/input_memo/input_field_notes を下敷きに、コピーする
+'   本文の下見をする。ブロックはしない(呼び出し側で警告表示にのみ使う)。
+Private Function ResearchWarningOf(ByVal body As String) As String
+    If modPii.HasPii(body) Then
+        ResearchWarningOf = "個人情報らしき記述が含まれています。"
+        Exit Function
+    End If
+
+    Dim caseId As String, sourceText As String
+    caseId = modUISheet.ReadNamed("hm_case_id")
+    If LenB(caseId) = 0 Then Exit Function
+
+    sourceText = modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
+                 modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
+                 modCaseStore.LoadData(caseId, "input_field_notes")
+    If LenB(sourceText) = 0 Then Exit Function
+
+    If modPii.SharesLongFragment(body, sourceText, 20) Then
+        ResearchWarningOf = "現契約・営業メモと20字以上一致する記述が含まれています。"
+    End If
+End Function
+
 Private Function CopiedTextOf(ByVal n As Long) As String
     Select Case n
     Case 1

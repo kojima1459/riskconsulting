@@ -130,11 +130,20 @@ End Function
 ' 絞込の純部。blk の2行目以降から条件に合う行を最大 maxRows 件選び、
 '   「見出し行 + 選ばれた行」だけの2次元配列を selOut へ返す(整形は
 '   modKnowledgeFmt の責務)。戻り=選ばれた行数。注入IDもここで積む。
+'   totalHits(裁定書38 B-10): 打切り前に条件へ合致した総行数(ByRef)。
+'   caseText/rankCols(同B-10・並べ替え): 完全一致(cInd)の該当数が maxRows に
+'   満たないとき、全業種の行から caseText との 2〜3字 n-gram 重なり数
+'   (modKnowledgeRank)が高い順に不足分を補う。rankCols は補充候補の本文列を
+'   ";" 区切りで指定する(例 "customer_profile;risk_presented")。どちらかが
+'   空、または cInd を使わない絞込(schemes 等)では補充は行わない(挙動不変)。
 Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal idCol As String, _
                             ByVal filterSpec As String, ByVal industryCode As String, _
                             ByVal maxRows As Long, ByRef selOut As Variant, _
-                            ByRef idsOut As String) As Long
+                            ByRef idsOut As String, ByRef totalHits As Long, _
+                            Optional ByVal caseText As String = vbNullString, _
+                            Optional ByVal rankCols As String = vbNullString) As Long
     selOut = Empty
+    totalHits = 0
     If Not IsArray(blk) Then Exit Function
 
     Dim cId As Long, cInd As Long, cTgt As Long, cAct As Long
@@ -155,7 +164,6 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
     Dim r As Long, n As Long
     Dim okAll As Boolean
     For r = 2 To lastRow
-        If n >= maxRows Then Exit For
         idText = CellAt(blk, r, cId)
         If LenB(idText) > 0 Then
             okAll = True
@@ -164,17 +172,100 @@ Public Function SelectRows(ByVal blk As Variant, ByVal lastRow As Long, ByVal id
             If okAll And cAct > 0 Then okAll = modConfig.ParseBoolText(CellAt(blk, r, cAct), True)
             If okAll And cSt > 0 Then okAll = IsListed(KB_SCHEME_STATUS, CellAt(blk, r, cSt))
             If okAll Then
-                If cSuf > 0 Then
-                    sufText = CellAt(blk, r, cSuf)
-                    If LenB(sufText) > 0 Then AddId idsOut, sufText
+                totalHits = totalHits + 1
+                If n < maxRows Then
+                    If cSuf > 0 Then
+                        sufText = CellAt(blk, r, cSuf)
+                        If LenB(sufText) > 0 Then AddId idsOut, sufText
+                    End If
+                    AddId idsOut, idText
+                    If cRef > 0 Then AddIdList idsOut, CellAt(blk, r, cRef)
+                    n = n + 1
+                    hits(n) = r
                 End If
-                AddId idsOut, idText
-                If cRef > 0 Then AddIdList idsOut, CellAt(blk, r, cRef)
-                n = n + 1
-                hits(n) = r
             End If
         End If
     Next r
+
+    ' 並べ替え補充(裁定書38 B-10): 完全一致(cInd)がある絞込で、かつ件数が
+    ' maxRows に満たないときだけ、全業種の行から関連度上位を補う。
+    If n < maxRows And cInd > 0 And LenB(caseText) > 0 And LenB(rankCols) > 0 Then
+        Dim rcNames As Variant
+        rcNames = Split(rankCols, KB_SEMI)
+        Dim rCols() As Long
+        ReDim rCols(LBound(rcNames) To UBound(rcNames))
+        Dim rc As Long
+        For rc = LBound(rcNames) To UBound(rcNames)
+            rCols(rc) = ColOf(blk, Trim$(CStr(rcNames(rc))))
+        Next rc
+
+        Dim candRows() As Long
+        Dim candTexts() As String
+        Dim candN As Long
+        ReDim candRows(1 To lastRow)
+        ReDim candTexts(1 To lastRow)
+        Dim already As Boolean, h As Long
+        For r = 2 To lastRow
+            idText = CellAt(blk, r, cId)
+            If LenB(idText) > 0 Then
+                already = False
+                For h = 1 To n
+                    If hits(h) = r Then
+                        already = True
+                        Exit For
+                    End If
+                Next h
+                If Not already Then
+                    okAll = True
+                    If cTgt > 0 Then okAll = IndustryHit(CellAt(blk, r, cTgt), industryCode, False)
+                    If okAll And cAct > 0 Then okAll = modConfig.ParseBoolText(CellAt(blk, r, cAct), True)
+                    If okAll And cSt > 0 Then okAll = IsListed(KB_SCHEME_STATUS, CellAt(blk, r, cSt))
+                    If okAll Then
+                        candN = candN + 1
+                        candRows(candN) = r
+                        Dim rowText As String
+                        rowText = vbNullString
+                        For rc = LBound(rCols) To UBound(rCols)
+                            If rCols(rc) > 0 Then rowText = rowText & KB_SPACE & CellAt(blk, r, rCols(rc))
+                        Next rc
+                        candTexts(candN) = rowText
+                    End If
+                End If
+            End If
+        Next r
+
+        If candN > 0 Then
+            Dim candTextsUsed() As String
+            ReDim candTextsUsed(1 To candN)
+            Dim ci As Long
+            For ci = 1 To candN
+                candTextsUsed(ci) = candTexts(ci)
+            Next ci
+            Dim order() As Long
+            Dim rn As Long
+            rn = modKnowledgeRank.RankRows(caseText, candTextsUsed, order)
+            Dim need As Long, taken As Long, pickIdx As Long, scoreCheck As Long
+            need = maxRows - n
+            For ci = 1 To rn
+                If taken >= need Then Exit For
+                pickIdx = order(ci)
+                scoreCheck = modKnowledgeRank.NgramOverlap(caseText, candTextsUsed(pickIdx), 2) + _
+                             modKnowledgeRank.NgramOverlap(caseText, candTextsUsed(pickIdx), 3)
+                If scoreCheck <= 0 Then Exit For ' 降順なのでここで以降も0
+                n = n + 1
+                hits(n) = candRows(pickIdx)
+                idText = CellAt(blk, candRows(pickIdx), cId)
+                If cSuf > 0 Then
+                    sufText = CellAt(blk, candRows(pickIdx), cSuf)
+                    If LenB(sufText) > 0 Then AddId idsOut, sufText
+                End If
+                AddId idsOut, idText
+                If cRef > 0 Then AddIdList idsOut, CellAt(blk, candRows(pickIdx), cRef)
+                taken = taken + 1
+            Next ci
+        End If
+    End If
+
     If n = 0 Then Exit Function
 
     Dim cols As Long

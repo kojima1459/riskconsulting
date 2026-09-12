@@ -66,7 +66,7 @@ Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As
     stepNo = modUINav.StepFor(kbReady, modUIProgress.IsUiLocked(), Len(company) > 0, anyArea, status)
     modUtil.BufInit buf, count
     modUtil.BufAdd buf, count, "{""case_id"":" & modNaviJson.Q(caseId) & ",""ctx"":" & ctx & ",""basics"":" & basics & ","
-    modUtil.BufAdd buf, count, """prompts"":" & BuildPrompts(company, basics, modJsonLite.GetStr(ctx, "industry_name")) & ",""materials"":" & materials & ","
+    modUtil.BufAdd buf, count, """prompts"":" & BuildPrompts(company, basics, modJsonLite.GetStr(ctx, "industry_name"), caseId) & ",""materials"":" & materials & ","
     modUtil.BufAdd buf, count, """step"":{""no"":" & CStr(stepNo) & ",""next_action"":" & modNaviJson.Q(modNaviHost.DisplayMessage(modUINav.StepActionOf(rule))) & _
         ",""text"":" & modNaviJson.Q(modNaviHost.DisplayMessage(modUINav.StepText(stepNo))) & "},"
     modUtil.BufAdd buf, count, """stages"":" & BuildStageList(caseId) & ","
@@ -98,12 +98,24 @@ Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As
         ",""hearing_built_at"":" & modNaviJson.Q(modNaviState2.HearingBuiltAt(caseId)) & "}}"
     BuildCaseState = modUtil.BufText(buf, count)
 End Function
-Public Function BuildPrompts(ByVal company As String, ByVal basics As String, Optional ByVal industryName As String) As String
+' caseId(裁定書38 Z-49・任意): 案件が確定していれば、[コピー]の直前の下見として
+'   (a) modPii 走査 (b) 現契約サマリ・営業メモ欄(input_contract/input_memo/
+'   input_field_notes)と20字以上一致する断片の検出(SharesLongFragment)を行い、
+'   結果を "warning" へ積む(空="")。**コピー自体は止めない**(16章 E-69)。
+Public Function BuildPrompts(ByVal company As String, ByVal basics As String, _
+                              Optional ByVal industryName As String, _
+                              Optional ByVal caseId As String = vbNullString) As String
     Dim n As Long, template As String, srcText As String, result As String, titles As Variant
-    Dim industry As String, limitChars As Long, chars As Long
+    Dim industry As String, limitChars As Long, chars As Long, warnText As String
+    Dim sourceText As String
     titles = Array("1本目 会社の基本", "2本目 リスクの兆候", "3本目 調達・仕入れの構造", "業界と競合", "世の中の動きとの関係", "前回の更新からの変化", "拠点の災害リスク", "決算のハイライト")
     industry = industryName
     If Len(industry) = 0 Then industry = modJsonLite.GetStr(basics, "industry_name")
+    If Len(caseId) > 0 Then
+        sourceText = modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
+                     modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
+                     modCaseStore.LoadData(caseId, "input_field_notes")
+    End If
     ' 裁定書37 B-09: 展開後の字数(chars)と上限超過(over)を各プロンプトへ足す。
     ' 上限は config dr_input_max_chars(既定2,000)。判定は純関数 IsOverDrLimit に閉じる。
     limitChars = modConfig.GetLong("dr_input_max_chars", 2000)
@@ -113,10 +125,19 @@ Public Function BuildPrompts(ByVal company As String, ByVal basics As String, Op
         srcText = modUIResearch.FillTemplate(template, company, modJsonLite.GetStr(basics, "address"), _
             industry, modJsonLite.GetStr(basics, "sec_code"), modJsonLite.GetStr(basics, "sites"))
         chars = Len(srcText)
+        warnText = vbNullString
+        If modPii.HasPii(srcText) Then
+            warnText = "個人情報らしき記述が含まれています。"
+        ElseIf Len(sourceText) > 0 Then
+            If modPii.SharesLongFragment(srcText, sourceText, 20) Then
+                warnText = "現契約・営業メモと20字以上一致する記述が含まれています。"
+            End If
+        End If
         If n > 1 Then result = result & ","
         result = result & "{""no"":" & CStr(n) & ",""title"":" & modNaviJson.Q(CStr(titles(n - 1))) & _
             ",""template"":" & modNaviJson.Q(template) & ",""text"":" & modNaviJson.Q(srcText) & _
             ",""chars"":" & CStr(chars) & ",""over"":" & modNaviJson.Flag(IsOverDrLimit(chars, limitChars)) & _
+            ",""warning"":" & modNaviJson.Q(warnText) & _
             ",""copied_at"":" & modNaviJson.Q(modJsonLite.GetStr(basics, "copied_" & CStr(n))) & "}"
     Next n
     BuildPrompts = result & "]"

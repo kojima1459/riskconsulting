@@ -23,9 +23,6 @@ End Sub
 Public Function HostIsBusy() As Boolean
     HostIsBusy = gBusy Or modUIProgress.IsUiLocked()
 End Function
-Public Function CurrentCaseId() As String
-    CurrentCaseId = gCurrent
-End Function
 Public Function IsAllowed(ByVal action As String) As Boolean
     Select Case action
     Case "initialize", "open_case", "new_case", "save_basics", "copy_prompt", "open_url"
@@ -232,19 +229,9 @@ Public Sub ShowSheet(ByVal sheetName As String)
     ' Keep the modeless window available; the sheet action is in Excel's task window.
 End Sub
 ' Stage two extension points: intentionally no writes / no AI calls.
+' @unused: Phase2 予約(裁定書38)
 Public Function RoundDiffExtension(ByVal caseId As String) As String
 End Function
+' @unused: Phase2 予約(裁定書38)
 Public Function EmbeddingSearchExtension(ByVal question As String) As String
-End Function
-
-' Read-only diagnostics for development verification, specification 12.
-Public Function HostDiagnostics() As String
-    Dim naviReady As Boolean, documentMode As Long, bodyChars As Long
-    Dim fontScale As String, browserZoom As Long
-    If Not gForm Is Nothing Then
-        naviReady = gForm.IsReady: documentMode = gForm.DocumentMode: bodyChars = gForm.HtmlLength
-        fontScale = gForm.TextScale: browserZoom = gForm.OpticalZoom
-    End If
-    HostDiagnostics = "{""ready"":" & modNaviJson.Flag(naviReady) & ",""document_mode"":" & CStr(documentMode) & _
-        ",""html_length"":" & CStr(bodyChars) & ",""text_scale"":" & modNaviJson.Q(fontScale) & ",""zoom"":" & CStr(browserZoom) & "}"
 End Function

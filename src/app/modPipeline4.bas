@@ -95,10 +95,14 @@ End Function
 '   txt は本関数が ReDim(0 To 5)して埋める。切り詰めたら注入IDを積み直す
 '   (LastInjectedIds は実際に注入したIDのみ。§0.7「記録」)。
 '   detailAcc へ "truncated:<対象>=<削った行数>" を積む(黙って削らない)。
+'   caseText(裁定書38 B-10): 業種完全一致の該当が上限に満たないときの並べ替え
+'   補充に使う案件本文(modPipeline.CaseTextFor)。空なら補充なし。
+'   同じ detailAcc へ "kb_cut:cases=U/T;…"(0.7の切詰め**前**・完全一致の
+'   該当総数)も、自然装填(config既定行数)を取った直後に1回だけ積む。
 ' ============================================================================
 Public Sub LoadKbSlots(ByRef ctx As TCaseCtx, ByVal stepNo As Long, _
                        ByVal budgetChars As Long, ByRef txt() As String, _
-                       ByRef detailAcc As String)
+                       ByVal caseText As String, ByRef detailAcc As String)
     Dim counts(0 To 2 * P4_PLAN_N - 1) As Long
     Dim plan As Variant
     Dim i As Long
@@ -106,7 +110,8 @@ Public Sub LoadKbSlots(ByRef ctx As TCaseCtx, ByVal stepNo As Long, _
 
     ReDim txt(0 To P4_PLAN_N - 1)
     modKnowledge.ResetInjectedIds
-    FetchKb ctx, stepNo, txt, -1, 0
+    FetchKb ctx, stepNo, txt, -1, 0, caseText
+    AddNote detailAcc, modKnowledge.LastKbCutNote()
     For i = 0 To P4_PLAN_N - 1
         counts(i) = modPipeline.KbRowCount(txt(i))
         counts(P4_PLAN_N + i) = Len(txt(i))
@@ -120,7 +125,7 @@ Public Sub LoadKbSlots(ByRef ctx As TCaseCtx, ByVal stepNo As Long, _
 
     modKnowledge.ResetInjectedIds
     For i = 0 To P4_PLAN_N - 1
-        If counts(i) > 0 Then FetchKb ctx, stepNo, txt, i, plan(i)
+        If counts(i) > 0 Then FetchKb ctx, stepNo, txt, i, plan(i), caseText
         If plan(i) < counts(i) Then
             AddNote detailAcc, "truncated:" & PickAt(P4_KB_LABELS, i) & _
                                "=" & CStr(counts(i) - plan(i))
@@ -130,8 +135,10 @@ End Sub
 
 ' slotIdx=-1 は全スロットを既定行数(config)で、0以上はそのスロットだけ maxRows 行
 '   (0なら既定文言)で取り直す。メニューはStepで別物(12章§3)。
+'   caseText(裁定書38 B-10)は成功事例(i=0)の並べ替え補充にだけ使う。
 Private Sub FetchKb(ByRef ctx As TCaseCtx, ByVal stepNo As Long, ByRef txt() As String, _
-                    ByVal slotIdx As Long, ByVal maxRows As Long)
+                    ByVal slotIdx As Long, ByVal maxRows As Long, _
+                    Optional ByVal caseText As String = vbNullString)
     Dim i As Long, n As Long
 
     For i = 0 To P4_PLAN_N - 1
@@ -141,7 +148,7 @@ Private Sub FetchKb(ByRef ctx As TCaseCtx, ByVal stepNo As Long, ByRef txt() As 
             If slotIdx >= 0 And maxRows <= 0 Then
                 txt(i) = P4_KB_ZERO
             ElseIf i = 0 Then
-                txt(i) = modKnowledge.CasesFor(ctx.industry_code, n)
+                txt(i) = modKnowledge.CasesFor(ctx.industry_code, n, caseText)
             ElseIf i = 1 Then
                 txt(i) = modPipeline3.IncidentsFor(ctx.industry_code, n)
             ElseIf i = 2 Then

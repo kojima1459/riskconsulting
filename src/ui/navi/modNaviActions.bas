@@ -217,13 +217,27 @@ Public Function ResultOf(ByVal ok As Boolean, ByVal successText As String, ByVal
 End Function
 
 Public Function SavedResult(ByVal caseId As String, ByVal message As String) As String
-    Dim result As String
+    SavedResult = SavedResultWithWarning(caseId, message, vbNullString)
+End Function
+
+' SavedResultWithWarning - 裁定書38 Z-46。企業ファイル自動保存の警告に加えて、
+'   呼び出し側が持つ追加の警告(policy_noのみ検知時の案内等)を1つのJSONへ
+'   まとめる(両方あれば vbLf で連結。どちらも無ければ warning キー自体を
+'   持たない Success と同じ形)。
+Public Function SavedResultWithWarning(ByVal caseId As String, ByVal message As String, _
+                                       ByVal extraWarning As String) As String
+    Dim result As String, warnText As String
     result = modCompanyFile3.AutoSaveCase(caseId)
-    If result = "saved" Then
-        SavedResult = Success(message)
+    warnText = extraWarning
+    If result <> "saved" Then
+        If LenB(warnText) > 0 Then warnText = warnText & vbLf
+        warnText = warnText & "企業ファイルへ保存できませんでした。ブックを閉じる前に保存先を確認してください。"
+    End If
+    If LenB(warnText) = 0 Then
+        SavedResultWithWarning = Success(message)
     Else
-        SavedResult = "{""ok"":true,""message"":" & modNaviJson.Q(message) & _
-                      ",""warning"":""企業ファイルへ保存できませんでした。ブックを閉じる前に保存先を確認してください。""}"
+        SavedResultWithWarning = "{""ok"":true,""message"":" & modNaviJson.Q(message) & _
+                                 ",""warning"":" & modNaviJson.Q(warnText) & "}"
     End If
 End Function
 
@@ -285,6 +299,7 @@ End Function
 Public Function ActPasteMaterial(ByRef caseId As String, ByVal data As String) As String
     Dim slot As String, body As String, reason As String, company As String, hits As Long
     Dim memo As String, others As String, coverage As String, ok As Boolean, oldBody As String
+    Dim piiKinds As String, piiWarn As String
     slot = modJsonLite.GetStr(data, "slot")
     If Not ValidSlot(slot) Then
         ActPasteMaterial = Failure("登録先が不正です。", "E0101")
@@ -299,9 +314,22 @@ Public Function ActPasteMaterial(ByRef caseId As String, ByVal data As String) A
         ActPasteMaterial = Failure("1欄の登録上限は100,000文字です。分割して内容を整理してください。", "E0101")
         Exit Function
     End If
-    If modPii.HasPii(body) Then
-        ActPasteMaterial = Failure("個人情報らしき記述を検知したため登録しませんでした。伏せ字にして登録してください。", "E0103")
-        Exit Function
+    ' 裁定書38 Z-46(伝書鳩3-2): 検知種別が policy_no だけなら登録は止めず警告に
+    '   留める(DR出力は出典URLを必ず含み、URL断片を契約番号と誤検知しやすい)。
+    '   人名・メール・電話を1件でも含む混在は従来どおりブロックする。
+    piiKinds = modPii.KindsOf(body)
+    If LenB(piiKinds) > 0 Then
+        If piiKinds = "policy_no" Then
+            piiWarn = "契約番号らしき数字列(" & CStr(modPii.DetectionCount(body)) & _
+                      "箇所: " & modUtil.SafeLeft(body, 30) & "…)を検知しました。" & _
+                      "伏せ字にするか、そのままでよいか確認してください。"
+            modLog.LogUsage "pii_policy_warning", caseId, modPii.ScanReport(body, "貼付/" & slot)
+        Else
+            modLog.LogError "E0103", "modNaviActions.ActPasteMaterial", _
+                            modPii.ScanReport(body, "貼付/" & slot)
+            ActPasteMaterial = Failure("個人情報らしき記述を検知したため登録しませんでした。伏せ字にして登録してください。", "E0103")
+            Exit Function
+        End If
     End If
     If Not EnsureCase(caseId, data, reason) Then
         ActPasteMaterial = Failure(reason, "E0101")
@@ -324,7 +352,7 @@ Public Function ActPasteMaterial(ByRef caseId As String, ByVal data As String) A
     End If
     If ok Then
         modLog.LogUsage "material_registered", caseId, "slot=" & slot & ";chars=" & CStr(Len(body))
-        ActPasteMaterial = SavedResult(caseId, "資料を登録しました。")
+        ActPasteMaterial = SavedResultWithWarning(caseId, "資料を登録しました。", piiWarn)
     Else
         ActPasteMaterial = Failure("資料を登録できませんでした。", "E0604")
     End If
