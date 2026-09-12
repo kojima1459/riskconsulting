@@ -12,11 +12,13 @@ Option Explicit
 ' 持つもの:
 '   CheckS5        15章§5.6 の13件(V-S5-01からV-S5-13)。""=合格
 '   TabooPairs     対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)の
-'                  「社内語<TAB>顧客語[<TAB>general]」を vbLf で並べた**唯一の値源**
+'                  「社内語<TAB>顧客語[<TAB>印]」を vbLf で並べた**唯一の値源**
+'                  (印は general=一般語 / suru=サ変語幹。どちらも下の(2))
 '   SoftenTaboo    修復後も V-S5-12 だけが残るときの機械置換(docs/29 §5.3。
 '                  生成を止めない。置換件数を呼出側へ返す)
 '   TabooHit       本文に残っている禁止語(";"区切り。0件なら "")
-'   TabooHitStrict 同上のうち**機械置換の担当語だけ**(一般語を除く)
+'   TabooHitStrict 同上のうち**機械置換の担当語だけ**(印つきの行を除く)
+'   TabooWarnLine  V-S5-12 の1行を組み立てる唯一の値源(不合格にも警告にも使う)
 '   MissingTopKeys JSONの最外オブジェクト直下に無いキー(";"区切り)
 '
 ' 機械置換の3規約(裁定書39 R2-02。壊す班 R2 が顧客資料に「未保険のご加入」
@@ -24,10 +26,16 @@ Option Explicit
 '   を実際に出したことへの是正):
 '   (1) **最長一致**。対訳表を社内語の長さの降順に並べ、本文を左から1回走査して
 '       その位置で最も長く一致する語だけを置き換える(宣言順の Replace をやめる)。
-'   (2) **一般語は置換しない**。「移転」「保有」「抜け」は保険の社内語であると
-'       同時に日常語であり(本社を移転する/現金を保有する)、機械が潰すと日本語が
-'       壊れる。対訳表の**第3列に general の印**を持たせて置換対象から外し、
-'       V-S5-12 の警告(TabooHit)にだけ出す。
+'   (2) **印のある行は(その位置では)置換しない**。置換対象から外した語も
+'       V-S5-12 の警告(TabooHit)には必ず出す=見逃しはしない。印は2種類:
+'       ・general(一般語)…「移転」「保有」「抜け」は保険の社内語であると
+'         同時に日常語であり(本社を移転する/現金を保有する)、機械が潰すと
+'         日本語が壊れる。**常に**置換しない(裁定書39 R2-02)。
+'       ・suru(サ変語幹)…「付保」「保険化」「組成」「顕在化」のように
+'         「〜する」に続けて使う社内語。顧客語が名詞句なので「保険化する」を
+'         置換すると「保険での備え方の設計する」になる。**「〜する」の直前
+'         だけ**置換せず(SuruFollows)、名詞として使われている「保険化の検討」は
+'         従来どおり置換する(裁定書40 S-M2)。
 '   (3) **冪等**。置換で生まれた語が別の社内語に当たらなくなるまで通し
 '       (V4_SOFT_PASS_MAX 回まで)、結果をもう一度通しても1件も変わらない。
 '       (「サブリミット -> 補償項目ごとの支払限度額」のように顧客語が別の
@@ -41,6 +49,14 @@ Private Const V4_TAB As String = vbTab
 Private Const V4_SEP As String = ";"
 ' 対訳表の第3列の印。この行は**機械置換しない**(一般語。裁定書39 R2-02)。
 Private Const V4_GENERAL As String = "general"
+' 同じく第3列の印。**サ変語幹**(「〜する」に続けて使う社内語)であり、
+'   顧客語が名詞句なので「〜する」の直前では置換しない(裁定書40 S-M2)。
+'   例: 「保険化する」を置換すると「保険での備え方の設計する」になる。
+'   名詞として使われている「保険化の検討」は従来どおり置換する。
+Private Const V4_SURU As String = "suru"
+' サ変の活用の頭文字(する/します/した/して/しない/される/させる/せず)。
+'   この1文字が続く位置では V4_SURU の行を置換しない。
+Private Const V4_SURU_HEADS As String = "しすさせ"
 ' 冪等化の走査回数の上限(対訳表の連鎖は最長でも2段。無限ループの歯止め)。
 Private Const V4_SOFT_PASS_MAX As Long = 4
 ' V-S5-02: 見出しの上限。15章§5.6 system は「45文字程度・60文字を超えない」。
@@ -83,9 +99,7 @@ Public Function CheckS5(ByVal jsonText As String, ByVal s2Json As String) As Str
     ' --- V-S5-12: 対訳表の社内語が本文に残っていないか ---
     Dim hit As String
     hit = TabooHit(jsonText)
-    If LenB(hit) > 0 Then
-        Ap r, "[V-S5-12] 顧客向けに書き換えていない語があります: " & hit
-    End If
+    If LenB(hit) > 0 Then Ap r, TabooWarnLine(hit)
 
     CheckS5 = r
 End Function
@@ -206,15 +220,17 @@ End Sub
 '   突き合わせる(値源を2箇所に持たない)。
 '   §4の「言い換えずに削る」3語には、機械置換の最後の砦で使う中立な代替語を
 '   与える(削除すると文が崩れるため。docs/29 §5.3)。
-'   行の書式は「社内語<TAB>顧客語」。**第3列に general** がある行(対訳表§6の
-'   一般語)は V-S5-12 の警告には出すが**機械置換しない**(裁定書39 R2-02)。
+'   行の書式は「社内語<TAB>顧客語<TAB>印」。**第3列の印**がある行(対訳表§6)は
+'   V-S5-12 の警告には出すが機械置換の対象から外れる。
+'     general = 一般語(常に置換しない。裁定書39 R2-02)
+'     suru    = サ変語幹(「〜する」の直前だけ置換しない。裁定書40 S-M2)
 '   第3列は当モジュールの中だけの印であり、対訳表Markdownの番号付き表
 '   (`| n | 社内語 | 顧客語 |`)は3列のまま=15章§5.6 との突き合わせ
 '   (tools/render_proposal.py の check_glossary)を壊さない。
 ' ============================================================================
 Public Function TabooPairs() As String
     Dim s As String
-    s = s & "付保" & V4_TAB & "保険のご加入" & vbLf
+    s = s & "付保" & V4_TAB & "保険のご加入" & V4_TAB & V4_SURU & vbLf
     s = s & "未付保" & V4_TAB & "保険に入っていない状態" & vbLf
     s = s & "付保ギャップ" & V4_TAB & "保険で手当てできていない部分" & vbLf
     s = s & "未充足" & V4_TAB & "保険の手当てが無い" & vbLf
@@ -223,13 +239,13 @@ Public Function TabooPairs() As String
     s = s & "トリガー" & V4_TAB & "保険金をお支払いする条件" & vbLf
     s = s & "サブリミット" & V4_TAB & "補償項目ごとの支払限度額" & vbLf
     s = s & "待機期間" & V4_TAB & "補償が始まるまでの期間" & vbLf
-    s = s & "保険化" & V4_TAB & "保険での備え方の設計" & vbLf
-    s = s & "特約開発" & V4_TAB & "補償内容の新しい設計" & vbLf
-    s = s & "組成" & V4_TAB & "仕組みづくり" & vbLf
+    s = s & "保険化" & V4_TAB & "保険での備え方の設計" & V4_TAB & V4_SURU & vbLf
+    s = s & "特約開発" & V4_TAB & "補償内容の新しい設計" & V4_TAB & V4_SURU & vbLf
+    s = s & "組成" & V4_TAB & "仕組みづくり" & V4_TAB & V4_SURU & vbLf
     s = s & "募集スキーム" & V4_TAB & "ご加入の手続きの流れ" & vbLf
     s = s & "料率" & V4_TAB & "保険料の水準" & vbLf
     s = s & "相関損失" & V4_TAB & "同時に起きる損害" & vbLf
-    s = s & "引受" & V4_TAB & "保険のお引き受け" & vbLf
+    s = s & "引受" & V4_TAB & "保険のお引き受け" & V4_TAB & V4_SURU & vbLf
     s = s & "過少保険" & V4_TAB & "補償額が損害に届かない状態" & vbLf
     s = s & "抜け" & V4_TAB & "補償されない部分" & V4_TAB & V4_GENERAL & vbLf
     s = s & "免責金額" & V4_TAB & "ご負担いただく金額" & vbLf
@@ -237,16 +253,16 @@ Public Function TabooPairs() As String
     s = s & "リスクユニバース" & V4_TAB & "リスクの全体像" & vbLf
     s = s & "ニューリスク" & V4_TAB & "新しく生まれているリスク" & vbLf
     s = s & "座組" & V4_TAB & "ご提案の構成" & vbLf
-    s = s & "ヒアリング" & V4_TAB & "お伺いしたい事項" & vbLf
+    s = s & "ヒアリング" & V4_TAB & "お伺いしたい事項" & V4_TAB & V4_SURU & vbLf
     s = s & "提案の核" & V4_TAB & "ご提案の前提" & vbLf
-    s = s & "攻めの保険活用" & V4_TAB & "成長を後押しする保険の活用" & vbLf
+    s = s & "攻めの保険活用" & V4_TAB & "成長を後押しする保険の活用" & V4_TAB & V4_SURU & vbLf
     s = s & "発散段階" & V4_TAB & "構想段階" & vbLf
     s = s & "実装難度" & V4_TAB & "実現までの難易度" & vbLf
-    s = s & "顕在化" & V4_TAB & "実際に起きること" & vbLf
+    s = s & "顕在化" & V4_TAB & "実際に起きること" & V4_TAB & V4_SURU & vbLf
     s = s & "打ち手" & V4_TAB & "対策" & vbLf
     s = s & "商材" & V4_TAB & "保険商品" & vbLf
     s = s & "リスク移転可能性" & V4_TAB & "保険での備えやすさ" & vbLf
-    s = s & "与信" & V4_TAB & "取引先の支払い能力" & vbLf
+    s = s & "与信" & V4_TAB & "取引先の支払い能力" & V4_TAB & V4_SURU & vbLf
     s = s & "座組パターン" & V4_TAB & "ご提案の型" & vbLf
     s = s & "PML" & V4_TAB & "想定最大損害額" & vbLf
     s = s & "CBI" & V4_TAB & "取引先の被災による損害" & vbLf
@@ -261,7 +277,7 @@ Public Function TabooPairs() As String
     s = s & "D&O" & V4_TAB & "会社役員賠償責任保険" & vbLf
     s = s & "PL保険" & V4_TAB & "生産物賠償責任保険" & vbLf
     s = s & "対話の順序" & V4_TAB & "ご説明の順序" & vbLf
-    s = s & "クロスセル" & V4_TAB & "追加でご検討いただける備え" & vbLf
+    s = s & "クロスセル" & V4_TAB & "追加でご検討いただける備え" & V4_TAB & V4_SURU & vbLf
     s = s & "仕分け" & V4_TAB & "整理"
     TabooPairs = s
 End Function
@@ -278,12 +294,27 @@ Public Function TabooHit(ByVal bodyText As String) As String
 End Function
 
 ' ============================================================================
-' TabooHitStrict - 上記のうち**機械置換が責任を持つ語だけ**(一般語を除く)。
-'   SoftenTaboo を通した後にこれが空なら、残っているのは一般語だけであり、
-'   呼出側は「警告を残して続行する」判断ができる(裁定書39 R2-02)。
+' TabooHitStrict - 上記のうち**機械置換が責任を持つ語だけ**(第3列に印のある
+'   行=一般語 general とサ変語幹 suru を除く)。SoftenTaboo を通した後に
+'   これが非空なら、それは置換の取りこぼし=実装の欠陥である。
+'   呼出側(modExportProposal.TabooLeftNote)はこれで「警告で済む残り」と
+'   「直すべき取りこぼし」を分けて記録する。
 ' ============================================================================
 Public Function TabooHitStrict(ByVal bodyText As String) As String
     TabooHitStrict = HitList(bodyText, False)
+End Function
+
+' ============================================================================
+' TabooWarnLine - V-S5-12 の1行を組み立てる**唯一の値源**(15章§5.6 の
+'   エラー文テンプレ)。hitsText は TabooHit / TabooHitStrict の戻り値
+'   (";"区切り。空なら "" を返す)。
+'   CheckS5 は不合格の行としてこれを使い、顧客向け提案書の出力経路
+'   (modExportProposal)は**警告の注記**として同じ1行を usage_log へ残す
+'   (裁定書40 S-M1)。文言を2箇所に書かないためにここへ寄せている。
+' ============================================================================
+Public Function TabooWarnLine(ByVal hitsText As String) As String
+    If LenB(hitsText) = 0 Then Exit Function
+    TabooWarnLine = "[V-S5-12] 顧客向けに書き換えていない語があります: " & hitsText
 End Function
 
 ' ============================================================================
@@ -295,6 +326,7 @@ End Function
 Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As String
     Dim srcArr() As String
     Dim dstArr() As String
+    Dim suruArr() As Boolean
     Dim heads As String
     Dim cnt As Long
     Dim pass As Long
@@ -308,7 +340,7 @@ Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As 
         Exit Function
     End If
 
-    cnt = SoftPairs(srcArr, dstArr, heads)
+    cnt = SoftPairs(srcArr, dstArr, suruArr, heads)
     If cnt = 0 Then
         SoftenTaboo = t
         Exit Function
@@ -316,7 +348,7 @@ Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As 
 
     For pass = 1 To V4_SOFT_PASS_MAX
         hits = 0
-        t = SoftenOnce(t, srcArr, dstArr, cnt, heads, hits)
+        t = SoftenOnce(t, srcArr, dstArr, suruArr, cnt, heads, hits)
         changed = changed + hits
         If hits = 0 Then Exit For
     Next pass
@@ -360,7 +392,8 @@ Private Sub Ap(ByRef outText As String, ByVal lineText As String)
     End If
 End Sub
 
-' 禁止語の一覧。withGeneral=False なら一般語(第3列 general)を除く。
+' 禁止語の一覧。withGeneral=False なら**第3列に印のある行**(general と suru)を
+'   除く=機械置換が責任を持つ語だけを返す。
 Private Function HitList(ByVal bodyText As String, ByVal withGeneral As Boolean) As String
     Dim rows() As String
     Dim onePair() As String
@@ -375,7 +408,7 @@ Private Function HitList(ByVal bodyText As String, ByVal withGeneral As Boolean)
         onePair = Split(rows(i), V4_TAB)
         word = onePair(0)
         If LenB(word) > 0 Then
-            If withGeneral Or Not IsGeneralRow(onePair) Then
+            If withGeneral Or Not IsMarkedRow(onePair) Then
                 If WordFound(bodyText, word) Then
                     If LenB(acc) > 0 Then acc = acc & V4_SEP
                     acc = acc & word
@@ -386,19 +419,31 @@ Private Function HitList(ByVal bodyText As String, ByVal withGeneral As Boolean)
     HitList = acc
 End Function
 
-' 対訳表の1行が一般語(機械置換しない)か。第3列が general のときだけ True。
-Private Function IsGeneralRow(ByRef onePair() As String) As Boolean
+' 対訳表の1行の第3列(印)。無ければ ""。
+Private Function MarkOf(ByRef onePair() As String) As String
     If UBound(onePair) < 2 Then Exit Function
-    IsGeneralRow = (onePair(2) = V4_GENERAL)
+    MarkOf = onePair(2)
+End Function
+
+' 対訳表の1行が**印つき**(機械置換が責任を持たない行)か。
+'   general = 一般語(常に置換しない。裁定書39 R2-02)
+'   suru    = サ変語幹(「〜する」の直前だけ置換しない。裁定書40 S-M2)
+'   どちらも V-S5-12 の警告(TabooHit)には出す=見逃しはしない。
+Private Function IsMarkedRow(ByRef onePair() As String) As Boolean
+    Dim mk As String
+    mk = MarkOf(onePair)
+    IsMarkedRow = (mk = V4_GENERAL) Or (mk = V4_SURU)
 End Function
 
 ' ============================================================================
 ' SoftPairs - 機械置換に使う対を**社内語の長さの降順**(最長一致)で返す。
 '   戻り値=件数。heads には社内語の1文字目を重複なく詰める(走査の足切り用)。
-'   一般語の行は入れない(裁定書39 R2-02)。
+'   一般語(第3列 general)の行は入れない(裁定書39 R2-02)。
+'   サ変語幹(第3列 suru)の行は**入れるが印を suruArr へ立てる**。置換して
+'   よいかは位置によって決まる(「〜する」の直前だけ置換しない。裁定書40 S-M2)。
 ' ============================================================================
 Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
-                           ByRef heads As String) As Long
+                           ByRef suruArr() As Boolean, ByRef heads As String) As Long
     Dim rows() As String
     Dim onePair() As String
     Dim i As Long
@@ -406,19 +451,22 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
     Dim n As Long
     Dim keySrc As String
     Dim keyDst As String
+    Dim keySuru As Boolean
     Dim headCh As String
 
     heads = vbNullString
     rows = Split(TabooPairs(), vbLf)
     ReDim srcArr(0 To UBound(rows) - LBound(rows))
     ReDim dstArr(0 To UBound(rows) - LBound(rows))
+    ReDim suruArr(0 To UBound(rows) - LBound(rows))
     n = 0
     For i = LBound(rows) To UBound(rows)
         onePair = Split(rows(i), V4_TAB)
         If UBound(onePair) >= 1 Then
-            If LenB(onePair(0)) > 0 And Not IsGeneralRow(onePair) Then
+            If LenB(onePair(0)) > 0 And MarkOf(onePair) <> V4_GENERAL Then
                 srcArr(n) = onePair(0)
                 dstArr(n) = onePair(1)
+                suruArr(n) = (MarkOf(onePair) = V4_SURU)
                 n = n + 1
             End If
         End If
@@ -428,11 +476,13 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
     For i = 1 To n - 1
         keySrc = srcArr(i)
         keyDst = dstArr(i)
+        keySuru = suruArr(i)
         j = i - 1
         Do While j >= 0
             If Len(srcArr(j)) < Len(keySrc) Then
                 srcArr(j + 1) = srcArr(j)
                 dstArr(j + 1) = dstArr(j)
+                suruArr(j + 1) = suruArr(j)
                 j = j - 1
             Else
                 Exit Do
@@ -440,6 +490,7 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
         Loop
         srcArr(j + 1) = keySrc
         dstArr(j + 1) = keyDst
+        suruArr(j + 1) = keySuru
     Next i
 
     For i = 0 To n - 1
@@ -457,7 +508,8 @@ End Function
 '   ・出力の連結は「一致した所」でだけ行う(1文字ずつ連結すると長文で遅い)。
 ' ============================================================================
 Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, _
-                            ByRef dstArr() As String, ByVal cnt As Long, _
+                            ByRef dstArr() As String, ByRef suruArr() As Boolean, _
+                            ByVal cnt As Long, _
                             ByVal heads As String, ByRef hits As Long) As String
     Dim outText As String
     Dim n As Long
@@ -481,8 +533,10 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
                 If wLen <= n - i + 1 Then
                     If Mid$(bodyText, i, wLen) = srcArr(k) Then
                         If BoundaryOk(bodyText, i, srcArr(k)) Then
-                            matched = k + 1
-                            Exit For
+                            If Not (suruArr(k) And SuruFollows(bodyText, i + wLen)) Then
+                                matched = k + 1
+                                Exit For
+                            End If
                         End If
                     End If
                 End If
@@ -502,6 +556,15 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
     Loop
     If segStart <= n Then outText = outText & Mid$(bodyText, segStart, n - segStart + 1)
     SoftenOnce = outText
+End Function
+
+' pos の位置からサ変の活用(する/し/さ/せ)が続くか。サ変語幹(第3列 suru)の
+'   行は、この位置では置換しない(裁定書40 S-M2)。顧客語は名詞句なので
+'   「保険化する」を置換すると「保険での備え方の設計する」になって日本語が
+'   壊れる。置換しない代わりに V-S5-12 の警告には出る(TabooHit)。
+Private Function SuruFollows(ByVal hay As String, ByVal pos As Long) As Boolean
+    If pos < 1 Or pos > Len(hay) Then Exit Function
+    SuruFollows = (InStr(1, V4_SURU_HEADS, Mid$(hay, pos, 1), vbBinaryCompare) > 0)
 End Function
 
 ' 置換してよい位置か。ASCII だけの語は前後が半角英字でないときだけ当てる

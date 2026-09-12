@@ -217,34 +217,54 @@ let m;
 while ((m = re.exec(html)) !== null) { scripts.push(m[1]); }
 if (scripts.length !== 2) { console.error('SCRIPT_BLOCKS=' + scripts.length); process.exit(3); }
 
-byId = Object.create(null);
-const root = new El('body');
-const deck = new El('main');
-deck.setAttribute('id', 'deck');
-root.appendChild(deck);
-const all = [];
-global.document = {
-  body: root,
-  createElement: (t) => { const n = new El(t); all.push(n); return n; },
-  getElementById: (id) => (byId[id] || null),
-  getElementsByClassName: (cls) => all.filter((n) => n.className === cls)
-};
-global.window = { addEventListener: function () {} };
-global.location = { search: '' };
+// ページを1回描いて結果を集める。mutate は DATA を壊す関数(省略可)。
+// 壊した素材でも「落ちずに22枚描き、壊れた枚に印が立つ」ことを見るため、
+// 同じ手順を2回回す(裁定書40 S-M3。発表者ノートの例外で run() ごと死ぬと
+// 提案書が白紙になるが、文字列 grep ではその違いが見えない)。
+function render(mutate) {
+  byId = Object.create(null);
+  const root = new El('body');
+  const deck = new El('main');
+  deck.setAttribute('id', 'deck');
+  root.appendChild(deck);
+  const all = [];
+  global.document = {
+    body: root,
+    createElement: (t) => { const n = new El(t); all.push(n); return n; },
+    getElementById: (id) => (byId[id] || null),
+    getElementsByClassName: (cls) => all.filter((n) => n.className === cls)
+  };
+  global.window = { addEventListener: function () {} };
+  global.location = { search: '' };
 
-(0, eval)(scripts[0]);            // var DATA=JSON.parse("...")
-(0, eval)(scripts[1]);            // ランタイム(登録配列の走査・描画)
+  (0, eval)(scripts[0]);            // var DATA=JSON.parse("...")
+  if (mutate) { mutate(global.DATA); }
+  (0, eval)(scripts[1]);            // ランタイム(登録配列の走査・描画)
 
-const ids = [];
-const nos = [];
-const texts = [];
-(function walk(n) {
-  if (n.attrs && n.attrs.id) { ids.push(n.attrs.id); }
-  if (n.attrs && n.attrs['data-no']) { nos.push(Number(n.attrs['data-no'])); }
-  if (n._text) { texts.push(n._text); }
-  for (const c of n.childNodes) { walk(c); }
-})(root);
-console.log(JSON.stringify({ ids: ids, nos: nos, texts: texts }));
+  const ids = [];
+  const nos = [];
+  const texts = [];
+  let renderErrors = 0;
+  (function walk(n) {
+    if (n.attrs && n.attrs.id) { ids.push(n.attrs.id); }
+    if (n.attrs && n.attrs['data-no']) { nos.push(Number(n.attrs['data-no'])); }
+    if (n.attrs && n.attrs['data-render-error']) { renderErrors += 1; }
+    if (n._text) { texts.push(n._text); }
+    for (const c of n.childNodes) { walk(c); }
+  })(root);
+  return { ids: ids, nos: nos, texts: texts, renderErrors: renderErrors };
+}
+
+const normal = render(null);
+// 発表者ノートの素材だけを壊す(20章§7。値源は S5 の notes[] で、
+// s5_edited を人が直す経路もあるため現実に起こりうる形)。
+const poisoned = render(function (D) { if (D && D.p) { D.p.notes = [null]; } });
+console.log(JSON.stringify({
+  ids: normal.ids, nos: normal.nos, texts: normal.texts,
+  renderErrors: normal.renderErrors,
+  poisonedIds: poisoned.ids, poisonedNos: poisoned.nos,
+  poisonedErrors: poisoned.renderErrors
+}));
 """
 
 
@@ -445,6 +465,71 @@ def check_glossary(problems_sink: list[str]) -> None:
                 f"(対訳表とプロンプトが二重管理になっています)")
 
 
+def spec15_s5_required() -> list[str]:
+    """15章§5.6 Schema-S5 の**最外 required**(16キー)を仕様から読む。"""
+    text = SPEC15.read_text(encoding="utf-8")
+    body = text.split("### Schema-S5")[1]
+    parts = body.split("```")
+    if len(parts) < 3:
+        return []
+    schema = parts[1]
+    if schema.lstrip().startswith("json"):
+        schema = schema.lstrip()[4:]
+    try:
+        obj = json.loads(schema)
+    except ValueError:
+        return []
+    req = obj.get("required")
+    return list(req) if isinstance(req, list) else []
+
+
+def impl_s5_required() -> list[str]:
+    """modExportProposal.bas の EP_S5_REQUIRED("|"区切り)を実装から読む。"""
+    src = (REPO_ROOT / "src" / "app" / "modExportProposal.bas").read_text(
+        encoding="utf-8")
+    lines = src.splitlines()
+    body = ""
+    for i, line in enumerate(lines):
+        if "Const EP_S5_REQUIRED" not in line:
+            continue
+        body = line
+        # VBAの行継続(末尾の ` _`)をたどって1本の宣言に戻す。
+        while body.rstrip().endswith("_") and i + 1 < len(lines):
+            i += 1
+            body = body.rstrip()[:-1] + lines[i]
+        break
+    if not body:
+        return []
+    joined = "".join(re.findall(r'"([^"]*)"', body))
+    return [k for k in joined.split("|") if k]
+
+
+def check_s5_required(problems_sink: list[str]) -> None:
+    """裁定書40 S-m: Schema-S5 の required の**3つ目の写し**を突き合わせる。
+
+    値源は (1) 15章§5.6 の required 行 (2) modSchemas2.SchemaS5()
+    (3) modExportProposal.EP_S5_REQUIRED の3箇所ある。(1)-(2) は
+    tools/prompt_diff.py --strict が見ているが、(3) を見るゲートが無かったため、
+    required が増減しても E0502 の必須キー検査だけが黙って古いままになる
+    (=裁定書39 R2-12 で立てた関門が静かに穴になる)。ここで閉じる。
+    """
+    spec = spec15_s5_required()
+    impl = impl_s5_required()
+    if not spec:
+        problems_sink.append(
+            "15章§5.6 Schema-S5 の required を読み取れませんでした")
+        return
+    if not impl:
+        problems_sink.append(
+            "modExportProposal.bas の EP_S5_REQUIRED を読み取れませんでした")
+        return
+    if spec != impl:
+        problems_sink.append(
+            "EP_S5_REQUIRED が15章§5.6 Schema-S5 の required と一致しません"
+            f"(15章={spec} / 実装={impl})。必須キー検査(E0502)が古い写しの"
+            "ままになっています")
+
+
 def check_dom(html_path: Path, slides: list, todo: str, faithful: bool,
               verbose: bool) -> list[str]:
     node = shutil.which("node") or shutil.which("nodejs")
@@ -474,6 +559,26 @@ def check_dom(html_path: Path, slides: list, todo: str, faithful: bool,
             f"。20章§4「枚数は22枚で固定」")
     if verbose:
         print(f"[render_proposal] 生成されたid: {sorted(ids)}")
+
+    # 裁定書40 S-M3: 発表者ノートの描画で例外が飛んでも、run() ごと落ちて
+    # 提案書が白紙になってはいけない。壊した素材でも22枚が描かれ、壊れた枚には
+    # 印(data-render-error)が立つこと。素の素材では印が1つも立たないこと
+    # (条件が成立するときだけ出る / しないときは出ない、の両方向)。
+    if got.get("renderErrors", 0) != 0:
+        problems.append(
+            f"素の mock なのに data-render-error が{got['renderErrors']}枚に"
+            "立っています(描画が壊れています)")
+    poisoned_ids = set(got.get("poisonedIds", []))
+    for no, slug, _master, _title in slides:
+        if ("sl-" + slug) not in poisoned_ids:
+            problems.append(
+                f"発表者ノートを壊すと sl-{slug}({no}枚目)が描かれません"
+                "(notes() の例外が走査ごと止めています。20章§7・裁定書40 S-M3)")
+            break
+    if got.get("poisonedErrors", 0) == 0:
+        problems.append(
+            "発表者ノートを壊しても data-render-error が1枚も立ちません"
+            "(壊れたページが「わざと保留した項目」に見えます。裁定書39 R2-12)")
 
     texts = got["texts"]
     hit = sum(1 for t in texts if t == todo)
@@ -525,14 +630,17 @@ def main() -> int:
         problems += check_data_literal(html)
         problems += check_literals(html, disclaimer, todo)
         check_glossary(problems)
+        check_s5_required(problems)
         problems += check_dom(out_path, slides, todo, args.faithful, args.verbose)
         if problems:
             print("[render_proposal] NG:")
             for p in problems:
                 print(f"  - {p}")
             return 1
-        print(f"[render_proposal] OK: 全{len(slides)}枚の登録と描画後DOM、"
-              f"20章§5.1の19変数・§8の免責・対訳表との一致を確認しました。")
+        print(f"[render_proposal] OK: 全{len(slides)}枚の登録と描画後DOM"
+              "(発表者ノートを壊しても22枚が描かれ印が立つことを含む)、"
+              "20章§5.1の19変数・§8の免責・対訳表との一致・"
+              "EP_S5_REQUIRED と15章§5.6 required の一致を確認しました。")
         return 0
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)

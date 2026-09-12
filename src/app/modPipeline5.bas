@@ -181,33 +181,58 @@ End Function
 '   語1つで止めない)。置換したことは run_log に taboo_softened=n で残す
 '   (黙って直さない)。それ以外の不合格が混じっていれば従来どおり失敗させる。
 '
-'   一般語の扱い(裁定書39 R2-02): 「移転」「保有」「抜け」は日常語でもあるため
-'   modValidate4 が**機械置換しない**。そのため置換後も V-S5-12 が残りうるが、
-'   残りが一般語だけ(TabooHitStrict が空)なら**警告を残して続行する**。
-'   ここで失敗させると「本社を移転する」と書かれただけで提案書が作れなくなり、
-'   裁定の「一般語は V-S5-12 の警告のみ」に反する。
+'   **CheckS5 の再検証に通らなければ必ず失敗**(裁定書40 S-M4。16章 E-71③
+'   「機械置換してから再検証し、**通れば**成功として続行する」の逐語)。
+'   W15 Round2 の Fix 波で、ここに「残りが一般語だけなら再検証が不合格でも
+'   通す」という未申告の緩和が入っていた。検証に不合格の S5 が s5_json として
+'   保存され顧客向け提案書の材料になるため、**戻した**。
+'   一般語(移転・保有・抜け)やサ変語幹(付保・保険化ほか)が本文に残る場合、
+'   modValidate4 はそれらを機械置換しないので CheckS5 の V-S5-12 が残り、
+'   S5 は失敗する(利用者には16章 E-71 の①②=案件は壊さず提案骨子を案内)。
+'   顧客向け提案書の本文に社内語が残ったときに**警告だけで続ける**のは、
+'   S2 由来の自由文を扱う出力側の経路(modExportProposal.TabooLeftNote)であり、
+'   検証の戻り値を通す経路ではない(裁定書40 §0 の警告チャネル規約)。
 ' ============================================================================
 Private Function SoftenOrFail(ByVal caseId As String, ByVal errText As String, _
                               ByVal rawText As String, ByVal s2Json As String, _
                               ByRef okJson As String) As String
-    Dim softened As String, changed As Long, recheck As String, genHit As String
+    Dim softened As String, changed As Long
 
     SoftenOrFail = P5_RES_FAILED
-    If Not OnlyTabooLeft(errText) Then Exit Function
-
-    softened = modValidate4.SoftenTaboo(modJsonLite.ExtractJsonBlock(rawText), changed)
-    recheck = modValidate4.CheckS5(softened, s2Json)
-    If LenB(recheck) > 0 Then
-        If Not OnlyTabooLeft(recheck) Then Exit Function
-        If LenB(modValidate4.TabooHitStrict(softened)) > 0 Then Exit Function
-        genHit = modValidate4.TabooHit(softened)
-    End If
+    softened = SoftenedOrEmpty(errText, rawText, s2Json, changed)
+    If LenB(softened) = 0 Then Exit Function
 
     okJson = softened
     mLastErrs = vbNullString
-    modLog.LogUsage "s5_taboo_softened", caseId, "taboo_softened=" & CStr(changed) & _
-        " general=" & genHit
+    modLog.LogUsage "s5_taboo_softened", caseId, "taboo_softened=" & CStr(changed)
     SoftenOrFail = P5_RES_REPAIRED
+End Function
+
+' ============================================================================
+' SoftenedOrEmpty - 上の**判断だけ**を取り出した純関数(層(a)から直接叩ける)。
+'   ""=採用しない(=S5 は失敗) / 非空=採用してよい S5 JSON。changed は置換箇所数。
+'   採用の条件は3つで、1つでも欠けたら採用しない(裁定書40 S-M4):
+'     (1) 残った不合格が V-S5-12 だけであること
+'     (2) 機械置換が実際に1件以上効いていること
+'     (3) **置換後の CheckS5 が1件も発火しないこと**(16章 E-71③「通れば」)
+'   (3) を緩めると、検証に不合格の S5 が s5_json として保存され顧客向け
+'   提案書の材料になる。前波の未申告の緩和はここだった。判断を切り出したのは
+'   層(b)の呼び口(modGatewayRPN)無しで両方向を回帰で押さえるためである。
+' ============================================================================
+Public Function SoftenedOrEmpty(ByVal errText As String, ByVal rawText As String, _
+                                ByVal s2Json As String, ByRef changed As Long) As String
+    Dim softened As String
+
+    changed = 0
+    If Not OnlyTabooLeft(errText) Then Exit Function
+
+    softened = modValidate4.SoftenTaboo(modJsonLite.ExtractJsonBlock(rawText), changed)
+    ' 1件も置換していないなら再検証しても同じ結果にしかならない(無駄な
+    ' CheckS5 を回さない)。前波で消えていた早期 Exit を戻した。
+    If changed = 0 Then Exit Function
+    If LenB(modValidate4.CheckS5(softened, s2Json)) > 0 Then Exit Function
+
+    SoftenedOrEmpty = softened
 End Function
 
 ' 残ったエラー行が V-S5-12 だけか(1行でも他のケースIDがあれば False)。

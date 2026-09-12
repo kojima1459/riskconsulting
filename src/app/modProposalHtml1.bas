@@ -278,7 +278,12 @@ Private Function DriverJs() As String
     s = s & "if(d.master!=='cover'&&d.master!=='back'){" & vbLf
     s = s & "T(sec,'div','footer-rule');" & vbLf
     s = s & "T(sec,'div','page-number',String(d.no)+' / '+String(SLIDES.length));}" & vbLf
-    s = s & "fr.appendChild(sec);deck.appendChild(fr);notes(deck,D,d.no);}" & vbLf
+    s = s & "fr.appendChild(sec);deck.appendChild(fr);" & vbLf
+    ' 発表者ノートも**同じ catch の内側**で描く(裁定書40 S-M3)。notes() の値源は
+    ' S5 の notes[](LLM出力。s5_edited を人が直す経路もある)なので、ここで
+    ' 例外が飛ぶと run() ごと落ちて提案書が1枚も描かれない=事実上の白紙になる。
+    ' 上の d.render と同じく、印を残して次の枚へ進む。
+    s = s & "try{notes(deck,D,d.no);}catch(err2){AT(sec,'data-render-error','1');}}" & vbLf
     ' 画面の切替は2つだけ。?notes=1=発表者ノート / ?debug=1=描画エラーの赤枠
     ' (社内での確認用。20章§11)。どちらも付けなければ何も起きない。
     s = s & "var q=String(location.search||'');var cls='';" & vbLf
