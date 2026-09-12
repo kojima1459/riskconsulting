@@ -351,8 +351,15 @@ PURE_ALLOWLIST = [
     "modNaviJson", "modNaviHost", "modGatewayRPN2", "modBootNavi",
     "modNaviStore",   # 裁定書36: InWindow(純関数)だけを叩く
     "modNaviState",   # 裁定書37 B-09: IsOverDrLimit(純関数)だけを叩く。
+                      # 裁定書39 R2-01/R2-06/R1-06: ProposalPlanOf / OutputsJson /
+                      # CopyWarningOf も純関数として叩く。
                       # BuildAppState/BuildCaseState/BuildPrompts はExcel/
                       # 他モジュールに触れるが実行に到達しない(技術メモ4)。
+    "modNaviActions", # 裁定書39 R2-01/R2-08: IsLongAction / NeedsCase(どちらも
+                      # Select Case だけの純関数)を叩く。Dispatch と Act* は
+                      # シート・パイプラインに触れるが実行に到達しない(技術メモ4)。
+    "modNaviActions2",# 裁定書39 R1-06: CopyWarningOf(modPii だけを呼ぶ純関数)を
+                      # 叩く。DispatchMore と Act* は実行に到達しない。
     "modTestsPureNavi",
 ]
 
