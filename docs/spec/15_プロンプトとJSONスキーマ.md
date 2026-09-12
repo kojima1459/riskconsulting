@@ -165,6 +165,8 @@ coverage_evidence には「該当契約なし」または【付保の見立て�
 
 注: 実装上の代入点は9（改訂パス S2/S3 が system を再生成するため）。全経路は `modPromptsOps.AsmGuarded` を通す。
 
+注（裁定書38 Z-52）: 案件チャット（`modNaviChat.BuildChatSystem`）も貼付資料を注入する経路であるため、呼出点 `modNaviChat.Ask` で `modPromptsOps.AsmGuarded` を通す（本節冒頭の7本＋改訂2本＋案件チャットで実装上は10経路。上の本文段落・BLOCK_GUARDの逐語は変更しない）。
+
 ## 2. Step1 企業プロファイル構造化（S1）
 
 ### 2.0 収集レシピ（入力収集の標準。案件入力シートに常設表示・利用ガイドに転載）

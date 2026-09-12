@@ -286,6 +286,13 @@ Public Sub RunAllPureTests()
     modTestsPure25.RunAll
     If Err.Number <> 0 Then
         Check "modTestsPure25.RunAll", False, _
+    ' W15(裁定書38 班B)の純層。modTestsPure* の数珠つなぎとは別に呼ぶ
+    ' (他班の連鎖の末尾行と衝突させないため)。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure26.RunAll
+    If Err.Number <> 0 Then
+        Check "modTestsPure26.RunAll", False, _
               "呼び出しでエラー: " & Err.Description & " (Err=" & Err.Number & ")"
         Err.Clear
     End If

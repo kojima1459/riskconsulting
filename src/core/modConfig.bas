@@ -116,11 +116,6 @@ Failed:
     modLog.LogError "E0608", "modConfig.LoadFromSheet", "read_failed", Err.Number
 End Function
 
-' 直近の LoadFromSheet で読めたキー数(-1=未読込・読込失敗)。
-Public Function LoadedKeyCount() As Long
-    LoadedKeyCount = gCfgLoadedCount
-End Function
-
 Public Function HasKey(ByVal cfgKey As String) As Boolean
     Dim v As String
     HasKey = TryGetCached(cfgKey, v)

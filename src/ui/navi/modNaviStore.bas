@@ -453,10 +453,12 @@ Public Function SaveSettings(ByVal data As String, ByRef reason As String) As Bo
     SaveSettings = True
 End Function
 
+' @unused: Phase2 予約(裁定書38)
 Public Function BuildRoundDiff(ByVal caseId As String) As String
     ' Specification F-13: reserved for phase 2. Do not parse S1-S4 in VBA.
 End Function
 
+' @unused: Phase2 予約(裁定書38)
 Public Function FindSimilarByEmbedding(ByVal question As String) As String
     ' Phase 2 extension only. No embedding API call in phase 1.
 End Function

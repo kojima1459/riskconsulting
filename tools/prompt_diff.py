@@ -169,7 +169,10 @@ def block_wiring_counts() -> tuple[dict[str, int], bool]:
 _CALLSITE_RE = re.compile(r"\b(Build\w+System)\s*\(")
 # 15章§1.3 の例外=壁打ち。案件チャット(BuildChatSystem)は15章§1.3 の7本に
 # 含まれない(ガード要否は Z-52 で裁定)ため、ここでは対象外として明示する。
-_CALLSITE_EXEMPT = {"BuildSparringSystem", "BuildChatSystem"}
+_CALLSITE_EXEMPT = {"BuildSparringSystem"}
+# BuildChatSystem は裁定書38 Z-52 で AsmGuarded 対象に加わった(案件チャットも
+# 貼付資料を注入するため)。呼出点(modNaviChat.Ask)は AsmGuarded( で包んで
+# いるので EXEMPT から外した(除外していたのは裁定書37時点で対象外だったため)。
 
 
 def check_guard_callsites() -> list[str]:

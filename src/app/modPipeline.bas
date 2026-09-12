@@ -349,13 +349,36 @@ Private Function Sanitized(ByVal caseId As String, ByVal dataKey As String, _
     If markerN > 0 Then AddNote detailAcc, "e04_marker=" & CStr(markerN)
 End Function
 
+' CaseTextFor - 裁定書38 B-10: KB並べ替え補充のスコア原文
+'   (business_summary + 業種名 + field_insights の note 原文)。s1Json が
+'   無い/読めないときは空文字(呼出側は補充なしにフォールバックする)。
+'   Public: modPipeline2(入念モード)も同じ組立を使う(写経を避ける)。
+Public Function CaseTextFor(ByVal s1Json As String, ByVal industryName As String) As String
+    If LenB(Trim$(s1Json)) = 0 Then Exit Function
+    Dim acc As String
+    acc = modJsonLite.GetStr(s1Json, "business_summary") & " " & industryName
+
+    On Error GoTo Done0
+    Dim items As Collection
+    Set items = modJsonLite.GetArrayItems(s1Json, "field_insights")
+    Dim it As Variant
+    For Each it In items
+        acc = acc & " " & modJsonLite.GetStr(CStr(it), "note")
+    Next it
+Done0:
+    CaseTextFor = acc
+End Function
+
 ' LoadKb - ナレッジ注入と15章§0.7の切詰め(6段)。手順の実体は modPipeline4 が
 '   唯一持つ(T-57。modPipeline2 と写経していたものを畳んだ)。
+'   裁定書38 B-10: 業種完全一致の並べ替え補充に使う案件本文
+'   (business_summary+業種名+field_insights原文)を組み立てて渡す。
 Private Sub LoadKb(ByRef ctx As TCaseCtx, ByRef c As TChkCtx, _
                    ByVal limitChars As Long, ByRef detailAcc As String)
     Dim txt() As String
 
-    modPipeline4.LoadKbSlots ctx, c.stepNo, BudgetOf(limitChars, PL_PCT_KB), txt, detailAcc
+    modPipeline4.LoadKbSlots ctx, c.stepNo, BudgetOf(limitChars, PL_PCT_KB), txt, _
+                             CaseTextFor(c.s1Json, ctx.industry_name), detailAcc
     c.casesText = txt(0)
     c.incidentsText = txt(1)
     c.schemesText = txt(2)

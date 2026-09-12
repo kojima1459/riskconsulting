@@ -159,7 +159,11 @@ PURE_ALLOWLIST = [
     # 14章§6が公開を宣言した判定核16本(純関数)だけ。
     # modCaseStore3 は data_key の一覧とラウンド確定の付帯処理を持つが、テストが
     # 叩くのは純関数 NormalizeStoryNos / CollectLineIds だけ(技術メモ4)。
-    "modKnowledgeFmt", "modCaseStore", "modCaseStore3", "modPipeline",
+    # modKnowledge2 = modKnowledge の分割先。シートに触らない純関数
+    #   (SelectRows等)だけを持つ(17章§7 Z-13)。modKnowledgeRank = 裁定書38
+    #   B-10の並べ替え純関数(NgramOverlap/RankRows)。どちらもExcel非依存。
+    "modKnowledgeFmt", "modKnowledge2", "modKnowledgeRank",
+    "modCaseStore", "modCaseStore3", "modPipeline",
     # W10(裁定書28・T-59)。modCompanyFile3 は企業ファイル(.xlsx)を開く関数を
     # 持つが、テストが叩くのは純関数だけ(技術メモ4): SchemaVersionOf /
     # IsSchemaReadable(版の前方互換判定)・CompanyFileNameOf / CompanyDirOf
@@ -309,6 +313,12 @@ PURE_ALLOWLIST = [
     #   (modPipeline3.S1DiffCount)・mock と SEC-03/04/14 の結線を叩く。
     #   modTestRunner.RunAllPureTests から別枠で呼ぶ。
     "modTestsPure25",
+    # modTestsPure26: W15(裁定書38 班B)の純層。modKnowledgeRank(NgramOverlap/
+    #   RankRows)・modKnowledge2.SelectRows のtotalHitsと並べ替え補充・
+    #   modPii.KindsOf(policy_noのみ/人名混在)・modPii.SharesLongFragment
+    #   (19/20/21字境界)を叩く。modTestRunner.RunAllPureTests から
+    #   modTestsPure* の連鎖とは別に呼ぶ(他班の連鎖と衝突させない)。
+    "modTestsPure26",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON

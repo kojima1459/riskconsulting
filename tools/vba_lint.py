@@ -157,6 +157,11 @@ MODULE_REGISTRY = {
     #   シートを触らない純関数(絞込・列引き・E-34の純部)だけを持つため
     #   R4_EXCEL_ALLOWED_MODULES へは足さない(層(a)から直接叩ける)。
     "modKnowledge2",
+    # modKnowledgeRank = 裁定書38 B-10。業種コード完全一致で上限に満たない
+    #   ときの全業種補充を n-gram 重なり数で順位付けする純関数(NgramOverlap/
+    #   RankRows)。呼ぶのは modKnowledge2 だけ。R4_EXCEL_ALLOWED_MODULES へは
+    #   足さない(Excelトークンを一切持たない)。
+    "modKnowledgeRank",
     # 分割・新設の追認は裁定書7 B-7/B-8(12章§2のモジュール一覧に追記済み)。
     #   modValidate2 / modCompanyFile2 = 30,000字契約による分割先。
     #   modCaseRead = 案件一覧の読取専用API(app層。R4許可も併せて追加)。
@@ -399,6 +404,11 @@ CONTRACT: dict[str, dict] = {
             "MissingColsOf", "BadRowsOf",
         ],
     },
+    # modKnowledgeRank: 裁定書38 B-10。全業種補充の順位付け専用の純関数2本。
+    "modKnowledgeRank": {
+        "closed": False,
+        "required": ["NgramOverlap", "RankRows"],
+    },
     # 14章§6(裁定書6 B/C)。整形の純関数はここが唯一の実装。
     # 14章§6 modUtil節(裁定書6 項目8で契約化)。10関数。
     "modUtil": {
@@ -613,7 +623,8 @@ CONTRACT: dict[str, dict] = {
     # modCompanyFile)が前段で必ず通す関係も§6が規定する。
     "modPii": {
         "closed": False,
-        "required": ["HasPii", "DetectionCount", "KindsOf", "ScanReport", "MaskText"],
+        "required": ["HasPii", "DetectionCount", "KindsOf", "ScanReport", "MaskText",
+                     "SharesLongFragment"],
     },
     # modCompanyFile: 企業ドシエファイルの書出・取込(13章§2.8)。公開4本は裁定書7
     #   B-5 が14章§6へ宣言。下位I/Oの modCompanyFile2 は§6の公開契約面に載せない

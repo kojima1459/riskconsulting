@@ -397,9 +397,16 @@ Public Sub CopyResearchRow()
     payload = modUISheet.CellText(ws, rowNo, colNo)
     If LenB(payload) = 0 Then GoTo Done
 
+    ' 裁定書38 Z-49: [コピー]の直前に(a)modPii走査 (b)現契約・営業メモとの
+    ' 20字以上一致断片の検出を行う(コピー自体は止めない。16章 E-69)。
+    Dim warnText As String
+    warnText = ResearchRowWarningOf(payload)
+
     If Not modUISheet.CopyToClipboard(payload) Then
         ws.Cells(rowNo, colNo).Select
         Notice "クリップボードへ入れられませんでした。選択したセルを Ctrl+C でコピーしてください。"
+    ElseIf LenB(warnText) > 0 Then
+        modUIToast.ShowToast warnText, "warn"
     End If
 
 Done:
@@ -429,6 +436,29 @@ Private Function PromptColOn(ByVal ws As Object) As Long
     Exit Function
 NoCol:
     PromptColOn = 0
+End Function
+
+' ResearchRowWarningOf - 裁定書38 Z-49。hm_case_id の input_contract/
+'   input_memo/input_field_notes を下敷きに payload の下見をする(未確定案件は
+'   後段の検査を省く)。
+Private Function ResearchRowWarningOf(ByVal payload As String) As String
+    If modPii.HasPii(payload) Then
+        ResearchRowWarningOf = "個人情報らしき記述が含まれています。"
+        Exit Function
+    End If
+
+    Dim caseId As String, sourceText As String
+    caseId = modUISheet.ReadNamed("hm_case_id")
+    If LenB(caseId) = 0 Then Exit Function
+
+    sourceText = modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
+                 modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
+                 modCaseStore.LoadData(caseId, "input_field_notes")
+    If LenB(sourceText) = 0 Then Exit Function
+
+    If modPii.SharesLongFragment(payload, sourceText, 20) Then
+        ResearchRowWarningOf = "現契約・営業メモと20字以上一致する記述が含まれています。"
+    End If
 End Function
 
 ' 利用者への案内。HOMEの警告欄へ書き、ダイアログでも知らせる。

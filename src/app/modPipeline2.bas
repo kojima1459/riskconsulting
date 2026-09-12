@@ -623,7 +623,8 @@ Private Sub LoadKb(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx)
     Dim detailAcc As String
 
     modPipeline4.LoadKbSlots ctx, d.stepNo, _
-        modPipeline.BudgetOf(ContextLimitOf(ctx.dossier_tier), P2_PCT_KB), txt, detailAcc
+        modPipeline.BudgetOf(ContextLimitOf(ctx.dossier_tier), P2_PCT_KB), txt, _
+        modPipeline.CaseTextFor(d.s1Json, ctx.industry_name), detailAcc
     d.casesText = txt(0)
     d.incidentsText = txt(1)
     d.schemesText = txt(2)

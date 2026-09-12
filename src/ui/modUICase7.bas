@@ -36,6 +36,9 @@ Private Const U7_MSG_MERGED As String = _
 Private Const U7_MSG_PII As String = _
     "に個人のお名前らしい記述が見つかったため保存しませんでした。" & _
     "該当の行を消してから、もう一度保存してください。"
+' 裁定書38 Z-46: 検知種別が policy_no だけのときは登録は止めず警告のみ出す。
+Private Const U7_MSG_POLICY As String = _
+    "に契約番号らしき数字列が見つかりました。伏せ字にするか、そのままでよいか確認してください。"
 
 ' [中身を見る]の表示シート(裁定書27 W9-B3。詳細は本モジュール末尾の節を参照)。
 Private Const U7_BODY_SHEET As String = "中身"
@@ -59,6 +62,7 @@ Public Function ImportDirectPastes(ByVal caseId As String) As String
     Dim overflowLabels As String
     Dim mergedLabels As String
     Dim piiLabels As String
+    Dim policyLabels As String
 
     Dim keys() As String
     keys = Split(modUICase6.AreaKeys(), vbLf)
@@ -88,30 +92,45 @@ Public Function ImportDirectPastes(ByVal caseId As String) As String
                     mergedLabels = AddLabel(mergedLabels, labelText)
                 ElseIf LenB(body) > 0 Then
                     body = modNavText.NormalizeEol(modNavText.StripDrFooter(body))
-                    If modPii.HasPii(body) Then
+                    Dim piiKinds As String
+                    piiKinds = modPii.KindsOf(body)
+                    If LenB(piiKinds) > 0 And piiKinds <> "policy_no" Then
                         piiLabels = AddLabel(piiLabels, labelText)
                         modLog.LogError "E0103", U7_SRC & ".ImportDirectPastes", _
                                         modPii.ScanReport(body, U7_SHEET & ":" & labelText)
-                    ElseIf modUICase6.StoreArea(caseId, dataKey, _
-                                JoinExisting(modUICase6.LoadArea(caseId, dataKey), body)) Then
-                        ClearDirectPaste rawRange
+                    Else
+                        ' 裁定書38 Z-46: policy_no だけの検知は登録したうえで
+                        ' 警告(labelを別枠に積む。人名/メール/電話が無ければ通す)。
+                        If piiKinds = "policy_no" Then
+                            policyLabels = AddLabel(policyLabels, labelText)
+                            modLog.LogUsage "pii_policy_warning", caseId, _
+                                            modPii.ScanReport(body, U7_SHEET & ":" & labelText)
+                        End If
+                        If modUICase6.StoreArea(caseId, dataKey, _
+                                    JoinExisting(modUICase6.LoadArea(caseId, dataKey), body)) Then
+                            ClearDirectPaste rawRange
+                        End If
                     End If
                 End If
             End If
         End If
     Next i
 
-    ImportDirectPastes = BlockedText(overflowLabels, mergedLabels, piiLabels)
+    ImportDirectPastes = BlockedText(overflowLabels, mergedLabels, piiLabels, policyLabels)
 End Function
 
 ' 理由ごとの逐語文を1本につなぐ(空の理由は文を作らない)。
+'   policyLabels(裁定書38 Z-46)は他の3つと違い**ブロックしていない**(登録済み
+'   の欄への警告)。既存3引数の呼び出し元(あれば)は互換のため Optional。
 Public Function BlockedText(ByVal overflowLabels As String, _
                             ByVal mergedLabels As String, _
-                            ByVal piiLabels As String) As String
+                            ByVal piiLabels As String, _
+                            Optional ByVal policyLabels As String = vbNullString) As String
     Dim acc As String
     If LenB(overflowLabels) > 0 Then acc = Add1(acc, overflowLabels & U7_MSG_OVERFLOW)
     If LenB(mergedLabels) > 0 Then acc = Add1(acc, mergedLabels & U7_MSG_MERGED)
     If LenB(piiLabels) > 0 Then acc = Add1(acc, piiLabels & U7_MSG_PII)
+    If LenB(policyLabels) > 0 Then acc = Add1(acc, policyLabels & U7_MSG_POLICY)
     BlockedText = acc
 End Function
 

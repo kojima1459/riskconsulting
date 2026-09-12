@@ -156,6 +156,14 @@
       "wave": "T-21"
     },
     {
+      "name": "modKnowledgeRank",
+      "path": "src/app/modKnowledgeRank.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 B-10(班B)。業種完全一致の該当が上限に満たないときの全業種補充を2〜3字n-gram重なり数で順位付けする純関数(NgramOverlap/RankRows)。呼ぶのは modKnowledge2 だけ。"
+    },
+    {
       "name": "modKnowledgeFmt",
       "path": "src/app/modKnowledgeFmt.bas",
       "role": "app",
@@ -871,6 +879,14 @@
       "type": "std",
       "wave": "W15",
       "_note": "裁定書38 班A(B-04/B-11/B-12/B-14)。出典URLの実在照合(modValidate3 V-S1-14)・接頭辞の不整合(V-S1-15)・S1再実行の揺れ(modPipeline3.S1DiffCount)・mockとSEC-03/04/14の結線。modTestRunner.RunAllPureTests から結線する。"
+    },
+    {
+      "name": "modTestsPure26",
+      "path": "src/test/modTestsPure26.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班B(B-10/Z-46/Z-49)。modKnowledgeRank・modKnowledge2.SelectRowsの並べ替え補充・modPii.KindsOf/SharesLongFragment。modTestRunner.RunAllPureTests から結線する。"
     },
     {
       "name": "modTestsPureNavi",

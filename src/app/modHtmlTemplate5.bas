@@ -120,6 +120,12 @@ Public Function SecSourceJs() As String
     s = s & "if(!NB(ev.quote)&&!NB(ev.source)){continue;}" & vbLf
     s = s & "rows.push([S(a[i].risk_no),S(a[i].risk_name),S(ev.quote)," & vbLf
     s = s & "LB(LSRC,ev.source),gm[S(a[i].risk_no)]?'原文未照合':'']);}" & vbLf
+    ' 裁定書38 B-10: 成功事例が該当N件のうちM件だけ使われたときの1行(静かな
+    ' 打切りを可視化する。totalが無い/使用数以下なら何も出さない。引用が0件の
+    ' 案件でも成立しうるので rows.length の判定より前に出す)。
+    s = s & "var ku=(D.meta||{}).kb_usage;" & vbLf
+    s = s & "if(ku&&NB(ku.cases_total)&&ku.cases_total>ku.cases_used){" & vbLf
+    s = s & "T(el,'p','muted','成功事例は該当'+ku.cases_total+'件のうち'+ku.cases_used+'件を使用しています。');}" & vbLf
     s = s & "if(rows.length){" & vbLf
     s = s & "T(el,'p','muted','各リスクの根拠にした記述と、その出どころです。"
     s = s & "「推定」は入力に直接の記述が無く当社が置いた仮定であることを示します。"
