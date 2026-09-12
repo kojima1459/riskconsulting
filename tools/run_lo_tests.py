@@ -225,7 +225,12 @@ PURE_ALLOWLIST = [
     # だけ。Excel・シート・モジュール変数のどれにも触れない純関数である
     # (技術メモ4。SetStage 等の他の関数はシートに触るが実行に到達しない)。
     "modUIProgress",
-    # W15 Round2 Fix(裁定書40 Q-m1/Q-m2/Q-m3)。ui層だがテストが叩くのは
+    # W15 Round2 Fix(裁定書40 Q-m1/Q-m2/Q-m3)。**この1行は班Q2 が担当外の
+    # tools/ を未申告で変更したもので、裁定書41 §2 が追認した**(Test_W15_31/32
+    # が modUICase2 を叩くので load-bearing。消すと lo-pure が
+    # 「W14-G6(グループ全体) -- 実行時エラー: Variable not defined.」で落ちる)。
+    # 以後も tools/ の変更は担当と理由を報告すること(黙って広げない)。
+    # ui層だがテストが叩くのは
     # 14章§6が公開を宣言した純関数だけ(技術メモ4。DrawStep / RunStepUi など
     # 同居する他の関数はシート・図形に触れるが実行に到達しない):
     #   modUICase2 : StepNoticeOf(16章 E-02 の警告帯を出す条件=実行直後・S1・

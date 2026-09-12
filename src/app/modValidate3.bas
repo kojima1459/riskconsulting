@@ -15,7 +15,8 @@ Option Explicit
 '                  enum 外。**この2件も他の警告と同じ注記チャネル**に出す
 '                  (裁定書40 P-M1。当初は modValidate.CheckS1 の戻り値へ
 '                  連結していたが、それは下の「混ぜない」規約に反していた)。
-'   PostNormalize(R1-09): S1 の正規化直後に sources の空配列を補う fail-open。
+'   PostNormalize(R1-09 / 裁定書41 §2): S1 の正規化直後に sources の空配列と
+'                  missing_info[].kind の既定値 not_found を補う fail-open。
 '
 ' **戻り値を modValidate.CheckS1 に混ぜない**: CheckS1 の戻り値は
 '   modPipeline.Defend の errText となり、非空なら修復リトライ1回と
@@ -29,8 +30,11 @@ Option Explicit
 '   missing_info[].kind(v2.7)も、実運用のリボン経路ではスキーマを強制できない
 '   ためモデルが落としうる。落としたことを不合格・警告のどちらにしても案件が
 '   前へ進まなくなる/警告が常時鳴って本物が埋もれるので、**欠落は既定値で
-'   補って黙って続け、値が壊れているときだけ警告する**(sources は
-'   PostNormalize が空配列を補填、kind の欠落と空は not_found とみなす)。
+'   補って黙って続け、値が壊れているときだけ警告する**。補填はどちらも
+'   PostNormalize の1本で行う(sources は空配列、missing_info[].kind の欠落と
+'   空は "not_found")。**「みなす」だけでは足りない**(裁定書41 §2): JSON へ
+'   実際に書かないと 18章 SEC-04 の「種別」列が modHtmlTemplate1.LB の引き当てに
+'   失敗して**空欄**になり、利用者には種別が消えたようにしか見えない。
 '
 ' 裁定書39 R1-10 / G-2: 値は**対象オブジェクトを切り出してから**読む。
 '   json 全体へ GetStr(json,"source") を掛けると「最初に現れた同名キー」(15章§14)
@@ -369,10 +373,13 @@ Public Function SoftNotesS1(ByVal json As String) As String
     '   "conflicted" のような値が素通りし、SEC-03/04 の分離表示(kind==='conflict')
     '   から静かに外れていた。
     '   **欠落・空は不正としない**(裁定書40 P-M1): kind は v2.7 の新設キーで、
-    '   モデルが落とすのは常態である。未記入は not_found(見つからない)とみなして
-    '   黙って続ける(sources を空配列で補うのと同じ fail-open)。kind!=="conflict"
-    '   なので SEC-03/04 の分離表示でも通常の不足情報として扱われ、辻褄が合う。
-    '   **値が enum 外のときだけ**警告する。
+    '   モデルが落とすのは常態である。未記入は PostNormalize が "not_found"
+    '   (見つからない)で**実際に補填**する(sources を空配列で補うのと同じ
+    '   fail-open。裁定書41 §2)。補填値は kind!=="conflict" なので SEC-03/04 の
+    '   分離表示でも通常の不足情報として扱われ、辻褄が合う。
+    '   **値が enum 外のときだけ**警告する。なお本関数は補填の**前**の JSON を
+    '   渡されることもある(呼び口は保存済みの sN_json)ので、欠落・空の判定は
+    '   ここにも残す(補填が効いていれば空には当たらない)。
     idx = 0
     For Each it In modJsonLite.GetArrayItems(json, "missing_info")
         kindText = Trim$(modJsonLite.GetStr(CStr(it), "kind"))
@@ -388,38 +395,150 @@ End Function
 
 ' ============================================================================
 ' PostNormalize - modValidate.NormalizeLlmJson が正規化の直後に掛ける後処理。
-'   いまは S1 の sources 補填だけ(裁定書39 R1-09)。他の step は素通し。
+'   S1 の sources 補填(裁定書39 R1-09)と missing_info[].kind の補填
+'   (裁定書41 §2)の2本。他の step は素通し。
 ' ============================================================================
 Public Function PostNormalize(ByVal stepName As String, ByVal json As String) As String
     PostNormalize = json
     If LCase$(Trim$(stepName)) <> "s1" Then Exit Function
-    PostNormalize = FillEmptySources(json)
+    PostNormalize = FillMissingKind(FillEmptySources(json))
 End Function
 
 ' トップレベルに "sources" が無ければ空配列を足す。オブジェクトとして読めない
 '   文字列(抽出失敗・空・配列)は触らない。
 Private Function FillEmptySources(ByVal json As String) As String
-    Dim t As String, p As Long
-
     FillEmptySources = json
     If HasTopKey(json, "sources") Then Exit Function
-    t = RTrim$(json)
-    If LenB(t) = 0 Then Exit Function
-    If Left$(t, 1) <> "{" Then Exit Function
-    If Right$(t, 1) <> "}" Then Exit Function
+    FillEmptySources = AddPair(json, """sources"":[]")
+End Function
+
+' ============================================================================
+' FillMissingKind - missing_info[] の各要素に kind が無い/空のとき "not_found"
+'   を実際に書き込む(裁定書41 §2。裁定書40 P-M1「空なら not_found」の残り半分)。
+' ----------------------------------------------------------------------------
+'   SoftNotesS1 の V-S1-17 は「欠落・空を警告しない」だけで値を直していなかった。
+'   18章 SEC-04 の「種別」列は modHtmlTemplate2 が LB(LMK, mi[k].kind) で引き、
+'   modHtmlTemplate1.LB は未知キーをそのまま返すので、空のままだと**空欄**で
+'   出る(補填すれば LMK.not_found の「未取得」が出る)。sources と同じ場所で
+'   同じように補う。
+'
+'   触らない(素通しする)場合(fail-open。壊れた入力で JSON を壊さない):
+'     ・トップレベルに missing_info が無い/値が配列でない/閉じていない
+'     ・要素にオブジェクト以外(文字列・数値)が混ざっている
+'     ・補う要素が1件も無い(そのときは文字列を作り直さない)
+'   要素は**配列を切り出してから** modJsonLite.GetArrayItems に渡す。同関数は
+'   深さを見ず「最初に現れた同名キー」を拾うため(裁定書39 R1-10 と同じ理由)。
+' ============================================================================
+Private Function FillMissingKind(ByVal json As String) As String
+    Dim valPos As Long, endPos As Long, arrText As String
+    Dim it As Variant, t As String, newT As String, outText As String
+    Dim n As Long, changed As Boolean
+
+    FillMissingKind = json
+    valPos = TopValuePos(json, "missing_info")
+    If valPos = 0 Then Exit Function
+    If Mid$(json, valPos, 1) <> "[" Then Exit Function
+    endPos = ArrEndPos(json, valPos)
+    If endPos = 0 Then Exit Function
+    arrText = Mid$(json, valPos, endPos - valPos + 1)
+
+    For Each it In modJsonLite.GetArrayItems("{""missing_info"":" & arrText & "}", _
+                                             "missing_info")
+        t = Trim$(CStr(it))
+        If Left$(t, 1) <> "{" Or Right$(t, 1) <> "}" Then Exit Function
+        If LenB(Trim$(modJsonLite.GetStr(t, "kind"))) = 0 Then
+            newT = SetKindNotFound(t)
+            If newT <> t Then
+                t = newT
+                changed = True
+            End If
+        End If
+        If n > 0 Then outText = outText & ","
+        outText = outText & t
+        n = n + 1
+    Next it
+    If Not changed Then Exit Function
+
+    FillMissingKind = Left$(json, valPos - 1) & "[" & outText & "]" & _
+                      Mid$(json, endPos + 1)
+End Function
+
+' ============================================================================
+' SetKindNotFound - 要素オブジェクト t の kind を "not_found" にする。
+'   キーが無ければ足し、**空文字・空白だけの文字列なら値を置き換える**
+'   (足すだけだと同名キーが2つ並び、15章§14「最初に現れた同名キー」の規則で
+'   空のほうが勝って補填が効かない)。kind が文字列でない(null・数値・配列)
+'   ときは触らない(fail-open。読めない形を推測で書き換えない)。
+' ============================================================================
+Private Function SetKindNotFound(ByVal t As String) As String
+    Dim valPos As Long, e As Long
+
+    SetKindNotFound = t
+    valPos = TopValuePos(t, "kind")
+    If valPos = 0 Then
+        SetKindNotFound = AddPair(t, """kind"":""not_found""")
+        Exit Function
+    End If
+    If Mid$(t, valPos, 1) <> """" Then Exit Function
+    e = StrEndPos(t, valPos)
+    If e = 0 Then Exit Function
+    SetKindNotFound = Left$(t, valPos - 1) & """not_found""" & Mid$(t, e + 1)
+End Function
+
+' ============================================================================
+' AddPair - オブジェクト文字列 t の末尾へ "キー":値 を1組足す。t がオブジェクト
+'   として読めなければ**触らない**(fail-open)。sources の空配列補填と
+'   missing_info[].kind の補填が同じ1本を通る(同じ規則を2箇所に持たない)。
+' ============================================================================
+Private Function AddPair(ByVal t As String, ByVal pairText As String) As String
+    Dim s As String, p As Long
+
+    AddPair = t
+    s = RTrim$(t)
+    If LenB(s) = 0 Then Exit Function
+    If Left$(s, 1) <> "{" Then Exit Function
+    If Right$(s, 1) <> "}" Then Exit Function
 
     ' 閉じ "}" の直前が "{" なら空オブジェクトなので "," を置かない。
-    p = Len(t) - 1
+    p = Len(s) - 1
     Do While p >= 1
-        If InStr(1, V3_WS, Mid$(t, p, 1), vbBinaryCompare) = 0 Then Exit Do
+        If InStr(1, V3_WS, Mid$(s, p, 1), vbBinaryCompare) = 0 Then Exit Do
         p = p - 1
     Loop
     If p < 1 Then Exit Function
-    If Mid$(t, p, 1) = "{" Then
-        FillEmptySources = Left$(t, Len(t) - 1) & """sources"":[]}"
+    If Mid$(s, p, 1) = "{" Then
+        AddPair = Left$(s, Len(s) - 1) & pairText & "}"
     Else
-        FillEmptySources = Left$(t, Len(t) - 1) & ",""sources"":[]}"
+        AddPair = Left$(s, Len(s) - 1) & "," & pairText & "}"
     End If
+End Function
+
+' ArrEndPos - openPos の "[" に対応する "]" の位置(0=閉じていない)。ObjEndPos の
+'   配列版(文字列リテラルの中の括弧は数えない)。
+Private Function ArrEndPos(ByVal s As String, ByVal openPos As Long) As Long
+    Dim n As Long, i As Long, depth As Long, ch As String, e As Long
+    n = Len(s)
+    i = openPos
+    Do While i <= n
+        ch = Mid$(s, i, 1)
+        If ch = """" Then
+            e = StrEndPos(s, i)
+            If e = 0 Then Exit Function
+            i = e + 1
+        ElseIf ch = "[" Then
+            depth = depth + 1
+            i = i + 1
+        ElseIf ch = "]" Then
+            depth = depth - 1
+            If depth = 0 Then
+                ArrEndPos = i
+                Exit Function
+            End If
+            i = i + 1
+        Else
+            i = i + 1
+        End If
+    Loop
 End Function
 
 ' トップレベル(深さ1)に keyName があるか。

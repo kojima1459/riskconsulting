@@ -52,12 +52,15 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
     (1) 先頭付近に `<meta charset="utf-8"` がある(18章§5.3(3))
     (2) 18章§3の全18セクション(v1.3で SEC-18 talk を追加)が登録表にある
         (id と slug と描画関数名の3点)
-    (3) node があれば、最小DOMスタブでページ内スクリプトを実際に走らせ、
+    (3) 最小DOMスタブでページ内スクリプトを実際に走らせ、
         `sec-<slug>` の要素がすべて生成されることと、上部ナビ・目次の
         アンカーが表示対象と1対1であること(11章§3.8.3)まで確認する。
         セクションの実体はブラウザ側のJSが作る(18章§4.1)ので、HTMLソースを
         grep しても cover 以外のアンカーは出てこない。ソース検査(2)だけでは
-        「登録したが描けない」を見逃すため、可能なら(3)まで行う。
+        「登録したが描けない」を見逃すため、(3)は**必須**とする。
+        node が無い環境では検査を飛ばさず exit 2 で落ちる(裁定書41 §2。
+        旧実装は黙ってスキップしたうえ「描画後DOM18本を確認しました」と
+        出して exit 0 になっていた=偽の成功文言)。
     (4) innerHTML / insertAdjacentHTML / document.write / outerHTML= が
         1つも出現しない(18章§4.1・17章 T-46 の出荷前検問と同じ観点)
     (5) DATAの文字列リテラル内に**生の `<` が1文字も無い**(18章§5.3(1) v1.1)。
@@ -81,6 +84,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -578,6 +582,11 @@ def check_reviewed(html: str, reviewed_by: str) -> list[str]:
     return problems
 
 
+def find_node() -> str | None:
+    """DOM検査に使う node の場所(無ければ None)。"""
+    return shutil.which("node") or shutil.which("nodejs")
+
+
 def check_dom(html_path: Path, verbose: bool, faithful: bool,
               reviewed_by: str = "") -> list[str]:
     """node があれば最小DOMスタブでページのJSを実際に走らせて確認する。
@@ -592,10 +601,14 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool,
       だけ**なので、本文(sec-round-update)と目次(#sec-round-update)の両方が
       消えることを見る。
     """
-    node = shutil.which("node") or shutil.which("nodejs")
+    node = find_node()
     if node is None:
-        print("[render_report] (node が無いためDOM検査はスキップしました)")
-        return []
+        # 裁定書41 §2: **fail-open 禁止**。旧実装はここで空リストを返していたので、
+        # DOMを1本も組まないまま「描画後DOM18本を確認しました」と出して exit 0 に
+        # なっていた(裁定書40 T-M1 の orphan_check と同型。tools/notice_check.py は
+        # 同じ状況で exit 2 を返す)。検査できないなら緑にしない。
+        return ["node が見つからないため描画後DOMの検査を実行できません"
+                "(検査を飛ばして緑にはしません。裁定書41 §2)"]
     stub = html_path.parent / "dom_stub.js"
     stub.write_text(DOM_STUB_JS, encoding="utf-8")
     proc = subprocess.run([node, str(stub), str(html_path)],
@@ -993,6 +1006,18 @@ def self_test() -> bool:
                   got.get("meta", {}).get("reviewed_at") == SAMPLE_REVIEWED_AT))
     cases.append(("DATA が無ければ None", parse_data_json("<p>x</p>") is None))
 
+    # 裁定書41 §2: node が無いときに **fail-open しない**(検査していないのに
+    # 緑で「描画後DOM18本を確認しました」と出さない)。PATH から node を隠して
+    # check_dom を呼び、問題が1件以上返ることを実測する。
+    saved_path = os.environ.get("PATH", "")
+    try:
+        os.environ["PATH"] = ""
+        cases.append(("node が無ければ DOM検査は赤(fail-open しない)",
+                      find_node() is None and
+                      len(check_dom(Path("dummy.html"), False, False)) > 0))
+    finally:
+        os.environ["PATH"] = saved_path
+
     bad = [n for n, ok in cases if not ok]
     for n in bad:
         print("  自己テスト NG: %s" % n)
@@ -1034,6 +1059,14 @@ def main() -> int:
     # 検査器そのものの回帰網。毎回のゲートで回す(骨抜き防止。T-m3)。
     if not self_test():
         print("[render_report] 結果: 自己テスト失敗(検査器が壊れています)")
+        return 2
+
+    # 裁定書41 §2: DOM検査には node が要る。無いまま進むと「描画後DOM18本を
+    # 確認しました」という**偽の成功文言**で緑になるので、ここで赤にして止める
+    # (tools/notice_check.py と同じ exit 2 = 検査を実行できない)。
+    if find_node() is None:
+        print("[render_report] 結果: node が見つからないため描画後DOMの検査を"
+              "実行できません(検査を飛ばして緑にはしません)")
         return 2
 
     soffice = lo.find_soffice()

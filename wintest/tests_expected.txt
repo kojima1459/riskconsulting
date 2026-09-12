@@ -6,5 +6,5 @@
 #            prod + dev_only を焼く。
 # テストを増減したらこの数字を必ず同時に更新すること(更新漏れは
 # modTestRunner と tools/run_lo_tests.py が即FAILとして可視化する。17章§4-1)。
-prod=1028
+prod=1031
 dev_only=17
