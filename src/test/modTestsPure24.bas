@@ -8,7 +8,8 @@ Option Explicit
 '   18章§2・§3.5 だけ**から手で書き出した(17章§1。実装の出力を見てから期待値を
 '   合わせない)。
 '
-' 対象と根拠(全31本。W15 Round 2 の G6 8本は裁定書39 §1 だけを根拠に追記した):
+' 対象と根拠(全33本。W15 Round 2 の G6 10本は裁定書39 §1・裁定書40 §1 だけを
+'   根拠に追記した):
 '   G1 原文照合(modGround。B-03 のテスト観点6つをそのまま置いた)
 '     01 引用の**先頭20字より後ろ**を1字変えても照合できる(表記揺れ耐性)
 '     02 丸ごと捏造した引用は未照合として検出する
@@ -27,9 +28,11 @@ Option Explicit
 '   G4 レポートCSS・辞書(D#10 表フォント / D#12 改ページ / D#11 英語タグ)
 '     19/20/21
 '   G5 SEC-14 の「原文照合」列(B-03)
-'     22
-'   G6 W15 Round 2(裁定書39 班Q)
-'     23/24 R2-04  25/26 R2-05  27 R1-05  28 R1-08  29/30 R1-07
+'     22(生成JSの照合。**描画の両方向**は tools/notice_check.py の検査①が
+'        持つ。裁定書40 Q-M2 の横展開で SEC-09 と同じ型だったため足した)
+'   G6 W15 Round 2(裁定書39 班Q / 裁定書40 班Q2)
+'     23/24 R2-04  25/26 R2-05  27 R1-05  28 R1-08(Q-M2で論理へ)  29/30 R1-07
+'     31 Q-m1(E-02の帯は実行直後のS1だけ)  32 Q-m3(E-02の帯とdeepを併記)
 '
 ' 変異注入(出来レース禁止・裁定書37 §2):
 '   (a) modGround.QuoteFound を常に True にすると 02 と 07 が落ちる。
@@ -356,8 +359,12 @@ End Sub
 ' 変異注入(出来レース禁止・裁定書39 §3):
 '   (c) modUtilText.HasVisibleText を `LenB(Trim$(s))>0` へ戻すと 23/24 が落ちる。
 '   (d) modExportHtml.StripFieldSeps の vbTab 除去をやめると 25/26 が落ちる。
-'   (e) modHtmlTemplate4 の E採番の行を消すと 28 が落ちる。
+'   (e) modGround.NoteJsonArray を常に "" にすると 28 が落ちる(材料側)。
+'       描画側(SEC-09 のカードに印が出る/出ない)の変異は tools/notice_check.py
+'       の検査①が受け持つ(ページ内JSは VBA から走らせられないため)。
 '   (f) modUICase.IqBannerTextOf を常に "" にすると 29 が落ちる。
+'   (g) modUICase2.StepNoticeOf の afterRun ガードを外すと 31 が落ちる。
+'   (h) modUICase2.NoticeJoin を secondText だけ返す形に戻すと 32 が落ちる。
 ' ============================================================================
 
 Private Sub T_W15Round2()
@@ -427,17 +434,30 @@ End Sub
 
 ' ---- R1-08 SEC-09 の「原文未照合」 ------------------------------------------
 Private Sub T_R1_08()
-    Dim js As String
-
-    ' 28 modGround.GroundNotes が emerging_risks を "E1" "E2" で採番して
-    '    meta.ground_unmatched へ入れる(18章§2)以上、SEC-09 はその番号で
-    '    突き合わせて印を出す。SEC-14(risks[])側だけでは出ない。
-    js = modHtmlTemplate4.SecNewRiskJs()
-    ChkB "Test_W15_28_SEC09にニューリスクの原文未照合を出す_裁定書39R1-08", _
-        Ctn(js, "ground_unmatched") And Ctn(js, "'E'+(i+1)") And _
-        Ctn(js, "原文未照合"), _
-        "renderNewRisk が meta.ground_unmatched を E採番で引く"
+    ' 28 SEC-09 が読む材料= meta.ground_unmatched(18章§2)。**両方向**を固定
+    '    する: 未照合が在れば modGround の E採番のまま配列に載り、無ければ
+    '    空配列になる。E採番そのもの(出現順の1始まり)は 07 が持つ。
+    '    裁定書40 Q-M2: 旧28は生成済みJSの**文字列 grep 3本**だけで、描画側の
+    '    判定を反転させる変異(`if(gm[...])` -> `if(!gm[...])`)が全ゲートを
+    '    素通りした。描画そのものの両方向(E1が在るカードにだけ印が出て、
+    '    無ければ出ない)は**ページ内JSなので VBA からは走らせられない**ため、
+    '    実DOMの回帰は `tools/notice_check.py` の検査①が持つ。ここは
+    '    「JSへ渡す材料」の論理だけを固定する(2本で1つの契約を挟む)。
+    ChkB "Test_W15_28_metaのground_unmatchedはE採番を載せ無ければ空配列_裁定書40Q-M2", _
+        Ctn(MetaOfGround("E1"), """ground_unmatched"":[""E1""]") And _
+        Ctn(MetaOfGround("E1;E2"), """ground_unmatched"":[""E1"",""E2""]") And _
+        Ctn(MetaOfGround(""), """ground_unmatched"":[]"), _
+        "meta=[" & MetaOfGround("E1") & "]"
 End Sub
+
+' 未照合リスト(";" 区切り)だけを差し替えた meta(28用)。
+Private Function MetaOfGround(ByVal groundNote As String) As String
+    MetaOfGround = modExportHtml.BuildMetaJson(W15_CASE_ID, "甲斐商店", "09", _
+                                               "食料品製造業", "renewal", "t2_full", _
+                                               "deep", 1, "proposal", _
+                                               "2026/09/12 10:05:00", "2.0.0", _
+                                               "standard", "", "", "", groundNote)
+End Function
 
 ' ---- R1-07 シート画面の iq=low 警告帯 --------------------------------------
 Private Sub T_R1_07()
@@ -455,6 +475,32 @@ Private Sub T_R1_07()
         (modUICase.IqBannerTextOf(IqJson("mid", "partial")) = "") And _
         (modUICase.IqBannerTextOf("") = ""), _
         "high/mid/読めない はすべて空"
+
+    ' 31 16章 E-02 は「**実行後**」の規定。modUICase2.DrawStep は
+    '    RunStepUi / HomeRunAll 以外([シートで編集]・案件切替の描き直し・
+    '    企業ファイル取込)からも呼ばれるので、afterRun=False では iq=low でも
+    '    **何も出さない**(裁定書40 Q-m1)。S1 以外の段でも出さない。
+    ChkB "Test_W15_31_E02の帯は実行直後のS1だけに出す_裁定書40Q-m1", _
+        (modUICase2.StepNoticeOf(1, IqJson("low", "missing"), False) = "") And _
+        (modUICase2.StepNoticeOf(2, IqJson("low", "missing"), True) = "") And _
+        (modUICase2.StepNoticeOf(4, IqJson("low", "missing"), True) = "") And _
+        (modUICase2.StepNoticeOf(1, IqJson("high", "ok"), True) = "") And _
+        Ctn(modUICase2.StepNoticeOf(1, IqJson("low", "missing"), True), _
+            "一般論に近い出力になります"), _
+        "描き直し=[" & modUICase2.StepNoticeOf(1, IqJson("low", "missing"), False) & _
+        "] 実行直後=[" & modUICase2.StepNoticeOf(1, IqJson("low", "missing"), True) & "]"
+
+    ' 32 シート画面は警告欄(hm_warning)が1枠しかないので、あとから書く1本が
+    '    前の1本を消す。deep の警告(E-35/E-36)は E-02 の帯を、部屋あふれの
+    '    警告は同じく E-02 の帯を消していた(裁定書40 Q-m3)。片方しか無ければ
+    '    その1本、両方あれば vbLf で**併記**する。順序は HTML画面
+    '    (modNaviActions.ActRunPipeline)と同じで E-02 の帯が先。
+    ChkB "Test_W15_32_E02の帯とdeepの警告を併記して片方を消さない_裁定書40Q-m3", _
+        (modUICase2.NoticeJoin("帯", "deep") = "帯" & vbLf & "deep") And _
+        (modUICase2.NoticeJoin("", "deep") = "deep") And _
+        (modUICase2.NoticeJoin("帯", "") = "帯") And _
+        (modUICase2.NoticeJoin("", "") = ""), _
+        "両方=[" & modUICase2.NoticeJoin("帯", "deep") & "]"
 End Sub
 
 ' 会社名だけを差し替えたレポート全文(R2-05 の26用)。
