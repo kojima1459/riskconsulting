@@ -180,23 +180,33 @@ End Function
 '   もう一度 CheckS5 に掛け、通れば合格として続行する(顧客向け提案書の生成を
 '   語1つで止めない)。置換したことは run_log に taboo_softened=n で残す
 '   (黙って直さない)。それ以外の不合格が混じっていれば従来どおり失敗させる。
+'
+'   一般語の扱い(裁定書39 R2-02): 「移転」「保有」「抜け」は日常語でもあるため
+'   modValidate4 が**機械置換しない**。そのため置換後も V-S5-12 が残りうるが、
+'   残りが一般語だけ(TabooHitStrict が空)なら**警告を残して続行する**。
+'   ここで失敗させると「本社を移転する」と書かれただけで提案書が作れなくなり、
+'   裁定の「一般語は V-S5-12 の警告のみ」に反する。
 ' ============================================================================
 Private Function SoftenOrFail(ByVal caseId As String, ByVal errText As String, _
                               ByVal rawText As String, ByVal s2Json As String, _
                               ByRef okJson As String) As String
-    Dim softened As String, changed As Long, recheck As String
+    Dim softened As String, changed As Long, recheck As String, genHit As String
 
     SoftenOrFail = P5_RES_FAILED
     If Not OnlyTabooLeft(errText) Then Exit Function
 
     softened = modValidate4.SoftenTaboo(modJsonLite.ExtractJsonBlock(rawText), changed)
-    If changed = 0 Then Exit Function
     recheck = modValidate4.CheckS5(softened, s2Json)
-    If LenB(recheck) > 0 Then Exit Function
+    If LenB(recheck) > 0 Then
+        If Not OnlyTabooLeft(recheck) Then Exit Function
+        If LenB(modValidate4.TabooHitStrict(softened)) > 0 Then Exit Function
+        genHit = modValidate4.TabooHit(softened)
+    End If
 
     okJson = softened
     mLastErrs = vbNullString
-    modLog.LogUsage "s5_taboo_softened", caseId, "taboo_softened=" & CStr(changed)
+    modLog.LogUsage "s5_taboo_softened", caseId, "taboo_softened=" & CStr(changed) & _
+        " general=" & genHit
     SoftenOrFail = P5_RES_REPAIRED
 End Function
 

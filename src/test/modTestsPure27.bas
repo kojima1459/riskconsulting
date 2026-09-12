@@ -23,12 +23,19 @@ Option Explicit
 '   G4 対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)
 '      23 30語以上ある  24 SoftenTaboo は置換して件数を返す
 '      25 英字の禁止語は語境界で見る(IoT の中の OT を拾わない)
+'   G5 W15 Round 2(裁定書39 R2-02 / R2-11 / R2-12 / R2-04受け。全14本)
+'      26..33 R2-02 最長一致・一般語・冪等・英字の語境界
+'      34     R2-11 機械置換の件数を呼出側が受け取る
+'      35..37 R2-12 描画例外の印と ?debug=1 の赤枠・S5必須キー
+'      38..39 R2-04受け 空白類だけの確認者名を認めない
 '
 ' 変異注入(出来レース禁止・裁定書38 §2):
 '   (a) modExportProposal.NeedsReviewMessage を常に "" にすると 19 が落ちる。
 '   (b) modProposalHtml1.SlidesJs から登録行を1本消すと 14 が落ち、
 '       tools/render_proposal.py も同時に赤くなる。
 '   (c) modExportProposal の Soft() を素通しにすると 17 が落ちる。
+'   (d) modValidate4.SoftPairs の並べ替えを昇順にすると 26..28 が落ちる。
+'   (e) modExportProposal.Soft() が件数を捨てると 34 が落ちる。
 '
 ' 書き方の約束(LibreOffice Basic 対策): Dim はプロシージャの先頭にまとめ、
 '   判定は一度ローカル変数へ入れてから modTestRunner.Check へ渡す
@@ -62,6 +69,14 @@ Public Sub RunAll()
     Err.Clear
     W15Glossary
     If Err.Number <> 0 Then W15Fail "W15-G4 対訳表"
+
+    Err.Clear
+    W15Round2Soften
+    If Err.Number <> 0 Then W15Fail "W15-G5 Round2 機械置換"
+
+    Err.Clear
+    W15Round2Render
+    If Err.Number <> 0 Then W15Fail "W15-G5 Round2 描画と確認者名"
 
     Err.Clear
     On Error GoTo 0
@@ -265,13 +280,171 @@ Private Sub W15Glossary()
     modTestRunner.Check "W15 対訳表は30語以上ある(裁定書38 班C)", (n >= 30), _
         "件数=" & CStr(n)
 
-    after = modValidate4.SoftenTaboo("リスクの移転を検討します。", changed)
+    ' 「移転」は一般語なので単独では置換しない(裁定書39 R2-02)。ここは
+    ' 一般語でない語で「置換して件数を返す」ことだけを見る。
+    after = modValidate4.SoftenTaboo("リスクユニバースを整理します。", changed)
     ok = (changed = 1)
-    If ok Then ok = (InStr(1, after, "保険で備える", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "リスクの全体像", vbBinaryCompare) > 0)
     modTestRunner.Check "W15 SoftenTaboo は社内語を顧客語へ置換して件数を返す", ok, _
         "changed=" & CStr(changed) & " after=" & after
 
     hit = modValidate4.TabooHit("IoT機器の導入を進めます。")
     modTestRunner.Check "W15 英字の禁止語は語境界で見る(IoT の中の OT を拾わない)", _
         (LenB(hit) = 0), hit
+End Sub
+
+' ============================================================================
+' G5-1 W15 Round 2(裁定書39 R2-02 / R2-11)。対訳表の機械置換。
+'   期待値は**壊す班 R2 が実測した壊れ方**(R2_break.md §2 R2-02 の S2..S7)を
+'   そのまま裏返して書いた。実装の出力を見てから合わせていない(17章§1)。
+' ============================================================================
+Private Sub W15Round2Soften()
+    Dim changed As Long
+    Dim changed2 As Long
+    Dim after As String
+    Dim after2 As String
+    Dim hit As String
+    Dim ok As Boolean
+    Dim srcText As String
+
+    ' R2-02 S2: 「未付保」が先に「付保」に食われて「未保険のご加入」になった。
+    after = modValidate4.SoftenTaboo("未付保の拠点があります。", changed)
+    ok = (InStr(1, after, "保険に入っていない状態", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "未保険のご加入", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-02 未付保は最長一致で置換する(未保険のご加入を作らない)", _
+        ok, "after=" & after
+
+    ' R2-02 S3: 「付保ギャップ」が「保険のご加入ギャップ」になった。
+    after = modValidate4.SoftenTaboo("付保ギャップが残ります。", changed)
+    ok = (InStr(1, after, "保険で手当てできていない部分", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "保険のご加入ギャップ", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-02 付保ギャップは最長一致で置換する", ok, "after=" & after
+
+    ' R2-02 S4: 「リスク移転可能性」が「リスク保険で備える可能性」になった。
+    after = modValidate4.SoftenTaboo("リスク移転可能性を評価します。", changed)
+    ok = (InStr(1, after, "保険での備えやすさ", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "リスク保険で備える可能性", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-02 リスク移転可能性は最長一致で置換する", ok, "after=" & after
+
+    ' R2-02 S5: 「座組パターン」が「ご提案の構成パターン」になった。
+    after = modValidate4.SoftenTaboo("座組パターンをお示しします。", changed)
+    ok = (InStr(1, after, "ご提案の型", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "ご提案の構成パターン", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-02 座組パターンは最長一致で置換する", ok, "after=" & after
+
+    ' R2-02 S6: 一般語の「移転」(本社移転)まで潰して「本社を保険で備えるする」。
+    srcText = "本社を移転する計画があります。"
+    after = modValidate4.SoftenTaboo(srcText, changed)
+    ok = (after = srcText)
+    If ok Then ok = (changed = 0)
+    modTestRunner.Check "W15 R2-02 一般語の移転は置換しない(本社移転を壊さない)", ok, _
+        "changed=" & CStr(changed) & " after=" & after
+
+    ' R2-02 S7: 一般語の「保有」(現金を保有)まで潰して「自社で負担する」。
+    srcText = "現金を保有しています。"
+    after = modValidate4.SoftenTaboo(srcText, changed)
+    ok = (after = srcText)
+    If ok Then ok = (changed = 0)
+    modTestRunner.Check "W15 R2-02 一般語の保有は置換しない", ok, _
+        "changed=" & CStr(changed) & " after=" & after
+
+    ' 置換しないだけで見逃しはしない(裁定書39 R2-02「警告のみ」)。テスト名に
+    ' ケースIDを書かないこと: tools/validate_check.py は「1ケース1テスト」を
+    ' テスト名の文字列リテラルから数えるため、ここで書くと2本目と数えられる。
+    hit = modValidate4.TabooHit("本社を移転する計画があります。")
+    ok = (InStr(1, hit, "移転", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15 R2-02 一般語も禁止語の一覧(TabooHit)には出る", ok, "hit=" & hit
+
+    ' 冪等: 置換後の文字列をもう一度通しても変わらない(裁定書39 R2-02)。
+    after = modValidate4.SoftenTaboo("サブリミットと未付保の状況です。", changed)
+    after2 = modValidate4.SoftenTaboo(after, changed2)
+    ok = (after2 = after)
+    If ok Then ok = (changed2 = 0)
+    If ok Then ok = (InStr(1, after, "未保険のご加入", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-02 SoftenTaboo は冪等(2回目は1件も置換しない)", ok, _
+        "1回目=" & after & " / 2回目changed=" & CStr(changed2)
+
+    ' 英字の禁止語は語境界で見る。CBI を BI で刻まない。
+    after = modValidate4.SoftenTaboo("CBI と BI を区別します。", changed)
+    ok = (InStr(1, after, "取引先の被災による損害", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "事業が止まったことによる利益の減少", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, after, "C事業が止まった", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-02 英字の禁止語は語境界で置換する(CBI を BI で刻まない)", _
+        ok, "after=" & after
+
+    W15Round2Count
+End Sub
+
+' R2-11: 機械置換の件数を呼出側が受け取れること(usage_log の値源)。
+Private Sub W15Round2Count()
+    Dim meta As String
+    Dim s2 As String
+    Dim s5 As String
+    Dim s2Dirty As String
+    Dim dataJson As String
+    Dim softClean As Long
+    Dim softDirty As Long
+    Dim ok As Boolean
+
+    s2 = modMockLlm3.BuildS2RnwJson()
+    s5 = modMockLlm4.BuildS5Json()
+    meta = modExportProposal.BuildProposalMetaJson(W15_COMPANY, s5, _
+        "2026/09/12 10:00:00", "2.4.0", W15_REVIEWER, "2026/09/12 10:05:00")
+
+    dataJson = modExportProposal.BuildProposalDataEx(meta, s2, s5, softClean)
+    ' S2 の control_note 全件の先頭へ社内語を差し込む(置換が必ず起きる素材)。
+    s2Dirty = Replace(s2, """control_note"":""", """control_note"":""リスクユニバースと")
+    dataJson = modExportProposal.BuildProposalDataEx(meta, s2Dirty, s5, softDirty)
+
+    ok = (softDirty > 0)
+    If ok Then ok = (softDirty > softClean)
+    If ok Then ok = (InStr(1, dataJson, "リスクユニバース", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15 R2-11 提案書DATAの機械置換の件数を呼出側が受け取る", ok, _
+        "clean=" & CStr(softClean) & " dirty=" & CStr(softDirty)
+End Sub
+
+' ============================================================================
+' G5-2 W15 Round 2(裁定書39 R2-12 と R2-04 の受け)。描画の失敗を隠さない。
+' ============================================================================
+Private Sub W15Round2Render()
+    Dim js As String
+    Dim css As String
+    Dim ok As Boolean
+    Dim miss As String
+    Dim msgTab As String
+    Dim msgWide As String
+
+    ' R2-12: 描画例外は「次回更新します」に化けるだけでなく印を残す。
+    js = modProposalHtml1.RuntimeJs()
+    ok = (InStr(1, js, "catch(err){AT(sec,'data-render-error','1');", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15 R2-12 描画例外は data-render-error を立てる", ok, _
+        "長さ=" & CStr(Len(js))
+
+    ' R2-12: 赤枠は ?debug=1 のときだけ(お客さまの画面には出さない)。
+    css = modProposalHtml2.FormatCss()
+    ok = (InStr(1, css, "body.debug", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, css, "data-render-error", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, js, "debug=1", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15 R2-12 描画エラーの赤枠は ?debug=1 のときだけ出る", ok, _
+        "css長=" & CStr(Len(css))
+
+    ' R2-12: S5 の必須キーが欠けたら描かずに止める(保留文に化けさせない)。
+    ok = (LenB(modExportProposal.MissingProposalKeys(modMockLlm4.BuildS5Json())) = 0)
+    modTestRunner.Check "W15 R2-12 mock(MK-S5)には必須キーが全部ある", ok, _
+        "実際=" & modExportProposal.MissingProposalKeys(modMockLlm4.BuildS5Json())
+
+    miss = modExportProposal.MissingProposalKeys( _
+        Replace(modMockLlm4.BuildS5Json(), """steps"":", """steps_off"":"))
+    ok = (InStr(1, miss, "steps", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15 R2-12 S5の必須キーが欠けていたら欠落キーを返す", ok, _
+        "実際=[" & miss & "]"
+
+    ' R2-04 の受け: 空白類だけの確認者名を「確認済み」と認めない。
+    msgTab = modExportProposal.NeedsReviewMessage(vbTab)
+    modTestRunner.Check "W15 R2-04 確認者名がTABだけなら提案書を生成しない", _
+        (msgTab = W15_NEED), "実際=[" & msgTab & "]"
+
+    msgWide = modExportProposal.NeedsReviewMessage(ChrW(12288))
+    modTestRunner.Check "W15 R2-04 確認者名が全角空白だけなら提案書を生成しない", _
+        (msgWide = W15_NEED), "実際=[" & msgWide & "]"
 End Sub
