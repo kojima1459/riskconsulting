@@ -206,9 +206,11 @@ End Property
 Public Property Get HtmlLength() As Long
     If mReady Then HtmlLength = Len(mBrowser.Document.DocumentElement.outerHTML)
 End Property
+' @unused: 診断用の取り出し口(髙橋 DPI 補正 v7.3 の実測値。イミディエイトから読む。裁定書38)
 Public Property Get TextScale() As String
     TextScale = mTextScale
 End Property
+' @unused: 同上(BaseOpticalZoom の採用値。裁定書38)
 Public Property Get OpticalZoom() As Long
     OpticalZoom = mOpticalZoom
 End Property

@@ -69,6 +69,12 @@ GATES = [
      r"一致: \d+件"),
     ("dossier",      [sys.executable, "tools/dossier_check.py"],
      r"\[dossier_check\] OK: 全\d+本"),  # docs/08 が15章ルール5bの4点を含む(裁定書37 B-07)
+    ("orphan",       [sys.executable, "tools/orphan_check.py"],
+     r"結果: OK \(孤児Public 0件"),  # 呼ばれない Public を機械で数える(裁定書38 班D)
+    ("doc-gate",     [sys.executable, "tools/doc_gate.py"],
+     r"結果: OK 4条件"),  # 文書の既定値・ボタン名・エラーコード(裁定書38 班D)
+    ("action",       [sys.executable, "tools/action_check.py"],
+     r"結果: OK 2条件"),  # ui action ⇔ Dispatch ⇔ 11章(裁定書38 班D)
     ("validate",     [sys.executable, "tools/validate_check.py"],
      r"結果: OK|ケース: 計\d+件"),
     ("enum",         [sys.executable, "tools/enum_check.py"],
