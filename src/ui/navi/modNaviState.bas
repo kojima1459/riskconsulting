@@ -4,11 +4,6 @@ Option Explicit
 Private gDraft As String
 Private gSparringCase As String
 Private gSparringNote As String
-' 裁定書39 R2-06: 提案書の保存先。案件一覧にも data_key にも列が無いので
-'   (追加は13章§2.2 の改訂を伴う。班Rの担当外)、SparringNote と同じ形で
-'   画面のセッション内だけ覚える。値源は ActExportProposal の成功時1箇所。
-Private gProposalCase As String
-Private gProposalPath As String
 Public Sub SetDraft(ByVal json As String)
     If Not modNaviJson.IsValidJson(json) Then Err.Raise 5, "modNaviState", "invalid_draft"
     gDraft = json
@@ -60,7 +55,7 @@ End Function
 Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As Boolean) As String
     Dim ctx As String, basics As String, company As String, status As String, materials As String
     Dim buf() As String, count As Long, n As Long, stepNo As Long, rule As Long, anyArea As Boolean
-    Dim raw As String, failure As String, report As String, reportHtml As String
+    Dim raw As String, failure As String, report As String, reportHtml As String, proposal As String
     If Len(caseId) = 0 Then
         ctx = DraftJson(): basics = DraftJson()
     Else
@@ -97,13 +92,16 @@ Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As
         modUtil.BufAdd buf, count, """runs"":" & modNaviStore.RowsJson("run_log", caseId) & ",""logs"":" & modNaviStore.LogRowsOf(caseId) & ","
         modUtil.BufAdd buf, count, """feedback"":" & modNaviStore.RowsJson("フィードバック", caseId) & ",""judgements"":" & modNaviStore.ListJudgements(caseId) & ","
         report = modCaseRead.CaseColumnOf(caseId, "report_path")
+        ' 提案書の保存先は**案件が採番されているときだけ**読む(下書きのJSONは
+        ' 画面から来るので、そこに紛れた proposal_path を区画④へ出さない)。
+        proposal = ProposalPathIn(basics)
         ' The path originates in the business store, never from an HTML path parameter.
         If Len(report) > 0 Then
             If modUtil.FileExistsAt(report) Then reportHtml = modUtil.ReadUtf8File(report)
         End If
     End If
     modUtil.BufAdd buf, count, """sparring_note"":" & modNaviJson.Q(SparringNote(caseId)) & ","
-    modUtil.BufAdd buf, count, """outputs"":" & OutputsJson(report, reportHtml, ProposalPathOf(caseId), _
+    modUtil.BufAdd buf, count, """outputs"":" & OutputsJson(report, reportHtml, proposal, _
         modNaviState2.HearingBuiltAt(caseId)) & "}"
     BuildCaseState = modUtil.BufText(buf, count)
 End Function
@@ -141,17 +139,48 @@ Public Function ProposalPlanOf(ByVal s5Json As String, ByVal s5Edited As String,
     ProposalPlanOf = "run_s5"
 End Function
 
-' SetProposalPath / ProposalPathOf - 提案書の保存先(裁定書39 R2-06)。
-'   案件一覧の列でも data_key でもないので、案件が変わったら消える
-'   (別案件の保存先を出さないため、caseId が一致するときだけ返す)。
+' SetProposalPath / ProposalPathOf - 提案書の保存先(裁定書39 R2-06・裁定書40 R-m1)。
+'   **案件データ(nav_basics)へ書いて残す**。画面のセッション変数に置くと
+'   ブックを開き直した時点で消え、区画④の出力一覧が「未出力」に戻る
+'   (会社PCはエクスプローラの操作が限られるので、画面に出さないと利用者は
+'   自分が出したファイルへたどり着けない。docs/24・29)。値源は
+'   ActExportProposal の成功時1箇所のまま。読み口は BuildCaseState(区画④の
+'   出力一覧)と ActOpenReport(given=proposal)の2つ。
+'   13章§2.2 の nav_basics の記載も同期すること(13章の改訂は別班の担当)。
 Public Sub SetProposalPath(ByVal caseId As String, ByVal pathText As String)
-    gProposalCase = caseId
-    gProposalPath = pathText
+    Dim basicsJson As String
+    If LenB(caseId) = 0 Then Exit Sub
+    basicsJson = modCaseStore.LoadData(caseId, "nav_basics")
+    If Not modNaviJson.IsValidJson(basicsJson) Then basicsJson = "{}"
+    modCaseStore.SaveData caseId, "nav_basics", _
+        modNaviStore.MergeBasics(basicsJson, "{}", pathText)
 End Sub
 Public Function ProposalPathOf(ByVal caseId As String) As String
-    If LenB(caseId) > 0 Then
-        If caseId = gProposalCase Then ProposalPathOf = gProposalPath
-    End If
+    If LenB(caseId) = 0 Then Exit Function
+    ProposalPathOf = ProposalPathIn(modCaseStore.LoadData(caseId, "nav_basics"))
+End Function
+
+' ProposalPathIn - nav_basics(JSON)から提案書の保存先だけを取り出す純関数
+'   (裁定書40 R-m1)。保存されていなければ空文字=区画④は「未出力」と出す。
+Public Function ProposalPathIn(ByVal basicsJson As String) As String
+    ProposalPathIn = modJsonLite.GetStr(basicsJson, "proposal_path")
+End Function
+
+' ProposalStepsOf - ProposalPlanOf が決めた段取りを、ActExportProposal が実際に
+'   踏む手順の並び(";"区切り・前から順に実行)へ開く純関数(裁定書40 R-M2)。
+'   **「S5 を作ってから出力する」という順序の正はここ1箇所**であり、
+'   ActExportProposal はこの並びをそのまま回すだけなので、順序や本数を
+'   書き換えると純テスト(NAVI-P54〜P56・P68〜P70)が落ちる。
+'     "run_s5" -> "run_s5;export"(その場で S5 を作ってから出力する)
+'     "export" -> "export"(S5 は作り直さない。AI呼出を1回むだにしない)
+'     それ以外(upstream_missing など) -> ""(1手も実行しない)
+Public Function ProposalStepsOf(ByVal plan As String) As String
+    Select Case plan
+    Case "run_s5"
+        ProposalStepsOf = "run_s5;export"
+    Case "export"
+        ProposalStepsOf = "export"
+    End Select
 End Function
 ' BuildPrompts - 区画①の調査指示文8本を state へ組む。
 '   裁定書38 Z-49 で各プロンプトへ "warning" を1本足した。**16章 E-69 の

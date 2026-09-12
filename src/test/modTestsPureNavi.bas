@@ -4,6 +4,10 @@ Option Explicit
 ' Spec 7.2/7.5/8.3/10. 24 assertions; baseline 780 -> tests_expected 804.
 ' 裁定書36で RibbonHead/InWindow を追加(+8 assertions -> tests_expected 812)。
 ' 裁定書37 B-09で IsOverDrLimit(NAVI-P33〜P35)を追加(+3 assertions)。
+' 裁定書39 R2-01/R2-06/R2-08/R1-06 で NAVI-P36〜P49(+14 assertions)。
+' 裁定書40 R-M2/R-m1/R-m3 で NAVI-P50〜P61(+12 assertions)。
+' 裁定書40 R-M2 の通し固定で NAVI-P68〜P70(+3 assertions)。
+' 裁定書40 の横展開(同型)で NAVI-P62〜P67(+6 assertions)。
 Public Sub RunAll()
     On Error GoTo Failed
     CheckN "NAVI-P01 empty object", modNaviJson.IsValidJson("{}")
@@ -89,6 +93,77 @@ Public Sub RunAll()
         modNaviActions2.CopyWarningOf(Left$(NaviFragSample(), 19), NaviFragSample()) = vbNullString
     CheckN "NAVI-P49 CopyWarningOf is quiet without a source", _
         modNaviActions2.CopyWarningOf(Left$(NaviFragSample(), 20), vbNullString) = vbNullString
+    ' 裁定書40 R-M2 / R-m3: [提案書（お客さま向け）を出す]の4分岐を、出る側と
+    ' 出ない側の**両方向**で固定する。ActExportProposal はこの3本の純関数
+    ' (ProposalBlockOf / ProposalStepsOf / ProposalS5FailedJson)だけで判断と
+    ' 順序を決めるので、分岐を書き換えるとここが落ちる。
+    CheckN "NAVI-P50 an unreviewed case is refused with E0603", _
+        modNaviActions2.ProposalBlockOf(modExportProposal.NeedsReviewMessage(vbNullString), "export") = _
+        "{""ok"":false,""message"":" & modNaviJson.Q(modExportProposal.NeedsReviewMessage(vbNullString)) & _
+        ",""error_code"":""E0603""}"
+    CheckN "NAVI-P51 a reviewed case is not refused", _
+        modNaviActions2.ProposalBlockOf(modExportProposal.NeedsReviewMessage("山田太郎"), "export") = vbNullString And _
+        modNaviActions2.ProposalBlockOf(vbNullString, "run_s5") = vbNullString
+    CheckN "NAVI-P52 upstream_missing asks for the analysis first", _
+        modNaviActions2.ProposalBlockOf(vbNullString, "upstream_missing") = _
+        "{""ok"":false,""message"":""先に[まとめて分析]を実行してください。"",""error_code"":""E0101""}"
+    CheckN "NAVI-P53 the review check wins over upstream_missing", _
+        modNaviActions2.ProposalBlockOf("内容を確認してから出力してください。", "upstream_missing") = _
+        "{""ok"":false,""message"":""内容を確認してから出力してください。"",""error_code"":""E0603""}"
+    CheckN "NAVI-P54 run_s5 builds S5 before the export", _
+        modNaviState.ProposalStepsOf("run_s5") = "run_s5;export"
+    CheckN "NAVI-P55 an existing S5 is not rebuilt", _
+        modNaviState.ProposalStepsOf("export") = "export"
+    CheckN "NAVI-P56 a blocked plan runs no step at all", _
+        modNaviState.ProposalStepsOf("upstream_missing") = vbNullString And _
+        modNaviState.ProposalStepsOf(vbNullString) = vbNullString
+    CheckN "NAVI-P57 a failed S5 returns the 16 E-71 guidance", _
+        modNaviActions2.ProposalS5FailedJson() = "{""ok"":false,""message"":""提案書を作れませんでした。" & _
+        "今回は提案骨子（4. 提案の骨子）をご利用ください。"",""error_code"":""E0302""}"
+    ' 裁定書40 R-m1: 提案書の保存先は案件データ(nav_basics)に残る=ブックを
+    ' 開き直しても区画④の出力一覧に出る。画面から来た JSON では上書きできない。
+    CheckN "NAVI-P58 proposal_path survives in nav_basics", _
+        modNaviState.ProposalPathIn("{""proposal_path"":" & modNaviJson.Q(NaviPathSample()) & "}") = NaviPathSample()
+    CheckN "NAVI-P59 a case without an export has no proposal_path", _
+        modNaviState.ProposalPathIn("{""address"":""東京都""}") = vbNullString And _
+        modNaviState.ProposalPathIn(vbNullString) = vbNullString
+    CheckN "NAVI-P60 saving the company form keeps the stored proposal_path", _
+        modJsonLite.GetStr(modNaviStore.MergeBasics("{""proposal_path"":" & modNaviJson.Q(NaviPathSample()) & "}", _
+            "{""address"":""大阪市"",""proposal_path"":""C:\\evil\\x.html""}"), "proposal_path") = NaviPathSample()
+    CheckN "NAVI-P61 only a new export overwrites the stored proposal_path", _
+        modJsonLite.GetStr(modNaviStore.MergeBasics("{""proposal_path"":" & modNaviJson.Q(NaviPathSample()) & "}", _
+            "{}", NaviPathSample() & "2"), "proposal_path") = NaviPathSample() & "2"
+    ' 裁定書40 R-M2: 案件データ -> 段取り -> 手順の並び を**つないだまま**固定する
+    ' (途中の1本だけを見ていると、つなぎ目を書き換えても誰も気づけない)。
+    CheckN "NAVI-P68 a case without S5 builds it first, then exports", _
+        modNaviState.ProposalStepsOf(modNaviState.ProposalPlanOf(vbNullString, vbNullString, _
+            "{""s"":1}", "{""s"":2}", "{""s"":3}")) = "run_s5;export"
+    CheckN "NAVI-P69 a case that already has S5 only exports", _
+        modNaviState.ProposalStepsOf(modNaviState.ProposalPlanOf("{""a"":1}", vbNullString, _
+            "{""s"":1}", "{""s"":2}", "{""s"":3}")) = "export"
+    CheckN "NAVI-P70 an unanalysed case is stopped with the guidance", _
+        modNaviState.ProposalStepsOf(modNaviState.ProposalPlanOf(vbNullString, vbNullString, _
+            "{""s"":1}", vbNullString, "{""s"":3}")) = vbNullString And _
+        modNaviActions2.ProposalBlockOf(vbNullString, modNaviState.ProposalPlanOf(vbNullString, _
+            vbNullString, "{""s"":1}", vbNullString, "{""s"":3}")) = _
+        "{""ok"":false,""message"":""先に[まとめて分析]を実行してください。"",""error_code"":""E0101""}"
+    ' 裁定書40 の横展開(同型): R2-06 の防波堤(画面から来たパスは開かない)と
+    ' R1-06 の走査上限も、純関数へ出して両方向で固定する。
+    CheckN "NAVI-P62 the proposal row opens the stored proposal", _
+        modNaviActions2.OpenTargetOf("R.html", NaviPathSample(), NaviPathSample()) = NaviPathSample()
+    CheckN "NAVI-P63 a path the case never produced is refused", _
+        modNaviActions2.OpenTargetOf("R.html", NaviPathSample(), "C:\\windows\\x.html") = vbNullString And _
+        modNaviActions2.OpenTargetOf(vbNullString, vbNullString, NaviPathSample()) = vbNullString
+    CheckN "NAVI-P64 the report row opens the report", _
+        modNaviActions2.OpenTargetOf("R.html", vbNullString, "R.html") = "R.html" And _
+        modNaviActions2.OpenTargetOf("R.html", NaviPathSample(), vbNullString) = "R.html"
+    CheckN "NAVI-P65 no report means nothing to open", _
+        modNaviActions2.OpenTargetOf(vbNullString, vbNullString, vbNullString) = vbNullString
+    CheckN "NAVI-P66 the copy pre-scan source is capped at 30000 chars", _
+        Len(modNaviActions2.CapSourceText(String$(30001, "x"))) = 30000
+    CheckN "NAVI-P67 a short source is not cut", _
+        modNaviActions2.CapSourceText("abc") = "abc" And _
+        Len(modNaviActions2.CapSourceText(String$(30000, "x"))) = 30000
     Exit Sub
 Failed:
     modTestRunner.Check "NAVI pure unexpected error", False, CStr(Err.Number) & " " & Err.Description
@@ -101,6 +176,12 @@ End Sub
 ' 下見テスト用の下敷き(modTestsPure26 の SharesLongFragment と同じ素材)。
 Private Function NaviFragSample() As String
     NaviFragSample = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+End Function
+
+' 提案書の保存先テスト用の実パス相当(区切り文字が JSON のエスケープを通ることも
+' あわせて見る。裁定書40 R-m1)。
+Private Function NaviPathSample() As String
+    NaviPathSample = "D:\データ\提案書_20260912.html"
 End Function
 
 Private Function RoundTrip(ByVal srcValue As String) As Boolean

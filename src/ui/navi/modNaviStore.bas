@@ -267,7 +267,15 @@ Public Function SaveBasics(ByVal caseId As String, ByVal data As String) As Bool
     SaveBasics = result
 End Function
 
-Public Function MergeBasics(ByVal stored As String, ByVal data As String) As String
+' MergeBasics - nav_basics(区画①の補助入力)の保存形を1本に組む純関数。
+'   第3引数 proposalPath は**提案書の保存先**(裁定書40 R-m1)。画面から来た
+'   JSON(data)では決して上書きしない: この値は ActOpenReport(given=proposal)が
+'   実際に開くパスなので、画面が任意のパスを書き込めると「画面から来たパスは
+'   開かない」(11章§3.8.2c)が崩れる。更新できるのは提案書の出力に成功した
+'   modNaviState.SetProposalPath の1箇所だけで、空文字を渡したときは保存済みの
+'   値をそのまま持ち越す。
+Public Function MergeBasics(ByVal stored As String, ByVal data As String, _
+                            Optional ByVal proposalPath As String) As String
     Dim keys() As String, i As Long, key As String, srcValue As String, result As String
     keys = Split("address;sec_code;sites;copied_1;copied_2;copied_3;copied_4;copied_5;copied_6;copied_7;copied_8", ";")
     For i = LBound(keys) To UBound(keys)
@@ -280,6 +288,9 @@ Public Function MergeBasics(ByVal stored As String, ByVal data As String) As Str
         If LenB(result) > 0 Then result = result & ","
         result = result & Q(key) & ":" & Q(srcValue)
     Next i
+    srcValue = modUtilText.SanitizeInput(proposalPath)
+    If LenB(srcValue) = 0 Then srcValue = modJsonLite.GetStr(stored, "proposal_path")
+    result = result & "," & Q("proposal_path") & ":" & Q(srcValue)
     MergeBasics = "{" & result & "}"
 End Function
 

@@ -367,13 +367,40 @@ End Function
 '   SharesLongFragment は O(|本文|×|下敷き|) なので、上限が無いと
 '   3欄合計30万字の案件でコピーのたびに数十秒待たされる。
 Private Function CopySourceTextOf(ByVal caseId As String) As String
-    Dim srcText As String
     If LenB(caseId) = 0 Then Exit Function
-    srcText = modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
-              modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
-              modCaseStore.LoadData(caseId, "input_field_notes")
-    If Len(srcText) > NA_COPY_SCAN_MAX Then srcText = Left$(srcText, NA_COPY_SCAN_MAX)
-    CopySourceTextOf = srcText
+    CopySourceTextOf = CapSourceText(modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
+                                     modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
+                                     modCaseStore.LoadData(caseId, "input_field_notes"))
+End Function
+
+' CapSourceText - 下見の下敷きを先頭 NA_COPY_SCAN_MAX 字で打ち切る純関数
+'   (裁定書39 R1-06 の走査上限を層(a)から見えるところへ出した=裁定書40 の
+'   横展開。上限を消しても機械で気づけないままにしない)。
+Public Function CapSourceText(ByVal srcText As String) As String
+    If Len(srcText) > NA_COPY_SCAN_MAX Then
+        CapSourceText = Left$(srcText, NA_COPY_SCAN_MAX)
+    Else
+        CapSourceText = srcText
+    End If
+End Function
+
+' OpenTargetOf - 出力一覧の[ブラウザで開く]/[フォルダを開く]で**開いてよいパス**を
+'   決める純関数(裁定書39 R2-06 の防波堤を層(a)へ出した=裁定書40 の横展開)。
+'   画面から来た givenPath は、案件に登録された2本(レポート・提案書)の
+'   **どちらかと一致したときだけ**採る。一致しなければ空文字=開かない。
+'   givenPath が空のとき(=一覧の行を指定しない呼び)はレポートを開く。
+'   ここが崩れると、画面のJSを書き換えるだけで任意のファイルを開かせられる。
+Public Function OpenTargetOf(ByVal reportPath As String, ByVal proposalPath As String, _
+                             ByVal givenPath As String) As String
+    If LenB(givenPath) = 0 Then
+        OpenTargetOf = reportPath
+        Exit Function
+    End If
+    If LenB(proposalPath) > 0 And givenPath = proposalPath Then
+        OpenTargetOf = proposalPath
+        Exit Function
+    End If
+    If LenB(reportPath) > 0 And givenPath = reportPath Then OpenTargetOf = reportPath
 End Function
 
 ' 区画①[調査ページを開く]/[クイック調査を開く](12章§2 の分割。裁定書39 R1-06 と同時)。
@@ -393,4 +420,42 @@ Public Function ActOpenUrl(ByVal data As String) As String
         Exit Function
     End Select
     ActOpenUrl = modNaviActions.ResultOf(modUIResearch.OpenUrl(url), "ページを開きました。", "ページを開けませんでした。")
+End Function
+
+' ==========================================================
+' 提案書(区画④)の出力判断(裁定書40 R-M2)。配線の実体は
+' modNaviActions.ActExportProposal にあるが、**断る/断らないの判断と、
+' 利用者へ返す文言・error_code はここの純関数に寄せる**(modNaviActions は
+' 30,000字契約の残りが少なく、新しい関数を置けない=12章§2の分割先が本)。
+' 層(a)の modTestsPureNavi がこの2本を直接叩く。
+' ==========================================================
+
+' ProposalBlockOf - [提案書（お客さま向け）を出す]を**出力させずに断る**ときの
+'   応答(断らないときは空文字)。断る理由は2つだけで、順番にも意味がある。
+'   (1) reviewNote が非空 = 確認者名が無い(16章 E-71 ④・20章§8-3)。S5 の
+'       AI呼出を始める**前**に断る(作ってから断ると1回むだになる)。
+'       error_code は E0603(裁定書40 R-m3: W15 Round2 で申告なく E0101 へ
+'       変わっていたので戻した。16章 E-71 ④は「エラーではない」としか書いて
+'       おらず code を登記していないので、登記の無い割当てを実装だけで
+'       増やさない)。
+'   (2) plan = "upstream_missing" = S1/S2/S3 のどれかが未了。error_code は
+'       E0101(必須入力の欠落。16章 E-01。ActExportReport の同型と同じ)。
+'   両方あてはまるときは (1) が勝つ(確認していない資料はそもそも出せない)。
+Public Function ProposalBlockOf(ByVal reviewNote As String, ByVal plan As String) As String
+    If LenB(reviewNote) > 0 Then
+        ProposalBlockOf = modNaviActions.Failure(reviewNote, "E0603")
+        Exit Function
+    End If
+    If plan = "upstream_missing" Then
+        ProposalBlockOf = modNaviActions.Failure("先に[まとめて分析]を実行してください。", "E0101")
+    End If
+End Function
+
+' ProposalS5FailedJson - S5(お客さま向け提案書の文章)が作れなかったときの応答
+'   (16章 E-71 ②の逐語)。案件は壊れていない(生応答は s5_json_failed へ退避し
+'   status も動かさない)ので、骨子(4. 提案の骨子)で商談へ行けることを案内する。
+'   error_code は E-71 の表のとおり E0302(E-06 のまま。新しいコードは作らない)。
+Public Function ProposalS5FailedJson() As String
+    ProposalS5FailedJson = modNaviActions.Failure("提案書を作れませんでした。" & _
+        "今回は提案骨子（4. 提案の骨子）をご利用ください。", "E0302")
 End Function
