@@ -109,9 +109,14 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
         Exit Function
     End If
 
-    ' 裁定書39 R1-05: 原文(haystack)は**このレポート生成で1回だけ**組み立てる。
-    ' 貼付10欄は1欄100,000字まで入りうる(modNaviActions.ActPasteMaterial)ので、
-    ' 2回組み立てると最大1,000,000字の文字列が2本できて32bit Excel が保たない。
+    ' 裁定書39 R1-05 / 裁定書40 Q-M3(根拠の訂正): 原文(haystack)は
+    ' **このレポート生成で1回だけ**組み立てる。ねらいは2つ(詳細は
+    ' GroundHaystack の注記)。(1) CPU: BuildHaystack は貼付10欄(各100,000字
+    ' まで)を LoadData で読み直して連結するので、2回呼ぶと最大約1,000,000字の
+    ' 組み立てを丸ごと2度やる。(2) 同じ土俵: S1注記(CheckS1Notes)とS2照合
+    ' (GroundNotes)が同一の原文を見る(別々に読むと、その間に case_data が
+    ' 変われば run_log と meta が別々の事実を語る)。**メモリは減らない**
+    ' (旧注記の「2本できて32bit Excel が保たない」は事実と逆)。
     ' 貼付原文だけの版を作り、S2照合用は GroundHaystack で末尾に S1 を足す
     ' (modPipeline3.BuildHaystack の `貼付原文 & s1Json` と同値)。
     Dim hayBase As String
@@ -157,7 +162,8 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
     ' 照合する原文は貼付原文だけ(BuildHaystack の第2引数に s1 を渡さない)。
     ' 匿名化の復元より前の s1Text を使う(復元でURLは変わらないが、社名の置換で
     ' 前後が動くため、run_log と同じ土俵で数えるには復元前が正しい)。
-    ' 裁定書39 R1-05: 上で1回だけ組み立てた hayBase を使い回す(2本目を作らない)。
+    ' 裁定書39 R1-05: 上で1回だけ組み立てた hayBase を使い回す
+    ' (BuildHaystack を呼び直さない。上の(1)(2)が理由)。
     Dim s1WarnNote As String
     s1WarnNote = modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(s1Text, hayBase))
     ' 裁定書38 B-10: 成功事例の選抜状況(SEC-14付近「該当N件のうちM件を使用」)。
@@ -228,11 +234,15 @@ End Function
 ' ----------------------------------------------------------------------------
 '   modPipeline3.BuildHaystack は `貼付原文(input_* 全欄) & s1Json` を返すので、
 '   S2照合用(S1込み)と S1出典点検用(貼付原文だけ)は**末尾に S1 を足すかどうか**
-'   しか違わない。1回のレポート生成で BuildHaystack を2回組み立てると、
-'   貼付10欄が各100,000字(modNaviActions.ActPasteMaterial の上限)のとき最大
-'   1,000,000字の文字列を2本作ることになり、32bit Excel では致命的である
-'   (裁定書39 R1-05)。呼出側は BuildHaystack を**1回だけ**呼び、S2照合用は
-'   この関数で足す。
+'   しか違わない。呼出側は BuildHaystack を**1回だけ**呼び、S2照合用は
+'   この関数で足す(裁定書39 R1-05)。
+'   ねらいは (1) 貼付10欄(各100,000字まで)の LoadData と連結=最大約1,000,000字の
+'   組み立てを2度やらない(CPU)と、(2) S1注記とS2照合が**同じ原文**を見る
+'   (2回読む間に case_data が変わると2つの検査が食い違う)の2つである。
+'   **メモリ削減ではない**: 旧コードは2回を逐次に呼んで戻り値を都度解放して
+'   いたので1M級が同時に2本生きることは無く、この関数の連結はむしろ一時的に
+'   2本目を作る(裁定書40 Q-M3 で「2本できて32bit Excel が保たない」という
+'   旧注記を取り消した)。
 ' ==========================================================
 Public Function GroundHaystack(ByVal hayBase As String, ByVal s1Json As String) As String
     GroundHaystack = hayBase & s1Json ' SAFE:html 照合用の原文(HTMLへは入らない)

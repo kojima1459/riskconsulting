@@ -225,6 +225,14 @@ PURE_ALLOWLIST = [
     # だけ。Excel・シート・モジュール変数のどれにも触れない純関数である
     # (技術メモ4。SetStage 等の他の関数はシートに触るが実行に到達しない)。
     "modUIProgress",
+    # W15 Round2 Fix(裁定書40 Q-m1/Q-m2/Q-m3)。ui層だがテストが叩くのは
+    # 14章§6が公開を宣言した純関数だけ(技術メモ4。DrawStep / RunStepUi など
+    # 同居する他の関数はシート・図形に触れるが実行に到達しない):
+    #   modUICase2 : StepNoticeOf(16章 E-02 の警告帯を出す条件=実行直後・S1・
+    #                iq=low の3つがそろったときだけ本文を返す真理値表)
+    #                NoticeJoin(1枠しかない警告欄へ2本を vbLf で併記し、
+    #                片方が片方を消さないことを固定する)
+    "modUICase2",
     # test 層。modTestRunner はモード1の入口そのもの。
     "modTestRunner",
     "modTestsPure", "modTestsPure2", "modTestsPure3", "modTestsPure4",

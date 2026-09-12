@@ -73,7 +73,13 @@ Private Sub ShowDeepWarning()
     warnText = modPipeline2.DeepWarningOf(outcome)
     If LenB(warnText) = 0 Then Exit Sub
 
-    modUIHome.ShowWarning warnText, "warn"
+    ' 裁定書40 Q-m3: hm_warning は1枠しかないので、そのまま書くと直前に
+    ' DrawStep が書いた 16章 E-02 の帯を**上書きして消して**しまう。実際に
+    ' 出した帯を取り直して**併記**する(HTML画面の modNaviActions.ActRunPipeline
+    ' も同じ2本を vbLf で連結している。予備経路だけ挙動を変えない)。併記の
+    ' 仕方は modUICase2.NoticeJoin の1本(この画面の警告は全部そこを通す)。
+    modUIHome.ShowWarning _
+        modUICase2.NoticeJoin(modUICase2.LastStepNotice(), warnText), "warn"
 End Sub
 
 ' ============================================================================
@@ -94,6 +100,9 @@ Public Sub HomeRunAll()
     ' 裁定書10 M1/N9: deep outcome のリセットは**実行の開始時に1回だけ**。
     ' 一括実行の中では消さない(Step2/3 の結末を Step4 が消さないため)。
     modPipeline2.ResetDeepOutcome
+    ' 裁定書40 Q-m3: 16章 E-02 の帯も同じ位置で1回だけ消す(前回の実行の帯を
+    ' 今回の deep 警告と併記してしまわないため)。
+    modUICase2.ResetStepNotice
 
     Dim caseId As String
     caseId = modUIHome.SelectedCaseId()
@@ -125,7 +134,9 @@ Public Sub HomeRunAll()
     Next stepNo
 
     If okAll Then
-        modUIHome.DrawAllSteps caseId
+        ' 裁定書40 Q-m1: ここは**実行の直後**なので afterRun=True で描く
+        ' (16章 E-02 の警告帯が出てよい唯一の呼び口のひとつ)。
+        modUIHome.DrawAllSteps caseId, True
         modUIToast.ShowNext 2
         ShowDeepWarning
     Else
@@ -206,6 +217,8 @@ Private Sub RunStepUi(ByVal stepNo As Long)
     modUIHome.ShowWarning vbNullString
     ' 裁定書10 M1/N9: deep outcome のリセットは実行の開始時に1回だけ。
     modPipeline2.ResetDeepOutcome
+    ' 裁定書40 Q-m3: 16章 E-02 の帯も同じ位置で1回だけ消す。
+    modUICase2.ResetStepNotice
 
     Dim caseId As String
     caseId = modUIHome.SelectedCaseId()
@@ -219,7 +232,8 @@ Private Sub RunStepUi(ByVal stepNo As Long)
 
     modUIProgress.SetStage StageNameOf(stepNo), WaitSec(), stepNo, 4
     If modPipeline.RunStep(caseId, stepNo, QualityOverride()) Then
-        modUICase2.DrawStep caseId, stepNo
+        ' 裁定書40 Q-m1: ここは**実行の直後**なので afterRun=True で描く。
+        modUICase2.DrawStep caseId, stepNo, True
         modUISheet.ShowSheet modUICase2.SheetNameOf(stepNo)
         modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: S1〜S4 の各段の完了ごとに
         ShowDeepWarning

@@ -36,9 +36,15 @@ Private Const U2_MSG_MISMATCH As String = "画面の案件と保存先が一致�
 '   gDrawStep    = いま DrawStep が描いている Step 番号(DrawArrBlock への文脈)
 '   gTruncStep() = 直近の描画で部屋あふれ(切捨て)が起きた Step
 '   gTruncNote   = 切捨ての内訳(利用者向け文言の材料)
+'   gStepNotice  = 直近の実行で実際に画面へ出した 16章 E-02 の警告帯(裁定書40
+'                  Q-m3)。あとから出る deep モードの警告が**上書きで消さない**
+'                  ために、書いた本文をそのまま覚えておく。modPipeline2 の
+'                  LastDeepOutcome / ResetDeepOutcome と同じ形(実行の開始時に
+'                  呼出側が ResetStepNotice で1回だけ消す)。
 Private gDrawStep As Long
 Private gTruncStep(1 To 4) As Boolean
 Private gTruncNote As String
+Private gStepNotice As String
 Private Const U2_MAX_ROOM As Long = 200        ' 最終ブロックの部屋の上限
 Private Const U2_HDR_WIDTH As Long = 24        ' 見出し行の探索幅(列番号ではない)
 Private Const U2_FIRST_COL As Long = 1         ' ブロックの左端列(build/sheets_main.json)
@@ -295,8 +301,19 @@ End Function
 
 ' ============================================================================
 ' DrawStep - JSON -> シート(参照優先の解決は modCaseStore.ResolveStepJson)
+' ----------------------------------------------------------------------------
+' afterRun(裁定書40 Q-m1): **この描画が実行の直後かどうか**。既定は False。
+'   16章 E-02 の警告帯は「実行後」の規定なので、実行の直後に描き直す呼び口
+'   (modUIHome2.RunStepUi / HomeRunAll -> modUIHome.DrawAllSteps)だけが True を
+'   渡す。それ以外の呼び口は**実行していない**ので False のまま置く:
+'     ・modNaviActions の open_step_sheet([シートで編集]で開くだけ)
+'     ・modUIHome.RefreshHome の案件切替による描き直し
+'     ・modUIHome2 の企業ファイル取込のあとの描き直し
+'   既定を False にしてあるので、呼び口を増やしたときに**黙って警告帯が出る**
+'   ことはない(出したい側が明示する)。
 ' ============================================================================
-Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolean
+Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long, _
+                         Optional ByVal afterRun As Boolean = False) As Boolean
     On Error GoTo Failed
 
     If stepNo < 1 Or stepNo > 4 Then Exit Function
@@ -323,6 +340,10 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolea
     gDrawStep = stepNo
     gTruncStep(stepNo) = False
     gTruncNote = vbNullString
+    ' 裁定書40 Q-m1: 実行**以外**の描画([シートで編集]・案件切替・取込)が
+    ' 起きた時点で「実行直後」は終わる。前の実行で出した 16章 E-02 の帯を
+    ' ここで手放し、以後の警告へ混ぜない。
+    If Not afterRun Then gStepNotice = vbNullString
 
     Dim jsonText As String
     jsonText = modCaseStore.ResolveStepJson(caseId, stepNo)
@@ -337,11 +358,6 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolea
     Select Case stepNo
     Case 1
         DrawS1 jsonText
-        ' 裁定書39 R1-07(a): シート画面にも 16章 E-02(実行後)の警告帯を出す。
-        ' RunStepUi は S1 成功後にここを必ず通り、S2〜S4 の描画は hm_warning を
-        ' 触らないので、一括実行(DrawAllSteps)でも帯は残る。文言の値源は
-        ' modUICase.IqBannerTextOf の1本(判断は modPipeline3.SufficiencyNoteOf)。
-        ShowIqBanner jsonText
     Case 2
         DrawS2 jsonText
     Case 3
@@ -349,6 +365,13 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolea
     Case 4
         DrawS4 jsonText
     End Select
+
+    ' 裁定書39 R1-07(a) / 裁定書40 Q-m1: シート画面にも 16章 E-02(実行後)の
+    ' 警告帯を出す。**出すかどうかと文言は StepNoticeOf の1本**が持ち(純関数)、
+    ' ここは書く場所を知っているだけ。RunStepUi は S1 成功後にここを必ず通る。
+    ' 一括実行では S2〜S4 の描画で部屋あふれの警告が同じ hm_warning へ来るが、
+    ' WriteWarnCell が両方を併記するので帯は消えない(裁定書40 Q-m3)。
+    ShowStepNotice StepNoticeOf(stepNo, jsonText, afterRun)
 
     ' ここまで来たら画面はこの案件の内容で描けている(13章§2.12)。ただし
     ' 裁定書10 m3: **部屋あふれ(切捨て)が起きた描画では案件ID表示セルを書かず
@@ -387,16 +410,90 @@ Private Sub DrawS1(ByVal jsonText As String)
     DrawResearchButtons
 End Sub
 
-' 裁定書39 R1-07(a): 16章 E-02(実行後)の警告帯を HOME の hm_warning へ出す。
-'   iq=low 以外は**何も書かない**(他の警告を消さない)。判断も文言も
-'   modUICase.IqBannerTextOf の1本が持ち、ここは書く場所を知っているだけ。
-Private Sub ShowIqBanner(ByVal jsonText As String)
+' ============================================================================
+' StepNoticeOf - 1段を描いた直後に画面へ出す注記(16章 E-02)。**純関数**。
+' ----------------------------------------------------------------------------
+'   3つの条件が全部そろったときだけ本文を返し、それ以外は ""(=何も書かない。
+'   他の警告を消さない):
+'     (1) afterRun = True。E-02 は「実行後」の規定であり、[シートで編集]や
+'         案件切替の描き直しでは出さない(裁定書40 Q-m1)。
+'     (2) stepNo = 1。E-02(実行後)が見るのは S1 の input_quality だけ。
+'     (3) iq=low。判断は modPipeline3.SufficiencyNoteOf、文言は
+'         modUICase.IqBannerTextOf の1本(HTML画面と同じ逐語)。
+'   純関数なので、純層テストがこの真理値表をそのまま固定できる(裁定書40 Q-m2)。
+' ============================================================================
+Public Function StepNoticeOf(ByVal stepNo As Long, ByVal jsonText As String, _
+                             ByVal afterRun As Boolean) As String
+    If Not afterRun Then Exit Function
+    If stepNo <> 1 Then Exit Function
+    StepNoticeOf = modUICase.IqBannerTextOf(jsonText)
+End Function
+
+' 注記を HOME の hm_warning とトーストへ出す。空なら**何も書かない**。
+'   書いた本文は gStepNotice に覚えておく。hm_warning は1枠しかないので、
+'   放っておくと「あとから書いた1本が前の1本を消す」が必ず起きる
+'   (裁定書40 Q-m3)。消さないために、この画面から出る警告は**すべて
+'   WriteWarnCell の1本**を通し、NoticeJoin で併記する。
+Private Sub ShowStepNotice(ByVal noticeText As String)
     On Error Resume Next
-    Dim bannerText As String
-    bannerText = modUICase.IqBannerTextOf(jsonText)
-    If LenB(bannerText) = 0 Then Exit Sub
-    modUISheet.WriteNamed U2_WARN, modUIToast.WarnLine(bannerText, "warn")
-    modUIToast.ShowToast bannerText, "warn"
+    If LenB(noticeText) = 0 Then Exit Sub
+    gStepNotice = noticeText
+    WriteWarnCell
+    modUIToast.ShowToast noticeText, "warn"
+End Sub
+
+' ============================================================================
+' NoticeJoin - 1枠しかない警告欄へ2本を**併記**する(裁定書40 Q-m3)。**純関数**。
+' ----------------------------------------------------------------------------
+'   どちらか片方しか無ければその1本を、両方あれば vbLf で連結して返す。
+'   順序は「実行後の注記(16章 E-02)が先」。HTML画面の
+'   modNaviActions.ActRunPipeline が同じ2本を同じ順で連結しているので、
+'   予備経路(シート画面)だけ挙動を変えない。
+'   警告を出す側が各々 WriteNamed すると必ず上書きが起きるので、**併記の仕方は
+'   この1本**が持つ(modUIHome2.ShowDeepWarning も deep の警告でこれを呼ぶ)。
+' ============================================================================
+Public Function NoticeJoin(ByVal firstText As String, _
+                           ByVal secondText As String) As String
+    If LenB(firstText) = 0 Then
+        NoticeJoin = secondText
+        Exit Function
+    End If
+    If LenB(secondText) = 0 Then
+        NoticeJoin = firstText
+        Exit Function
+    End If
+    NoticeJoin = firstText & vbLf & secondText
+End Function
+
+' 部屋あふれ(切捨て)の警告文。切捨てが無ければ ""。**逐語の値源はここ1本**
+'   (NoteTruncation と WriteWarnCell が同じ文を2箇所に持たない)。
+Private Function TruncWarnText() As String
+    If LenB(gTruncNote) = 0 Then Exit Function
+    TruncWarnText = gTruncNote & _
+        "。編集を保存すると残りが失われるため、この画面の保存は行いません。"
+End Function
+
+' この画面から出る警告をまとめて hm_warning へ書く唯一の口(裁定書40 Q-m3)。
+'   16章 E-02 の帯(実行直後のS1)と部屋あふれの警告は**どちらも消さない**。
+'   一括実行では S1 の帯のあとに S2〜S4 の切捨てが来るので、両方が起きると
+'   片方しか残らなかった。
+Private Sub WriteWarnCell()
+    On Error Resume Next
+    Dim bodyText As String
+    bodyText = NoticeJoin(gStepNotice, TruncWarnText())
+    If LenB(bodyText) = 0 Then Exit Sub
+    modUISheet.WriteNamed U2_WARN, modUIToast.WarnLine(bodyText, "warn")
+End Sub
+
+' LastStepNotice - 直近の実行で実際に出した注記(無ければ "")。
+Public Function LastStepNotice() As String
+    LastStepNotice = gStepNotice
+End Function
+
+' ResetStepNotice - 明示リセット口(modPipeline2.ResetDeepOutcome と同じ考え方)。
+'   **実行の開始時に1回だけ**呼ぶ(前回の実行の帯を今回の警告に混ぜない)。
+Public Sub ResetStepNotice()
+    gStepNotice = vbNullString
 End Sub
 
 Private Sub DrawS2(ByVal jsonText As String)
@@ -512,8 +609,9 @@ Private Sub NoteTruncation(ByVal anchorName As String, ByVal total1 As Long, ByV
     If LenB(gTruncNote) > 0 Then gTruncNote = gTruncNote & " ／ "
     gTruncNote = gTruncNote & one
 
-    modUISheet.WriteNamed U2_WARN, gTruncNote & _
-        "。編集を保存すると残りが失われるため、この画面の保存は行いません。"
+    ' 裁定書40 Q-m3: ここで直に WriteNamed すると、直前に出した 16章 E-02 の
+    ' 帯(一括実行のS1)を消してしまう。併記は WriteWarnCell の1本に任せる。
+    WriteWarnCell
 End Sub
 
 ' 文字列配列ブロックへ書く。

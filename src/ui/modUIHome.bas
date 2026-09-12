@@ -203,10 +203,15 @@ Public Sub ShowWarning(ByVal messageText As String, _
 End Sub
 
 ' 一括実行後の4シート描画。
-Public Sub DrawAllSteps(ByVal caseId As String)
+'   afterRun(裁定書40 Q-m1): 16章 E-02 の警告帯は「実行後」の規定なので、
+'   一括実行の直後(modUIHome2.HomeRunAll)だけが True を渡す。案件を切り替えた
+'   ときの描き直し(RefreshHome)や企業ファイル取込のあとは**実行していない**
+'   ので既定の False のままにする。値は modUICase2.DrawStep へそのまま渡す。
+Public Sub DrawAllSteps(ByVal caseId As String, _
+                        Optional ByVal afterRun As Boolean = False)
     Dim n As Long
     For n = 1 To 4
-        modUICase2.DrawStep caseId, n
+        modUICase2.DrawStep caseId, n, afterRun
     Next n
 End Sub
 
