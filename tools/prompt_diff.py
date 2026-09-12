@@ -109,6 +109,10 @@ SECTION_MAP: list[tuple[str, list[str], str]] = [
     ("SchemaPF()", ["SchemaPF"], "modSchemas"),
     ("BuildSparringSystem", ["BuildSparringSystem"], "modPromptsOps"),
     ("RepairSuffix", ["RepairSuffix"], "modPromptsOps"),
+    # W15・裁定書38 班C: 顧客向け提案書(S5)。15章§5.6・20章。
+    ("BuildS5System", ["BuildS5System"], "modPromptsS5"),
+    ("BuildS5User", ["BuildS5User"], "modPromptsS5"),
+    ("SchemaS5()", ["SchemaS5"], "modSchemas2"),
 ]
 
 # ==============================================================================
@@ -488,7 +492,7 @@ def extract_code_bodies(src_dir: Path):
 # ==============================================================================
 # Schema* のJSON検査(17章 T-23 DoD の機械化。14章§3 の strict 要件)
 # ==============================================================================
-SCHEMA_FUNCS = ("SchemaS1", "SchemaS2", "SchemaS3", "SchemaS4",
+SCHEMA_FUNCS = ("SchemaS1", "SchemaS2", "SchemaS3", "SchemaS4", "SchemaS5",
                 "SchemaS2C", "SchemaS3C", "SchemaPF", "SchemaWT", "SchemaFG")
 
 

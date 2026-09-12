@@ -43,7 +43,9 @@ Private Const CS3_KV As String = vbFormFeed
 '   並びは13章§2.2 の列挙順そのままで、modCaseStore.SaveData の許可リストになる。
 '   裁定書34 §1.2(W12-A): HTML画面の案件チャット(chat_u / chat_a)と、会社情報の
 '   下書き(nav_basics)を末尾へ足して 29 -> 32 値になった。
-Private Const CS3_DATA_KEYS As String = "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;input_dossier;input_field_notes;input_coverage_note;input_finance;input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;s4_json_failed;sparring_u;sparring_a;chat_u;chat_a;nav_basics"
+'   裁定書38 班C(W15): 顧客向け提案書(S5)の s5_json / s5_edited と、検証不合格の
+'   生応答 s5_json_failed(S1からS4 と同じ E-06 の退避先)を足して 35 値になった。
+Private Const CS3_DATA_KEYS As String = "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;input_dossier;input_field_notes;input_coverage_note;input_finance;input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;s4_json_failed;sparring_u;sparring_a;chat_u;chat_a;nav_basics;s5_json;s5_edited;s5_json_failed"
 
 ' DataKeys - 13章§2.2 の data_key 一覧(「;」区切り)。値源はここ1箇所。
 Public Function DataKeys() As String

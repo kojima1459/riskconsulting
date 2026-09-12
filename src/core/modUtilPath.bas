@@ -121,3 +121,50 @@ Public Function FileNameOf(ByVal pathText As String) As String
         FileNameOf = Mid$(pathText, p + 1)
     End If
 End Function
+
+' ============================================================================
+' BuildVersionedFileName - W12-c(裁定書38 §1 班C 3)の版つきファイル名(純関数)。
+' ----------------------------------------------------------------------------
+'   テンプレート: `<headWord>_<Sanitize(company)>_<yyyymmdd>_v<app_version>`
+'   (拡張子は付けない。呼び出し側が付ける)
+'     headWord    : 用途を表す先頭語(例 "提案書" / "レポート")
+'     company     : 案件入力の自由記述。**生では使わず必ず SanitizeFileName**
+'     dateCompact : modUtilText.IsoDateCompact(Date) の8桁
+'     appVersion  : config app_version。空なら "v" 以降を付けない
+'     dirPath/ext : 13章§2.8 手順5(最終パス240字超)の判定にだけ使う
+'   長すぎるときは company 部を Fnv1a64Hex(16桁)へ**置換**して再構成する
+'   (途中で切ると別の会社が同名になり得るため。13章§2.8 手順5と同じ考え方)。
+' ============================================================================
+Public Function BuildVersionedFileName(ByVal headWord As String, ByVal company As String, _
+                                       ByVal dateCompact As String, ByVal appVersion As String, _
+                                       ByVal dirPath As String, ByVal ext As String) As String
+    Dim head As String
+    head = modUtilText.SanitizeFileName(company)
+    If LenB(head) = 0 Then head = "no_name"
+
+    Dim nameText As String
+    nameText = VerJoin(headWord, head, dateCompact, appVersion)
+
+    If Len(dirPath) + 1 + Len(nameText) + Len(ext) > 240 Then
+        nameText = VerJoin(headWord, modUtilText.Fnv1a64Hex(company), dateCompact, appVersion)
+    End If
+    ' 全体へは SanitizeFileName を掛け直さない(同関数は32字で切り詰めるため、
+    ' 掛けると日付と版が落ちる)。無害化が要るのは company 部だけで、それは
+    ' 上で済ませてある。headWord / dateCompact / appVersion は当方の値。
+    BuildVersionedFileName = nameText
+End Function
+
+' 4つの部品を "_" でつなぐ(空の部品は飛ばす)。版は "v" を前置する。
+Private Function VerJoin(ByVal headWord As String, ByVal nameText As String, _
+                         ByVal dateCompact As String, ByVal appVersion As String) As String
+    Dim t As String
+    t = headWord
+    If LenB(t) > 0 Then
+        t = t & "_" & nameText
+    Else
+        t = nameText
+    End If
+    If LenB(dateCompact) > 0 Then t = t & "_" & dateCompact
+    If LenB(appVersion) > 0 Then t = t & "_v" & appVersion
+    VerJoin = t
+End Function

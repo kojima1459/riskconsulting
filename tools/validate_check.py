@@ -83,7 +83,7 @@ ROW_RULE = re.compile(
     r"^\|\s*(V-[A-Z0-9]+-\d+[a-z]?)\s*\|([^|]*)\|(.*)\|\s*(不合格|警告|合格)\s*\|(.*)\|\s*$"
 )
 # 枝番(V-S2-12b)を読めるように末尾1文字の小文字を許す(v2.6・裁定書25 S1。17章 T-55①b)。
-CASE_ID = re.compile(r"V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2}[a-z]?")
+CASE_ID = re.compile(r"V-(?:S1|S2|S3|S4|S5|PF|S2C|S3C)-\d{2}[a-z]?")
 # §11の枝番・欠番の注記:「**枝番 `V-S2-12b` と欠番 `V-S2-12` の扱い(...)**」
 # 欠番になった番号を、その位置に立つ枝番へ読み替えるための対応表を作る。
 BRANCH_NOTE = re.compile(
@@ -247,7 +247,7 @@ def check_impl(ids: list[str], verdict: dict[str, str], rep: Report) -> None:
     rep.note(f"(a) 実装: {', '.join(srcs)}")
     joined = "\n".join(srcs.values())
     # 実装中の "[V-xxx] " で始まる文字列リテラルを集める。
-    lit_ids = set(re.findall(r'"\[(V-(?:S1|S2|S3|S4|PF|S2C|S3C)-\d{2}[a-z]?)\]\s', joined))
+    lit_ids = set(re.findall(r'"\[(V-(?:S1|S2|S3|S4|S5|PF|S2C|S3C)-\d{2}[a-z]?)\]\s', joined))
     examined = 0
     for cid in ids:
         examined += 1

@@ -1423,6 +1423,65 @@ Public Function RoomOf(ByVal anchorName As String) As Long
 ' ブロックの部屋数。13章§2.9「行番号を仮定しない」に従い、次のブロックのアンカー行から
 '   動的に決める（確保行数を定数で持たない）
 
+' === app: modExportProposal（顧客向け提案書 Wide 22枚。W15・裁定書38 班C。20章）===
+Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As String, _
+                                     ByVal reviewedBy As String) As String
+' ""=成功 / 非空=失敗理由。**reviewedBy が空なら生成せず** `内容を確認してから出力してください。`
+'   を返す（顧客向けは担当者の確認が必須＝社内IT・AI環境 v1.1 §7.3。20章§8-3）。
+'   判断の唯一の点は純関数 `NeedsReviewMessage`（画面を書き換えても抜けられない）。
+'   S5 が空なら「先にお客さま向け提案書の作成を実行してください。」で中止する。
+'   出力先は config `html_out_dir`（空なら `data_dir`）。ファイル名は
+'   `提案書_<Sanitize(company)>_<yyyymmdd>_v<app_version>.html`（20章§9.2）。
+Public Function NeedsReviewMessage(ByVal reviewedBy As String) As String
+' 確認必須の判断（純関数）。空なら案内文、非空なら ""。
+Public Function BuildProposalMetaJson(ByVal company As String, ByVal s5Json As String, _
+                                      ByVal generatedAt As String, ByVal appVersion As String, _
+                                      ByVal reviewedBy As String, ByVal reviewedAt As String) As String
+' 20章§3 の `meta`（純関数）。**内部の値（tier / quality_mode / case_type / round_no /
+'   s4_variant / status）は引数にも戻り値にも無い**（持たなければ漏れない）。
+Public Function BuildProposalData(ByVal metaJson As String, ByVal s2Json As String, _
+                                  ByVal s5Json As String) As String
+' 20章§3 のDATA（純関数）。S2 由来の文字列は `modValidate4.SoftenTaboo` を通してから入れる。
+Public Function BuildProposalHtml(ByVal metaJson As String, ByVal s2Json As String, _
+                                  ByVal s5Json As String) As String
+' DATA組立からHTML全文まで（純関数。tools/render_proposal.py が直接叩く境界）。
+Public Function StatsText(ByVal s2Json As String, ByVal s3Json As String) As String
+' 15章§5.6 user の {{statsText}}（1行1項目）。**AIに数えさせない**ための実数の値源。
+Public Function ProposalFileBase(ByVal company As String, ByVal dirText As String) As String
+Public Function RankLabelOf(ByVal score As Long) As String
+Public Function ClassLabelOf(ByVal transferability As String) As String
+
+' === app: modPipeline5（S5 の実行。W15・裁定書38 班C。15章§5.6）===
+Public Function RunStep5(ByVal caseId As String) As Boolean
+' 1案件ぶんの S5 実行。True=検証合格まで到達。**案件の status は動かさない**。
+'   呼び出しは1回＋修復1回。修復後も V-S5-12（禁止語）だけが残るときは
+'   `modValidate4.SoftenTaboo` で機械置換してから再検証し、通れば続行する
+'   （docs/29 §5.3「生成を止めない」。run_log に taboo_softened=n を残す）。
+Public Function AsmS5User(ByVal company As String, ByVal s1Json As String, _
+                          ByVal s2Json As String, ByVal s3Json As String, _
+                          ByVal statsText As String) As String
+Public Function OnlyTabooLeft(ByVal errText As String) As Boolean
+Public Function LastErrs() As String
+
+' === app: modValidate4（CheckS5。W15・裁定書38 班C。15章§5.6）===
+Public Function CheckS5(ByVal jsonText As String, ByVal s2Json As String) As String
+' ""=合格 / 非空=エラー行（vbLf区切り・行頭 `[V-S5-nn] `）。`s2Json` は risk_no の
+'   実在検査に使う一覧で、**非空の risk_no があるのに空**なら V-S5-03 で不合格（fail-closed）。
+Public Function TabooPairs() As String
+' 対訳表（`docs/design/提案書_wide/対訳表_社内語から顧客語.md`）の「社内語<TAB>顧客語」を
+'   vbLf で並べた**唯一の値源**。15章§5.6 の system 本文と tools/render_proposal.py が突き合わせる。
+Public Function TabooHit(ByVal bodyText As String) As String
+Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As String
+Public Function ObjBlock(ByVal jsonText As String, ByVal keyName As String) As String
+
+' === core: modUtilPath（W12-c の版つきファイル名。W15・裁定書38 班C 3）===
+Public Function BuildVersionedFileName(ByVal headWord As String, ByVal company As String, _
+                                       ByVal dateCompact As String, ByVal appVersion As String, _
+                                       ByVal dirPath As String, ByVal ext As String) As String
+' `<headWord>_<Sanitize(company)>_<yyyymmdd>_v<app_version>`（拡張子を付けない）。
+'   HTMLレポート（headWord=`レポート`）と提案書（`提案書`）が**共有する1本**。
+'   最終パスが240字を超えるときは company 部を Fnv1a64Hex(16桁)へ置換する（13章§2.8 手順5）。
+
 ' === app: modExportHtml / modExportPpt / modExportHearing ===
 Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
 Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As String, _

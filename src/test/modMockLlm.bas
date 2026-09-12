@@ -80,7 +80,7 @@ End Function
 ' ==============================================================================
 ' ResponseById - 15章§8.1の表の mock ID で正常応答を返す(14章§6)
 ' ------------------------------------------------------------------------------
-'   キーの正は15章§8.1の11 ID。表に無いIDは "" を返す(呼び元の
+'   キーの正は15章§8.1の11 ID と15章§5.6 の MK-S5(計12 ID)。表に無いIDは "" を返す(呼び元の
 '   ClassifyResponse がE0202として扱う)。決定的=乱数・現在時刻・呼び出し回数に
 '   依存しない。壁打ち(sp)は表にIDを持たないため本関数の対象外。
 ' ==============================================================================
@@ -98,6 +98,8 @@ Public Function ResponseById(ByVal mockId As String) As String
             ResponseById = modMockLlm2.BuildS3Json()
         Case "MK-S4"
             ResponseById = modMockLlm2.BuildS4Json()
+        Case "MK-S5"
+            ResponseById = modMockLlm4.BuildS5Json()
         Case "MK-PF"
             ResponseById = modMockLlm2.BuildPfJson()
         Case "MK-S2C-HIT"
@@ -224,6 +226,8 @@ Private Function MockIdFor(ByVal stepKey As String, ByVal variantName As String)
             MockIdFor = "MK-S3"
         Case "s4"
             MockIdFor = "MK-S4"
+        Case "s5"
+            MockIdFor = "MK-S5"
         Case "pf"
             MockIdFor = "MK-PF"
         Case "s2c"
