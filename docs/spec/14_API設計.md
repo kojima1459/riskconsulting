@@ -896,6 +896,40 @@ Public Function SufficiencyNoteOf(ByVal s1Json As String) As String
 '   `coverage[].status<>ok` の観点数）。**読めなければ `"iq=?"`**（黙って mid に
 '   しない）。HTML画面の充足度警告（16章 E-02）もこの1本を呼ぶ
 
+' --- 裁定書38 班A（W15）。S1の出典・接頭辞の警告と、S1再実行の揺れ ---
+Public Sub S1Notes(ByVal caseId As String, ByVal s1Json As String, _
+                   ByRef detailAcc As String)
+' `DefendNotes`（stepNo=1）から呼ぶ。`modValidate3.CheckS1Notes` の結果を
+'   `WarnNoteOf` で畳み、0件でなければ detail へ `s1_warn=V-S1-14:2;V-S1-15:1` を足す。
+'   照合する原文は **`BuildHaystack(caseId, "")`＝貼付原文だけ**（S1の出力を混ぜない）
+Public Function LastS1Notes() As String
+' 直近のS1警告の集計（`LastGroundNote` と同型・同理由。""＝指摘なし）
+Public Sub ResetS1Notes()
+Public Sub S1Snapshot(ByVal caseId As String, ByVal s1Json As String, _
+                      ByRef detailAcc As String)
+' B-14。`s1_json` を上書きする**前**に前回分を `s1_json_prev`（13章§2.2）へ退避し、
+'   detail へ `s1_diff=n` を足す。前回が無ければ何もしない
+Public Function S1DiffCount(ByVal prevJson As String, ByVal curJson As String) As Long
+' 主要8フィールド（company_name / business_summary / strategy_outlook〔mvv・
+'   market_context・aspirations件数〕/ locations件数 / financials.sales /
+'   current_coverage件数 / missing_info件数 / input_quality.overall）のうち
+'   値が変わった数（0～8）。**どちらかが空なら 0**。純関数
+
+' === app: modValidate3（S1の落とさない警告。W15。裁定書38 班A）===
+' app層の**純文字列**モジュール（12章§2 R4）。`modValidate.CheckS1` の戻り値には
+'   載せない（載せると修復リトライが走る）。呼び出しは `modPipeline3.S1Notes` と
+'   `modExportHtml.GenerateHtmlReportEx` の2箇所だけ。
+Public Function CheckS1Notes(ByVal json As String, ByVal haystack As String) As String
+' 15章§11 の **V-S1-14**（`sources[].url` が貼付原文に `InStr` で実在するか。
+'   `haystack` が空なら検査しない＝fail-open）と **V-S1-15**（`certainty="assumed"` の
+'   要素に「(見立て)」が無い／`financials.source<>"unknown"` なのに4項目すべて「不明」）の
+'   警告行を vbLf 区切りで返す。各行は `[ケースID] ` で始まる（15章§0 原則10）
+Public Function WarnNoteOf(ByVal notesText As String) As String
+' 上の警告行を run_log / `meta.s1_warn` 用の1語 `"V-S1-14:2;V-S1-15:1"` へ畳む
+'   （0件のケースは出さない。全件0なら空文字）
+Public Function TrimUrl(ByVal rawUrl As String) As String
+' URLの前後の空白と、末尾の句読点・閉じ括弧（`。、．，.,;:)）」』】>＞` と空白）を落とす
+
 ' === app: modGround（引用の原文照合。W14。裁定書37 B-03）===
 ' app層の**純文字列**モジュール（12章§2 R4）。Excelトークン・案件データ・config の
 '   どれにも触れない。値源の解決と注記の保持は `modPipeline3`、呼び出しは
@@ -1457,12 +1491,19 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
                               ByVal qualityMode As String, ByVal roundNo As Long, _
                               ByVal s4Variant As String, ByVal generatedAt As String, _
                               ByVal appVersion As String, ByVal themeName As String, _
-                              ByVal warnText As String) As String
+                              ByVal warnText As String, ByVal reviewedBy As String, _
+                              ByVal reviewedAt As String, ByVal groundNote As String, _
+                              Optional ByVal s1WarnNote As String = vbNullString) As String
 ' 18章§2 の `meta` オブジェクトを1本のJSON文字列として組み立てる**純関数**（W3.1で宣言。
 '   Excel・configに触れず、値はすべて引数で受け取る＝層(a)から叩ける）。値の由来は18章§2の
 '   とおり（案件一覧の同名列／`hm_quality_mode`／config `app_version`・`html_theme`）。
 '   `warnText` は18章§2の `meta.warnings`（16章 E-05 のPII検知・E-31 の復元失敗など、
 '   生成をブロックしない警告）。**vbLf区切りの0本以上**を受け取り、空なら空配列を書く
+'   `reviewedBy` / `reviewedAt` は18章§2 の `meta.reviewed_by` / `reviewed_at`（未確認は
+'   両方とも空文字。v1.4・裁定書37 B-06）。`groundNote` は `meta.ground_unmatched` の値源
+'   （`";"` 区切りの risk_no。同 B-03）。**`s1WarnNote`**（v2.8・裁定書38 班A）は
+'   `meta.s1_warn` の値源で、`modValidate3.WarnNoteOf` が返す `"V-S1-14:2;V-S1-15:1"` 形式の
+'   `";"` 区切り文字列。空なら空配列を書く（既定値があるので旧13引数の呼び出しは壊さない）
 Public Function BuildReportHtml(ByVal metaJson As String, ByVal s1Json As String, _
                                 ByVal s2Json As String, ByVal s3Json As String, _
                                 ByVal themeName As String) As String

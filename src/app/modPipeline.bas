@@ -251,7 +251,7 @@ Private Function BuildPrompts(ByVal caseId As String, ByRef ctx As TCaseCtx, _
     Select Case c.stepNo
     Case 1
         LoadPasted caseId, limitChars, pasted, detailAcc, c
-        sysText = modPromptsOps.AsmGuarded(modPromptsCore.BuildS1System())
+        sysText = modPromptsOps.AsmGuarded(modPromptsCore2.BuildS1System())
         userText = modPipeline3.S1UserText(ctx, caseId, pasted)
         schemaText = modSchemas.SchemaS1()
 

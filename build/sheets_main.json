@@ -266,6 +266,12 @@
       "商機",
       "その他"
     ],
+    "missing_kind_ja": [
+      "資料間の矛盾",
+      "非開示",
+      "未取得",
+      "ヒアリングで確認"
+    ],
     "input_quality_aspect_ja": [
       "会社概要",
       "事業・製品",
@@ -1418,7 +1424,13 @@
             {
               "name": "why_needed",
               "type": "String",
-              "width": 46
+              "width": 40
+            },
+            {
+              "name": "kind",
+              "type": "String",
+              "width": 16,
+              "dv": "missing_kind_ja"
             }
           ]
         },
@@ -1479,6 +1491,34 @@
               "type": "String",
               "width": 60,
               "header_note": "1,800字以内(15章ルール5b。超過は警告)"
+            }
+          ]
+        },
+        {
+          "name": "s1_sources",
+          "title": "出典 s1_sources (貼付原文に現れたURLだけ・0行でよい)",
+          "reserve_rows": 10,
+          "columns": [
+            {
+              "name": "seq",
+              "type": "Long",
+              "width": 6
+            },
+            {
+              "name": "label",
+              "type": "String",
+              "width": 30
+            },
+            {
+              "name": "url",
+              "type": "String",
+              "width": 50,
+              "header_note": "貼付原文に現れたURLをそのまま(短縮・補完をしない)"
+            },
+            {
+              "name": "aspect",
+              "type": "String",
+              "width": 16
             }
           ]
         }
@@ -2589,7 +2629,7 @@
           "type": "String",
           "width": 24,
           "dv": "data_key",
-          "header_note": "enum 全32値(19章§3と完全一致)"
+          "header_note": "enum 全33値(19章§3と完全一致)"
         },
         {
           "name": "seq",

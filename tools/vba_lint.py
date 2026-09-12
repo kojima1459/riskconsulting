@@ -160,7 +160,9 @@ MODULE_REGISTRY = {
     # 分割・新設の追認は裁定書7 B-7/B-8(12章§2のモジュール一覧に追記済み)。
     #   modValidate2 / modCompanyFile2 = 30,000字契約による分割先。
     #   modCaseRead = 案件一覧の読取専用API(app層。R4許可も併せて追加)。
-    "modValidate2", "modCompanyFile", "modCompanyFile2", "modPii",
+    # W15(裁定書38 班A)で新設。modValidate / modValidate2 が30,000字契約で
+    #   満杯のため、V-S1-14 / V-S1-15(落とさない警告)だけを持つ。12章§2に追記済み。
+    "modValidate2", "modValidate3", "modCompanyFile", "modCompanyFile2", "modPii",
     # W10(裁定書28・17章 T-59)で新設。12章§2のモジュール一覧に追記済み。
     #   modCompanyFile3 = 企業ファイルのスキーマ拡張(dossier_case/data/judge)・
     #                     自動保存・起動時再構成の読取口。modCompanyFile は
@@ -191,7 +193,10 @@ MODULE_REGISTRY = {
     #               R4許可は与えない(Excelトークンに触れない)。
     "modGround",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
-    "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
+    # W15(裁定書38 班A)で新設。modPromptsCore が30,000字契約に達したため
+    #   15章§2(S1 の system / user)を切り出した分割先。12章§2に追記済み。
+    "modPromptsCore", "modPromptsCore2", "modPromptsBlocks", "modPromptsOps",
+    "modSchemas",
     "modHtmlTheme",
     # ---- core 層 ----
     "modGatewayRPN", "modGatewayDirect", "modJsonLite", "modConfig", "modLog",
@@ -362,6 +367,13 @@ CONTRACT: dict[str, dict] = {
             "CheckS3CCore",
         ],
     },
+    # modValidate3: S1の**落とさない警告**(V-S1-14 / V-S1-15)。modValidate /
+    #   modValidate2 が満杯のため新設した(裁定書38 班A)。呼び出しは
+    #   modPipeline3(注記経路)と modExportHtml(meta.s1_warn)だけ。
+    "modValidate3": {
+        "closed": True,
+        "required": ["CheckS1Notes", "WarnNoteOf", "TrimUrl"],
+    },
     "modKnowledge": {
         "closed": False,
         "required": [
@@ -411,9 +423,15 @@ CONTRACT: dict[str, dict] = {
     "modPromptsCore": {
         "closed": False,
         "required": [
-            "BuildS1System", "BuildS1User", "BuildS2System", "BuildS2User",
+            "BuildS2System", "BuildS2User",
             "BuildS3System", "BuildS3User", "BuildS4System", "BuildS4User",
         ],
+    },
+    # W15(裁定書38 班A): 15章§2 の2関数は modPromptsCore2 へ移した
+    #   (modPromptsCore が30,000字契約に達したため。15章§10.2 の対応表も同時改訂)。
+    "modPromptsCore2": {
+        "closed": True,
+        "required": ["BuildS1System", "BuildS1User"],
     },
     "modPromptsBlocks": {
         # 15章§10.2 末尾が「Block* の7関数」と明言しているため closed=True。

@@ -296,9 +296,9 @@ Public Function BuildS1NewJson() As String
     s = s & """financials"":{""fiscal_year"":""不明"",""net_assets"":""不明"",""sales"":""不明"",""operating_profit"":""不明"",""source"":""unknown"",""note"":""不明""" & vbLf
     s = s & "},""field_insights"":[{""note"":""社長は先代からの工場を大事にしており設備更新には慎重だと聞いている"",""tag"":""constraint""" & vbLf
     s = s & "},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""" & vbLf
-    s = s & "},{""note"":""競合の同業他社が値上げに踏み切ったため価格面では当社が優位に見えるとのこと"",""tag"":""competitor""}],""missing_info"":[{""item"":""浜松本社工場の建物構造(耐火・耐震等級)"",""why_needed"":""施設・自然災害リスクの評価に必要なため""}" & vbLf
-    s = s & ",{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため""" & vbLf
-    s = s & "},{""item"":""直近の食品衛生関連の指摘・自主回収の有無"",""why_needed"":""製造・品質リスクの評価に必要なため""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""" & vbLf
+    s = s & "},{""note"":""競合の同業他社が値上げに踏み切ったため価格面では当社が優位に見えるとのこと"",""tag"":""competitor""}],""missing_info"":[{""item"":""浜松本社工場の建物構造(耐火・耐震等級)"",""why_needed"":""施設・自然災害リスクの評価に必要なため"",""kind"":""not_found""}" & vbLf
+    s = s & ",{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため"",""kind"":""hearing_only""" & vbLf
+    s = s & "},{""item"":""直近の食品衛生関連の指摘・自主回収の有無"",""why_needed"":""製造・品質リスクの評価に必要なため"",""kind"":""undisclosed""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""business"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""sites"",""status"":""partial""" & vbLf
     s = s & "},{""aspect"":""history"",""status"":""ok""" & vbLf
@@ -314,7 +314,9 @@ Public Function BuildS1NewJson() As String
     s = s & "},{""aspect"":""insurance_ctx"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""hazard"",""status"":""partial""}],""overall"":""mid"",""advice"":""有価証券報告書相当の財務・リスク情報とSNS評判、競合動向、市況情報を追加すると仮説の精度が上がる""" & vbLf
     s = s & "},""research_requests"":[{""purpose"":""finance_risk観点(財務・事業リスクの記載)を埋めるための調査"",""prompt_text"":""静岡県浜松市の菓子メーカーである株式会社浜松スイーツファクトリー(本社所在地:静岡県浜松市)について、EDINETまたは同社の公式IRページに掲載されている有価証券報告書または決算公告の「事業等のリスク」に相当する記載内容を調査してください。該当する事実が見当たらない場合は「見当たらない」、取得できない項目は「取得できず」と明記してください。各項目には出典URLを付けてください。まとめサイト・就活情報サイト・個人ブログは情報源に使わないでください。有価証券報告書や決算公告が存在しない場合はその旨を報告してください。""" & vbLf
-    s = s & "},{""purpose"":""sns観点(SNS・口コミの評判傾向)を埋めるための調査"",""prompt_text"":""静岡県浜松市の菓子メーカーである株式会社浜松スイーツファクトリー(本社所在地:静岡県浜松市)について、SNSや口コミサイトでの評判傾向(品質・接客・労働環境・炎上の有無)を調査してください。該当する事実が見当たらない場合は「見当たらない」、取得できない項目は「取得できず」と明記してください。各項目には出典URLを付けてください。まとめサイト・就活情報サイト・個人ブログは情報源に使わないでください。""}]}"
+    s = s & "},{""purpose"":""sns観点(SNS・口コミの評判傾向)を埋めるための調査"",""prompt_text"":""静岡県浜松市の菓子メーカーである株式会社浜松スイーツファクトリー(本社所在地:静岡県浜松市)について、SNSや口コミサイトでの評判傾向(品質・接客・労働環境・炎上の有無)を調査してください。該当する事実が見当たらない場合は「見当たらない」、取得できない項目は「取得できず」と明記してください。各項目には出典URLを付けてください。まとめサイト・就活情報サイト・個人ブログは情報源に使わないでください。""}]," & vbLf
+    s = s & """sources"":[{""label"":""会社概要(公式HP)"",""url"":""https://example.co.jp/company/"",""aspect"":""profile""" & vbLf
+    s = s & "},{""label"":""工場紹介(公式HP)"",""url"":""https://example.co.jp/factory/"",""aspect"":""sites""}]}"
 
     BuildS1NewJson = s
 End Function
@@ -333,8 +335,9 @@ Public Function BuildS1RnwJson() As String
     s = s & "},{""line_name"":""労働災害総合保険"",""coverage_summary"":""従業員の業務災害を法定外補償で上乗せ""" & vbLf
     s = s & ",""limit_note"":""不明"",""special_note"":""パート従業員の加入状況は不明"",""certainty"":""confirmed""}],""financials"":{""fiscal_year"":""2025年3月期"",""net_assets"":""12億円"",""sales"":""85億円"",""operating_profit"":""3億2000万円"",""source"":""kessan_kokoku"",""note"":""決算公告の貸借対照表要旨から転記""" & vbLf
     s = s & "},""field_insights"":[{""note"":""社長は先代からの工場を大事にしており設備更新には慎重だと聞いている"",""tag"":""constraint""" & vbLf
-    s = s & "},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""}],""missing_info"":[{""item"":""止水板などの水災対策の導入状況"",""why_needed"":""施設・自然災害リスクの評価に必要なため""" & vbLf
-    s = s & "},{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""" & vbLf
+    s = s & "},{""note"":""EC直販の物流は外部委託先1社に依存しておりトラブル時の代替が無いらしい"",""tag"":""risk_clue""}],""missing_info"":[{""item"":""止水板などの水災対策の導入状況"",""why_needed"":""施設・自然災害リスクの評価に必要なため"",""kind"":""hearing_only""" & vbLf
+    s = s & "},{""item"":""売上高が資料間で食い違っている(85億円と82億円)"",""why_needed"":""規模前提が変わると補償額の妥当性が変わるため"",""kind"":""conflict""" & vbLf
+    s = s & "},{""item"":""EC物流委託先との契約内容(損害時の責任分担)"",""why_needed"":""サプライチェーンリスクの評価に必要なため"",""kind"":""undisclosed""}],""input_quality"":{""coverage"":[{""aspect"":""profile"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""business"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""sites"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""history"",""status"":""ok""" & vbLf
@@ -348,7 +351,10 @@ Public Function BuildS1RnwJson() As String
     s = s & "},{""aspect"":""finance"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""insurance_ctx"",""status"":""ok""" & vbLf
     s = s & "},{""aspect"":""hazard"",""status"":""ok""}],""overall"":""high"",""advice"":""追加不要""" & vbLf
-    s = s & "},""research_requests"":[]}"
+    s = s & "},""research_requests"":[]," & vbLf
+    s = s & """sources"":[{""label"":""会社概要(公式HP)"",""url"":""https://example.co.jp/company/"",""aspect"":""profile""" & vbLf
+    s = s & "},{""label"":""決算公告"",""url"":""https://example.co.jp/ir/koukoku2025.html"",""aspect"":""finance""" & vbLf
+    s = s & "},{""label"":""重ねるハザードマップ(浜松本社工場の住所)"",""url"":""https://disaportal.gsi.go.jp/"",""aspect"":""hazard""}]}"
 
     BuildS1RnwJson = s
 End Function

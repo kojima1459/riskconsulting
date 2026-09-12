@@ -389,7 +389,7 @@ Public Function AsmS1User(ByRef ctx As TCaseCtx, ByVal hpTxt As String, ByVal yu
     vals(11) = coverageNote
     vals(12) = hearingAnswers
     vals(13) = financeTxt
-    AsmS1User = FillNamed(RenewalApplied(modPromptsCore.BuildS1User(), ctx.case_type, _
+    AsmS1User = FillNamed(RenewalApplied(modPromptsCore2.BuildS1User(), ctx.case_type, _
         "BLOCK_RENEWAL_S1", modPromptsBlocks.BlockRenewalS1()), _
         "company|industryName|case_typeの日本語|dossier_tierの日本語|hpText|yuhoText|" & _
         "memoText|contractText|prevRenewalText|dossierText|fieldNotesText|" & _

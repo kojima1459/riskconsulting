@@ -103,7 +103,12 @@ Public Function SecHearingJs() As String
     SecHearingJs = s
 End Function
 
-' SEC-14 source。リスクごとの引用と出所(19章§3の source enum を日本語へ)。
+' SEC-14 source。リスクごとの引用と出所(19章§3の source enum を日本語へ)＋
+'   **出典**(裁定書38 B-04。S1が拾った sources を label + URL の**テキスト**で
+'   出す。`<a href>` は使わない=18章§4.1 の textContent 規律)。
+'   出典は s2 が無いと節ごと消える(登録表 need:['s2'])。これは18章§3の
+'   「s2 が null なら非表示」を変えないための踏襲であり、S1だけを実行した
+'   段階では出典表も出ない。
 Public Function SecSourceJs() As String
     Dim s As String
     s = s & "function renderSource(D,el){var rs=RISKS(D);var rows=[];" & vbLf
@@ -115,12 +120,24 @@ Public Function SecSourceJs() As String
     s = s & "if(!NB(ev.quote)&&!NB(ev.source)){continue;}" & vbLf
     s = s & "rows.push([S(a[i].risk_no),S(a[i].risk_name),S(ev.quote)," & vbLf
     s = s & "LB(LSRC,ev.source),gm[S(a[i].risk_no)]?'原文未照合':'']);}" & vbLf
-    s = s & "if(!rows.length){return;}" & vbLf
+    s = s & "if(rows.length){" & vbLf
     s = s & "T(el,'p','muted','各リスクの根拠にした記述と、その出どころです。"
     s = s & "「推定」は入力に直接の記述が無く当社が置いた仮定であることを示します。"
     s = s & "「原文未照合」は、貼り付けた資料の中にその記述を見つけられなかった"
     s = s & "ことを示します（表記の違いで見つからないこともあります）。');" & vbLf
     s = s & "TBL(el,['No','リスク名','引用した記述','出所','原文照合'],rows);}" & vbLf
+    ' 裁定書38 B-04: 出典(sources)。URLはテキストのまま出す(リンクにしない)。
+    s = s & "var sr=AR((D.s1||{}).sources);" & vbLf
+    s = s & "if(sr.length){T(el,'h3',null,'出典(貼り付けた資料に現れたURL)');" & vbLf
+    s = s & "var rows2=[];" & vbLf
+    s = s & "for(var j=0;j<sr.length;j++){" & vbLf
+    s = s & "rows2.push([S(sr[j].label),S(sr[j].url),LB(LASP,sr[j].aspect)]);}" & vbLf
+    s = s & "TBL(el,['出典','URL','観点'],rows2);}" & vbLf
+    ' 同 V-S1-14 / V-S1-15 の警告。件数だけを出す(本文は run_log にある)。
+    s = s & "var wn=AR((D.meta||{}).s1_warn);" & vbLf
+    s = s & "if(wn.length){T(el,'p','muted','出典の点検: '+wn.join(' / ')+" & vbLf
+    s = s & "'（V-S1-14=貼付原文に見つからなかったURLの件数、"
+    s = s & "V-S1-15=「(見立て)」等の接頭辞・出所の不整合の件数）');}}" & vbLf
     SecSourceJs = s
 End Function
 

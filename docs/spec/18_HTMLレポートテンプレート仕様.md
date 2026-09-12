@@ -1,4 +1,6 @@
-# 18. HTMLレポートテンプレート仕様 v1.3
+# 18. HTMLレポートテンプレート仕様 v1.5
+
+v1.5（W15・裁定書38 班A「S1の証拠と出典」）: 3点を改訂した。**(1) §2 DATA** へ `meta.s1_warn`（S1の出典・接頭辞の点検結果。ケースIDと件数だけ）を追加した。**(2) §3 SEC-14** に**出典表**（`s1.sources[]` を `出典` / `URL` / `観点` の3列で。URLは `<a href>` にせず**テキスト**で出す＝§4.1 の textContent 規律）と点検の注記1行を足した。**(3) §3 SEC-03 / SEC-04** で `missing_info[].kind="conflict"` を**最上段へ分離**して「資料間で値が食い違っています」として出し、SEC-04 の表には「種別」列を足した（充足度バッジは不変＝性質の違う信号を混ぜない）。※ v1.4（W14・裁定書37 B-03/B-06）の改訂は本文に反映済みだが見出しの版が据え置かれていたため、ここで版を揃えた。
 
 v1.3（W7・裁定書25「W7センターピン整合」）: 4点を改訂した。**（T-56 実装時の追認）** §4.4 の分割表で `CommonCss` の持ち主を `modHtmlTemplate7` へ移した（`modHtmlTemplate8` の連結行と `TalkCss` の追加で `modHtmlTemplate1` が25,000字規約を超えたため。関数名は変えていない）。**(1) SEC-08 の「両方0件なら非表示」を撤回**（裁定書25 S1）。`s2.risks[].insurability` があれば必ず描く。新規案件で現契約が無くても「保険カバレッジ表・未充足リスク一覧」が出る状態にした（UC案 Output3-4・見本05節）。**(2) §3.8 を新設**（同 S5）: SEC-08 の主表を**リスク単位の8列表**（見本05節と同じ粒度）とし、現契約表・gaps表をその下に置く。読むJSONパスに `insurability.gap_note`（15章 v2.6 で `line_note` から分離）を加えた。**(3) SEC-18 talk を新設**（同 S2）: `s3.talk_script` を描く。**改番はしていない**（SEC-01..SEC-17 は不変。追加は SEC-18 以降という §3 の規約どおり）。§3.0 の対応表では見本08節に SEC-10 と並置し、キッカーは節の先頭である SEC-10 が持つ。描き方は §3.9。**(4)** SEC-07 リスク一覧の読むJSONパスへ `insurability.gap_note` を追加した。§3.5 の免責フッタ（「保険料の試算は本資料の対象外です（要見積）。」）は**据え置き**である。
 
@@ -59,7 +61,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
     "case_type": "renewal", "dossier_tier": "t2_full", "quality_mode": "deep",
     "round_no": 1, "s4_variant": "proposal",
     "generated_at": "2026/09/01 14:07:22", "app_version": "2.4.0", "theme": "standard",
-    "reviewed_by": "", "reviewed_at": "", "ground_unmatched": [],
+    "reviewed_by": "", "reviewed_at": "", "ground_unmatched": [], "s1_warn": [],
     "warnings": []
   },
   "s1": { "company_name": "...", "business_summary": "...", "...": "Schema-S1 の全キー" },
@@ -71,6 +73,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 - `meta` の由来: `case_id` / `case_type` / `dossier_tier` / `company` / `industry_code` / `industry_name` / `round_no` / `s4_variant` は13章§2.1『案件一覧』の同名列。`quality_mode` はHOMEの `hm_quality_mode`（13章§2.10。未上書きなら config `quality_mode`）。`app_version` は config `app_version`、`theme` は config `html_theme` を `modHtmlTheme.ThemeCss` で解決したあとの実テーマ名（§5.2のフォールバック後の値）、`generated_at` は生成時刻 `yyyy/mm/dd hh:mm:ss`。
 - `meta.reviewed_by` / `meta.reviewed_at` は**担当者が内容を確認・編集したか**（v1.4・裁定書37 B-06）。未確認は**両方とも空文字**（キー自体は必ず置く）。値を入れるのは `modExportHtml.GenerateHtmlReportEx` の `reviewedBy` 引数が非空のときだけで、`reviewed_at` はそのとき生成側が打つ（`modUtil.NowStamp` の `yyyy/mm/dd hh:mm:ss`）。読むのは §3.5 の免責1行目と §3 SEC-01 の表紙チップ、および §4.1 の `<noscript>`。
 - `meta.ground_unmatched` は**引用の原文照合で見つけられなかったリスクの番号**の文字列配列（v1.4・裁定書37 B-03。0本以上。キー自体は必ず置き、無ければ空配列）。`s2.risks[]` は `risk_no` をそのまま、`s2.emerging_risks[]` は `risk_no` を持たないため配列の出現順に `"E1"` `"E2"` と採番した値が入る。値源は `modGround.GroundNotes`（貼付原文＝`case_data` の `input_*` 全欄＋`s1_json` と突き合わせる純関数）で、`evidence.source` が `inference` / `knowledge` のものと、貼付原文が空のときは**検査しない**（空配列になる。config `ground_check` / `ground_head_chars`＝13章§2.3）。読むのは §3 SEC-14 の「原文照合」列だけで、**SEC-04 の充足度バッジは動かさない**（別の事実なので混ぜない）。
+- `meta.s1_warn` は**S1の出典と接頭辞の点検結果**の文字列配列（v1.5・裁定書38 班A。0本以上。キー自体は必ず置き、無ければ空配列）。要素は `"V-S1-14:2"` のように**ケースIDと件数**だけで、本文（どのURLか）は載せない（レポートは障害報告書ではない＝16章NFR-S3。本文は run_log の detail にある）。値源は `modValidate3.CheckS1Notes`→`WarnNoteOf`（貼付原文＝`case_data` の `input_*` 全欄だけと突き合わせる。S1出力は混ぜない）。読むのは §3 SEC-14 の末尾の注記行だけで、**SEC-04 の充足度バッジは動かさない**（別の事実なので混ぜない）。
 - `meta.warnings` は**生成をブロックしない警告**の文字列配列（0本以上。キー自体は必ず置き、無ければ空配列）。載せてよいのは§1.1の②③が定める「匿名化の復元ができませんでした」（16章 E-31）と `modPii` の検知（16章 E-05(6)。**検知種別と箇所だけで本文は載せない**＝NFR-S3）に限る。ページ側は本文の前に1枚のバナーとして出す（`hm_warning` と同じ内容を、レポート単体で配布したときにも読めるようにするためのもの。W3.1で追認）。**エラーコード・スタックトレース・入力原文をここへ入れない**（レポートは成果物であり障害報告書ではない＝16章NFR-S3）。
 - S3が未実行の案件では `"s3": null` とする（キー自体は必ず置く)。同様にS2未実行は `"s2": null`。`null` のときの各セクションの挙動は§3の「空のときの挙動」列が正。
 - **DATAに入れないもの**: 入力貼付テキストの原文（`input_hp` 等）・run_log・err_log・ナレッジ本文・APIキーに類する一切。レポートは成果物であり、入力の原本を持ち出す口にしない（16章NFR-S3）。ただし `s1.field_insights[]`（現場メモ由来の原文パススルー。10章FR-34）はS1の出力そのものなので含む。
@@ -105,8 +108,8 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 |---|---|---|---|---|---|
 | SEC-01 | cover | （表紙。見出しなし） | `meta.company` / `meta.case_id` / `meta.case_type` / `meta.dossier_tier` / `meta.quality_mode` / `meta.round_no` / `meta.industry_name` / `meta.generated_at` / `s1.company_name` | 常に表示（`s1` が null でも `meta` だけで描ける） | 見出し＋チップ列 |
 | SEC-02 | exec | エグゼクティブサマリ | `s1.business_summary` / `s1.strategy_outlook.market_context` / `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score`） / `s3.stories[]`（`story_no` `headline` `pitch` `target_risk_nos`） | 常に表示。`s3` が null のときはテーマ3本を省き「提案ストーリーは未生成です」の1行 | 文章中心（§3.1） |
-| SEC-03 | profile | 企業理解 | `s1.business_summary` / `s1.main_products[]` / `s1.processes[]` / `s1.locations[]`（`name` `type` `address` `hazard_note` `notes`） / `s1.supply_chain.key_materials[]` `s1.supply_chain.notes` / `s1.customers.segments[]` `s1.customers.channels[]` / `s1.workforce_notes` / `s1.management_notes` / `s1.strategy_outlook.mvv` `aspirations[]` `market_context` | `s1` が null なら**セクションごと非表示** | 定義リスト＋拠点表 |
-| SEC-04 | sufficiency | 入力の充足度と要確認事項 | `s1.input_quality.coverage[]`（`aspect` `status`） / `s1.input_quality.overall` / `s1.input_quality.advice` / `s1.missing_info[]`（`item` `why_needed`） | `s1` が null なら非表示 | 14観点バッジ＋表 |
+| SEC-03 | profile | 企業理解 | **最上段に `s1.missing_info[]` のうち `kind="conflict"`（「資料間で値が食い違っています」の分離表示。v1.5・裁定書38 B-11）** / `s1.business_summary` / `s1.main_products[]` / `s1.processes[]` / `s1.locations[]`（`name` `type` `address` `hazard_note` `notes`） / `s1.supply_chain.key_materials[]` `s1.supply_chain.notes` / `s1.customers.segments[]` `s1.customers.channels[]` / `s1.workforce_notes` / `s1.management_notes` / `s1.strategy_outlook.mvv` `aspirations[]` `market_context` | `s1` が null なら**セクションごと非表示** | 定義リスト＋拠点表（右カードの「要確認」は `kind="conflict"` を除く＝最上段と二重に出さない） |
+| SEC-04 | sufficiency | 入力の充足度と要確認事項 | `s1.input_quality.coverage[]`（`aspect` `status`） / `s1.input_quality.overall` / `s1.input_quality.advice` / `s1.missing_info[]`（`item` `why_needed` `kind`） | `s1` が null なら非表示 | **最上段に `kind="conflict"` の分離表示**＋14観点バッジ＋表（表は `conflict` 以外を出し、「種別」列に `kind` の日本語ラベル〔19章§3〕を添える。v1.5・裁定書38 B-11） |
 | SEC-05 | riskuniv | リスクユニバース10分類 | `s2.risks[].category`（19章§3の日本語ラベルへ変換） / `s2.risks[].risk_no` | `s2` が null なら非表示 | 10分類の件数バー（§3.2） |
 | SEC-06 | riskmap | 2軸リスクマップ（影響×頻度 5×5） | `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score` `insurability.transferability`） | `s2` が null なら非表示。`risks` が0件なら「該当なし」の空マップを描く | 5×5マトリクス（§3.3） |
 | SEC-16 | round-update | 訪問で分かったこと（ラウンド更新） | `meta.round_no` ／ `s2.risks[]` のうち `status` が `new`（新たに浮上した仮説）／ `confirmed`（裏が取れたリスク）／ `rejected`（否定された仮説）のもの（`risk_no` `risk_name` `scenario` `category` `status`）。**スキーマ変更はなく `status` によるフィルタのみ** | `meta.round_no` が2未満（初回ラウンド）、または3つの `status` がいずれも0件なら**セクションごと非表示**（目次からも落とす） | 3ブロック（新たに浮上した仮説／裏が取れたリスク／否定された仮説。rejected は見出しに取り消し表現を付し、`scenario` 末尾に追記された否定の理由をそのまま残す） |
@@ -119,7 +122,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 | SEC-10 | story | 提案ストーリー（当社にできること） | `s3.stories[]` の全項目（`story_no` `proposal_kind` `headline` `hook_question` `target_risk_nos[]` `target_gap_nos[]` `menu_ids[]` `line_ids[]` `scheme_id` `pitch` `similar_case_id` `expected_objection` `objection_response`）。`target_risk_nos` は `s2.risks[].risk_no` を、`target_gap_nos` は `s2.gaps[].gap_no` を引いて名称に解決する | `s3` が null なら非表示 | カード3枚 |
 | SEC-18 | talk | 経営層への話し方 | `s3.talk_script`（`opening` `flow[]` `closing` `taboo[]`） | `s3` が null、または `talk_script` が無いなら**セクションごと非表示**（目次からも落とす） | 吹き出し＋番号付きの流れ（§3.9） |
 | SEC-13 | hearing | ヒアリング事項 | `s3.stories[].hook_question` / `s2.open_questions[]` / `s1.missing_info[]`（`item` `why_needed`） / `s2.risks[].check_points[]` | 4系統すべて0件なら非表示 | 番号付きリスト（§3.4） |
-| SEC-14 | source | 出典と根拠 | `s2.risks[]`（`risk_no` `evidence.quote` `evidence.source`） | `s2` が null なら非表示 | 表 |
+| SEC-14 | source | 出典と根拠 | `s2.risks[]`（`risk_no` `evidence.quote` `evidence.source`） / **`s1.sources[]`（`label` `url` `aspect`）** / `meta.s1_warn` | `s2` が null なら非表示（**出典表も同時に消える**＝登録表の `need:['s2']` は変えない） | 表＋**出典表**（`出典` / `URL` / `観点`。URLは `<a href>` にせず**テキスト**で出す＝§4.1 の textContent 規律。v1.5・裁定書38 B-04）＋点検の注記1行 |
 | SEC-15 | disclaimer | 免責とご確認事項 | `meta.company` / `meta.generated_at` / `meta.app_version` / `meta.case_id` ＋ §3.5の固定文 | **常に表示（非表示にできない唯一のセクション）** | フッタ |
 
 - **S4は読まない**。本レポートは `GenerateHtmlReport` の契約どおり S1・S2・S3 だけから描く（14章§6）。S4の `hearing_questions` はヒアリングシート（13章§2.16・`modExportHearing`）の入力であり、S4未実行でもレポートが出せる状態を保つため本章では参照しない。

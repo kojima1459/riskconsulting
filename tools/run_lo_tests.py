@@ -137,8 +137,9 @@ PURE_ALLOWLIST = [
     #   **配布集合(このリスト)には無い**。dev専用集合(DEV_ONLY_EXTRA)が持つ。
     "modConfig", "modLog", "modGatewayRPN", "modGatewayLink",
     # app の純文字列・純ロジック(W2)。
-    "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsOps",
-    "modSchemas", "modValidate", "modValidate2", "modPii",
+    "modAppTypes", "modPromptsBlocks", "modPromptsCore", "modPromptsCore2",
+    "modPromptsOps",
+    "modSchemas", "modValidate", "modValidate2", "modValidate3", "modPii",
     # T-35(W3)のHTMLテンプレ系。18章§1の表が「純文字列モジュール」と定めた
     # とおりExcelトークンを1つも持たないので、そのまま実行テストにかけられる
     # (lint の R4 が Excelトークンの混入を機械的に禁止している)。
@@ -303,6 +304,11 @@ PURE_ALLOWLIST = [
     #   3項分岐(modHtmlTemplate5/1)を叩く。modTestRunner.RunAllPureTests から
     #   modTestsPure* の連鎖とは別に呼ぶ(班1の modTestsPure23 と衝突させない)。
     "modTestsPure24",
+    # modTestsPure25: W15(裁定書38 班A)の純層。出典URLの実在照合
+    #   (modValidate3 の V-S1-14 / V-S1-15)・S1再実行の揺れ
+    #   (modPipeline3.S1DiffCount)・mock と SEC-03/04/14 の結線を叩く。
+    #   modTestRunner.RunAllPureTests から別枠で呼ぶ。
+    "modTestsPure25",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON

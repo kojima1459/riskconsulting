@@ -749,7 +749,7 @@ STAGE2_REQUIRED = (
     ("archived_at", "案件一覧 26列目の追加"),
     ("tests_expected", "config の期待本数"),
     ("wintest\\tests_expected.txt", "期待本数を台帳から読むこと(直書き禁止)"),
-    ("BN_DATA_KEYS", "data_key 32値を値源から読むこと(直書き禁止)"),
+    ("BN_DATA_KEYS", "data_key 33値を値源から読むこと(直書き禁止)"),
     ("'s1,s2,s3,s4,pf,sp,wt,fg,s2c,s3c,s2r,s3r,ch'", "run_log!step に ch を足すこと"),
     ("リスク提案ナビ.xlsm", "出力の名前を変えないこと"),
 )

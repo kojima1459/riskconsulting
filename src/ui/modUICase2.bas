@@ -377,6 +377,7 @@ Private Sub DrawS1(ByVal jsonText As String)
     DrawArrBlock "s1_input_quality", modUICaseFmt.ColsS1Quality(), _
                  modUICaseFmt.SubJson(jsonText, "input_quality"), "coverage"
     DrawArrBlock "s1_research_requests", modUICaseFmt.ColsS1Research(), jsonText, "research_requests"
+    DrawArrBlock "s1_sources", modUICaseFmt.ColsS1Sources(), jsonText, "sources"
     DrawQualityBanner jsonText
     DrawResearchButtons
 End Sub

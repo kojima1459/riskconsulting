@@ -115,6 +115,9 @@ REQUIRED: dict[str, str] = {
     "input_quality.status": "input_quality_status",
     "input_quality.overall": "input_quality_overall",
     "field_insights.tag": "field_insight_tag",
+    # v2.8(裁定書38 班A): 不足情報の種別。13章§2.12 s1_missing_info の kind 列と
+    #   18章 SEC-03/04(conflict の分離表示)で日本語ラベルを出す。
+    "missing_info.kind": "missing_kind",
     # v2.6(裁定書25 S1/S3): S1シートの「日本語表示」列(13章§2.12)。
     #   current_coverage.certainty = s1_current_coverage の certainty 列、
     #   financials.source = s1_basic の fin_source 列。どちらも18章 SEC-08 /

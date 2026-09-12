@@ -39,6 +39,11 @@ Private Const P3_FOCUS_NONE As String = "指定なし"
 '   他に無い)。読む口は LastGroundNote のみ。書くのは GroundHook のみ。
 Private mLastGroundNote As String
 
+' 直近のS1で立った警告の集計("V-S1-14:2;V-S1-15:1" 形式。""=指摘なし)。
+'   mLastGroundNote と同型・同じ理由(RunStep の戻り値の契約を変えずに HTML へ
+'   渡す口が他に無い)。読む口は LastS1Notes のみ。書くのは S1Notes のみ。
+Private mLastS1Note As String
+
 ' --------------------------------------------------------------------------
 ' 純関数(15章の各プレースホルダの値づくり)
 ' --------------------------------------------------------------------------
@@ -171,6 +176,8 @@ Public Sub DefendNotes(ByVal stepNo As Long, ByVal caseId As String, _
     If Not validateOk Then Exit Sub
     If stepNo = 1 Then
         P3AddNote detailAcc, SufficiencyNoteOf(stepJson)
+        S1Notes caseId, stepJson, detailAcc
+        S1Snapshot caseId, stepJson, detailAcc
     ElseIf stepNo = 2 Then
         GroundHook caseId, stepJson, s1Json, detailAcc
     End If
@@ -245,6 +252,84 @@ Public Function SufficiencyNoteOf(ByVal s1Json As String) As String
     Next it
     SufficiencyNoteOf = "iq=" & ov & ";miss=" & CStr(n)
 End Function
+
+' ============================================================================
+' 裁定書38 班A: S1の警告(V-S1-14 / V-S1-15)と、S1再実行時の揺れ(B-14)
+' ----------------------------------------------------------------------------
+' どちらも**落とさない**。run_log の detail に印を残すだけで、検証の戻り値には
+'   一切触れない(modValidate3 の冒頭注釈・15章§2 の注記)。
+' ============================================================================
+
+' S1Notes - 15章 V-S1-14 / V-S1-15 を測り、detail へ "s1_warn=..." を足す。
+'   照合する原文は**貼付原文だけ**(BuildHaystack の第2引数に s1Json を渡さない。
+'   S1の出力を混ぜると捏造URLが自分自身と一致してしまう)。
+'   0件のときは何も足さない(注記が増え続けるのを避ける)。
+Public Sub S1Notes(ByVal caseId As String, ByVal s1Json As String, _
+                   ByRef detailAcc As String)
+    Dim note As String
+
+    mLastS1Note = vbNullString
+    note = modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(s1Json, BuildHaystack(caseId, vbNullString)))
+    mLastS1Note = note
+    If LenB(note) > 0 Then P3AddNote detailAcc, "s1_warn=" & note
+End Sub
+
+' LastS1Notes - 直近のS1警告の集計(LastGroundNote と同型)。
+Public Function LastS1Notes() As String
+    LastS1Notes = mLastS1Note
+End Function
+
+' ResetS1Notes - 明示リセット口(ResetGroundNote と同じ考え方)。
+Public Sub ResetS1Notes()
+    mLastS1Note = vbNullString
+End Sub
+
+' S1Snapshot - 裁定書38 B-14。**s1_json を上書きする前**に前回分を
+'   s1_json_prev(13章§2.2)へ退避し、主要8フィールドの差分件数を
+'   detail へ "s1_diff=n" として残す。前回が無ければ何もしない
+'   (初回実行を「差分0」と記録すると、揺れが無かったのと区別できなくなる)。
+Public Sub S1Snapshot(ByVal caseId As String, ByVal s1Json As String, _
+                      ByRef detailAcc As String)
+    Dim prevJson As String
+
+    prevJson = modCaseStore.LoadData(caseId, "s1_json")
+    If LenB(Trim$(prevJson)) = 0 Then Exit Sub
+    modCaseStore.SaveData caseId, "s1_json_prev", prevJson
+    P3AddNote detailAcc, "s1_diff=" & CStr(S1DiffCount(prevJson, s1Json))
+End Sub
+
+' S1DiffCount - 主要8フィールドのうち値が変わった数(0から8)。純関数。
+'   1 company_name / 2 business_summary / 3 strategy_outlook(mvv・市況・
+'   aspirations件数) / 4 locations件数 / 5 financials.sales / 6 current_coverage
+'   件数 / 7 missing_info件数 / 8 input_quality.overall。
+'   **どちらかが空なら 0**(比較していないことを「差分なし」と同じ 0 で表すが、
+'   呼出側 S1Snapshot は前回が空のときそもそも記録しない)。
+Public Function S1DiffCount(ByVal prevJson As String, ByVal curJson As String) As Long
+    Dim i As Long, n As Long
+    Dim a(1 To 8) As String, b(1 To 8) As String
+
+    If LenB(Trim$(prevJson)) = 0 Or LenB(Trim$(curJson)) = 0 Then Exit Function
+    S1Fields prevJson, a
+    S1Fields curJson, b
+    For i = 1 To 8
+        If a(i) <> b(i) Then n = n + 1
+    Next i
+    S1DiffCount = n
+End Function
+
+' S1DiffCount の比較値を作る(8要素。取り出せない値は空文字のまま比較する)。
+Private Sub S1Fields(ByVal s1Json As String, ByRef out() As String)
+    out(1) = Trim$(modJsonLite.GetStr(s1Json, "company_name"))
+    out(2) = Trim$(modJsonLite.GetStr(s1Json, "business_summary"))
+    out(3) = Trim$(modJsonLite.GetStr(s1Json, "mvv")) & vbTab & _
+             Trim$(modJsonLite.GetStr(s1Json, "market_context")) & vbTab & _
+             CStr(modJsonLite.GetArrayItems(s1Json, "aspirations").Count)
+    out(4) = CStr(modJsonLite.GetArrayItems(s1Json, "locations").Count)
+    out(5) = Trim$(modJsonLite.GetStr(s1Json, "sales"))
+    out(6) = CStr(modJsonLite.GetArrayItems(s1Json, "current_coverage").Count)
+    out(7) = CStr(modJsonLite.GetArrayItems(s1Json, "missing_info").Count)
+    out(8) = Trim$(modJsonLite.GetStr(s1Json, "overall"))
+End Sub
 
 ' run_log detail の積み上げ(modPipeline.AddNote と同じ規約=";" 区切り)。
 Private Sub P3AddNote(ByRef acc As String, ByVal noteText As String)

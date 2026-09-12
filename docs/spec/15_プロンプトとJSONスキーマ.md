@@ -1,4 +1,6 @@
-# 15. プロンプトとJSONスキーマ v2.6（本製品の核心）
+# 15. プロンプトとJSONスキーマ v2.7（本製品の核心）
+
+> v2.7（W15・裁定書38 班A「S1の証拠と出典」）: §2 S1 を**出典が残る形**へ改訂した。**system**: 冒頭に証拠階層の1段落（一次資料 > 調査AIアプリの要約 > 学習済み知識は使わない）を置き、**ルール11**（入力にそのまま現れたURLだけを `sources` に列挙・URLを創作しない）を新設した（既存のルール1～10の番号と文言は不変）。**user**: 出力JSON例へ `missing_info[].kind` と `sources[]` を足し、※行を2本足した。**Schema-S1**: `missing_info[].kind`（enum `conflict` / `undisclosed` / `not_found` / `hearing_only`・required）と `sources[]`（`label` / `url` / `aspect`・0～20件・required・空配列可。`aspect` は14観点キーまたは `other`）を追加し、ルートの required を**17キー**へ。**§11**: CheckS1 へ **V-S1-14**（sources[].url の貼付原文実在。警告）と **V-S1-15**（接頭辞・出所の不整合。警告）を新設し**計77件**（不合格61 / 警告14 / 合格判定2）へ。この2件は落とさない警告のため実装は `modValidate3.CheckS1Notes` に置き、`modPipeline3` の注記経路から run_log と HTML meta へ渡す（§2 の注記）。§10.2 の §2 system / user の実装モジュールを **modPromptsCore2**（modPromptsCore が30,000字契約に達したための分割先。12章§2）へ改めた。
 
 > v2.6（W7・裁定書25「W7センターピン整合」）: UC案v0.1＋髙橋FB（8/26-27）へ核を合わせた。**S1**: 新規案件でも付保ギャップを立てられるようにした（§1.2b `BLOCK_NEW_S2` 新設・CheckS2 の V-S2-12 を廃止し V-S2-12b を新設・Schema-S1 `current_coverage[].certainty`〔confirmed/assumed〕追加・V-S1-04 の発火条件を訂正・V-S1-12 新設）。**S2**: Schema-S3 へ `talk_script`（opening/flow/closing/taboo）を required で追加し、S3 system 第12ルールと V-S3-19〜21 を新設した（描画は18章 SEC-18）。**S3**: Schema-S1 へ `financials`（fiscal_year/net_assets/sales/operating_profit/source/note）を required で追加、S1 system 第10ルールと S1 user の【決算・財務】ブロックを新設し、V-S1-13 を追加。S2 systemルール11を「純資産との対比を必ず出す」へ改訂し V-S2-18 を新設した。**S4**: §1.2c `BLOCK_ROUND2_FOCUS` を新設し S2/S3 user へ挿入した。**S5**: `insurability.line_note` を `line_note`（想定種目）と `gap_note`（確認点）へ分離した。**S6**: S2 user へ `{{incidentsText}}`（事故事例）の注入枠を新設し、§0.7 の切詰め表へ加えた。**S7**: `emerging_risks` を0～5件へ（V-S2-16 の閾値5）。**S9**: §5 S4 system の「PowerPoint骨子」を「提案書骨子」へ改めた。§10.2 へ `BlockNewS2()` / `BlockRound2Focus()` を追加（Block* は9関数・対応表は33関数）。§11 は**計75件**（CheckS1 13 / CheckS2 18 / CheckS3 21）。
 
@@ -224,6 +226,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 企業の公開情報テキスト（および更新案件では現契約サマリ）を読み、後続のリスク分析に使う
 「企業プロファイル」を構造化します。
 
+情報の確からしさには順位がある。第一順位は一次資料(有価証券報告書・決算公告・公式HP・
+現契約サマリ)、第二順位は調査AIアプリの要約であり、両者が食い違うときは一次資料を採る。
+あなた自身の学習済み知識は根拠に使わない(入力に無い事項は "不明" とする)。
+
 必ず守るルール:
 1. 入力テキストに書かれていないことを事実として書かない。読み取れない項目は文字列 "不明" とする。
 2. テキストから合理的に推定できる事項は、値の先頭に「(推定)」を付けて書いてよい。ただし推定は控えめに。
@@ -287,6 +293,11 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
    その場合も残りを推測で埋めず "不明" とする。単位（円・千円・百万円）は原文の表記を保つ。
    source は出所を1つ選ぶ(yuho=有価証券報告書 / kessan_kokoku=決算公告 /
    tdb=帝国データバンク等の信用調査 / view=VIEW情報 / memo=営業メモ / unknown=不明)。
+11. 【HP等のテキスト】【追加ドシエ】等の入力に**そのまま現れた**URLだけを、それが支える
+   項目とともに sources に列挙する。URLを創作しない。URLの無い資料は sources に入れない。
+   label には資料名または支える項目名を、aspect には input_quality の14観点キーの
+   いずれか(どれにも当たらないときは "other")を入れる。最大20件とし、入力にURLが
+   1つも無ければ空配列とする。
 ```
 （末尾に BLOCK_GUARD を連結）
 
@@ -357,7 +368,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
                  "sales": "売上高(不明なら\"不明\")", "operating_profit": "営業利益(不明なら\"不明\")",
                  "source": "yuho/kessan_kokoku/tdb/view/memo/unknown", "note": "補足(なければ\"不明\")"},
   "field_insights": [{"note": "現場メモの原文(要約しない)", "tag": "risk_clue/relationship/competitor/constraint/opportunity/other"}],
-  "missing_info": [{"item": "知りたい情報", "why_needed": "なぜリスク分析に必要か(1文)"}],
+  "missing_info": [{"item": "知りたい情報", "why_needed": "なぜリスク分析に必要か(1文)",
+                    "kind": "conflict/undisclosed/not_found/hearing_only"}],
+  "sources": [{"label": "資料名または支える項目名", "url": "入力にそのまま現れたURL",
+               "aspect": "14観点キーまたはother"}],
   "input_quality": {
     "coverage": [{"aspect": "profile", "status": "ok/partial/missing"}],
     "overall": "high/mid/low",
@@ -370,6 +384,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 ※【決算・財務】が「なし」の場合も financials は必ず出力し、全項目を "不明"（source は "unknown"）とする。
 ※input_quality.coverage は14観点(profile, business, sites, history, news, hr, finance_risk, sales_memo, sns, competitors, market, finance, insurance_ctx, hazard)を必ず各1回出力する。
 ※全観点が ok の場合、research_requests は [] とする。
+※missing_info の kind は、資料間で値が食い違う=conflict / 非開示・記載なしと書かれている=undisclosed /
+  調べたが見つからない=not_found / 顧客へのヒアリングでしか得られない=hearing_only とする。
+※sources には入力にそのまま現れたURLだけを列挙する(1つも無ければ [] とする)。
 ```
 
 ### Schema-S1（`SchemaS1()`）
@@ -425,8 +442,9 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     }, "required": ["note", "tag"], "additionalProperties": false}},
     "missing_info": {"type": "array", "items": {"type": "object", "properties": {
       "item": {"type": "string"},
-      "why_needed": {"type": "string"}
-    }, "required": ["item", "why_needed"], "additionalProperties": false}},
+      "why_needed": {"type": "string"},
+      "kind": {"type": "string", "enum": ["conflict", "undisclosed", "not_found", "hearing_only"]}
+    }, "required": ["item", "why_needed", "kind"], "additionalProperties": false}},
     "input_quality": {"type": "object", "properties": {
       "coverage": {"type": "array", "items": {"type": "object", "properties": {
         "aspect": {"type": "string", "enum": ["profile", "business", "sites", "history", "news", "hr", "finance_risk", "sales_memo", "sns", "competitors", "market", "finance", "insurance_ctx", "hazard"]},
@@ -438,11 +456,17 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
     "research_requests": {"type": "array", "items": {"type": "object", "properties": {
       "purpose": {"type": "string"},
       "prompt_text": {"type": "string"}
-    }, "required": ["purpose", "prompt_text"], "additionalProperties": false}}
+    }, "required": ["purpose", "prompt_text"], "additionalProperties": false}},
+    "sources": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
+      "label": {"type": "string"},
+      "url": {"type": "string"},
+      "aspect": {"type": "string", "enum": ["profile", "business", "sites", "history", "news", "hr", "finance_risk", "sales_memo", "sns", "competitors", "market", "finance", "insurance_ctx", "hazard", "other"]}
+    }, "required": ["label", "url", "aspect"], "additionalProperties": false}}
   },
   "required": ["company_name", "business_summary", "main_products", "processes", "locations",
                "supply_chain", "customers", "workforce_notes", "management_notes", "strategy_outlook",
-               "current_coverage", "financials", "field_insights", "missing_info", "input_quality", "research_requests"],
+               "current_coverage", "financials", "field_insights", "missing_info", "input_quality",
+               "research_requests", "sources"],
   "additionalProperties": false
 }
 ```
@@ -451,7 +475,7 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 
 | ケースID | 対象キー | 条件（これに該当したら発火） | 判定 | エラー文テンプレ |
 |---|---|---|---|---|
-| V-S1-01 | ルート | required 16キーのいずれかが欠落 | 不合格 | `[V-S1-01] 必須キー {key} がありません` |
+| V-S1-01 | ルート | required 17キーのいずれかが欠落 | 不合格 | `[V-S1-01] 必須キー {key} がありません` |
 | V-S1-02 | locations[].type | enum（工場/本社/店舗/倉庫/その他）以外 | 不合格 | `[V-S1-02] locations[{i}].type が不正です: {value}` |
 | V-S1-03 | current_coverage | case_type=renewal で 0件 | 不合格 | `[V-S1-03] 更新案件ですが current_coverage が0件です` |
 | V-S1-04 | current_coverage | case_type=new で `certainty="confirmed"` の要素が1件以上（**全件が `assumed` のときは発火しない**。v2.6・裁定書25 S1） | 警告 | `[V-S1-04] 新規案件ですが確認済みの current_coverage が{n}件あります` |
@@ -464,6 +488,10 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 | V-S1-11 | field_insights | 現場メモ提供ありで 0件 | 警告 | `[V-S1-11] 現場メモがありますが field_insights が0件です` |
 | V-S1-12 | current_coverage[].certainty | enum（confirmed/assumed）以外（v2.6・裁定書25 S1） | 不合格 | `[V-S1-12] current_coverage[{i}].certainty が不正です: {value}` |
 | V-S1-13 | financials.source | enum（yuho/kessan_kokoku/tdb/view/memo/unknown）以外（v2.6・裁定書25 S3） | 不合格 | `[V-S1-13] financials.source が不正です: {value}` |
+| V-S1-14 | sources[].url | 貼付原文（`modPipeline3.BuildHaystack` の `input_*` 全欄）に `InStr` で見つからない（v2.7・裁定書38 B-04） | 警告 | `[V-S1-14] sources[{i}].url が貼付原文に見当たりません: {value}` |
+| V-S1-15 | current_coverage[].certainty / financials | `certainty="assumed"` の要素の値に接頭辞「(見立て)」が1つも無い、または `financials.source` が `unknown` 以外なのに4項目すべてが「不明」（v2.7・裁定書38 B-12） | 警告 | `[V-S1-15] 接頭辞・出所の不整合があります: {detail}` |
+
+**V-S1-14 / V-S1-15 の実装位置（v2.7・裁定書38 班A）**: この2件は**警告であり、出力を落とさない・修復リトライを起こさない**。`modValidate.CheckS1` の戻り値（＝不合格と同じ経路で `modPipeline.Defend` が受ける文字列）に載せると修復リトライが走ってしまうため、実体は **`modValidate3.CheckS1Notes(json, haystack)`** に置き、`modPipeline3.DefendNotes`（S1成功時）から呼んで run_log の `detail` へ `s1_warn=V-S1-14:2;V-S1-15:1` の形で記録し、HTMLレポートの `meta.s1_warn`（18章§2）へ配列で渡す。`haystack` は `modPipeline3.BuildHaystack(caseId, "")`＝**貼付原文だけ**（S1出力を混ぜると捏造URLが自分自身と一致してしまうため、第2引数には空文字を渡す）。
 
 **充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。research_requests は案件入力シートの「追加収集」欄に一覧表示し、各行に「コピー」操作を付ける（営業は調査AIアプリへ貼るだけ。11章）。
 補足: 現場メモ未提供時は field_insights=[]（V-S1-11 は現場メモ提供時のみ判定する）。field_insights は s1Json に含まれるため、S2/S4・壁打ちへは追加配線なしで原文のまま届く（蒸留しないパススルー。docs/09 F-01）。S3へは s1Json 全体ではなく要約（{{s1SummaryJson}}。§4）で届くが、field_insights は要約の対象キーに含めるため原文のまま渡る。
@@ -1518,8 +1546,8 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 | # | mock ID | step | バリアント | 内容の要点 |
 |---|---|---|---|---|
-| 1 | MK-S1-NEW | s1 | new | current_coverage 1件（**`certainty=assumed`**。【付保の見立て】由来。V-S1-04 が発火しないこと〈全件 assumed〉を mock で担保する）／ **financials 全項目 "不明"・source="unknown"** ／ input_quality.coverage 14件（overall=mid）／ research_requests 2件（各1,800字以内）／ field_insights 3件（うち `tag=constraint` 1件） |
-| 2 | MK-S1-RNW | s1 | renewal | current_coverage 3件（全て `certainty=confirmed`）／ **financials（fiscal_year / net_assets / sales / operating_profit が具体値・source="kessan_kokoku"）** ／ overall=high ／ research_requests=[] |
+| 1 | MK-S1-NEW | s1 | new | current_coverage 1件（**`certainty=assumed`**。【付保の見立て】由来。V-S1-04 が発火しないこと〈全件 assumed〉を mock で担保する）／ **financials 全項目 "不明"・source="unknown"** ／ input_quality.coverage 14件（overall=mid）／ research_requests 2件（各1,800字以内）／ field_insights 3件（うち `tag=constraint` 1件）／ **missing_info 3件（`kind` は not_found / hearing_only / undisclosed 各1）／ sources 2件（`aspect`＝profile / sites。v2.7・裁定書38 B-04）** |
+| 2 | MK-S1-RNW | s1 | renewal | current_coverage 3件（全て `certainty=confirmed`）／ **financials（fiscal_year / net_assets / sales / operating_profit が具体値・source="kessan_kokoku"）** ／ overall=high ／ research_requests=[] ／ **missing_info 3件（うち `kind=conflict` 1件＝SEC-03/04 の分離表示を mock で担保する）／ sources 3件（`aspect`＝profile / finance / hazard。v2.7・裁定書38 B-04）** |
 | 3 | MK-S2-NEW | s2 | new | risks 8件（10分類のうち6分類・status は全て proposed・transferability=hard を1件以上含む）／ **gaps 2件（`gap_type` は2件とも `uninsured`・`coverage_evidence` は「該当契約なし」と【付保の見立て】の引用。V-S2-12b が発火しないこと、および新規案件で未充足リスク一覧が出ることを mock で担保する）** ／ 全risksの `insurability` に `line_note` と `gap_note` を別々に持つ ／ `loss_scale_note` は全件空（MK-S1-NEW の net_assets が "不明" のため V-S2-18 は発火しない） ／ **emerging_risks 1件**（`category=facility_bcp` / `horizon=mid_long` / 気候変動による原料(果実・乳製品)調達難と浜松2工場の高温化。`proposal_hint` 非空） |
 | 4 | MK-S2-RNW | s2 | renewal | risks 8件（`loss_scale_note` は「純資産◯億円に対し…（概算）」の対比形を1件以上含む＝V-S2-18 が発火しない） ／ gaps 3件（uninsured / underinsured / overlap 各1） ／ **emerging_risks=[]**（空配列が合格であること〈V-S2-16 が0件で発火しないこと〉を mock で兼ねて担保する） |
 | 5 | MK-S3 | s3 | 共通 | stories 3件（upsell / cross_sell / scheme 各1）／ unmatched_risks 1件 ／ do_not_propose 1件 ／ growth_ideas 4件 ／ **talk_script 1本**（opening 80字以内・flow 4文〔STEP1-4 相当〕・closing 1文・taboo 1件〔MK-S1-NEW の `constraint` に対応〕） |
@@ -1608,8 +1636,8 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | §1.2b 新規案件の付保ギャップ指示ブロック | `BlockNewS2()` | modPromptsBlocks |
 | §1.2c 第2ラウンドの深掘りブロック | `BlockRound2Focus()` | modPromptsBlocks |
 | §1.3 データ境界規律 | `BlockGuard()` | modPromptsBlocks |
-| §2 system | `BuildS1System()` | modPromptsCore |
-| §2 user | `BuildS1User()` | modPromptsCore |
+| §2 system | `BuildS1System()` | modPromptsCore2 |
+| §2 user | `BuildS1User()` | modPromptsCore2 |
 | §2 Schema-S1 | `SchemaS1()` | modSchemas |
 | §3 system | `BuildS2System()` | modPromptsCore |
 | §3 user | `BuildS2User()` | modPromptsCore |
@@ -1639,7 +1667,7 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 
 | Check関数 | ケースID | 不合格 | 警告 | 合格判定 |
 |---|---|---|---|---|
-| CheckS1 | V-S1-01 ～ V-S1-13（13件） | 01/02/03/06/07/09/10/12/13 | 04/05/08/11 | - |
+| CheckS1 | V-S1-01 ～ V-S1-15（15件） | 01/02/03/06/07/09/10/12/13 | 04/05/08/11/14/15 | - |
 | CheckS2 | V-S2-01 ～ V-S2-18（18件） | 01/02/03/04/05/06/07/08/09/12/13/16/17（06は一覧未提供時も不合格。**12 の実体は枝番 V-S2-12b**＝下の注記） | 10/11/14/15/18 | - |
 | CheckS3 | V-S3-01 ～ V-S3-21（21件） | 01/02/03/04/05/06/07/08/09/10/11/12/14/15/16/17/18/19/20（03から06は一覧未提供時も不合格） | 13/21 | - |
 | CheckS4 | V-S4-01 ～ V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
@@ -1647,7 +1675,7 @@ alliance バリアントでも出力スキーマ・件数規約・CheckS4 は pr
 | CheckS2C | V-S2C-01 ～ V-S2C-05（5件） | 01/02/03（03は審査対象S2の未提供時も不合格） | 04 | 05（issues 0件=改訂スキップ） |
 | CheckS3C | V-S3C-01 ～ V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
 
-**合計75件**（不合格61件 / 警告12件 / 合格判定2件）。ケースIDは削除する場合も番号を再利用しない（追番のみ）。
+**合計77件**（不合格61件 / 警告14件 / 合格判定2件）。ケースIDは削除する場合も番号を再利用しない（追番のみ）。
 
 **枝番 `V-S2-12b` と欠番 `V-S2-12` の扱い（v2.6・裁定書25 S1）**: 旧 `V-S2-12`（新規案件で gaps が1件以上→不合格）は撤回した。**番号 `V-S2-12` は永久欠番**とし再利用しない。その位置に新しい条件を置くため、裁定書25の指定どおり**枝番 `V-S2-12b`** を新設した（CheckS2 の実体は 01..11 / **12b** / 13..18 の18件）。上の表の範囲表記が `V-S2-01 ～ V-S2-18` の連番形なのは照合器（`tools/validate_check.py`）が範囲を機械展開するためであり、**12 の位置に立つ実体は `V-S2-12b` である**。照合器は枝番と欠番をまだ解さないため、**この2つを解釈できるようにするのは実装側の作業**（17章 T-55）である。それまで `validate` ゲートは `V-S2-12` を要求して赤くなるが、それは仕様の誤りではない。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
 
