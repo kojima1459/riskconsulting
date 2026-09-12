@@ -28,6 +28,24 @@
         docs/ を救済集合に入れると**仕様書に書いた瞬間に検出不能**になる
         (fail-open)。docs/ にしか名前が無いものは `ERROR(docs-only)` として
         一覧に出す(救済はするが緑にはしない、ではなく**赤にする**)。
+        **登記は「使用」ではない**(W15 Round2 T-M1): build/ tools/ の中にも
+        「名前を表へ載せているだけ」の**台帳**がある。台帳への登記で救済して
+        しまうと、docs/ を外したのと同じ fail-open が build/ tools/ 側に残る
+        (実測: 呼出0件の Public 19本が `tools/vba_lint.py` の登記だけで緑に
+        なっていた)。そこで救済する/しないの線を次のとおり引く:
+          救済する = **そのテキストが実行時に VBA を呼ぶ**もの。
+            - ビルドが焼き込む VBA ソース片(`build/build_rpn.py` の
+              ThisWorkbook。ブックのイベントから ui 層を直接呼ぶ行がある。
+              **関数名はここへ書かない**: 書くとこのファイル自身がその名前を
+              救済してしまう=冒頭の自己言及の罠)
+            - ツールが実行時に流し込む VBA ドライバ(`tools/render_report.py`
+              `tools/render_proposal.py` `tools/run_lo_tests.py`)
+            - 実行コマンドの宛先文字列(OnAction/OnTime/Run の宛先)
+          救済しない = **名前を表へ載せるだけ**の登記。`REGISTRY_ONLY_TEXT`
+            に列挙する(`tools/vba_lint.py` の `MODULE_REGISTRY` / `CONTRACT`
+            と、モジュール台帳 `build/modules.json` 全体)。
+        この線引きは「呼ばれているか」を見る本検査の目的そのものであり、
+        登記の有無は 14章§6 との突合(vba_lint の契約検査)が別に見る。
     (c) 動的連結の救済(C_evidence A-1で確認した2パターン):
         - `"接頭辞" & 式` 型: 接頭辞文字列(モジュール修飾があれば末尾の
           ローカル名も)を「有効な接頭辞」として集め、その接頭辞で始まる
@@ -41,14 +59,20 @@
     python3 tools/orphan_check.py
     python3 tools/orphan_check.py --path <dir>   # 検査対象を変える(テスト用)
     python3 tools/orphan_check.py --verbose       # 救済された候補も列挙
+    python3 tools/orphan_check.py --selftest      # 自己テスト+回帰網だけ(src は見ない)
     exit code: 0 = 孤児(SKIP以外)0件 / 1 = 1件以上 / 2 = 自己テスト失敗
 ================================================================================
 """
 from __future__ import annotations
 
 import argparse
+import ast
+import contextlib
+import io
 import re
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -66,6 +90,21 @@ EXTERNAL_DIRS = ("build", "tools")
 DOC_DIRS = ("docs",)
 EXTERNAL_EXTS = {".py", ".md", ".json", ".ps1", ".txt", ".bat", ".cfg",
                   ".yml", ".yaml", ".ini", ".csv"}
+
+# 「登記(名前を表へ載せるだけ)」であって「使用」ではない外部テキスト
+# (W15 Round2 T-M1)。キーは<repo>からの相対パス(区切りは "/")。
+#   値 None       = そのファイル全体を救済集合から外す
+#   値 (変数名,…) = その Python 代入ブロック(直前の見出しコメントを含む)だけを外す
+# ここに載せる根拠は「実行時にその名前で VBA を呼ばない」こと。呼ぶもの
+# (build_rpn.py の ThisWorkbook・render_*.py / run_lo_tests.py の VBA ドライバ)は
+# 載せない。載せると本当の配線まで赤くなる(誤検知)。
+REGISTRY_ONLY_TEXT: dict[str, tuple[str, ...] | None] = {
+    # モジュール台帳。モジュール名とパスの登録簿であり、`_comment` / `_note` の
+    # 散文も「どう作ったか」の記録であって呼び出しではない。
+    "build/modules.json": None,
+    # 公開契約表(14章§6の写し)とモジュール一覧。**登記の本丸**。
+    "tools/vba_lint.py": ("MODULE_REGISTRY", "CONTRACT"),
+}
 
 UNUSED_MARK = "@unused:"
 
@@ -206,6 +245,55 @@ def strip_self_labels(stmt: str, name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 登記ブロックの除去(W15 Round2 T-M1)
+# ---------------------------------------------------------------------------
+def blank_assignment_block(text: str, var_name: str) -> str:
+    """Python ソースの `var_name = …` 代入ブロックを空行へ置き換える。
+
+    代入の範囲は ast が返す実体(lineno..end_lineno)に、**直前の連続した
+    コメント行**(その表の見出しコメント)を足した範囲。見出しコメントまで
+    落とすのは、契約表の見出しが「required に入れない関数」の名前を列挙して
+    いるためで、そこを残すと表本体だけ落としても救済が残る。
+
+    行数は変えない(空行に置き換える)ので、他の照合の行番号は動かない。
+    構文として読めないときは**ファイル全体を空にする**(fail-closed。
+    読めないものを「使用あり」と見なす方向へ倒さない)。
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return ""
+    lines = text.split("\n")
+    for node in tree.body:
+        targets: list[str] = []
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            targets = [node.target.id]
+        if var_name not in targets:
+            continue
+        start = node.lineno - 1
+        end = (node.end_lineno or node.lineno) - 1
+        while start > 0 and lines[start - 1].lstrip().startswith("#"):
+            start -= 1
+        for i in range(start, min(end + 1, len(lines))):
+            lines[i] = ""
+    return "\n".join(lines)
+
+
+def strip_registry_text(rel_path: str, text: str) -> str | None:
+    """登記だけのテキストを救済集合から落とす。None = ファイルごと落とす。"""
+    if rel_path not in REGISTRY_ONLY_TEXT:
+        return text
+    names = REGISTRY_ONLY_TEXT[rel_path]
+    if names is None:
+        return None
+    for name in names:
+        text = blank_assignment_block(text, name)
+    return text
+
+
+# ---------------------------------------------------------------------------
 # 外部テキスト(build/tools と docs)の読み込み
 # ---------------------------------------------------------------------------
 def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS) -> str:
@@ -220,9 +308,17 @@ def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS) -> str:
             if path.suffix.lower() not in EXTERNAL_EXTS:
                 continue
             try:
-                chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+                text = path.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
+            try:
+                rel = str(path.relative_to(repo_root)).replace("\\", "/")
+            except ValueError:
+                rel = path.name
+            text = strip_registry_text(rel, text)
+            if text is None:
+                continue  # 登記だけのファイル(救済しない)
+            chunks.append(text)
     return "\n".join(chunks)
 
 
@@ -372,6 +468,151 @@ def _module_relpath(files: list[Path], vb_name: str, src_root: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 回帰テスト(W15 Round2 T-m3): 合成リポジトリで「赤くなる/ならない」の両方向を固定する。
+# ---------------------------------------------------------------------------
+# 以前はこの網が scratchpad の絶対パス直書きのスクリプトにしかなく、worktree を
+# 消した時点で実行不能だった。**リポジトリの中**(この自己テスト)へ移し、毎回の
+# ゲートで回るようにする。合成リポジトリの識別子は `ZzT` 接頭辞で始める
+# (src/ に実在しない名前。実在名をこのファイルに書くと、このファイル自身が
+#  tools/ の外部テキストとしてその名前を救済してしまう=冒頭の自己言及の罠)。
+BAS_DOC_ONLY = (
+    'Attribute VB_Name = "modZzT"\n'
+    "Option Explicit\n"
+    "\n"
+    "Public Sub ZzTDocOnly()\n"
+    "    Dim i As Long\n"
+    "    i = 1\n"
+    "End Sub\n"
+)
+
+BAS_SELF_LABEL = (
+    'Attribute VB_Name = "modZzT"\n'
+    "Option Explicit\n"
+    'Private Const ZZT_SRC As String = "modZzT"\n'
+    "\n"
+    "Public Function ZzTNeverCalled() As Boolean\n"
+    '    modLog.LogError "E0101", ZZT_SRC & ".ZzTNeverCalled", "bad"\n'
+    "    ZzTNeverCalled = True\n"
+    "End Function\n"
+)
+
+BAS_ONACTION = (
+    'Attribute VB_Name = "modZzT"\n'
+    "Option Explicit\n"
+    "\n"
+    "Public Sub ZzTWiredByOnAction()\n"
+    "    Dim i As Long\n"
+    "    i = 1\n"
+    "End Sub\n"
+    "\n"
+    "Public Sub ZzTRegister()\n"
+    '    sh.Buttons(1).OnAction = "modZzT.ZzTWiredByOnAction"\n'
+    "    Call ZzTRegister2\n"
+    "End Sub\n"
+    "\n"
+    "Public Sub ZzTRegister2()\n"
+    "    Call ZzTRegister\n"
+    "End Sub\n"
+)
+
+# `tools/vba_lint.py` の写し(登記だけ / 登記の外にドライバ文字列がある の2形)。
+VBA_LINT_REGISTRY_ONLY = (
+    "# 公開契約表の見出し。ZzTInHeadComment もここに名前だけがある。\n"
+    "CONTRACT = {\n"
+    '    "modZzT": {"closed": False, "required": ["ZzTDocOnly"]},\n'
+    "}\n"
+    "MODULE_REGISTRY = {\n"
+    '    "modZzT",\n'
+    "}\n"
+)
+
+VBA_LINT_WITH_DRIVER = VBA_LINT_REGISTRY_ONLY + (
+    "\n"
+    "# 登記の外。ここは実行時に VBA を呼ぶ文字列なので救済してよい。\n"
+    'DRIVER = \'    Call modZzT.ZzTDocOnly\\n\'\n'
+)
+
+
+def _synth_repo(root: Path, bas_body: str, docs_text: str = "",
+                tools_files: dict | None = None,
+                build_files: dict | None = None) -> None:
+    (root / "src" / "app").mkdir(parents=True, exist_ok=True)
+    (root / "docs").mkdir(parents=True, exist_ok=True)
+    (root / "tools").mkdir(parents=True, exist_ok=True)
+    (root / "build").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "app" / "modZzT.bas").write_text(bas_body, encoding="utf-8")
+    (root / "docs" / "zz_spec.md").write_text(docs_text, encoding="utf-8")
+    for name, body in (tools_files or {}).items():
+        (root / "tools" / name).write_text(body, encoding="utf-8")
+    for name, body in (build_files or {}).items():
+        (root / "build" / name).write_text(body, encoding="utf-8")
+
+
+def _run_synth(bas_body: str, docs_text: str = "",
+               tools_files: dict | None = None,
+               build_files: dict | None = None) -> int:
+    """合成リポジトリを検査して ERROR 件数だけ返す(出力は飲み込む)。"""
+    global REPO_ROOT
+    saved = REPO_ROOT
+    tmp = Path(tempfile.mkdtemp(prefix="orphan_selftest_"))
+    try:
+        _synth_repo(tmp, bas_body, docs_text, tools_files, build_files)
+        REPO_ROOT = tmp
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            n_error, _n_skip, _n_rescued = run_checks(tmp / "src", False)
+        return n_error
+    finally:
+        REPO_ROOT = saved
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def regression_cases() -> list[tuple[str, bool]]:
+    """「条件が成立するときだけ赤くなる」の両方向を固定する。"""
+    cases: list[tuple[str, bool]] = []
+
+    # R1-01: docs/ にしか名前が無い Public は赤(仕様書の言及は配線ではない)。
+    cases.append(("R1-01 docs/のみの言及では救済しない",
+                  _run_synth(BAS_DOC_ONLY,
+                             docs_text="14章: `ZzTDocOnly` は S5 を実行する。") == 1))
+    # 逆方向: tools/ の普通のファイルの言及は従来どおり救済する(締めすぎ防止)。
+    cases.append(("tools/ の普通のファイルの言及は救済",
+                  _run_synth(BAS_DOC_ONLY,
+                             tools_files={"zz_tool.py": "x = 'ZzTDocOnly'\n"}) == 0))
+    # 逆方向: build/ の普通のファイルの言及も救済する。
+    cases.append(("build/ の普通のファイルの言及は救済",
+                  _run_synth(BAS_DOC_ONLY,
+                             build_files={"zz_build.json":
+                                          '{"onAction": "ZzTDocOnly"}'}) == 0))
+
+    # T-M1 本丸: vba_lint の CONTRACT / MODULE_REGISTRY への登記だけでは救済しない。
+    cases.append(("T-M1 vba_lint の登記だけでは救済しない",
+                  _run_synth(BAS_DOC_ONLY,
+                             tools_files={"vba_lint.py": VBA_LINT_REGISTRY_ONLY}) == 1))
+    # 逆方向: 同じ vba_lint.py でも**登記の外**(VBAを呼ぶ文字列)なら救済する。
+    cases.append(("T-M1 登記の外の呼び出し文字列は救済する",
+                  _run_synth(BAS_DOC_ONLY,
+                             tools_files={"vba_lint.py": VBA_LINT_WITH_DRIVER}) == 0))
+    # T-M1: build/modules.json(モジュール台帳)への登記だけでも救済しない。
+    cases.append(("T-M1 build/modules.json の登記だけでは救済しない",
+                  _run_synth(BAS_DOC_ONLY,
+                             build_files={"modules.json":
+                                          '{"_note": "ZzTDocOnly を呼ぶ"}'}) == 1))
+    # 逆方向: 同じ内容でもファイル名が違えば(台帳でなければ)救済する。
+    cases.append(("T-M1 台帳でない build/ の同内容は救済する",
+                  _run_synth(BAS_DOC_ONLY,
+                             build_files={"zz_other.json":
+                                          '{"_note": "ZzTDocOnly を呼ぶ"}'}) == 0))
+
+    # R2-16: 自モジュールのログ用名札 `SRC & ".名前"` だけでは使用に数えない。
+    cases.append(("R2-16 自分の名札だけの Public は赤", _run_synth(BAS_SELF_LABEL) == 1))
+    # 逆方向: 同一モジュール内の**完全な** OnAction 宛先文字列は従来どおり救済。
+    cases.append(("R2-16 同一モジュールのOnAction宛先は救済",
+                  _run_synth(BAS_ONACTION) == 0))
+    return cases
+
+
+# ---------------------------------------------------------------------------
 # 自己テスト(骨抜き防止): 負例(未参照Publicを合成)で検出できるか。
 # ---------------------------------------------------------------------------
 def self_test() -> bool:
@@ -431,6 +672,45 @@ def self_test() -> bool:
     cases.append(("docs/ は救済集合ではない",
                   "docs" not in EXTERNAL_DIRS and tuple(DOC_DIRS) == ("docs",)))
 
+    # 登記を救済集合から外したこと(W15 Round2 T-M1)の固定。
+    src_py = (
+        "HEAD = 1\n"
+        "# 見出しコメント: ZzTInHeadComment\n"
+        "# 2行目\n"
+        "TABLE = {\n"
+        '    "a": {"b": "}{"},   # ZzTInBlockComment と括弧 } を含む\n'
+        '    "c": "# これはコメントではない",\n'
+        "}\n"
+        "TAIL = 'ZzTAfterTable'\n"
+    )
+    blanked = blank_assignment_block(src_py, "TABLE")
+    cases.append(("登記ブロックは表本体ごと落ちる",
+                  "ZzTInBlockComment" not in blanked))
+    cases.append(("登記ブロックの見出しコメントも落ちる",
+                  "ZzTInHeadComment" not in blanked))
+    cases.append(("登記ブロックの外は落とさない",
+                  "ZzTAfterTable" in blanked and "HEAD = 1" in blanked))
+    cases.append(("登記ブロックを落としても行数は変わらない",
+                  len(blanked.split("\n")) == len(src_py.split("\n"))))
+    cases.append(("無い名前を指定しても何も落とさない",
+                  blank_assignment_block(src_py, "NOT_THERE") == src_py))
+    cases.append(("読めない Python は fail-closed(全部落とす)",
+                  blank_assignment_block("def (:\n", "TABLE") == ""))
+    cases.append(("登記だけのファイルはファイルごと落ちる",
+                  strip_registry_text("build/modules.json", "ZzTLedger") is None))
+    cases.append(("担当外のパスは素通し",
+                  strip_registry_text("tools/zz_tool.py", "ZzTPlain") == "ZzTPlain"))
+    cases.append(("登記リストは vba_lint の2表と台帳のみ",
+                  sorted(REGISTRY_ONLY_TEXT) ==
+                  ["build/modules.json", "tools/vba_lint.py"] and
+                  REGISTRY_ONLY_TEXT["tools/vba_lint.py"] ==
+                  ("MODULE_REGISTRY", "CONTRACT")))
+    # 「実行時に VBA を呼ぶ」側は**外さない**(外すと本物の配線が赤くなる)。
+    cases.append(("VBAを呼ぶ側は登記リストに入れない",
+                  not any(p in REGISTRY_ONLY_TEXT for p in
+                          ("build/build_rpn.py", "tools/run_lo_tests.py",
+                           "tools/render_report.py", "tools/render_proposal.py"))))
+
     # @unused
     lines = ["' 何か", "' @unused: Phase2 予約(裁定書38)",
              "Public Function Reserved() As String", "End Function"]
@@ -455,6 +735,9 @@ def self_test() -> bool:
     cases.append(("@unused 正例(Aは検出できる)",
                   find_unused_reason(bleed_lines, 2) == "reason A"))
 
+    # 合成リポジトリの回帰網(W15 Round2 T-m3。以前は scratchpad にしか無かった)。
+    cases.extend(regression_cases())
+
     bad = [name for name, ok in cases if not ok]
     for name in bad:
         print("  自己テスト NG: %s" % name)
@@ -468,9 +751,17 @@ def main() -> int:
                     help="検査対象ディレクトリ(既定: <repo>/src)")
     ap.add_argument("--verbose", action="store_true",
                     help="動的連結で救済した候補も列挙する")
+    ap.add_argument("--selftest", action="store_true",
+                    help="自己テストと回帰網だけを回す(src は検査しない)")
     args = ap.parse_args()
 
     print("orphan_check: 孤児Public検査(裁定書38 班D §1(1))")
+    if args.selftest:
+        if not self_test():
+            print("結果: 自己テスト失敗(検出器が壊れています)")
+            return 2
+        print("結果: 自己テストOK")
+        return 0
     src_root = Path(args.path).resolve()
     if not src_root.exists():
         print("[orphan_check] 対象ディレクトリが存在しません: %s" % src_root)

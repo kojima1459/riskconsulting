@@ -29,12 +29,15 @@
         伝書鳩1-3が挙げた「正しい長い名前を禁止語の部分一致で赤くする」を
         避けるため、判定は「存在するか」だけで、逆方向〔存在しない語を
         禁止するブロックリスト〕は持たない)
-        **ナビ画面(HTML画面=正)の区画ボタンの文脈では `src/ui/modUI*.bas`
-        (旧シート画面)を照合対象から外す**(W15 Round2 R2-10)。旧シート画面
-        には同じ位置に別名のボタン(例: 出力の区画)が今も実装として残って
-        いるため、手順書がHTML画面の区画を説明しながら旧シート画面の名前を
-        書いていても緑になっていた。**シート画面専用の手順**(docs/24 §5・§8、
-        docs/25 第1部〔予備: `ui_mode=sheet`〕)は従来どおり modUI* を見る。
+        **ナビ画面(HTML画面=正)の区画ボタンの文脈では `ui/` だけを照合する**
+        (W15 Round2 R2-10 → T-M2)。旧シート画面には同じ位置に別名のボタン
+        (例: 出力の区画)が今も実装として残っているため、手順書がHTML画面の
+        区画を説明しながら旧シート画面の名前を書いていても緑になっていた。
+        Round2 の Fix 波は `src/ui/modUI*.bas` だけを外したが、旧ボタン名の
+        多くは `build/sheets_main.json` にもキャプション・案内文として載って
+        いるため4語が素通りした(実測)。区画の正は `ui/` の実物だけなので、
+        照合先も `ui/` だけにする。**シート画面専用の手順**(docs/24 §5・§8、
+        docs/25 第1部〔予備: `ui_mode=sheet`〕)は従来どおり全集合を見る。
     (3) src が吐くエラーコード `E0\\d{3}` ⊆ 16章§1の表 ⊆ docs/25 が
         本文中に書くエラーコード(一方向の部分集合。docs/25は全コードを
         網羅する文書ではないため、逆方向〔16章にあってdocs/25に無い〕は
@@ -44,6 +47,7 @@
 使い方:
     python3 tools/doc_gate.py
     python3 tools/doc_gate.py --verbose
+    python3 tools/doc_gate.py --selftest   # 回帰網だけ(docs は検査しない)
     exit code: 0 = ERROR 0件 / 1 = ERROR 1件以上 / 2 = 自己テスト失敗
 ================================================================================
 """
@@ -147,7 +151,14 @@ TAB_NAME = re.compile(r"「([^「」\n]{1,20})」タブ")
 #   - `[名前を付けて保存]`: Excelの[ファイル]メニュー(docs/24:440・554)
 #   - `[オプション]`: Excel本体の設定画面(docs/24:566)
 #   - 「全般」タブ: Windowsのファイルのプロパティダイアログ(docs/24:64・107)
+#   - `[コンテンツの有効化]`: Excel のセキュリティ警告の黄色い帯のボタン
+#     (docs/25:28・89・420、docs/26:120、docs/24:123・136・291)。このアプリの
+#     ボタンではないので ui/ にも modUI* にも無い。これまでは
+#     build/sheets_main.json の案内文に同じ語があるせいで**たまたま**緑だった。
+#     区画の文脈の照合先を ui/ だけにした(T-M2)ことで実体が出たため、
+#     他のOS純正ボタンと同じくここへ明示する。
 NATIVE_OS_UI_ALLOWLIST = {"再表示", "フィルター", "名前を付けて保存", "オプション",
+                          "コンテンツの有効化",
                           "デバッグ", "VBAProject のコンパイル", "ツール", "参照設定"}  # VBE のメニュー(docs/24 §8.1-6)
 NATIVE_OS_TAB_ALLOWLIST = {"全般"}
 
@@ -167,21 +178,42 @@ HISTORICAL_PARAGRAPH_MARKER = "当時の記録"
 CHANGELOG_PARAGRAPH_RE = re.compile(r"^v[\d.]+\s*(?:変更概要|系)")
 
 
-def extract_ui_names(texts: dict, include_sheet_ui: bool = True) -> str:
+def extract_ui_names(texts: dict, include_sheet_ui: bool = True,
+                     include_sheets_json: bool = True) -> str:
     """突合対象の全テキストを1本に連結する。
 
-    include_sheet_ui=False のときは `src/ui/modUI*.bas`(旧シート画面の描画)を
-    外す。ナビ画面(HTML画面=正)の区画ボタンの文脈で使う(R2-10)。
-    build/sheets_main.json は**外さない**: シート本体(欄名・使い方タブ)の
-    キャプション源であり、どちらの画面の手順でも参照されるため。
+    既定(両方True)は「画面のどこかにある名前か」を見る従来の集合
+    = ui/ + build/sheets_main.json + src/ui/modUI*.bas。
+
+    **ナビ画面の区画ボタンの文脈では `ui/` だけを見る**(W15 Round2 T-M2)。
+    include_sheet_ui=False で旧シート画面の描画(`src/ui/modUI*.bas`)を、
+    include_sheets_json=False でシート定義(`build/sheets_main.json`)を外す。
+    Round2 の Fix 波は modUI* だけを外したが、旧シート画面のボタン名の多くは
+    **sheets_main.json 側にも**キャプション・案内文として載っているため、
+    R2 が名指しした旧名のうち4語(実測)が区画文脈で書き戻しても緑のままだった。
+    「区画N の [ボタン名]」はHTML画面の実物(`ui/`)が唯一の正なので、
+    照合先も `ui/` だけにする。
     """
     chunks = list(texts.values())
-    d = json.loads(SHEETS_JSON.read_text(encoding="utf-8"))
-    chunks.append(json.dumps(d, ensure_ascii=False))
+    if include_sheets_json:
+        d = json.loads(SHEETS_JSON.read_text(encoding="utf-8"))
+        chunks.append(json.dumps(d, ensure_ascii=False))
     if include_sheet_ui:
         for path in sorted((REPO_ROOT / "src" / "ui").glob("modUI*.bas")):
             chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
     return "\n".join(chunks)
+
+
+def build_haystacks(ui_texts: dict) -> tuple[str, str]:
+    """(通常の照合集合, 区画の文脈の照合集合) を作る。
+
+    **配線をここ1箇所に閉じる**。run_checks に直書きしていたときは、区画側の
+    旗を True へ戻す変異を自己テストが1件も捕まえられなかった(実測)。
+    自己テストはこの関数の戻り値を見るので、戻し変異はその場で赤くなる。
+    """
+    return (extract_ui_names(ui_texts),
+            extract_ui_names(ui_texts, include_sheet_ui=False,
+                             include_sheets_json=False))
 
 
 # ナビ画面(HTML画面=正)の説明をしている文書・区間。ここだけ modUI* を外す。
@@ -196,7 +228,6 @@ NAVI_DOC_REGIONS = {
 }
 
 KUKAKU_WORD = "区画"
-TABLE_SEPARATOR_ROW = re.compile(r"^\s*\|[\s\-:|]+\|\s*$")
 
 
 def _strip_historical_paragraphs(text: str) -> str:
@@ -345,8 +376,8 @@ def run_checks(verbose: bool) -> int:
         "app.js": (UI_DIR / "app.js").read_text(encoding="utf-8")
         if (UI_DIR / "app.js").exists() else "",
     }
-    haystack = extract_ui_names(ui_texts)
-    navi_haystack = extract_ui_names(ui_texts, include_sheet_ui=False)
+    # 区画の文脈は ui/ だけを照合する(T-M2)。配線は build_haystacks が持つ。
+    haystack, navi_haystack = build_haystacks(ui_texts)
     n2 = 0
     for rel, text in docs_texts.items():
         is_navi_doc = rel in NAVI_DOC_REGIONS
@@ -490,6 +521,35 @@ def self_test() -> bool:
                   check_bracket_names("区画4の [レポートを出す] を押す。", full)
                   == []))
 
+    # W15 Round2 T-M2: 区画の文脈の照合先は **ui/ だけ**。
+    # modUI* だけでなく build/sheets_main.json 由来の名前でも緑にしない
+    # (Round2 の Fix はここが抜けており、旧シート名4語が素通りしていた)。
+    full_j = "HTML画面の[提案骨子を見る]\nシート定義の案内文にある[ここに貼る]"
+    navi_j = "HTML画面の[提案骨子を見る]"
+    cases.append(("区画の文脈は sheets_main.json の名前でも緑にしない",
+                  check_bracket_names("区画2の [ここに貼る] に貼る。", full_j, navi_j)
+                  == [("ここに貼る", True)]))
+    cases.append(("区画の文脈でなければ sheets_main.json の名前は従来どおり緑",
+                  check_bracket_names("`S1_調べる` の [ここに貼る] に貼る。",
+                                      full_j, navi_j) == []))
+    cases.append(("区画の文脈でも ui/ にある名前は緑(誤検知0)",
+                  check_bracket_names("区画3の [提案骨子を見る] を押す。",
+                                      full_j, navi_j) == []))
+    # 照合集合の組み立てそのものを固定する(どちらの旗も効くこと)。
+    only_ui = extract_ui_names({"x": "ZzDocGateProbe"}, include_sheet_ui=False,
+                               include_sheets_json=False)
+    with_json = extract_ui_names({"x": "ZzDocGateProbe"}, include_sheet_ui=False,
+                                 include_sheets_json=True)
+    cases.append(("区画用の集合は ui/ のテキストだけ", only_ui == "ZzDocGateProbe"))
+    cases.append(("include_sheets_json=True なら sheets_main.json が入る",
+                  len(with_json) > len(only_ui) and "ZzDocGateProbe" in with_json))
+    # **配線**の固定(run_checks が実際に渡す2本)。旗を戻す変異をここで捕まえる。
+    hay, navi_hay = build_haystacks({"x": "ZzDocGateProbe"})
+    cases.append(("配線: 区画用は ui/ だけ", navi_hay == "ZzDocGateProbe"))
+    cases.append(("配線: 通常用は sheets_main.json を含む", '"sheets"' in hay))
+    cases.append(("配線: 通常用は modUI*.bas を含む", "modUI" in hay))
+    cases.append(("配線: 区画用は modUI*.bas を含まない", "modUI" not in navi_hay))
+
     # 対象外判定
     cases.append(("spec除外", is_excluded("docs/spec/13_データ設計.md")))
     cases.append(("受領除外", is_excluded("docs/受領/x.md")))
@@ -508,9 +568,17 @@ def self_test() -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser(description="文書検問(裁定書38 班D §1(3))")
     ap.add_argument("--verbose", action="store_true", help="エラーコード集合を列挙する")
+    ap.add_argument("--selftest", action="store_true",
+                    help="自己テスト(回帰網)だけを回す(docs は検査しない)")
     args = ap.parse_args()
 
     print("doc_gate: 文書検問(裁定書38 班D §1(3)。伝書鳩Part1-3の移植)")
+    if args.selftest:
+        if not self_test():
+            print("結果: 自己テスト失敗(検出器が壊れています)")
+            return 2
+        print("結果: 自己テストOK")
+        return 0
     errors = run_checks(args.verbose)
 
     if not self_test():
