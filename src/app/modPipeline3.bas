@@ -33,16 +33,13 @@ Private Const P3_NONE_TEXT As String = "なし"
 ' 15章§1.2c {{focus_line_ids}} の空時の既定文言。
 Private Const P3_FOCUS_NONE As String = "指定なし"
 
-' 直近の原文照合で未照合だった risk_no の一覧(";" 区切り。""=全部照合できた)。
-'   **モジュール変数による状態保持**は modPipeline2.LastDeepOutcome と同型で、
-'   理由も同じ(RunStep の Boolean 戻り値の契約を変えずに ui・HTML へ渡す口が
-'   他に無い)。読む口は LastGroundNote のみ。書くのは GroundHook のみ。
-Private mLastGroundNote As String
-
-' 直近のS1で立った警告の集計("V-S1-14:2,V-S1-15:1" 形式。""=指摘なし)。
-'   mLastGroundNote と同型・同じ理由(RunStep の戻り値の契約を変えずに HTML へ
-'   渡す口が他に無い)。読む口は LastS1Notes のみ。書くのは S1Notes のみ。
-Private mLastS1Note As String
+' W15 Round3(裁定書41 §1): 未照合注記・S1警告の**モジュール変数による状態保持**
+'   (mLastGroundNote / mLastS1Note)と読出口4本(LastGroundNote / ResetGroundNote /
+'   LastS1Notes / ResetS1Notes)は撤去した。HTMLレポートはこの値を使っておらず、
+'   modExportHtml が modGround.GroundNotes / modValidate3.CheckS1Notes を
+'   **自分で測り直している**(modExportHtml.bas の「同じ土俵」注記。実行時の
+'   case_data と出力時の case_data が食い違わないようにするため)。読む者が
+'   いない状態を持ち続けると、次に読む人が古い値を掴む。
 
 ' --------------------------------------------------------------------------
 ' 純関数(15章の各プレースホルダの値づくり)
@@ -160,7 +157,7 @@ End Function
 ' 裁定書37 B-03 / B-05: 原文照合(modGround)と充足度の run_log 記録
 ' ----------------------------------------------------------------------------
 ' modPipeline は30,000字契約でほぼ満杯のため、値源の組立(BuildHaystack)・
-'   config の読み・注記の保持(LastGroundNote)をここへ置き、modPipeline からは
+'   config の読み・run_log への注記(ground_unmatched=n)をここへ置き、modPipeline からは
 '   DefendNotes の**1行**で呼ぶ(B班報告 §3 B-03 の「呼び出し点は1箇所」)。
 ' **落とさない・修復リトライを起こさない**。run_log の detail に印を残すだけで、
 '   検証の戻り値(modValidate の *Core の結果)には一切触れない。
@@ -191,7 +188,6 @@ Public Sub GroundHook(ByVal caseId As String, ByVal s2Json As String, _
                       ByVal s1Json As String, ByRef detailAcc As String)
     Dim hay As String, note As String
 
-    mLastGroundNote = vbNullString
     If Not modConfig.GetBool("ground_check", True) Then Exit Sub
 
     hay = BuildHaystack(caseId, s1Json)
@@ -202,19 +198,8 @@ Public Sub GroundHook(ByVal caseId As String, ByVal s2Json As String, _
 
     note = modGround.GroundNotes(s2Json, hay, _
                                  modConfig.GetLong("ground_head_chars", modGround.GR_HEAD_DEFAULT))
-    mLastGroundNote = note
     ' 0件でも必ず記録する(「検査した」と「検査していない」を区別するため)。
     P3AddNote detailAcc, "ground_unmatched=" & CStr(modGround.NoteCount(note))
-End Sub
-
-' LastGroundNote - 直近の未照合 risk_no 一覧(";" 区切り)。
-Public Function LastGroundNote() As String
-    LastGroundNote = mLastGroundNote
-End Function
-
-' ResetGroundNote - 明示リセット口(modPipeline2.ResetDeepOutcome と同じ考え方)。
-Public Sub ResetGroundNote()
-    mLastGroundNote = vbNullString
 End Sub
 
 ' BuildHaystack - 照合される「原文」。case_data の input_* 全欄(13章§2.2 の
@@ -268,20 +253,8 @@ Public Sub S1Notes(ByVal caseId As String, ByVal s1Json As String, _
                    ByRef detailAcc As String)
     Dim note As String
 
-    mLastS1Note = vbNullString
     note = modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(s1Json, BuildHaystack(caseId, vbNullString)))
-    mLastS1Note = note
     If LenB(note) > 0 Then P3AddNote detailAcc, "s1_warn=" & note
-End Sub
-
-' LastS1Notes - 直近のS1警告の集計(LastGroundNote と同型)。
-Public Function LastS1Notes() As String
-    LastS1Notes = mLastS1Note
-End Function
-
-' ResetS1Notes - 明示リセット口(ResetGroundNote と同じ考え方)。
-Public Sub ResetS1Notes()
-    mLastS1Note = vbNullString
 End Sub
 
 ' S1Snapshot - 裁定書38 B-14。**s1_json を上書きする前**に前回分を

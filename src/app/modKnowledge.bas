@@ -45,7 +45,7 @@ Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_
 ' --- 絞込スペック(1行書式そのものは modKnowledgeFmt が持つ) ---
 ' 裁定書39 R1-03: 並べ替え補充(modKnowledgeRank)の n-gram 比較に掛ける字数上限の
 '   既定値。config `kb_rank_case_chars` / `kb_rank_row_chars` が正(13章§2.3)。
-'   上限が無いと案件本文2万字 x 全業種の行 の比較で Excel が数分〜数十分固まる。
+'   上限が無いと案件本文2万字 x 全業種の行 の比較で Excel が数分～数十分固まる。
 Private Const KB_RANK_CASE_CHARS As Long = 3000
 Private Const KB_RANK_ROW_CHARS As Long = 2000
 ' 裁定書40 P-M3(b): 並べ替え(modKnowledgeRank.RankRows)に掛ける候補**行数**の
@@ -290,6 +290,14 @@ Public Function CaseLibIdExists(ByVal id As String) As Boolean
     CaseLibIdExists = IdExistsIn(KB_I_CASE, "case_lib_id", id, False)
 End Function
 
+' 5種のうち pattern_id だけは呼出元が0件である(2026-09 時点の実測)。S1～S4の
+'   シートに pattern_id 欄が無く(modUICase2 の実在検査は menu/line/scheme/
+'   case_lib の4本)、pattern_id が現れる唯一の場所である壁打ち(PF)の
+'   rework_suggestions[] は modSchemas の固定enum P1～P15 を modValidate2 の
+'   V-PF-06 が照合している。16章 E-07 が「実在検査5種」を掲げている以上、
+'   ナレッジブックの patterns シートを増やして V-PF-06 を KB ホワイトリストへ
+'   切り替えるときの口として5本目を残す(4本だけ残すと E-07 と食い違う)。
+' @unused: 16章 E-07 の実在検査5種の5本目。pattern_id はS1～S4の画面に現れず、PF の rework_suggestions は modSchemas の固定enum(P1～P15)を V-PF-06 が見ているため現時点の呼出元は0件
 Public Function PatternIdExists(ByVal id As String) As Boolean
     PatternIdExists = IdExistsIn(KB_I_PAT, "pattern_id", id, False)
 End Function

@@ -727,17 +727,16 @@ Private Function LooksLikePolicyNo(ByVal token As String) As Boolean
 End Function
 
 ' ============================================================================
-' S1～S4シートの入口(13章§2.2 が名指しする `modUICase.SerializeSheet`)
+' SerializeSheet の撤去(W15 Round3・裁定書41 §1)
 ' ----------------------------------------------------------------------------
-' 実体は modUICase2(30,000字契約による分割先)。13章が名指しした名前を
-' この層に残し、呼び出し側がどちらを呼ぶか迷わないようにする。
+' 13章§2.2 逆シリアライズ規約1の入口として `modUICase.SerializeSheet` を置いて
+' いたが、**中身は modUICase2.SerializeStep を呼ぶだけの別名**で、呼出元は
+' 0件だった(本番の呼出は modUICase2.SerializeStep 直呼びが2箇所=
+' modNaviActions.bas の HTML画面経路、および modUICase2 内部)。別名を残すと
+' 「どちらが正か」を毎回調べることになるため落とす。
+' 【申し送り】13章§2.2 と src/ui/README.md の名指しを `modUICase2.SerializeStep`
+'   へ直す必要がある(どちらも本班の担当ファイル外)。
 ' ============================================================================
-
-' 13章§2.2 逆シリアライズ規約1。対象シートの全ブロックを読んでJSONを組む。
-'   組めなければ ""(捏造しない)。
-Public Function SerializeSheet(ByVal stepNo As Long) As String
-    SerializeSheet = modUICase2.SerializeStep(stepNo)
-End Function
 
 ' ============================================================================
 ' シート画面(予備経路)にも HTML画面と同じ2つを置く(裁定書39 R1-07)

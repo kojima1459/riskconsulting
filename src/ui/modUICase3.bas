@@ -90,9 +90,11 @@ Private Function AttrTable() As String
     AttrTable = s
 End Function
 
-' ============================================================================
-' 図形ボタン(11章 案件入力ワイヤー)
-' ============================================================================
+' 図形ボタン。v3.2 で廃止した旧「案件入力」シートの残存経路(17章 Z-5)。
+' **配線し直さないこと**: U3_SHEET は v3.2 で "ナビ" を指すため、呼ぶとナビに
+' CaseSave 結線の[保存して戻る]が生え、撤去済み ci_paste_* を読む CaseSave が
+' case_data を空で上書きする(11章§3.1.2)。現行の保存口は SaveNav の1本。
+' @unused: v3.2 で廃止した旧「案件入力」シートの残存経路(17章 Z-5 で一括裁定)。配線すると CaseSave が case_data を空で上書きする
 Public Sub EnsureCaseButtons()
     On Error Resume Next
 
@@ -261,9 +263,8 @@ Failed:
     CreateCaseFromSheet = vbNullString
 End Function
 
-' ============================================================================
-' 案件入力の描画(案件 -> 画面)
-' ============================================================================
+' 案件入力の描画(案件 -> 画面)。EnsureCaseButtons と同じ旧経路(17章 Z-5)。
+' @unused: v3.2 で廃止した旧「案件入力」シートの残存経路(17章 Z-5 で一括裁定)。現行の描画は modUINav.DrawNav
 Public Sub DrawCaseInput(ByVal caseId As String)
     On Error Resume Next
 

@@ -235,7 +235,7 @@ Private Sub RunStepUi(ByVal stepNo As Long)
         ' 裁定書40 Q-m1: ここは**実行の直後**なので afterRun=True で描く。
         modUICase2.DrawStep caseId, stepNo, True
         modUISheet.ShowSheet modUICase2.SheetNameOf(stepNo)
-        modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: S1〜S4 の各段の完了ごとに
+        modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: S1～S4 の各段の完了ごとに
         ShowDeepWarning
     Else
         modUIHome.ShowWarning "Step" & CStr(stepNo) & " が完了しませんでした。err_log をご確認ください。"
@@ -313,79 +313,22 @@ End Function
 
 
 ' ============================================================================
-' 新規案件・画面遷移
+' 画面遷移ハンドラ7本の撤去(W15 Round3・裁定書41 §1)
+' ----------------------------------------------------------------------------
+' HomeNewCase / HomeOpenCaseInput / HomeOpenInbox / HomeOpenFeedback /
+' HomeOpenJudgeLog / HomeOpenSparring / HomePreflightAll は v3.2 で**廃止した
+' HOMEシート**の[くわしい操作]ボタンの OnAction 先であり、HOMEシート撤去
+' (11章§3.1.4・§8.1)以降どの図形からも指されていなかった。同じ操作は
+' シート画面(予備経路)にそのまま残っている:
+'   新規案件   = 帯で案件未選択 -> modUINav.DrawNav が ci_case_id へ (新規) を
+'                書き、modUICase6.SaveNav が採番する(11章§3.1.4)
+'   貼る欄を開く = ナビが常時その画面(区画②)
+'   受信箱/フィードバック/判断台帳/壁打ち
+'              = 使い方タブ⑦上級の[表示する](modUIGuide.ShowAdvanced1～5)
+'   一括診断   = 受信箱の[未診断を一括診断](modUIInbox.InboxDiagnoseAll。
+'                modPlayOps.RunPreflightAll を呼ぶ実体は同じ)
+' したがって予備画面は壊れていない。重複した入口だけを落とす。
 ' ============================================================================
-Public Sub HomeNewCase()
-    If Not modUIProgress.TryEnterUiLock("新規案件") Then Exit Sub
-    On Error GoTo Done
-
-    modUIProgress.ParkFocus
-    modUIHome.ShowWarning vbNullString
-
-    ' 裁定書12 V1(13章§2.11): ここでは採番しない。案件入力を**新規モード**で
-    ' 開くだけにし、ci_case_id へ固定マーカー「(新規)」を書く。採番は案件入力の
-    ' [保存して戻る](modUICase3.CaseSave の3値判定)が企業名・業種を読んで行う。
-    ' 空欄のまま採番して幽霊案件が積まれるのを防ぎ、かつ「表示が空のまま保存」
-    ' を新規採番へ倒さないという保証を、ブックに残るセル1つで成り立たせる。
-    '
-    ' 裁定書13 W1(13章§2.11): マーカーを書く**前に画面を全クリアする**。前の案件
-    ' を描いた画面のまま新規モードへ入ると、その画面の貼付内容がそのまま新しい
-    ' 案件の case_data として確定する(切り詰まった描画のあとでも同じ)。
-    ' **新規モードは空画面から始まる**。
-    modUICase4.ClearCaseInput
-    modUINavDraw.ResetForNewCase vbNullString
-    modUISheet.WriteNamed "ci_case_id", modUICase3.U3_NEW_MARK
-    modUISheet.ShowSheet "ナビ"
-    modUIToast.ShowNext 1
-
-Done:
-    modUIProgress.ExitUiLock
-    modUIProgress.ParkFocus
-End Sub
-
-' v3.2: 「案件入力」シートは廃止され、区画②はナビの中にある(11章§1.1)。
-'   本ハンドラは残るが、開くのはナビであり、描き直しは modUINav が行う。
-Public Sub HomeOpenCaseInput()
-    If Not modUIProgress.TryEnterUiLock("貼る欄を開く") Then Exit Sub
-    On Error GoTo Done
-    modUISheet.ShowSheet "ナビ"
-    modUINav.DrawNav
-Done:
-    modUIProgress.ExitUiLock
-End Sub
-
-Public Sub HomeOpenInbox()
-    If Not modUIProgress.TryEnterUiLock("受信箱を開く") Then Exit Sub
-    On Error GoTo Done
-    modUIInbox.RefreshInbox
-    modUISheet.ShowSheet "受信箱"
-Done:
-    modUIProgress.ExitUiLock
-End Sub
-
-Public Sub HomeOpenFeedback()
-    If Not modUIProgress.TryEnterUiLock("商談の記録") Then Exit Sub
-    On Error GoTo Done
-    modUISheet.ShowSheet "フィードバック"
-Done:
-    modUIProgress.ExitUiLock
-End Sub
-
-Public Sub HomeOpenJudgeLog()
-    If Not modUIProgress.TryEnterUiLock("判断台帳") Then Exit Sub
-    On Error GoTo Done
-    modUISheet.ShowSheet "判断台帳"
-Done:
-    modUIProgress.ExitUiLock
-End Sub
-
-Public Sub HomeOpenSparring()
-    If Not modUIProgress.TryEnterUiLock("壁打ち") Then Exit Sub
-    On Error GoTo Done
-    modUISparring.OpenSparring modUIHome.SelectedCaseId()
-Done:
-    modUIProgress.ExitUiLock
-End Sub
 
 ' ============================================================================
 ' 第2ラウンド開始(11章 HOMEワイヤー・裁定書9 A-2/N7)
@@ -696,25 +639,6 @@ Public Sub HomeReloadKnowledge()
     Else
         modUIHome.ShowWarning vbNullString
     End If
-    modUIHome.RefreshHome
-
-Done:
-    modUIProgress.ExitUiLock
-    modUIProgress.ParkFocus
-End Sub
-
-Public Sub HomePreflightAll()
-    If Not modUIProgress.TryEnterUiLock("プリフライト診断") Then Exit Sub
-    On Error GoTo Done
-
-    modUIProgress.ParkFocus
-    modUIProgress.SetStage "投函をまとめて診断しています", WaitSec(), 1, 1
-
-    Dim n As Long
-    n = modPlayOps.RunPreflightAll()
-    modUIHome.ShowWarning "プリフライト診断: " & CStr(n) & "件を診断しました。", "info"
-
-    modUIInbox.RefreshInbox
     modUIHome.RefreshHome
 
 Done:

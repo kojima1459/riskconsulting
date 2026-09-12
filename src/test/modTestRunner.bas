@@ -137,13 +137,12 @@ End Function
 ' 計数の公開アクセサ(裁定書14 裁定5)
 '   ブック内テスト実行(modTestsRunnerUi)が ps1 と同じ4条件(FAIL 0 / SKIP 0 /
 '   純層の実行本数=期待 / 層(b) 1本以上)をVBA側で判定するための読み出し口。
+'   W15 Round3(裁定書41 §1): PassCount は4条件のどれにも要らず(tools/t48_check.py
+'   が見るのも FailCount / SkipCount / ExecutedCount の3本)、呼出元が0件だった
+'   ため撤去した。合格数が要るときは ExecutedCount() - FailCount() で足りる。
 '   **読み出すだけ**であり集計の仕方は変えない(R4=純ロジックのまま。
 '   LibreOffice実行テストへの影響も無い)。
 ' ----------------------------------------------------------------------------
-Public Function PassCount() As Long
-    PassCount = mTotalCount - mFailCount
-End Function
-
 Public Function FailCount() As Long
     FailCount = mFailCount
 End Function

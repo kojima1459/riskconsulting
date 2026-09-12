@@ -346,8 +346,11 @@ CONTRACT: dict[str, dict] = {
     },
     "modUICase6": {
         "closed": False,
-        "required": ["StoreArea", "LoadArea", "ReadDirectPaste", "SentinelCheck",
-                     "MergedOrShapeCheck", "PasteIntoArea", "ShowArea", "ClearArea",
+        # W15 Round3(裁定書41 §1): SentinelCheck / MergedOrShapeCheck を撤去した
+        # (呼出元0件の通過口。はみ出し判定は ReadDirectPaste の overflow、
+        #  結合セル・図形は modUICase7.MergedOrShapeAt が本体)。
+        "required": ["StoreArea", "LoadArea", "ReadDirectPaste",
+                     "PasteIntoArea", "ShowArea", "ClearArea",
                      "SaveNav", "AreaKeys", "AreaField", "AreaBody",
                      "AreaTable", "HandlerName", "WriteFieldNotesArea"],
     },
@@ -360,8 +363,10 @@ CONTRACT: dict[str, dict] = {
     },
     "modUIGeom": {
         "closed": False,
-        "required": ["SumSpan", "FlowLeft", "TextSpan", "ClipToWidth", "ClipToChars",
-                     "PillWidth", "StepDots", "CardHeightFor", "CardWaitMsFor",
+        # W15 Round3(裁定書41 §1): 移植しただけで一度も呼ばれなかった
+        # SumSpan / ClipToWidth / PillWidth / CardWaitMsFor の4本を撤去した。
+        "required": ["FlowLeft", "ClipToChars",
+                     "StepDots", "CardHeightFor",
                      "ToastSecondsFor"],
     },
     "modNavText": {
@@ -532,7 +537,10 @@ CONTRACT: dict[str, dict] = {
             "FinanceBlockText", "IncidentsBlockText", "FocusLineIdsAttr",
             "IncidentsFor",
             # 裁定書37 B-03/B-05。原文照合の呼び口と充足度の1語化。
-            "DefendNotes", "GroundHook", "LastGroundNote", "BuildHaystack",
+            # W15 Round3(裁定書41 §1): LastGroundNote / ResetGroundNote /
+            # LastS1Notes / ResetS1Notes は読む者が0件だったため撤去した
+            # (HTMLレポートは modExportHtml が自分で測り直している)。
+            "DefendNotes", "GroundHook", "BuildHaystack",
             "SufficiencyNoteOf",
         ],
     },
@@ -689,10 +697,12 @@ CONTRACT: dict[str, dict] = {
     #   `modUICase.SerializeSheet(stepNo)`。EnumPairsCsv は tools/enum_check.py が
     #   静的評価する**変換表そのもの**であり、Private化・改名すると17章§4-2の
     #   一致検査が対象を失う(=検査が無言で消える)ため required に載せる。
+    #   W15 Round3(裁定書41 §1): SerializeSheet は modUICase2.SerializeStep を
+    #   呼ぶだけの別名で呼出元0件だったため撤去した(本番は SerializeStep 直呼び)。
     "modUICase": {
         "closed": False,
         "required": ["EnumPairsCsv", "EnumJa", "EnumEn", "EnumLabels",
-                     "ApplyEnumValidation", "SerializeSheet"],
+                     "ApplyEnumValidation"],
     },
     # 以下4本の公開口は 14章§6 が宣言していない(ui層の画面ハンドラは章の
     # 契約面に載っていない)。CONTRACT へは完全性自己検査
@@ -731,12 +741,14 @@ CONTRACT: dict[str, dict] = {
     "modUIHome2": {
         "closed": False,
         "required": [
+            # W15 Round3(裁定書41 §1): v3.2 で廃止した HOMEシートの
+            # [くわしい操作]の結線先だった7本(HomeNewCase / HomeOpenCaseInput /
+            # HomeOpenInbox / HomeOpenFeedback / HomeOpenJudgeLog /
+            # HomeOpenSparring / HomePreflightAll)を撤去した。同じ操作は
+            # ナビの新規モード・使い方タブ⑦上級・受信箱の一括診断に残っている。
             "HomeRunAll", "HomeRunS1", "HomeRunS2", "HomeRunS3", "HomeRunS4",
-            "HomeNewCase", "HomeOpenCaseInput", "HomeOpenInbox",
-            "HomeOpenFeedback", "HomeOpenJudgeLog", "HomeOpenSparring",
             "HomeFreezeRound", "HomeExportHtml", "HomeBuildHearing",
             "HomeCompanySave", "HomeCompanyOpen", "HomeReloadKnowledge",
-            "HomePreflightAll",
         ],
     },
     "modUICase2": {"closed": False, "required": []},
@@ -755,7 +767,9 @@ CONTRACT: dict[str, dict] = {
             "SetExpectedCount",
             # 裁定書14 裁定5: ブック内テスト実行が ps1 と同じ4条件を判定する
             # ための計数の読み出し口(集計の仕方は変えない)。
-            "PassCount", "FailCount", "SkipCount", "ExecutedCount",
+            # W15 Round3(裁定書41 §1): PassCount は4条件のどれにも使われず
+            # 呼出元0件だったため撤去した(合格数は ExecutedCount - FailCount)。
+            "FailCount", "SkipCount", "ExecutedCount",
         ],
     },
     # modTestsExcel: 14章§6のtest層契約(層(b)=実Excel E2Eスモークの入口。17章T-47)。
