@@ -337,6 +337,11 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long) As Boolea
     Select Case stepNo
     Case 1
         DrawS1 jsonText
+        ' 裁定書39 R1-07(a): シート画面にも 16章 E-02(実行後)の警告帯を出す。
+        ' RunStepUi は S1 成功後にここを必ず通り、S2〜S4 の描画は hm_warning を
+        ' 触らないので、一括実行(DrawAllSteps)でも帯は残る。文言の値源は
+        ' modUICase.IqBannerTextOf の1本(判断は modPipeline3.SufficiencyNoteOf)。
+        ShowIqBanner jsonText
     Case 2
         DrawS2 jsonText
     Case 3
@@ -380,6 +385,18 @@ Private Sub DrawS1(ByVal jsonText As String)
     DrawArrBlock "s1_sources", modUICaseFmt.ColsS1Sources(), jsonText, "sources"
     DrawQualityBanner jsonText
     DrawResearchButtons
+End Sub
+
+' 裁定書39 R1-07(a): 16章 E-02(実行後)の警告帯を HOME の hm_warning へ出す。
+'   iq=low 以外は**何も書かない**(他の警告を消さない)。判断も文言も
+'   modUICase.IqBannerTextOf の1本が持ち、ここは書く場所を知っているだけ。
+Private Sub ShowIqBanner(ByVal jsonText As String)
+    On Error Resume Next
+    Dim bannerText As String
+    bannerText = modUICase.IqBannerTextOf(jsonText)
+    If LenB(bannerText) = 0 Then Exit Sub
+    modUISheet.WriteNamed U2_WARN, modUIToast.WarnLine(bannerText, "warn")
+    modUIToast.ShowToast bannerText, "warn"
 End Sub
 
 Private Sub DrawS2(ByVal jsonText As String)

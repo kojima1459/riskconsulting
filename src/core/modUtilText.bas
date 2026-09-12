@@ -232,6 +232,40 @@ Public Function SanitizeInput(ByVal s As String, _
     SanitizeInput = cleaned
 End Function
 
+' ============================================================================
+' HasVisibleText - 空白類を除いて1文字でも残るか(裁定書39 R2-04)。
+' ----------------------------------------------------------------------------
+'   「入力されているか」の判定を1本に寄せるための純関数。VBAの Trim$ は
+'   Chr(32)(半角空白)しか落とさないため、`LenB(Trim$(s)) > 0` は TAB・LF・CR・
+'   全角空白(U+3000)だけの文字列を「入力あり」と認めてしまう。顧客提示物を
+'   出す前の**唯一の関門**である確認者名の判定がそこに乗っていたので、空白類を
+'   明示して数える(SanitizeInput は TAB と LF を本文の構造として意図的に残す
+'   =本モジュール上の SanitizeInput(1) なので、その後段でも残っている)。
+'
+'   空白類として扱う文字: 半角空白 / 全角空白(U+3000) / TAB(Chr(9)) /
+'     LF(Chr(10)) / CR(Chr(13)) / 垂直タブ(Chr(11)) / 改ページ(Chr(12))。
+'   空文字列は False。
+'
+'   呼び口(この1本以外で確認者名の空判定をしない):
+'     ・レポート   modExportHtml.ReviewerOf
+'     ・提案書     modExportProposal.NeedsReviewMessage(班S/司令塔が差し替え)
+' ============================================================================
+Public Function HasVisibleText(ByVal s As String) As Boolean
+    Dim i As Long
+    Dim ch As String
+
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        Select Case ch
+        Case " ", "　", vbTab, vbLf, vbCr, Chr$(11), Chr$(12)
+            ' 空白類。可視文字として数えない。
+        Case Else
+            HasVisibleText = True
+            Exit Function
+        End Select
+    Next i
+End Function
+
 Private Function CountOccurrences(ByVal hay As String, ByVal needle As String) As Long
     If LenB(hay) = 0 Or LenB(needle) = 0 Then Exit Function
     Dim n As Long

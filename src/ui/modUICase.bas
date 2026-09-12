@@ -46,6 +46,16 @@ Private Const UC_POLICY_MIN_DIGITS As Long = 4
 ' 変換表のキャッシュ(先頭に vbLf を足した形。行頭一致で引くため)。
 Private gPairs As String
 
+' 裁定書39 R1-07: シート画面の確認者名の入力口(11章§3.8.2c と同じ趣旨)。
+Private Const UC_TITLE_ASK_REVIEWER As String = "内容を確認した担当者"
+Private Const UC_MSG_ASK_REVIEWER As String = _
+    "レポートの内容を確認した担当者のお名前を入力してください。" & vbLf & _
+    "空のまま[OK]または[キャンセル]を押すと、「AI生成・担当者確認前」の" & _
+    "注記が入ったレポートを出力します。"
+' 16章 E-02(実行後)の警告帯。HTML画面(modNaviActions.ActRunPipeline)の逐語。
+Private Const UC_MSG_IQ_LOW As String = "入力が薄いため、一般論に近い出力になります。"
+Private Const UC_MSG_IQ_ADVICE As String = " 助言: "
+
 ' ============================================================================
 ' EnumPairsCsv - 19章§3の変換表そのもの(`グループ,機械値,日本語` を vbLf 区切り)
 ' ----------------------------------------------------------------------------
@@ -727,4 +737,58 @@ End Function
 '   組めなければ ""(捏造しない)。
 Public Function SerializeSheet(ByVal stepNo As Long) As String
     SerializeSheet = modUICase2.SerializeStep(stepNo)
+End Function
+
+' ============================================================================
+' シート画面(予備経路)にも HTML画面と同じ2つを置く(裁定書39 R1-07)
+' ----------------------------------------------------------------------------
+' iq=low の警告帯と確認者つきレポート出力が**HTML画面にしか無かった**ため、
+' シート画面では 16章 E-02 が一度も出ず、18章§3.5 の3項分岐が常に「AI生成・
+' 担当者確認前」へ固定されていた。判断は app層(modPipeline3.SufficiencyNoteOf /
+' modExportHtml.GenerateHtmlReportEx)が唯一持ち、本モジュールはその値を画面の
+' 言葉にするだけにする(裁定書37 B-05/B-06「画面を直しても抜けない」)。
+' ============================================================================
+
+' 16章 E-02(実行後)の警告文。iq=low のときだけ1文を返し、それ以外は ""。
+'   advice は S1 出力の同名キー(15章 Schema-S1)。文言は HTML画面
+'   (modNaviActions.ActRunPipeline)の逐語と同じにする。
+Public Function IqBannerTextOf(ByVal s1Json As String) As String
+    ' 読めなければ "iq=?" が返る(黙って low 扱いにしない)。
+    If Left$(modPipeline3.SufficiencyNoteOf(s1Json), 6) <> "iq=low" Then Exit Function
+
+    Dim adviceText As String
+    adviceText = Trim$(modJsonLite.GetStr(s1Json, "advice"))
+
+    IqBannerTextOf = UC_MSG_IQ_LOW
+    If LenB(adviceText) > 0 Then
+        IqBannerTextOf = IqBannerTextOf & UC_MSG_IQ_ADVICE & adviceText
+    End If
+End Function
+
+' シート画面のレポート出力の口(裁定書39 R1-07(b))。確認者名を1回だけ尋ねて
+'   modExportHtml.GenerateHtmlReportEx へ渡す(空なら未確認のまま出る)。戻り値も
+'   引数も GenerateHtmlReport に合わせてあるので、呼出側は1行差し替えでよい。
+' 【申し送り】呼び出し元は modUIHome2.bas:450 の
+'     errText = modExportHtml.GenerateHtmlReport(caseId, outPath)
+'   を ExportReportWithReview(caseId, outPath) へ差し替えると生える。同ファイルは
+'   裁定書39 §2 の班Q担当一覧(modUICase*)に無いので班Qは触れず口だけ用意した。
+'   **差し替えたら次行の @unused を削ること**(残すと以後の未配線を隠す)。
+' @unused: 配線待ち(裁定書39 R1-07(b)。modUIHome2.bas:450 の1行差し替え。上記参照)
+Public Function ExportReportWithReview(ByVal caseId As String, _
+                                       ByRef outPath As String) As String
+    ExportReportWithReview = modExportHtml.GenerateHtmlReportEx(caseId, outPath, _
+                                                                AskReviewerName())
+End Function
+
+' 確認者名の入力口(シート画面)。Excelの InputBox を1回だけ出し、取り消し・
+'   空白類だけの入力は ""(=未確認のまま出力する)として返す。判定は
+'   modUtilText.HasVisibleText の1本(裁定書39 R2-04)。
+Public Function AskReviewerName() As String
+    On Error GoTo Skipped
+    Dim answer As String
+    answer = CStr(InputBox(UC_MSG_ASK_REVIEWER, UC_TITLE_ASK_REVIEWER))
+    If modUtilText.HasVisibleText(answer) Then AskReviewerName = answer
+    Exit Function
+Skipped:
+    AskReviewerName = vbNullString
 End Function
