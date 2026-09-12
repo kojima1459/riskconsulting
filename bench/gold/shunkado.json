@@ -1,0 +1,28 @@
+{
+  "company": "有限会社春華堂",
+  "fixture_dir": "shunkado",
+  "exact": {
+    "company_name": "有限会社春華堂",
+    "financials.source": "unknown"
+  },
+  "recall": [
+    "春華堂",
+    "うなぎパイ",
+    "1887年",
+    "うなぎパイファクトリー",
+    "SWEETS BANK",
+    "浜松",
+    "初任給",
+    "shunkado.co.jp"
+  ],
+  "forbidden": [
+    "浸水深30cm~50cm未満",
+    "セグメント別売上高120億円",
+    "営業利益3918億円",
+    "従業員数1200名",
+    "本社は静岡市"
+  ],
+  "sources_forbidden_url": [
+    "https://example-fake-news.invalid/shunkado-report"
+  ]
+}
