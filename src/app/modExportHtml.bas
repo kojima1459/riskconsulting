@@ -258,9 +258,13 @@ End Function
 '         「本文の構造」として**意図的に残す**ため、ここで落とさないと確認者名
 '         1つで coverFields のフィールドがずれ、<noscript> の確認日時を任意の
 '         文字列に偽装できる(裁定書39 R2-05)。
-'     (3) 空白類(半角/全角/TAB/LF/CR)だけなら**未確認**として空文字を返す。
-'         Trim$ は Chr(32) しか落とさないので、判定は modUtilText.HasVisibleText
-'         の1本に寄せる(裁定書39 R2-04。提案書側も同じ1本を呼ぶ)。
+'     (3) 空白類だけなら**未確認**として空文字を返す。Trim$ は Chr(32) しか
+'         落とさないので、判定は modUtilText.HasVisibleText の1本に寄せる
+'         (裁定書39 R2-04・42 §2-1)。**空白類の一覧をここに書かない**:
+'         一覧は modUtilText.HasVisibleText だけが持ち(NBSP・ZWSP・BOM を
+'         含む10種)、提案書側 modExportProposal.NeedsReviewMessage も同じ
+'         1本を前処理なしで呼ぶ。両経路は tools/render_proposal.py の
+'         確認導線の節が**同じ表**で実測するので、片方だけ直すと赤くなる。
 ' ==========================================================
 Public Function ReviewerOf(ByVal reviewedBy As String) As String
     Dim t As String
@@ -428,7 +432,10 @@ Private Function RestoreAnonymized(ByVal jsonText As String, ByVal company As St
     Dim t As String
     t = jsonText
     If InStr(1, t, EX_PH_COMPANY, vbBinaryCompare) > 0 Then
-        If LenB(Trim$(company)) > 0 Then
+        ' 会社名は人の入力。空判定は modUtilText.HasVisibleText の1本
+        ' (裁定書42 §2-1 の横展開。全角空白や NBSP だけの会社名を実名として
+        ' 差し込むと、顧客に出る本文が見た目の空欄で埋まる)。
+        If modUtilText.HasVisibleText(company) Then
             t = Replace(t, EX_PH_COMPANY, company)
         Else
             warnText = AddWarn(warnText, "匿名化の復元ができませんでした(会社名)。")

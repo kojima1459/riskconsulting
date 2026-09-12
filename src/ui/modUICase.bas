@@ -617,7 +617,10 @@ End Function
 Public Function RestoreNames(ByVal sText As String, ByVal company As String) As String
     RestoreNames = sText
     If LenB(sText) = 0 Then Exit Function
-    If LenB(Trim$(company)) = 0 Then Exit Function
+    ' 会社名は人の入力。空判定は modUtilText.HasVisibleText の1本(裁定書42
+    ' §2-1 の横展開)。Trim$ だけだと全角空白や NBSP だけの会社名を実名として
+    ' 差し込み、プレースホルダが見た目の空欄に化ける。
+    If Not modUtilText.HasVisibleText(company) Then Exit Function
     If InStr(1, sText, UC_PH_COMPANY, vbBinaryCompare) = 0 Then Exit Function
     RestoreNames = Replace(sText, UC_PH_COMPANY, company)
 End Function

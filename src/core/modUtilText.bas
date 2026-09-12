@@ -233,22 +233,32 @@ Public Function SanitizeInput(ByVal s As String, _
 End Function
 
 ' ============================================================================
-' HasVisibleText - 空白類を除いて1文字でも残るか(裁定書39 R2-04)。
+' HasVisibleText - 空白類を除いて1文字でも残るか(裁定書39 R2-04・42 §2-1)。
 ' ----------------------------------------------------------------------------
-'   「入力されているか」の判定を1本に寄せるための純関数。VBAの Trim$ は
+'   「人が入力したか」の判定を**1本に寄せる**ための純関数。VBAの Trim$ は
 '   Chr(32)(半角空白)しか落とさないため、`LenB(Trim$(s)) > 0` は TAB・LF・CR・
 '   全角空白(U+3000)だけの文字列を「入力あり」と認めてしまう。顧客提示物を
 '   出す前の**唯一の関門**である確認者名の判定がそこに乗っていたので、空白類を
 '   明示して数える(SanitizeInput は TAB と LF を本文の構造として意図的に残す
 '   =本モジュール上の SanitizeInput(1) なので、その後段でも残っている)。
 '
-'   空白類として扱う文字: 半角空白 / 全角空白(U+3000) / TAB(Chr(9)) /
-'     LF(Chr(10)) / CR(Chr(13)) / 垂直タブ(Chr(11)) / 改ページ(Chr(12))。
-'   空文字列は False。
+'   空白類として扱う文字(10種。**この一覧がこの製品の唯一の正**):
+'     半角空白 / 全角空白(U+3000) / TAB(9) / LF(10) / CR(13) / 垂直タブ(11) /
+'     改ページ(12) / NBSP(U+00A0) / ZWSP(U+200B) / BOM=ZWNBSP(U+FEFF)。
+'   後半3つは**見た目が空なのに Trim$ でも落ちない**文字で、ブラウザや Word
+'   からの貼り付けで容易に混入する(裁定書40 S-m と統合レビュー。NBSP だけの
+'   確認者名でレポートが「担当者が確認・編集したもの」に切り替わり、ZWSP と
+'   BOM だけの確認者名では提案書が実際に書き出されていた)。空文字列は False。
 '
-'   呼び口(この1本以外で確認者名の空判定をしない):
-'     ・レポート   modExportHtml.ReviewerOf
-'     ・提案書     modExportProposal.NeedsReviewMessage(班S/司令塔が差し替え)
+'   呼び口(**確認者名・会社名など人の入力の空判定はこの1本以外でしない**):
+'     ・レポート       modExportHtml.ReviewerOf
+'     ・提案書         modExportProposal.NeedsReviewMessage
+'     ・シート画面     modUICase.AskReviewerName
+'     ・会社名         modNaviActions.ValidateBasics / modUICase.RestoreNames
+'     ・貼り付け本文   modNaviActions.ActPasteMaterial
+'   回帰は純テスト(modTestsPure24/27)と tools/render_proposal.py の確認導線の
+'   節(レポート・提案書の両経路を**同じ表**で実測する)。片方だけ直す改修を
+'   すると後者が必ず赤くなる。
 ' ============================================================================
 Public Function HasVisibleText(ByVal s As String) As Boolean
     Dim i As Long
@@ -257,7 +267,8 @@ Public Function HasVisibleText(ByVal s As String) As Boolean
     For i = 1 To Len(s)
         ch = Mid$(s, i, 1)
         Select Case ch
-        Case " ", "　", vbTab, vbLf, vbCr, Chr$(11), Chr$(12)
+        Case " ", "　", vbTab, vbLf, vbCr, Chr$(11), Chr$(12), _
+             ChrW$(160), ChrW$(8203), ChrW$(65279)
             ' 空白類。可視文字として数えない。
         Case Else
             HasVisibleText = True

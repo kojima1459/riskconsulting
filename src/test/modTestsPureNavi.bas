@@ -159,6 +159,16 @@ Public Sub RunAll()
         modNaviActions2.OpenTargetOf("R.html", NaviPathSample(), vbNullString) = "R.html"
     CheckN "NAVI-P65 no report means nothing to open", _
         modNaviActions2.OpenTargetOf(vbNullString, vbNullString, vbNullString) = vbNullString
+    ' 裁定書42 §2-2: ActOpenReport の4つの文言は OpenLabelOf の1本から作る。
+    ' 提案書の行から来たときだけ「提案書」になり、それ以外は「レポート」。
+    ' この2本が落ちると、提案書の[ブラウザで開く]に「この案件に登録された
+    ' レポートがありません。」というレポート専用の文言が戻る形へ逆戻りする。
+    CheckN "NAVI-P71 the proposal row is worded as the proposal", _
+        modNaviActions2.OpenLabelOf(NaviPathSample(), NaviPathSample()) = "提案書"
+    CheckN "NAVI-P72 every other row is worded as the report", _
+        modNaviActions2.OpenLabelOf(NaviPathSample(), "R.html") = "レポート" And _
+        modNaviActions2.OpenLabelOf(NaviPathSample(), vbNullString) = "レポート" And _
+        modNaviActions2.OpenLabelOf(vbNullString, vbNullString) = "レポート"
     CheckN "NAVI-P66 the copy pre-scan source is capped at 30000 chars", _
         Len(modNaviActions2.CapSourceText(String$(30001, "x"))) = 30000
     CheckN "NAVI-P67 a short source is not cut", _

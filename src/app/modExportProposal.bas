@@ -179,25 +179,17 @@ End Function
 '   **唯一の判断点**(純関数)。確認者名が空なら案内文、非空なら ""。
 '   画面(区画④)でも先に弾くが、判断の正はここであり、画面を書き換えても
 '   抜けられないようにするための1関数である。層(a)から直接叩ける。
-'   空判定は Trim$ ではなく HasVisibleName(裁定書39 R2-04)。Windows の
-'   Trim$ は Chr(32) しか落とさないため、TAB / LF / CR / 全角空白だけの
-'   文字列が「確認済み」として通っていた。
+'   空判定は Trim$ ではなく **modUtilText.HasVisibleText を直接呼ぶ**
+'   (裁定書39 R2-04・42 §2-1)。Windows の Trim$ は Chr(32) しか落とさない
+'   ため、TAB / LF / CR / 全角空白だけの文字列が「確認済み」として通っていた。
+'   ここに**独自の前処理を挟まない**ことが肝で、裁定書40 S-m では提案書側
+'   だけが NBSP を落としていたためレポート側と判定が食い違い、NBSP だけの
+'   確認者名でレポートが「担当者が確認・編集したもの」になっていた
+'   (=「片方だけ直す」型)。空白類の一覧は modUtilText.HasVisibleText が
+'   唯一持ち、レポート(modExportHtml.ReviewerOf)と同じ1本を通る。
 ' ==========================================================
 Public Function NeedsReviewMessage(ByVal reviewedBy As String) As String
-    If Not HasVisibleName(reviewedBy) Then NeedsReviewMessage = EP_NEED_REVIEW
-End Function
-
-' 空白類を除いて1文字以上あるか。判定の実体は**レポートと同じ1本**
-'   modUtilText.HasVisibleText(半角空白・全角空白・TAB・LF・CR・VT(11)・
-'   FF(12))であり、ここはそこへ寄せる薄い入口である(裁定書39 R2-04)。
-'   NBSP(U+00A0=160)だけは HasVisibleText がまだ空白類に数えないため、
-'   渡す前に落とす(裁定書40 S-m。Word やブラウザからの貼り付けで容易に
-'   混入し、見た目が空の確認者名で顧客提示物が「確認済み」になる)。
-'   **handoff**: modUtilText.HasVisibleText の Select Case へ ChrW$(160) を
-'   足したら、この Replace は不要になるので1行消して直接呼ぶこと
-'   (modUtilText は班Q2 の担当ファイルのため本波では触っていない)。
-Private Function HasVisibleName(ByVal t As String) As Boolean
-    HasVisibleName = modUtilText.HasVisibleText(Replace(t, ChrW$(160), vbNullString))
+    If Not modUtilText.HasVisibleText(reviewedBy) Then NeedsReviewMessage = EP_NEED_REVIEW
 End Function
 
 ' ==========================================================

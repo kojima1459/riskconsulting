@@ -262,8 +262,9 @@ Private Function BasicValue(ByVal data As String, ByVal srcName As String) As St
     End If
 End Function
 
+' 会社名も人の入力。空判定は確認者名と同じ1本(裁定書42 §2-1 の横展開)。
 Public Function ValidateBasics(ByVal company As String, ByVal caseType As String) As String
-    If LenB(Trim$(company)) = 0 Then
+    If Not modUtilText.HasVisibleText(company) Then
         ValidateBasics = "会社名を入力してください。"
     ElseIf Len(company) > 200 Then
         ValidateBasics = "会社名は200文字以内で入力してください。"
@@ -319,7 +320,8 @@ Public Function ActPasteMaterial(ByRef caseId As String, ByVal data As String) A
         Exit Function
     End If
     body = modNavText.NormalizeEol(modNavText.StripDrFooter(modJsonLite.GetStr(data, "text")))
-    If LenB(Trim$(body)) = 0 Then
+    ' 貼り付け本文も人の入力(裁定書42 §2-1 の横展開)。
+    If Not modUtilText.HasVisibleText(body) Then
         ActPasteMaterial = Failure("登録する本文を入力してください。", "E0101")
         Exit Function
     End If
@@ -616,23 +618,26 @@ End Function
 '   裁定書39 R2-06: 提案書の行もこの action を通るので、案件に登録された
 '   **レポートと提案書の2本**だけを開いてよい対象にする(画面から来たパスを
 '   そのまま開くと、任意のファイルを開く口になる。この照合が防波堤)。
+'   開いてよいパスと**文言の種類名**は純関数2本(modNaviActions2 の
+'   OpenTargetOf=裁定書40 / OpenLabelOf=裁定書42 §2-2。4つの文言が同じ
+'   lbl を使うので、レポート専用の文言が提案書の行に出ない)。
 Public Function ActOpenReport(ByVal caseId As String, ByVal data As String) As String
-    Dim path As String, ok As Boolean
-    ' 開いてよいパスの判断は純関数1本(modNaviActions2.OpenTargetOf。裁定書40)。
+    Dim path As String, ok As Boolean, given As String, lbl As String
+    given = modJsonLite.GetStr(data, "path")
     path = modNaviActions2.OpenTargetOf(modCaseRead.CaseColumnOf(caseId, "report_path"), _
-                                        modNaviState.ProposalPathOf(caseId), _
-                                        modJsonLite.GetStr(data, "path"))
+                                        modNaviState.ProposalPathOf(caseId), given)
+    lbl = modNaviActions2.OpenLabelOf(modNaviState.ProposalPathOf(caseId), given)
     If LenB(path) = 0 Then
-        ActOpenReport = Failure("この案件に登録されたレポートがありません。", "E0101")
+        ActOpenReport = Failure("この案件に登録された" & lbl & "がありません。", "E0101")
         Exit Function
     End If
     If Not modUtil.FileExistsAt(path) Then
-        ActOpenReport = Failure("レポートファイルが見つかりません。", "E0603")
+        ActOpenReport = Failure(lbl & "ファイルが見つかりません。", "E0603")
         Exit Function
     End If
     If modJsonLite.GetStr(data, "kind") = "folder" Then path = modUtil.ParentDirOf(path, modUtil.PathSep())
     ok = modUIResearch.OpenUrl(path)
-    ActOpenReport = ResultOf(ok, "レポートを開きました。", "レポートを開けませんでした。")
+    ActOpenReport = ResultOf(ok, lbl & "を開きました。", lbl & "を開けませんでした。")
 End Function
 
 Public Function PhaseTwoStepEdit(ByVal caseId As String, ByVal data As String) As String

@@ -530,6 +530,401 @@ def check_s5_required(problems_sink: list[str]) -> None:
             "ままになっています")
 
 
+# ==============================================================================
+# 確認導線(裁定書42 §2-3)。班X1 の対訳表の節とは独立した節である。
+# ------------------------------------------------------------------------------
+# なぜ要るか(ゲートの死角#7): W15 Round3 まで、確認導線(=確認者名が無ければ
+# 顧客提示物を出さない)を守っていたのは lo-pure の純テスト4本だけだった。
+# 統合レビューは modExportProposal.NeedsReviewMessage を「常に空を返す」へ潰す
+# 変異で、render-p / render-pf / lint / doc-gate / action / ui / validate が
+# **全部緑**になることを実測している。提案書に関わる機械検問は「22枚出るか」
+# しか見ておらず、「**出てはいけない条件で出ないか**」を1件も見ていなかった。
+#
+# ここで何を測るか(すべて LibreOffice で**製品コードを実際に呼ぶ**):
+#   (1) 出してはいけない: 空白類だけの確認者名12通り × 2経路
+#       ・提案書  modExportProposal.GenerateProposalHtml が
+#         reason=EP_NEED_REVIEW / outPath 空 / **出力先にファイルが増えない**
+#       ・レポート modExportHtml.ReviewerOf が空文字(=18章§3.5 の免責が
+#         「担当者が確認・編集したもの」へ切り替わらない)
+#       この2経路を**同じ表**で測ることが肝である。裁定書40 S-m では提案書側
+#       だけを直したため NBSP でレポートだけが「確認済み」になっていた
+#       (=「片方だけ直す」型の3回目)。表を1つにすれば非対称は原理的に作れない。
+#   (2) 出さなければいけない: 可視文字のある確認者名では提案書が**実際に
+#       書き出される**(ファイルが存在し、出力の直前で止まっていない)。
+#       これが無いと「全部断る」実装でも(1)が緑になる=出来レースになる。
+#
+# 空白類の一覧(BLANK_INPUTS)は**この検問が持つ独立した期待値**であり、
+# 実装(modUtilText.HasVisibleText)から読み出さない。実装から読むと、実装を
+# 壊した変異に合わせて期待値も一緒に動き、何も検査しないのと同じになる。
+# 文言 EP_NEED_REVIEW だけは modExportProposal.bas の Const から読む(値源は
+# 1つ=二重管理にしない。文言が変わったら検問も一緒に動いてよい)。
+# ==============================================================================
+
+# 出力してはいけない確認者名。(ラベル, LO Basic の式)。
+# 足すときは modUtilText.HasVisibleText の Select Case にも同じ文字を足すこと。
+BLANK_INPUTS: list[tuple[str, str]] = [
+    ("空", '""'),
+    ("半角空白", '" "'),
+    ("全角空白", "ChrW(12288) & ChrW(12288)"),
+    ("TAB", "Chr(9)"),
+    ("LF", "Chr(10)"),
+    ("CR", "Chr(13)"),
+    ("VT", "Chr(11)"),
+    ("FF", "Chr(12)"),
+    ("NBSP", "ChrW(160)"),
+    ("ZWSP", "ChrW(8203)"),
+    ("BOM", "ChrW(65279)"),
+    ("混在", 'Chr(9) & ChrW(160) & ChrW(12288) & ChrW(8203) & " " & ChrW(65279)'),
+]
+# 出力しなければいけない確認者名(出来レース防止の対照)。
+VISIBLE_INPUTS: list[tuple[str, str]] = [
+    ("氏名", '"浜松支店 山田"'),
+    ("空白で囲んだ1字", 'ChrW(160) & "田" & ChrW(8203)'),
+]
+
+# 確認導線の実測に要るモジュール。製品コードは**本物**を読み込み、
+# 案件データ・設定・ログの3つだけをスタブに差し替える(統合レビューと同じ手)。
+REVIEW_REAL_MODULES = [
+    "modUtil", "modUtilText", "modUtilPath", "modJsonLite", "modPii",
+    "modValidate4", "modProposalHtml1", "modProposalHtml2",
+    "modProposalHtml3", "modProposalHtml4", "modExportProposal",
+    "modExportHtml",
+    "modMockLlm", "modMockLlm2", "modMockLlm3", "modMockLlm4",
+    "modAppTypes", "modTypes",
+]
+
+REVIEW_STUBS: dict[str, str] = {
+    "modCaseStore": (
+        "Option Explicit\n"
+        "Public Function IsValidCaseId(ByVal caseId As String) As Boolean\n"
+        '    IsValidCaseId = (Left(caseId, 2) = "C-")\n'
+        "End Function\n"
+        "Public Function LoadData(ByVal caseId As String, ByVal k As String) As String\n"
+        '    If k = "s5_json" Then LoadData = StubBag.S5()\n'
+        "End Function\n"
+        "Public Function ResolveStepJson(ByVal caseId As String, ByVal n As Long) As String\n"
+        "    If n = 2 Then ResolveStepJson = StubBag.S2()\n"
+        "End Function\n"
+    ),
+    "modCaseRead": (
+        "Option Explicit\n"
+        "Public Function ReadCaseCtx(ByVal caseId As String, ByRef ctx As TCaseCtx, _\n"
+        "                            ByRef roundNo As Long, ByRef qualityMode As String, _\n"
+        "                            ByRef s4Variant As String, ByRef dossierTier As String) As Boolean\n"
+        '    ctx.company = "' + SAMPLE_COMPANY + '"\n'
+        '    ctx.case_type = "new"\n'
+        '    ctx.industry_name = "菓子製造"\n'
+        "    roundNo = 1\n"
+        '    qualityMode = "standard"\n'
+        '    dossierTier = "B"\n'
+        "    ReadCaseCtx = True\n"
+        "End Function\n"
+    ),
+    "modConfig": (
+        "Option Explicit\n"
+        "Public Function GetStr(ByVal k As String, Optional ByVal dflt As String) As String\n"
+        '    If k = "data_dir" Then\n'
+        "        GetStr = StubBag.DataDir()\n"
+        '    ElseIf k = "app_version" Then\n'
+        '        GetStr = "' + SAMPLE_APP_VERSION + '"\n'
+        "    Else\n"
+        "        GetStr = dflt\n"
+        "    End If\n"
+        "End Function\n"
+        "Public Function GetLong(ByVal k As String, Optional ByVal dflt As Long) As Long\n"
+        "    GetLong = dflt\n"
+        "End Function\n"
+        "Public Function GetBool(ByVal k As String, Optional ByVal dflt As Boolean) As Boolean\n"
+        "    GetBool = dflt\n"
+        "End Function\n"
+    ),
+    "modLog": (
+        "Option Explicit\n"
+        "Public Sub LogUsage(ByVal ev As String, Optional ByVal caseId As String, "
+        "Optional ByVal detail As String)\n"
+        '    StubBag.AddLog "USAGE|" & ev & "|" & detail\n'
+        "End Sub\n"
+        "Public Sub LogError(ByVal code As String, Optional ByVal src As String, "
+        "Optional ByVal detail As String, Optional ByVal n As Long)\n"
+        '    StubBag.AddLog "ERROR|" & code & "|" & detail\n'
+        "End Sub\n"
+        "Public Sub LogRun(ByVal a As String, Optional ByVal b As String, "
+        "Optional ByVal c As String)\n"
+        "End Sub\n"
+    ),
+    "StubBag": (
+        "Option Explicit\n"
+        "Private mS5 As String\n"
+        "Private mS2 As String\n"
+        "Private mDir As String\n"
+        "Private mLog As String\n"
+        "Public Sub SetUp(ByVal s5 As String, ByVal s2 As String, ByVal d As String)\n"
+        "    mS5 = s5\n"
+        "    mS2 = s2\n"
+        "    mDir = d\n"
+        '    mLog = ""\n'
+        "End Sub\n"
+        "Public Function S5() As String\n"
+        "    S5 = mS5\n"
+        "End Function\n"
+        "Public Function S2() As String\n"
+        "    S2 = mS2\n"
+        "End Function\n"
+        "Public Function DataDir() As String\n"
+        "    DataDir = mDir\n"
+        "End Function\n"
+        "Public Sub AddLog(ByVal t As String)\n"
+        "    mLog = mLog & t & Chr(10)\n"
+        "End Sub\n"
+        "Public Function LogText() As String\n"
+        "    LogText = mLog\n"
+        "End Function\n"
+    ),
+}
+
+
+def review_driver(out_dir: str, result_url: str) -> str:
+    """確認者名の表を1件ずつ**製品コードへ実際に通す**ドライバ。"""
+    rows = ""
+    for label, expr in BLANK_INPUTS:
+        rows += f'    outT = outT & Probe("BLANK", "{label}", {expr}, s5, s2)\n'
+    for label, expr in VISIBLE_INPUTS:
+        rows += f'    outT = outT & Probe("VISIBLE", "{label}", {expr}, s5, s2)\n'
+    return (
+        "Option Explicit\n"
+        "\n"
+        "Sub WriteUtf8(ByVal fileUrl As String, ByVal bodyText As String)\n"
+        "    Dim oSFA As Object, oOut As Object, oText As Object\n"
+        '    Set oSFA = createUnoService("com.sun.star.ucb.SimpleFileAccess")\n'
+        "    If oSFA.exists(fileUrl) Then oSFA.kill(fileUrl)\n"
+        "    Set oOut = oSFA.openFileWrite(fileUrl)\n"
+        '    Set oText = createUnoService("com.sun.star.io.TextOutputStream")\n'
+        "    oText.setOutputStream(oOut)\n"
+        '    oText.setEncoding("UTF-8")\n'
+        "    oText.writeString(bodyText)\n"
+        "    oText.closeOutput()\n"
+        "End Sub\n"
+        "\n"
+        "' 1件 = 提案書(実生成)とレポート(確認者名の正規化)の**両方**を同じ入力で測る。\n"
+        "Function Probe(ByVal kindText As String, ByVal label As String, _\n"
+        "               ByVal reviewer As String, ByVal s5 As String, _\n"
+        "               ByVal s2 As String) As String\n"
+        '    StubBag.SetUp s5, s2, "' + out_dir + '"\n'
+        "    Dim p As String, r As String, rv As String\n"
+        '    r = modExportProposal.GenerateProposalHtml("C-0001", p, reviewer)\n'
+        "    rv = modExportHtml.ReviewerOf(reviewer)\n"
+        '    Probe = kindText & Chr(9) & label & Chr(9) & "reason=" & r & _\n'
+        '            Chr(9) & "path=" & p & Chr(9) & "reviewer=[" & rv & "]" & _\n'
+        '            Chr(9) & "log=" & Replace(StubBag.LogText(), Chr(10), "~") & Chr(10)\n'
+        "End Function\n"
+        "\n"
+        "Sub Main\n"
+        "    Dim s5 As String, s2 As String, outT As String\n"
+        '    s5 = modMockLlm.ResponseById("MK-S5")\n'
+        '    s2 = modMockLlm.ResponseById("MK-S2-RNW")\n'
+        '    outT = ""\n'
+        + rows +
+        '    WriteUtf8 "' + result_url + '", outT\n'
+        "End Sub\n"
+    )
+
+
+def need_review_literal() -> str:
+    """modExportProposal.bas の EP_NEED_REVIEW(文言の唯一の値源)を読む。"""
+    src = (REPO_ROOT / "src" / "app" / "modExportProposal.bas").read_text(
+        encoding="utf-8")
+    m = re.search(r'Const\s+EP_NEED_REVIEW\s+As\s+String\s*=\s*"([^"]*)"', src)
+    return m.group(1) if m else ""
+
+
+def run_review_probe(soffice: str, work_dir: Path,
+                     verbose: bool) -> tuple[list[list[str]], int] | None:
+    all_modules = dict(lo.discover_modules(REPO_ROOT / "src"))
+    type_blocks = lo.collect_public_type_blocks(all_modules)
+    modules: dict[str, str] = {}
+    missing = []
+    for name in REVIEW_REAL_MODULES:
+        path = all_modules.get(name)
+        if path is None:
+            missing.append(name)
+            continue
+        modules[name] = path.read_text(encoding="utf-8", errors="replace")
+    if missing:
+        print(f"[render_proposal] FAIL: 未実装のモジュールがあります: {', '.join(missing)}")
+        return None
+    modules.update(REVIEW_STUBS)
+
+    out_dir = work_dir / "review_out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    result = work_dir / "review_result.txt"
+    modules["ReviewMain"] = review_driver(out_dir.as_posix(),
+                                          "file://" + result.as_posix())
+
+    profile_dir = work_dir / "profile_review"
+    template = lo.ensure_template_profile(soffice, verbose)
+    lo.fresh_profile_copy(template, profile_dir)
+    lo.write_library(profile_dir, "RpnReview", modules, type_blocks)
+    lo.register_libraries(profile_dir, ["RpnReview"])
+    uri = ("vnd.sun.star.script:RpnReview.ReviewMain.Main"
+           "?language=Basic&location=application")
+    rc, out, err = lo.run_uri(soffice, profile_dir, uri, 300)
+    if not result.exists():
+        print(f"[render_proposal] FAIL: 確認導線の実測を実行できません(soffice exit={rc})")
+        if verbose:
+            print(f"  stdout: {out.strip()}\n  stderr: {err.strip()}")
+        return None
+    rows = [line.split("\t") for line in
+            result.read_text(encoding="utf-8").splitlines() if line.strip()]
+    produced = len([p for p in out_dir.iterdir() if p.is_file()])
+    return rows, produced
+
+
+def check_review_path(problems_sink: list[str], soffice: str, work_dir: Path,
+                      verbose: bool) -> int:
+    """確認導線を実測する。戻り値=**実際に検査した項目数**(0=検問として無効)。"""
+    need = need_review_literal()
+    if not need:
+        problems_sink.append(
+            "modExportProposal.bas の EP_NEED_REVIEW を読み取れませんでした")
+        return 0
+    got = run_review_probe(soffice, work_dir, verbose)
+    if got is None:
+        problems_sink.append("確認導線の実測(LibreOffice)を実行できませんでした")
+        return 0
+    rows, produced = got
+
+    checked = 0
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        if len(row) < 3:
+            continue
+        kind, label = row[0], row[1]
+        fields: dict[str, str] = {}
+        for cell in row[2:]:
+            k, _, v = cell.partition("=")
+            fields[k] = v
+        reason = fields.get("reason", "")
+        path = fields.get("path", "")
+        reviewer = fields.get("reviewer", "")
+        logText = fields.get("log", "")
+        seen.add((kind, label))
+        if kind == "BLANK":
+            checked += 3
+            if reason != need or path:
+                problems_sink.append(
+                    f"確認者名が[{label}]だけでも提案書が止まりません"
+                    f"(reason=[{reason}] path=[{path}]。期待=[{need}]・path空)")
+            if "proposal_skipped|not_reviewed" not in logText:
+                problems_sink.append(
+                    f"確認者名が[{label}]のとき usage_log に "
+                    f"proposal_skipped|not_reviewed が残りません(log=[{logText}])")
+            if reviewer != "[]":
+                problems_sink.append(
+                    f"確認者名が[{label}]だけでもレポートは確認済みとして扱います"
+                    f"(modExportHtml.ReviewerOf=[{reviewer}]。期待=空)。"
+                    "レポートと提案書で空白判定が非対称です")
+        else:
+            checked += 2
+            if reason or not path:
+                problems_sink.append(
+                    f"可視文字のある確認者名[{label}]で提案書が出ません"
+                    f"(reason=[{reason}] path=[{path}])。「全部断る」実装でも"
+                    "空白側の検査は緑になるため、この対照が要ります")
+            if reviewer == "[]":
+                problems_sink.append(
+                    f"可視文字のある確認者名[{label}]をレポートが未確認として扱います"
+                    "(modExportHtml.ReviewerOf が空)")
+    want = {("BLANK", lbl) for lbl, _ in BLANK_INPUTS}
+    want |= {("VISIBLE", lbl) for lbl, _ in VISIBLE_INPUTS}
+    lost = want - seen
+    if lost:
+        problems_sink.append(f"確認導線の実測が欠けています: {sorted(lost)}")
+    checked += 1
+    if produced != len(VISIBLE_INPUTS):
+        problems_sink.append(
+            f"出力先に残った提案書が{produced}件です(期待{len(VISIBLE_INPUTS)}件="
+            "可視文字の分だけ)。空白類の確認者名で1件でも書き出されていたら、"
+            "未確認の顧客提示物が出ています")
+    return checked
+
+
+# ==============================================================================
+# 人の入力の空判定を1本に寄せる(裁定書42 §2-1 の横展開を**規則として固定**)。
+# ------------------------------------------------------------------------------
+# 確認者名を1本に寄せても、会社名・テーマ・本文で `LenB(Trim$(x)) = 0` が新しく
+# 書かれれば同じ欠陥がまた生える(Trim$ は Chr(32) しか落とさないので、全角空白・
+# NBSP・ZWSP だけの入力が「入力あり」として通る)。そこで**人の入力を指す名前**
+# で空判定を書いている行を機械で数え、既知の一覧(BLANK_STYLE_BASELINE)より
+# 増えたら赤にする。新しい未変換を作れなくし、残りの債務を目に見える形で置く。
+#
+# 名前で当たりを付ける以上、機械JSONの局所変数が同じ名前のこともある。除外は
+# baseline に**理由付きで**書き、黙って消さない(docs/29 §5.3「黙って直さない」)。
+# ==============================================================================
+
+# 人の入力を指す識別子(この名前で受けたものは画面から来た文字列とみなす)。
+HUMAN_INPUT_NAMES = ("company", "companyName", "reviewer", "reviewedBy",
+                     "reviewerName", "theme", "themeText", "body", "bodyText",
+                     "utterance", "displayName", "display_name", "caseName",
+                     "answer")
+BLANK_STYLE_RE = re.compile(
+    r"LenB\(Trim\$\((?P<a>" + "|".join(HUMAN_INPUT_NAMES) + r")\)\)"
+    r"|Trim\$\((?P<b>" + "|".join(HUMAN_INPUT_NAMES) + r")\)\s*(=|<>)\s*(\"\"|vbNullString)")
+
+# 既知の未変換(裁定書42 §2 の担当ファイル外=司令塔へ handoff)と、名前が
+# たまたま一致しただけの機械JSON。**この表を増やすには裁定が要る**。
+BLANK_STYLE_BASELINE = {
+    # (ファイル, 行に現れる識別子): 理由
+    ("app/modCaseStore.bas", "company"):
+        "handoff: 案件作成時の会社名。担当ファイル外(裁定書42 §2-4)",
+    ("app/modExportHtml.bas", "body"):
+        "対象外: OrNull の body は ExtractJsonBlock の戻り値(機械JSON)",
+    ("app/modInboxStore.bas", "themeText"):
+        "handoff: 受信箱のテーマ。担当ファイル外",
+    ("app/modInboxStore.bas", "theme"):
+        "handoff: 受信箱のテーマ。担当ファイル外",
+    ("app/modPlayOps.bas", "themeText"):
+        "handoff: 受信箱の投函。担当ファイル外",
+    ("app/modPlayOps.bas", "bodyText"):
+        "handoff: 受信箱の投函。担当ファイル外",
+    ("app/modSparring.bas", "bodyText"):
+        "handoff: スパーリングの発話。担当ファイル外",
+    ("ui/modUISparring.bas", "utterance"):
+        "handoff: スパーリングの発話。担当ファイル外",
+    ("ui/navi/modNaviActions2.bas", "theme"):
+        "handoff: 受信箱の投函(ActInboxPost)。担当ファイル外",
+    ("ui/navi/modNaviActions2.bas", "body"):
+        "handoff: 受信箱の投函(ActInboxPost)。担当ファイル外",
+}
+
+
+def check_blank_style(problems_sink: list[str]) -> int:
+    """人の入力の空判定が Trim$ で書かれていないか。戻り値=走査したファイル数。"""
+    src_root = REPO_ROOT / "src"
+    files = sorted(src_root.rglob("*.bas"))
+    found: set[tuple[str, str]] = set()
+    for path in files:
+        rel = path.relative_to(src_root).as_posix()
+        if rel.startswith("test/"):
+            continue          # テストは意図的に古い書き方を再現することがある
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            # 1行に2つ以上書かれることがある(`A = 0 Or B = 0`)ので全件を見る。
+            for m in BLANK_STYLE_RE.finditer(line):
+                name = m.group("a") or m.group("b")
+                key = (rel, name)
+                found.add(key)
+                if key not in BLANK_STYLE_BASELINE:
+                    problems_sink.append(
+                        f"{rel}:{lineno} 人の入力({name})の空判定が Trim$ です。"
+                        "modUtilText.HasVisibleText へ寄せてください"
+                        "(裁定書42 §2-1。全角空白・NBSP・ZWSP が素通りします)")
+    stale = sorted(set(BLANK_STYLE_BASELINE) - found)
+    if stale:
+        problems_sink.append(
+            f"BLANK_STYLE_BASELINE に、もう存在しない行が残っています: {stale}"
+            "(直したら表からも消すこと)")
+    return len(files)
+
+
 def find_node() -> str | None:
     """DOM検査に使う node の場所(無ければ None)。"""
     return shutil.which("node") or shutil.which("nodejs")
@@ -648,14 +1043,32 @@ def main() -> int:
         check_glossary(problems)
         check_s5_required(problems)
         problems += check_dom(out_path, slides, todo, args.faithful, args.verbose)
+        # 確認導線(裁定書42 §2-3)。--faithful は素材の間引きを見るモードで
+        # 確認導線とは無関係なので、標準モードでだけ実測する(LOの往復が増える)。
+        # 飛ばした回は要点行にも「確認しました」と書かない。
+        reviewed = 0
+        scanned = check_blank_style(problems)
+        if not args.faithful:
+            reviewed = check_review_path(problems, soffice, work_dir, args.verbose)
+            if reviewed == 0 and not problems:
+                problems.append(
+                    "確認導線の検査を1件も実行できませんでした"
+                    "(0件の検査を緑にはしません)")
         if problems:
             print("[render_proposal] NG:")
             for p in problems:
                 print(f"  - {p}")
             return 1
+        review_text = f"人の入力の空判定を{scanned}モジュール分走査・"
+        if reviewed:
+            review_text += (f"確認導線{reviewed}件"
+                            f"(空白類{len(BLANK_INPUTS)}通りの確認者名で提案書が"
+                            "生成されず、レポート側も未確認として扱うこと・"
+                            "可視文字では実際に書き出されること)・")
         print(f"[render_proposal] OK: 全{len(slides)}枚の登録と描画後DOM"
               "(発表者ノートを壊しても22枚が描かれ印が立つことを含む)、"
               "20章§5.1の19変数・§8の免責・対訳表との一致・"
+              f"{review_text}"
               "EP_S5_REQUIRED と15章§5.6 required の一致を確認しました。")
         return 0
     finally:
