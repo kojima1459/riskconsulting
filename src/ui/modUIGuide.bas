@@ -474,13 +474,13 @@ End Function
 Private Function TitleOf(ByVal n As Long) As String
     Select Case n
     Case 1
-        TitleOf = "① 会社のこと"
+        TitleOf = "1 会社のこと"
     Case 2
-        TitleOf = "② 貼る"
+        TitleOf = "2 貼る"
     Case 3
-        TitleOf = "③ 作る"
+        TitleOf = "3 作る"
     Case Else
-        TitleOf = "④ 出す"
+        TitleOf = "4 出す"
     End Select
 End Function
 
@@ -597,6 +597,6 @@ Private Sub NoticeKbMissingOnce()
     If LenB(Dir$(pathText)) > 0 Then Exit Sub
 
     MsgBox "ナレッジブックが見つかりません。管理者にご連絡ください" & _
-           "（操作ガイドの④ 困ったとき をご覧ください）。", vbExclamation, _
+           "（操作ガイドの4 困ったとき をご覧ください）。", vbExclamation, _
            "リスク提案ナビ"
 End Sub

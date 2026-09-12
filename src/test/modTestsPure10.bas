@@ -70,8 +70,10 @@ Private Const DISC2 As String = _
 Private Const DISC3 As String = "保険料の試算は本資料の対象外です（要見積）。"
 
 ' 18章§3 SEC-09 の0件時の1行(v1.0で文言が確定。非表示にしない)。
+' 裁定書38 §1 班E(Z-48)で見出し語を平易化(「ニューリスク」→「新しく出て
+' きたリスク」)し、この案内文も同時に改めた。
 Private Const NOTE_SEC09 As String = _
-    "現時点で特筆すべきニューリスクは検出されていません"
+    "現時点で特筆すべき新しく出てきたリスクは検出されていません"
 
 ' 表紙(§4.1(b))へ渡す会社名。DATA側の meta.company とは別の値にする(DATAは生の
 ' ままJS文字列へ入るのが正で、同値だと表紙のエスケープ有無を判別できない)。
@@ -537,7 +539,7 @@ Private Sub T_Sections()
     ' 見出しに空白を含むもの(SEC-06「影響×頻度 5×5」)があるため期待値も Squash
     ' を通す。ソース上の文言は§3・§4.2の逐語のまま残す。
     ChkB "G90_SEC-02とSEC-06の登録行が§4.2の例どおり_18章§4.2", _
-        (Ctn(sj, Squash("{id:'SEC-02',slug:'exec',title:'エグゼクティブサマリ'," & _
+        (Ctn(sj, Squash("{id:'SEC-02',slug:'exec',title:'要点(1分で読む)'," & _
                         "need:['s1'],empty:'always',render:renderExec},")) And _
          Ctn(sj, Squash("{id:'SEC-06',slug:'riskmap'," & _
                         "title:'2軸リスクマップ（影響×頻度 5×5）'," & _
@@ -556,7 +558,7 @@ Private Sub T_NewAndRound()
 
     ChkB "G91_SEC-09の登録行が空配列時の案内文を持つ_18章§3", _
         Ctn(sj, Squash("{id:'SEC-09',slug:'newrisk'," & _
-                       "title:'ニューリスク（新種・新興リスク）'," & _
+                       "title:'新しく出てきたリスク（新種・新興リスク）'," & _
                        "need:['s2'],empty:'note',note:'" & NOTE_SEC09 & _
                        "',render:renderNewRisk},")), _
         "SEC-09位置=" & InStr(sj, "id:'SEC-09'") & " 文=" & InStr(sj, NOTE_SEC09)

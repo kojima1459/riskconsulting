@@ -23,7 +23,7 @@ Option Explicit
 
 ' SEC-09 newrisk。見本の2列レーダーカード(.radar。horizon のピル+強度バー。
 '   11章§3.8.1)。0件のときは何も描かず、登録表の empty:'note' が
-'   「現時点で特筆すべきニューリスクは検出されていません」の1行を出す。
+'   「現時点で特筆すべき新しく出てきたリスクは検出されていません」の1行を出す。
 Public Function SecNewRiskJs() As String
     Dim s As String
     s = s & "function renderNewRisk(D,el){var s2=D.s2||{};" & vbLf

@@ -316,6 +316,10 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "limit_check", "TRUE"
     modConfig.RegisterDefault "log_max_rows", "2000"
     modConfig.RegisterDefault "anonymize_default", "TRUE"
+    ' 裁定書38 §1 班E(Z-45・W12-d): 報告メールの宛先/CC。既定は空(宛先欄を
+    ' 空のまま表示。modReportMail.SendReportMail が読む)。
+    modConfig.RegisterDefault "report_mail_to", vbNullString
+    modConfig.RegisterDefault "report_mail_cc", vbNullString
     ' 裁定書11 Q7(裁定書10 m7・13章§2.3): 実施者。run_log の operator 列と
     ' 受信箱の judged_by_group がこのキーを読む。個人名は入れない(部署・
     ' グループ名まで)ため、既定値は空とし config で記入してもらう。

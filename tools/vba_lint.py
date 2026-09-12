@@ -237,6 +237,11 @@ MODULE_REGISTRY = {
     "modTestsPureHook", "modTestsPureDev",
     # W11-c(裁定書33 C-3)で新設。リボンちゃんの応答抽出の逐語模擬(純関数)。
     "modRibbonSim",
+    # W15(裁定書38 §1 班E・Z-45)で新設。12章§2のモジュール一覧に追記済み。
+    #   modReportMail = 報告メールの下書き作成(Outlook.Application を late-bound
+    #                   で.Display。自動送信はしない)。失敗時は報告文を返し
+    #                   HTML画面側の[コピー]導線へフォールバックする。
+    "modReportMail",
     # ---- フォーム(.frm) ----
     # W12-A(裁定書34)。HTML画面の器(UserForm + WebBrowser)。標準モジュールでは
     #   ないが、Attribute 行より後は同じ規則で検査する(discover_module_files)。

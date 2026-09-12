@@ -32,7 +32,7 @@ Private Const UH2_SRC As String = "modUIHome2"
 Private Const UH_QUALITY As String = "hm_quality_mode"
 
 ' 18章§1.1(1): S1未実行時のレポート出力は**エラーコードを立てず**中止する。
-Private Const UH_MSG_NEED_S1 As String = "先に③の[まとめて作る]を押してください。会社の理解の下書きがまだありません。"
+Private Const UH_MSG_NEED_S1 As String = "先に3の[まとめて作る]を押してください。会社の理解の下書きがまだありません。"
 Private Const UH_MSG_NO_CASE As String = "案件が選ばれていません。いちばん上の帯で、案件を選んでください。"
 
 ' 企業ドシエファイルの保存先。13章§2.3 に専用キーが無いため、出力の共通
@@ -143,13 +143,13 @@ End Sub
 Public Function StageNameOf(ByVal stepNo As Long) As String
     Select Case stepNo
     Case 1
-        StageNameOf = "① 会社の理解を作っています"
+        StageNameOf = "1 会社の理解を作っています"
     Case 2
-        StageNameOf = "② リスクの洗い出しを作っています"
+        StageNameOf = "2 リスクの洗い出しを作っています"
     Case 3
-        StageNameOf = "③ 提案の候補を作っています"
+        StageNameOf = "3 提案の候補を作っています"
     Case 4
-        StageNameOf = "④ 提案の骨子を作っています"
+        StageNameOf = "4 提案の骨子を作っています"
     Case Else
         StageNameOf = "下書きを作っています"
     End Select
@@ -525,7 +525,7 @@ Public Sub HomeBuildHearing()
         modUISheet.ShowSheet "ヒアリングシート"
         modUIToast.ShowNext 4
     Else
-        modUIHome.ShowWarning "ヒアリングシートを作れませんでした。先に③の[まとめて作る]を押してください。"
+        modUIHome.ShowWarning "ヒアリングシートを作れませんでした。先に3の[まとめて作る]を押してください。"
     End If
 
 Done:

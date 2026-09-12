@@ -176,24 +176,24 @@ Public Function SectionsJs() As String
     ' (b) 登録配列
     s = s & "var SECTIONS=[" & vbLf
     s = s & "{id:'SEC-01',slug:'cover',title:'',need:['meta'],empty:'always',render:renderCover}," & vbLf
-    s = s & "{id:'SEC-02',slug:'exec',title:'エグゼクティブサマリ',need:['s1'],empty:'always',render:renderExec}," & vbLf
+    s = s & "{id:'SEC-02',slug:'exec',title:'要点(1分で読む)',need:['s1'],empty:'always',render:renderExec}," & vbLf
     s = s & "{id:'SEC-03',slug:'profile',title:'企業理解',need:['s1'],empty:'hide',render:renderProfile}," & vbLf
     s = s & "{id:'SEC-04',slug:'sufficiency',title:'入力の充足度と要確認事項',need:['s1'],empty:'hide',render:renderSufficiency}," & vbLf
-    s = s & "{id:'SEC-05',slug:'riskuniv',title:'リスクユニバース10分類',need:['s2'],empty:'hide',render:renderRiskUniv}," & vbLf
+    s = s & "{id:'SEC-05',slug:'riskuniv',title:'リスクの全体像(10分類)',need:['s2'],empty:'hide',render:renderRiskUniv}," & vbLf
     s = s & "{id:'SEC-06',slug:'riskmap',title:'2軸リスクマップ（影響×頻度 5×5）'," & vbLf
     s = s & "need:['s2'],empty:'hide',render:renderRiskMap}," & vbLf
     s = s & "{id:'SEC-16',slug:'round-update',title:'訪問で分かったこと（ラウンド更新）'," & vbLf
     s = s & "need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
     s = s & "{id:'SEC-07',slug:'risks',title:'リスク一覧',need:['s2'],empty:'hide',render:renderRisks}," & vbLf
-    s = s & "{id:'SEC-08',slug:'coverage',title:'保険カバレッジ表',need:['s2'],empty:'hide',render:renderCoverage}," & vbLf
+    s = s & "{id:'SEC-08',slug:'coverage',title:'いまの保険と足りないところ',need:['s2'],empty:'hide',render:renderCoverage}," & vbLf
     s = s & "{id:'SEC-11',slug:'prevent',title:'未然防止メニュー',need:['s2'],empty:'hide',render:renderPrevent}," & vbLf
     s = s & "{id:'SEC-12',slug:'limit',title:'当社にできないこと・提案を控えること',need:['s2'],empty:'note'," & vbLf
     s = s & "note:'該当なし',render:renderLimit}," & vbLf
-    s = s & "{id:'SEC-09',slug:'newrisk',title:'ニューリスク（新種・新興リスク）'," & vbLf
+    s = s & "{id:'SEC-09',slug:'newrisk',title:'新しく出てきたリスク（新種・新興リスク）'," & vbLf
     s = s & "need:['s2'],empty:'note'," & vbLf
-    s = s & "note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
+    s = s & "note:'現時点で特筆すべき新しく出てきたリスクは検出されていません',render:renderNewRisk}," & vbLf
     s = s & "{id:'SEC-17',slug:'growth',title:'攻めの保険活用',need:['s3'],empty:'hide',render:renderGrowth}," & vbLf
-    s = s & "{id:'SEC-10',slug:'story',title:'提案ストーリー（当社にできること）',need:['s3'],empty:'hide',render:renderStory}," & vbLf
+    s = s & "{id:'SEC-10',slug:'story',title:'提案の筋書き（当社にできること）',need:['s3'],empty:'hide',render:renderStory}," & vbLf
     s = s & "{id:'SEC-18',slug:'talk',title:'経営層への話し方',need:['s3'],empty:'hide',render:renderTalk}," & vbLf
     s = s & "{id:'SEC-13',slug:'hearing',title:'ヒアリング事項',need:['s1'],empty:'hide',render:renderHearing}," & vbLf
     s = s & "{id:'SEC-14',slug:'source',title:'出典と根拠',need:['s2'],empty:'hide',render:renderSource}," & vbLf

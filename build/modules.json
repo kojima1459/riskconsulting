@@ -483,6 +483,13 @@
       "wave": "T-34"
     },
     {
+      "name": "modReportMail",
+      "path": "src/ui/modReportMail.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "W15-E"
+    },
+    {
       "name": "modUIGuide",
       "path": "src/ui/modUIGuide.bas",
       "role": "ui",

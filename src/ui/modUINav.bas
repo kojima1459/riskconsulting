@@ -175,13 +175,13 @@ Public Function StepText(ByVal stepNo As Long) As String
         StepText = "1本目の[コピー]を押して、社内のディープリサーチに貼ってください。" & _
                    "1本ずつ・各10分です。"
     Case 3
-        StepText = "返ってきた文章を、②の枠へ貼ってください。長くても分けなくて大丈夫です。"
+        StepText = "返ってきた文章を、2の枠へ貼ってください。長くても分けなくて大丈夫です。"
     Case 4
-        StepText = "③の[まとめて作る]を押してください。10～20分で下書きが4枚そろいます。"
+        StepText = "3の[まとめて作る]を押してください。10～20分で下書きが4枚そろいます。"
     Case 5
-        StepText = "④の[下書きを見る]を押して、違うところを手で直してください。"
+        StepText = "4の[下書きを見る]を押して、違うところを手で直してください。"
     Case 6
-        StepText = "④の[レポートを出す]を押すと、お客様に見せるレポートができます。"
+        StepText = "4の[レポートを出す]を押すと、お客様に見せるレポートができます。"
     End Select
 End Function
 
@@ -280,19 +280,19 @@ Public Function StepActionOf(ByVal ruleNo As Long) As String
     Case 4
         StepActionOf = StepText(2)
     Case 5
-        StepActionOf = "前回が途中で止まりました。もう一度③の[まとめて作る]を" & _
+        StepActionOf = "前回が途中で止まりました。もう一度3の[まとめて作る]を" & _
                        "押してください。直らないときは、使い方タブの[記録を見る]を押して、" & _
                        "いちばん下の行を開発担当へ送ってください。"
     Case 7
-        StepActionOf = "途中まで出来ています。もう一度③の[まとめて作る]を押すと、" & _
+        StepActionOf = "途中まで出来ています。もう一度3の[まとめて作る]を押すと、" & _
                        "最後まで作ります。"
     Case 8
         StepActionOf = StepText(5)
     Case 9
-        StepActionOf = "④の[ヒアリングシートを出す]を押して、訪問に持っていく紙を" & _
+        StepActionOf = "4の[ヒアリングシートを出す]を押して、訪問に持っていく紙を" & _
                        "印刷してください。"
     Case 10
-        StepActionOf = "訪問おつかれさまでした。聞いてきたことを②の「ヒアリング回答」へ" & _
+        StepActionOf = "訪問おつかれさまでした。聞いてきたことを2の「ヒアリング回答」へ" & _
                        "貼ると、提案が深まります。"
     Case Else
         StepActionOf = StepText(4)
@@ -541,7 +541,7 @@ Public Sub ShowDrafts()
 
     modUISheet.ShowSheet names(LBound(names))
     modUIToast.ShowToast "下書きのタブを4枚出しました。" & _
-                         "「AIの下書き①」から順に読んでください。", "info"
+                         "「AIの下書き1」から順に読んでください。", "info"
 Done:
     modUIProgress.ExitUiLock
 End Sub
