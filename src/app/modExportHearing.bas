@@ -32,6 +32,9 @@ Private Const EH_SHEET As String = "ヒアリングシート"
 Private Const EH_BLOCK As String = "hearing_questions"
 Private Const EH_MAX_Q As Long = 10
 Private Const EH_HDR_WIDTH As Long = 6
+' Z-44(裁定書38 §1 班E): 社内向け出力のAI生成明示。文言は他の出力(受信箱・
+' 判断台帳)とも1字違わず揃える(modInboxStore.IBS_AI_NOTICE / modJudgeStore.JS_AI_NOTICE と同文)。
+Private Const EH_AI_NOTICE As String = "※この内容はAIが作成した下書きです。内容を確認のうえ使用してください。"
 
 ' ==========================================================
 ' BuildHearingSheet - 14章§6の契約。True=生成できた / False=生成しなかった。
@@ -183,6 +186,7 @@ Private Sub WriteHeaderFields(ByVal caseId As String)
     PutNamed "hs_company", ctx.company
     PutNamed "hs_industry_name", ctx.industry_name
     PutNamed "hs_printed_at", modUtil.NowStamp()
+    PutNamed "hs_ai_notice", EH_AI_NOTICE
 End Sub
 
 ' 名前付きレンジ1点への書込。会社名は案件入力の自由記述なので SetCellSafe を通す。

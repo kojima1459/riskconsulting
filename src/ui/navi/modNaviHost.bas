@@ -32,7 +32,7 @@ Public Function IsAllowed(ByVal action As String) As Boolean
         IsAllowed = True
     Case "paste_material", "clear_material", "save_materials", "run_pipeline", "save_step_edit", "open_step_sheet"
         IsAllowed = True
-    Case "export_report", "open_report", "export_hearing", "chat", "clear_chat"
+    Case "export_report", "open_report", "export_hearing", "chat", "clear_chat", "report_mail"
         IsAllowed = True
     Case "sparring_resume", "sparring_send", "sparring_to_inbox", "start_round2", "company_save", "company_open"
         IsAllowed = True

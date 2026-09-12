@@ -2102,6 +2102,13 @@
           "type": "String",
           "input": false,
           "note": "書込専用"
+        },
+        {
+          "range": "hs_ai_notice",
+          "label": "ご案内",
+          "type": "String",
+          "input": false,
+          "note": "Z-44(裁定書38 §1 班E): AI生成の明示。modExportHearing.BuildHearingSheet が固定文を書く"
         }
       ],
       "blocks": [
@@ -2971,6 +2978,16 @@
           "name": "app_display_name",
           "value": "リスク提案ナビ",
           "note": "表示名の唯一の値源(HTML画面のブランド表示・frmNaviHtml.Caption・表示名置換)。製品名のPJ正式決定までは既定のまま。決定後はこの1行で切替"
+        },
+        {
+          "name": "report_mail_to",
+          "value": "",
+          "note": "報告メール(W12-d・Z-45)の宛先。既定は空(宛先欄を空のまま表示)。modReportMail.SendReportMail が読む"
+        },
+        {
+          "name": "report_mail_cc",
+          "value": "",
+          "note": "報告メール(W12-d・Z-45)のCC。既定は空。modReportMail.SendReportMail が読む"
         },
         {
           "name": "tests_expected",

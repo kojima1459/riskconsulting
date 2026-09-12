@@ -473,7 +473,7 @@ Public Sub SaveNav()
         caseId = modUICase3.CreateCaseFromSheet()
         If LenB(caseId) = 0 Then
             modUIToast.ShowToast "会社名か業種が空のため、案件を作れませんでした。" & _
-                                 "①の会社名と業種名を入れてから、もう一度押してください。", "error"
+                                 "1の会社名と業種名を入れてから、もう一度押してください。", "error"
             GoTo Done
         End If
     ElseIf Not modCaseStore.IsValidCaseId(caseId) Then
@@ -484,7 +484,7 @@ Public Sub SaveNav()
 
     If LenB(modUISheet.ReadNamed("ci_company")) = 0 Then
         modUIHome.ShowWarning "会社名が空のため保存しませんでした。" & _
-            "①の会社名を入れてから、もう一度[貼ったものを保存する]を押してください。"
+            "1の会社名を入れてから、もう一度[貼ったものを保存する]を押してください。"
         GoTo Done
     End If
 
@@ -503,7 +503,7 @@ Public Sub SaveNav()
             "保存していません。" & vbLf & blocked, "warn"
     Else
         modUIToast.ShowToast "案件 " & caseId & " を保存しました。" & _
-                             "次は③の[まとめて作る]を押してください。", "info"
+                             "次は3の[まとめて作る]を押してください。", "info"
     End If
     modUIHome.AutoSaveNow caseId   ' 裁定書28 W10: [貼ったものを保存する]の後も企業ファイルへ
     modLog.LogUsage "case_input_saved", caseId, "nav"
@@ -625,7 +625,7 @@ End Function
 Private Function CaseIdFailText() As String
     If StrComp(Trim$(modUISheet.ReadNamed("ci_case_id")), modUICase3.U3_NEW_MARK, _
                vbBinaryCompare) = 0 Then
-        CaseIdFailText = "先に①の会社名と業種名を入れてください。" & _
+        CaseIdFailText = "先に1の会社名と業種名を入れてください。" & _
                          "どの会社の話かが決まらないと、貼った文章を保存できません。"
     Else
         CaseIdFailText = U6_MSG_MISMATCH

@@ -191,11 +191,11 @@ End Function
 Private Function NextTextOf(ByVal stepNo As Long) As String
     Select Case stepNo
     Case 1
-        NextTextOf = "会社のことを②の枠へ貼って、[貼ったものを保存する]を押してください"
+        NextTextOf = "会社のことを2の枠へ貼って、[貼ったものを保存する]を押してください"
     Case 2
-        NextTextOf = "できました。④の[レポートを出す]を押してください"
+        NextTextOf = "できました。4の[レポートを出す]を押してください"
     Case 3
-        NextTextOf = "レポートを出しました。次は④の[ヒアリングシートを出す]です"
+        NextTextOf = "レポートを出しました。次は4の[ヒアリングシートを出す]です"
     Case 4
         NextTextOf = "ヒアリングシートができました。Ctrl+Pで印刷できます"
     End Select

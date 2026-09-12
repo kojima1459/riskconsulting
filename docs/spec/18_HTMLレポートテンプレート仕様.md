@@ -107,19 +107,19 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 | ID | slug | 見出し（既定） | 読むJSONパス（15章のプロパティ名） | 空のときの挙動 | 図表種別 |
 |---|---|---|---|---|---|
 | SEC-01 | cover | （表紙。見出しなし） | `meta.company` / `meta.case_id` / `meta.case_type` / `meta.dossier_tier` / `meta.quality_mode` / `meta.round_no` / `meta.industry_name` / `meta.generated_at` / `s1.company_name` | 常に表示（`s1` が null でも `meta` だけで描ける） | 見出し＋チップ列 |
-| SEC-02 | exec | エグゼクティブサマリ | `s1.business_summary` / `s1.strategy_outlook.market_context` / `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score`） / `s3.stories[]`（`story_no` `headline` `pitch` `target_risk_nos`） | 常に表示。`s3` が null のときはテーマ3本を省き「提案ストーリーは未生成です」の1行 | 文章中心（§3.1） |
+| SEC-02 | exec | 要点(1分で読む) | `s1.business_summary` / `s1.strategy_outlook.market_context` / `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score`） / `s3.stories[]`（`story_no` `headline` `pitch` `target_risk_nos`） | 常に表示。`s3` が null のときはテーマ3本を省き「提案ストーリーは未生成です」の1行 | 文章中心（§3.1） |
 | SEC-03 | profile | 企業理解 | **最上段に `s1.missing_info[]` のうち `kind="conflict"`（「資料間で値が食い違っています」の分離表示。v1.5・裁定書38 B-11）** / `s1.business_summary` / `s1.main_products[]` / `s1.processes[]` / `s1.locations[]`（`name` `type` `address` `hazard_note` `notes`） / `s1.supply_chain.key_materials[]` `s1.supply_chain.notes` / `s1.customers.segments[]` `s1.customers.channels[]` / `s1.workforce_notes` / `s1.management_notes` / `s1.strategy_outlook.mvv` `aspirations[]` `market_context` | `s1` が null なら**セクションごと非表示** | 定義リスト＋拠点表（右カードの「要確認」は `kind="conflict"` を除く＝最上段と二重に出さない） |
 | SEC-04 | sufficiency | 入力の充足度と要確認事項 | `s1.input_quality.coverage[]`（`aspect` `status`） / `s1.input_quality.overall` / `s1.input_quality.advice` / `s1.missing_info[]`（`item` `why_needed` `kind`） | `s1` が null なら非表示 | **最上段に `kind="conflict"` の分離表示**＋14観点バッジ＋表（表は `conflict` 以外を出し、「種別」列に `kind` の日本語ラベル〔19章§3〕を添える。v1.5・裁定書38 B-11） |
-| SEC-05 | riskuniv | リスクユニバース10分類 | `s2.risks[].category`（19章§3の日本語ラベルへ変換） / `s2.risks[].risk_no` | `s2` が null なら非表示 | 10分類の件数バー（§3.2） |
+| SEC-05 | riskuniv | リスクの全体像(10分類) | `s2.risks[].category`（19章§3の日本語ラベルへ変換） / `s2.risks[].risk_no` | `s2` が null なら非表示 | 10分類の件数バー（§3.2） |
 | SEC-06 | riskmap | 2軸リスクマップ（影響×頻度 5×5） | `s2.risks[]`（`risk_no` `risk_name` `impact_score` `frequency_score` `insurability.transferability`） | `s2` が null なら非表示。`risks` が0件なら「該当なし」の空マップを描く | 5×5マトリクス（§3.3） |
 | SEC-16 | round-update | 訪問で分かったこと（ラウンド更新） | `meta.round_no` ／ `s2.risks[]` のうち `status` が `new`（新たに浮上した仮説）／ `confirmed`（裏が取れたリスク）／ `rejected`（否定された仮説）のもの（`risk_no` `risk_name` `scenario` `category` `status`）。**スキーマ変更はなく `status` によるフィルタのみ** | `meta.round_no` が2未満（初回ラウンド）、または3つの `status` がいずれも0件なら**セクションごと非表示**（目次からも落とす） | 3ブロック（新たに浮上した仮説／裏が取れたリスク／否定された仮説。rejected は見出しに取り消し表現を付し、`scenario` 末尾に追記された否定の理由をそのまま残す） |
 | SEC-07 | risks | リスク一覧 | `s2.risks[]` の全項目（`risk_no` `category` `risk_name` `scenario` `status` `frequency` `impact` `frequency_score` `impact_score` `evidence.quote` `evidence.source` `insurability.transferability` `insurability.line_note` `insurability.gap_note` `insurability.control_note` `loss_scale_note` `check_points[]` `preventions[].measure` `preventions[].related_menu_id`） | `s2` が null なら非表示 | 表（横スクロール可） |
-| SEC-08 | coverage | 保険カバレッジ表 | ①`s2.risks[]`（`risk_no` `category` `risk_name` `impact_score` `frequency_score` `insurability.transferability` `insurability.line_note` `insurability.gap_note` `insurability.control_note`） ②`s1.current_coverage[]`（`line_name` `coverage_summary` `limit_note` `special_note` `certainty`） ③`s2.gaps[]`（`gap_no` `gap_type` `target` `description` `risk_evidence` `coverage_evidence`） | **`s2.risks[].insurability` があれば必ず描く**（v1.3・裁定書25 S1。旧「両方0件なら非表示」は撤回した）。`current_coverage` が0件（新規案件）なら②を省き「新規案件のため現契約なし。以下は必要補償の見立て」の注記を出す。`gaps` が0件なら③を省く。`s2` が null のときだけセクションごと非表示 | リスク単位の表＋2枚組の表（§3.8） |
+| SEC-08 | coverage | いまの保険と足りないところ | ①`s2.risks[]`（`risk_no` `category` `risk_name` `impact_score` `frequency_score` `insurability.transferability` `insurability.line_note` `insurability.gap_note` `insurability.control_note`） ②`s1.current_coverage[]`（`line_name` `coverage_summary` `limit_note` `special_note` `certainty`） ③`s2.gaps[]`（`gap_no` `gap_type` `target` `description` `risk_evidence` `coverage_evidence`） | **`s2.risks[].insurability` があれば必ず描く**（v1.3・裁定書25 S1。旧「両方0件なら非表示」は撤回した）。`current_coverage` が0件（新規案件）なら②を省き「新規案件のため現契約なし。以下は必要補償の見立て」の注記を出す。`gaps` が0件なら③を省く。`s2` が null のときだけセクションごと非表示 | リスク単位の表＋2枚組の表（§3.8） |
 | SEC-11 | prevent | 未然防止メニュー | `s2.risks[]`（`risk_no` `risk_name` `preventions[].measure` `preventions[].related_menu_id`） | `preventions` が全リスクで0件なら非表示 | 表 |
 | SEC-12 | limit | 当社にできないこと・提案を控えること | ①`s2.risks[]` のうち `insurability.transferability` が `hard`（`risk_no` `risk_name` `insurability.control_note`） ②`s3.unmatched_risks[]`（`risk_no` `risk_name` `why_unmatched`） ③`s3.do_not_propose[]`（`topic` `reason`） | 3ブロックとも0件なら「該当なし」の1行を出す（**非表示にしない**。10章FR-37「できないことを正直に書く」がこのセクションの存在理由であるため） | 3ブロック |
-| SEC-09 | newrisk | ニューリスク（新種・新興リスク） | `s2.emerging_risks[]`（`risk_name` `category` `horizon` `scenario` `evidence_quote` `evidence_source` `proposal_hint`）。`category` と `horizon` は19章§3の日本語ラベルへ変換する | 0件（空配列）のときは「現時点で特筆すべきニューリスクは検出されていません」の1行を出す（**非表示にしない**。「見ていない」のではなく「見たうえで該当が無い」ことを読み手に示すため） | カード |
+| SEC-09 | newrisk | 新しく出てきたリスク（新種・新興リスク） | `s2.emerging_risks[]`（`risk_name` `category` `horizon` `scenario` `evidence_quote` `evidence_source` `proposal_hint`）。`category` と `horizon` は19章§3の日本語ラベルへ変換する | 0件（空配列）のときは「現時点で特筆すべき新しく出てきたリスクは検出されていません」の1行を出す（**非表示にしない**。「見ていない」のではなく「見たうえで該当が無い」ことを読み手に示すため） | カード |
 | SEC-17 | growth | 攻めの保険活用 | `s3.growth_ideas[]`（`title` `what` `why` `insurance_fit` `effect` `difficulty`）。`difficulty` は19章§3の日本語ラベル（低／中／高）へ変換する | `s3` が null、または `growth_ideas` が0件なら**セクションごと非表示**（目次からも落とす）。**「該当なし」の1行は出さない**（SEC-09・SEC-12 と扱いが違う。発想が出なければ出さないだけの節であるため） | 順位バッジ＋★5段階＋難度ピル（§3.7） |
-| SEC-10 | story | 提案ストーリー（当社にできること） | `s3.stories[]` の全項目（`story_no` `proposal_kind` `headline` `hook_question` `target_risk_nos[]` `target_gap_nos[]` `menu_ids[]` `line_ids[]` `scheme_id` `pitch` `similar_case_id` `expected_objection` `objection_response`）。`target_risk_nos` は `s2.risks[].risk_no` を、`target_gap_nos` は `s2.gaps[].gap_no` を引いて名称に解決する | `s3` が null なら非表示 | カード3枚 |
+| SEC-10 | story | 提案の筋書き（当社にできること） | `s3.stories[]` の全項目（`story_no` `proposal_kind` `headline` `hook_question` `target_risk_nos[]` `target_gap_nos[]` `menu_ids[]` `line_ids[]` `scheme_id` `pitch` `similar_case_id` `expected_objection` `objection_response`）。`target_risk_nos` は `s2.risks[].risk_no` を、`target_gap_nos` は `s2.gaps[].gap_no` を引いて名称に解決する | `s3` が null なら非表示 | カード3枚 |
 | SEC-18 | talk | 経営層への話し方 | `s3.talk_script`（`opening` `flow[]` `closing` `taboo[]`） | `s3` が null、または `talk_script` が無いなら**セクションごと非表示**（目次からも落とす） | 吹き出し＋番号付きの流れ（§3.9） |
 | SEC-13 | hearing | ヒアリング事項 | `s3.stories[].hook_question` / `s2.open_questions[]` / `s1.missing_info[]`（`item` `why_needed`） / `s2.risks[].check_points[]` | 4系統すべて0件なら非表示 | 番号付きリスト（§3.4） |
 | SEC-14 | source | 出典と根拠 | `s2.risks[]`（`risk_no` `evidence.quote` `evidence.source`） / **`s1.sources[]`（`label` `url` `aspect`）** / `meta.s1_warn` | `s2` が null なら非表示（**出典表も同時に消える**＝登録表の `need:['s2']` は変えない） | 表＋**出典表**（`出典` / `URL` / `観点`。URLは `<a href>` にせず**テキスト**で出す＝§4.1 の textContent 規律。v1.5・裁定書38 B-04）＋点検の注記1行 |
@@ -128,16 +128,16 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 - **S4は読まない**。本レポートは `GenerateHtmlReport` の契約どおり S1・S2・S3 だけから描く（14章§6）。S4の `hearing_questions` はヒアリングシート（13章§2.16・`modExportHearing`）の入力であり、S4未実行でもレポートが出せる状態を保つため本章では参照しない。
 - enum値は必ず19章§3・15章§0の日本語ラベルへ変換して表示する。生の英字enumを画面に出さない。**充足度 `input_quality.overall` のラベルも19章§3の「高／中／低」を逐語で用いる**（v1.1.1・裁定書10 m4。旧「充足度 高／充足度 中／充足度 低」のラベル辞書は廃止し、同一enumのラベルが画面側〔19章§3・`modUICase.EnumPairsCsv`〕と2系統に分岐しない状態を保つ。実装のラベル辞書は `modHtmlTemplate6` の LIQO＝`{high:'高',mid:'中',low:'低'}`。**SEC-04 の総合充足度の段落は「充足度: 」を前置して `充足度: 高` の形で描画する**〔v1.1.1・裁定書10補遺P5。ラベル辞書は1字のままとし、前置は表示側 `modHtmlTemplate2` の SEC-04 描画が持つ〕）。
 - 「空のときの挙動」が「非表示」のセクションは、目次（§3.6）からも同時に落とす。
-- **SEC-09 と SEC-16 は別物である**: SEC-09「ニューリスク」は `s2.emerging_risks[]`＝サイバー・気候変動のような**新種・新興リスク**（ラウンドに関係なく初回から出る）、SEC-16「訪問で分かったこと」は `s2.risks[].status`＝**第2ラウンド以降の仮説ライフサイクル**（新規発見・確認済み・棄却）である。`status = "new"` のリスクは SEC-16 と SEC-07 リスク一覧の `status` 表示（バッジ）に留め、**SEC-09 には出さない**。
+- **SEC-09 と SEC-16 は別物である**: SEC-09「新しく出てきたリスク」は `s2.emerging_risks[]`＝サイバー・気候変動のような**新種・新興リスク**（ラウンドに関係なく初回から出る）、SEC-16「訪問で分かったこと」は `s2.risks[].status`＝**第2ラウンド以降の仮説ライフサイクル**（新規発見・確認済み・棄却）である。`status = "new"` のリスクは SEC-16 と SEC-07 リスク一覧の `status` 表示（バッジ）に留め、**SEC-09 には出さない**。
 
-### 3.1 SEC-02 エグゼクティブサマリの構成（10章FR-37「3テーマ・A4 1枚相当の文字中心」）
+### 3.1 SEC-02 要点(1分で読む)の構成（10章FR-37「3テーマ・A4 1枚相当の文字中心」）
 
 1. **リード**: `s1.business_summary` の全文（改行はそのまま段落に変換）。続けて `s1.strategy_outlook.market_context` を1段落。
 2. **最重要リスク3件**: `s2.risks[]` を `impact_score * frequency_score` の降順、同点は `impact_score` の降順、なお同点は `risk_no` の昇順で並べ、上位3件の `risk_no` と `risk_name` を1行ずつ。
 3. **3テーマ**: `s3.stories[]` を `story_no` 昇順に3件。各テーマは `headline`（小見出し）／対象リスク（`target_risk_nos` を `s2.risks[].risk_name` へ解決し「・」で連結）／`pitch` の先頭200字（超過時は末尾に「…」を付す）。
 4. 本セクションだけは印刷時に `break-after: page` を効かせ、A4 1枚に収める（§6）。以降のセクションは文字を減らし図表主体にする。
 
-### 3.2 SEC-05 リスクユニバース10分類の描き方
+### 3.2 SEC-05 リスクの全体像(10分類)の描き方
 
 19章§3の10分類を**常に10行**（該当0件の分類も0件と表示する）並べ、各行に件数と横バーを描く。バー長は `件数 / 全risks件数` の比。分類の並びは15章§0の変換表の記載順（strategy_market から brand_social まで）に固定する。件数0の分類を落とさないのは「見ていない領域」と「見たが該当なし」を読み手が区別できるようにするためである。
 
@@ -207,7 +207,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 
 `menu_ids` / `line_ids` は**持たない**（15章§4。実在しないメニューIDを引く経路を作らない）ため、本節にID列は無い。
 
-### 3.8 SEC-08 保険カバレッジ表の描き方（v1.3で新設。裁定書25 S5。見本05節が正）
+### 3.8 SEC-08 いまの保険と足りないところの描き方（v1.3で新設。裁定書25 S5。見本05節が正）
 
 見本05節（`Insurance Coverage Matrix`）の粒度は**契約単位ではなくリスク単位**である。契約が1本も無い新規先でも「このリスクは、ふつうどの保険で、どこまで移せて、何を確かめる必要があるか」が並ぶことが、この節の価値である（髙橋FB①「事業内容×既存の保険」のリスクマップ）。したがって本セクションは**3枚の表**を上から順に描く。
 
@@ -276,9 +276,9 @@ s = s & modHtmlTemplate2.SecExecJs()
 ' (b) 登録配列: 描画の順序と条件を宣言する。ここに並んだ順に描画される
 s = s & "var SECTIONS=[" & vbLf
 s = s & " {id:'SEC-01',slug:'cover',    title:'',                  need:['meta'],   empty:'always',render:renderCover},"      & vbLf
-s = s & " {id:'SEC-02',slug:'exec',     title:'エグゼクティブサマリ',need:['s1'],    empty:'always',render:renderExec},"       & vbLf
+s = s & " {id:'SEC-02',slug:'exec',     title:'要点(1分で読む)',need:['s1'],    empty:'always',render:renderExec},"       & vbLf
 s = s & " {id:'SEC-06',slug:'riskmap',  title:'2軸リスクマップ（影響×頻度 5×5）',need:['s2'],empty:'hide',render:renderRiskMap}," & vbLf
-s = s & " {id:'SEC-09',slug:'newrisk',  title:'ニューリスク（新種・新興リスク）',need:['s2'],empty:'note',note:'現時点で特筆すべきニューリスクは検出されていません',render:renderNewRisk}," & vbLf
+s = s & " {id:'SEC-09',slug:'newrisk',  title:'新しく出てきたリスク（新種・新興リスク）',need:['s2'],empty:'note',note:'現時点で特筆すべき新しく出てきたリスクは検出されていません',render:renderNewRisk}," & vbLf
 s = s & " {id:'SEC-16',slug:'round-update',title:'訪問で分かったこと（ラウンド更新）',need:['s2'],empty:'hide',render:renderRoundUpdate}," & vbLf
 s = s & " {id:'SEC-17',slug:'growth',   title:'攻めの保険活用',      need:['s3'],   empty:'hide', render:renderGrowth},"    & vbLf
 s = s & "];" & vbLf
@@ -375,7 +375,7 @@ s = s & "];" & vbLf
 | `--navy` | `#27364A` | 濃紺。提案ブロックの地・絞り込みボタンの選択状態 |
 | `--kaki` | `#B4552D` | 注意・できないこと・不足の強調 |
 | `--matsu` | `#2F7A54` | 肯定・提案・充足の強調 |
-| `--deep` | `#6F42C1` | ニューリスクの時間軸ピルなど、補足の系統色 |
+| `--deep` | `#6F42C1` | 新しく出てきたリスクの時間軸ピルなど、補足の系統色 |
 
 **面色と影（7）**
 
@@ -501,7 +501,7 @@ Public Function ThemeCss(ByVal themeName As String) As String
 | ② | 画面は中央1カラム、印刷は紙幅いっぱい | 本文ラッパを `max-width:var(--page-width);margin:0 auto;padding:0 var(--page-pad)` とし、`@media print` で `max-width:none;padding:0` に戻す |
 | ③ | 背景色印刷が無効でも読める | `body{-webkit-print-color-adjust:exact;print-color-adjust:exact}` を指定するが、**これに依存しない**。リスクマップは帯番号（§3.3）、移転可能性・充足度は色に加えて文字ラベルを併記する。色だけで意味を運ぶ表現を作らない |
 | ④ | 図表を紙面で分断しない | カード・表の行・リスクマップ全体・提案カードに `break-inside:avoid` を指定する |
-| ⑤ | エグゼクティブサマリはA4 1枚 | SEC-02 に `break-after:page` を指定する（10章FR-37の紙面設計） |
+| ⑤ | 要点(1分で読む)はA4 1枚 | SEC-02 に `break-after:page` を指定する（10章FR-37の紙面設計） |
 | ⑥ | 広い表は画面で横スクロール、印刷で全幅 | 表は `.tblwrap{overflow-x:auto}` で包み、`@media print` で `overflow:visible` に戻し表の文字を `11px` へ落とす。**印刷時に横スクロールで隠れた列が消えないこと**が受入条件 |
 | ⑦ | 印刷に不要な操作要素を消す | 画面のみの要素（先頭の「印刷する」ボタン・目次の折りたたみ）に `.no-print` を付け、`@media print{.no-print{display:none}}` |
 | ⑧ | 目次は印刷にも出す | §3.6。紙でも構成が追えるようにする。ページ番号は付けない（CSSだけでは本文中に採番できないため、無理に作らない） |
@@ -509,4 +509,4 @@ Public Function ThemeCss(ByVal themeName As String) As String
 | ⑩ | 印刷の基準文字サイズ | `@media print{body{font-size:12px;line-height:1.7}}`。画面の `--font-size` とは独立に固定する |
 | ⑪ | リンクは同一ファイル内アンカーのみ | 目次の `#sec-<slug>` 以外の `href` を出さない。外部URLを踏ませない（社内配布物としての安全側） |
 
-**受入確認（17章 T-33／T-41 のDoDと対応）**: mockデータ（15章§8）から生成したHTMLを、(a) ブラウザで開いて全セクションが表示される (b) 印刷プレビューでA4縦・エグゼクティブサマリが1枚・リスクマップとカバレッジ表が分断されない (c) `</script>`・`<img onerror=`・`&`・改行・絵文字を含むmock S2を入力しても記号がそのまま文字として表示され、レイアウトが壊れない (d) `html_theme` を `standard` から `mono` へ替えるだけで配色が変わり、構成は変わらない、の4点を確認する。
+**受入確認（17章 T-33／T-41 のDoDと対応）**: mockデータ（15章§8）から生成したHTMLを、(a) ブラウザで開いて全セクションが表示される (b) 印刷プレビューでA4縦・要点(1分で読む)が1枚・リスクマップとカバレッジ表が分断されない (c) `</script>`・`<img onerror=`・`&`・改行・絵文字を含むmock S2を入力しても記号がそのまま文字として表示され、レイアウトが壊れない (d) `html_theme` を `standard` から `mono` へ替えるだけで配色が変わり、構成は変わらない、の4点を確認する。

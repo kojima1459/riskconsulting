@@ -100,6 +100,8 @@ Public Function Dispatch(ByVal action As String, ByVal data As String, ByRef cas
         response = ActExportReport(caseId, modJsonLite.GetStr(data, "reviewedBy"))
     Case "export_hearing"
         response = ActExportHearing(caseId, data)
+    Case "report_mail"
+        response = modReportMail.SendReportMail(caseId)
     Case "open_report"
         response = ActOpenReport(caseId, data)
     Case "chat"
@@ -129,16 +131,16 @@ Public Function Dispatch(ByVal action As String, ByVal data As String, ByRef cas
         n = modSparring.ResumeSparring(caseId, note)
         If n >= 0 Then
             modNaviState.SetSparringNote caseId, note
-            response = SavedResult(caseId, "壁打ちを開始しました。調べる深さは壁打ちまでに変更しました。")
+            response = SavedResult(caseId, "商談の予行演習を開始しました。調べる深さを「商談の予行演習あり」に変更しました。")
         Else
-            response = Failure("壁打ちを開始できませんでした。", "E0101")
+            response = Failure("商談の予行演習を開始できませんでした。", "E0101")
         End If
     Case "sparring_send"
-        modNaviHost.ShowBusy "壁打ちの回答を確認しています", ProgressJson(1, 1, "壁打ち")
+        modNaviHost.ShowBusy "商談の予行演習の回答を確認しています", ProgressJson(1, 1, "商談の予行演習")
         DoEvents
         ok = modSparring.SendSparring(caseId, modJsonLite.GetStr(data, "utterance"), srcValue, errCode)
         If ok Then
-            response = SavedResult(caseId, "壁打ちの回答を保存しました。")
+            response = SavedResult(caseId, "商談の予行演習の回答を保存しました。")
         Else
             note = modGatewayRPN.ErrMessageFor(errCode)
             If errCode = "E0103" Then note = "個人情報らしき記述を検知したため送信しませんでした。"
@@ -186,7 +188,7 @@ End Function
 Public Function NeedsCase(ByVal action As String) As Boolean
     Select Case action
     Case "open_case", "clear_material", "run_pipeline", "open_step_sheet", "save_step_edit", _
-         "export_report", "open_report", "export_hearing", "chat", "clear_chat", _
+         "export_report", "open_report", "export_hearing", "chat", "clear_chat", "report_mail", _
          "sparring_resume", "sparring_send", "sparring_to_inbox", "start_round2", _
          "company_save", "company_open", "feedback_add", "rename_case", "archive_case", "export_case"
         NeedsCase = True

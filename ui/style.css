@@ -60,6 +60,11 @@ a { color:#01675b; }
 .mode-tabs button:hover { background:transparent; color:#01675b; }
 .mode-tabs button.active { border-bottom-color:#01675b; color:#01675b; font-weight:600; }
 .badge { display:inline-block; border-radius:9px; background:#d9ece2; color:#01675b; margin-left:3px; padding:1px 6px; font-size:0.8462rem; }
+/* 信頼度バッジ(D&O由来。裁定書38 §1 班E-a): 色だけに頼らず文言でも区別する。 */
+.trust-badge { display:inline-block; border-radius:9px; border:1px solid; margin-left:5px; padding:1px 7px; font-size:0.7692rem; font-weight:600; vertical-align:1px; }
+.trust-badge.trust-primary { background:#e7f0ff; color:#1d4f9e; border-color:#bcd4f7; }
+.trust-badge.trust-ai { background:#f2eaff; color:#5a3caa; border-color:#dccdf5; }
+.trust-badge.trust-memo { background:#fff1cc; color:#8a5a00; border-color:#f0d27a; }
 .mode-content { position:absolute; top:38px; bottom:0; left:0; right:0; overflow:auto; padding:12px 16px 10px; }
 #chatPane,#sparPane { display:flex; flex-direction:column; height:calc(100% - 38px); overflow:hidden; padding-bottom:8px; }
 .chat-history-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex:0 0 auto; }
@@ -423,7 +428,7 @@ button.chip { min-height:30px; font-size:.8462rem; padding:4px 10px; }
 .chat-form>.muted { margin-top:8px; font-size:.7857rem; }
 .chat-form .form-footer button { margin-top:0; }
 .modal-backdrop { padding:24px 16px; }
-.modal { width:660px; max-width:100%; max-height:calc(100vh - 48px); display:flex; flex-direction:column; overflow:hidden; border-radius:12px; }
+.modal { width:660px; max-width:100%; max-height:560px; max-height:calc(100vh - 48px); display:flex; flex-direction:column; overflow:hidden; border-radius:12px; }
 .modal-header { flex:0 0 auto; min-height:68px; padding:14px 22px; }
 .modal-header h2 { font-size:1.2308rem; padding-right:12px; line-height:1.5; }
 .modal-header button { flex:0 0 auto; }
@@ -436,7 +441,7 @@ button.chip { min-height:30px; font-size:.8462rem; padding:4px 10px; }
 .modal-body .field-check input { flex:0 0 auto; min-height:0; width:16px; height:16px; margin:0 8px 0 0; }
 .modal-body .form-footer { border-top:1px solid #e3ede7; margin-top:24px; padding-top:12px; }
 .modal-body .form-footer button { white-space:normal; text-align:center; }
-#modalFeedback { flex:0 0 auto; max-height:30vh; overflow:auto; margin:0; padding:12px 24px; border-radius:0; font-size:.9231rem; }
+#modalFeedback { flex:0 0 auto; max-height:180px; max-height:30vh; overflow:auto; margin:0; padding:12px 24px; border-radius:0; font-size:.9231rem; }
 #discardModal { display:block; margin-top:10px; }
 .toast { max-width:calc(100% - 32px); right:16px; top:116px; font-size:.9231rem; padding:14px 16px; }
 .left-pane[data-narrow="true"] .area-main { flex-basis:100%; margin-bottom:8px; }
@@ -500,7 +505,7 @@ button.chip { min-height:30px; font-size:.8462rem; padding:4px 10px; }
  .view-scroll { top:130px; padding:16px 12px 28px; }
  .card.half,.card.third { width:calc(100% - 12px); }
  .modal-backdrop { padding:12px 10px; }
- .modal { max-height:calc(100vh - 24px); border-radius:9px; }
+ .modal { max-height:480px; max-height:calc(100vh - 24px); border-radius:9px; }
  .modal-header { padding:12px 16px; }
  .modal-body { padding:16px; }
  .welcome { margin-top:20px; }
@@ -508,7 +513,7 @@ button.chip { min-height:30px; font-size:.8462rem; padding:4px 10px; }
 }
 @media(max-height:560px) {
  .modal-backdrop { padding-top:12px; padding-bottom:12px; }
- .modal { max-height:calc(100vh - 24px); }
+ .modal { max-height:320px; max-height:calc(100vh - 24px); }
  .modal-header { min-height:56px; padding-top:10px; padding-bottom:10px; }
  #chatPane,#sparPane { overflow:auto; display:block !important; }
  #chatPane[style*="none"],#sparPane[style*="none"] { display:none !important; }
@@ -589,3 +594,14 @@ button.chip { min-height:30px; font-size:.8462rem; padding:4px 10px; }
 .topbar,.top-actions,.context-bar { flex-wrap:wrap; }
 .topbar { height:auto; min-height:56px; }
 .context-bar { height:auto; min-height:48px; }
+
+/* 印刷対応(Gemini 3.8 flash合議 第2回・裁定書38 §1 班E): この画面は
+   基本的にExcel内WebBrowserでの表示専用だが、誤ってCtrl+P等で印刷された
+   場合に固定領域(topbar/左ペイン等)のせいで本文が切れるのを避ける保険。
+   本番のレポート出力はmodExportHtmlが作る自己完結HTMLファイル(18章)を
+   ブラウザで開いて印刷する運用が正であり、本ブロックはこの画面自体の
+   誤印刷に対する最低限の保険にとどめる。 */
+@media print {
+ html,body,#app,#workspace,.right-pane,.view-scroll { position:static !important; overflow:visible !important; height:auto !important; }
+ .topbar,.context-bar,.compact-pane-tabs,.left-pane,.splitter,.view-toolbar,.view-tabs,.statusbar,#toast,#modalBackdrop { display:none !important; }
+}

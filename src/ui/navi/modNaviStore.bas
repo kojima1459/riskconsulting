@@ -99,6 +99,13 @@ Private Function FilterRows(ByVal sheetName As String, ByVal filterName As Strin
         End If
         If take Then
             rowText = RowJson(blk, r)
+            If sheetName = "案件一覧" Then
+                ' Q-7(docs/29§10.1): 一覧に所在地(nav_basics.address)を添える。
+                ' 空なら空欄(modJsonLite.GetStr は既定で"")。views.js の
+                ' caseOptions がこの address フィールドを描く。
+                rowText = Left$(rowText, Len(rowText) - 1) & ",""address"":" & _
+                    Q(modJsonLite.GetStr(modCaseStore.LoadData(CellValue(blk, r, "case_id"), "nav_basics"), "address")) & "}"
+            End If
             If n > 0 Then modUtil.BufAdd buf, n, ","
             modUtil.BufAdd buf, n, rowText
         End If
@@ -315,8 +322,12 @@ Public Function ExportCaseJson(ByVal caseId As String) As String
             modUtil.BufAdd buf, n, rowText
         End If
     Next i
-    ExportCaseJson = "{""format"":""riscon-navi-case"",""version"":1,""case"":" & _
-                     CaseRowJson(caseId) & ",""data"":[" & JoinPieces(buf, n) & "]}"
+    ' Z-44(裁定書38 §1 班E): 社内向け出力のAI生成明示。S1-S4のAI下書きを
+    ' そのまま持ち出せる出力のため、他の出力(ヒアリングシート・受信箱診断)と
+    ' 同文の注記を1フィールド添える。
+    ExportCaseJson = "{""format"":""riscon-navi-case"",""version"":1," & _
+                     """ai_notice"":" & Q("この内容はAIが作成した下書きを含みます。内容を確認のうえ使用してください。") & _
+                     ",""case"":" & CaseRowJson(caseId) & ",""data"":[" & JoinPieces(buf, n) & "]}"
 End Function
 
 Public Function ValidTransfer(ByVal json As String, ByRef reason As String) As Boolean

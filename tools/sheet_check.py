@@ -23,7 +23,7 @@ sheet_check.py - 13章(データ設計)と、シート台帳/ビルド済みブ�
                   レンジ(アンカー)から特定したヘッダ行**を読む(13章§2.9)。
   4. 名前付きレンジ 帳票型2シート(ナビ=hm_/ci_/dr_/nv_ の4接頭辞・使い方=gd_)と、
                   ヒアリングシート・壁打ちの
-                  見出し用(hs_ / sp_ の計8本)を名前付きレンジ側で突合する。
+                  見出し用(hs_ / sp_ の計9本)を名前付きレンジ側で突合する。
   5. configキー   13章§2.3の name 列と、その順序。機械比較できる行は既定値も。
 
 ビルド機構シート(sheets_main.json で build_infrastructure=true のもの。vba_src)は
@@ -838,8 +838,8 @@ def run(book_path: Path | None, rep: Report) -> None:
             bgot = [n for n, (sh, _) in book.names.items() if sh == sheet
                     and n.startswith(NAME_PREFIXES)]
             rep.eq_set(f"[ブック] {sheet} の名前付きレンジ", want, bgot)
-    rep.check(total_hs_sp == 8,
-              "hs_/sp_ の見出し用名前付きレンジは計8本(19章§5)",
+    rep.check(total_hs_sp == 9,
+              "hs_/sp_ の見出し用名前付きレンジは計9本(19章§5)",
               f"13章から読めたのは{total_hs_sp}本")
 
     # --- 5. configキー --------------------------------------------------------
