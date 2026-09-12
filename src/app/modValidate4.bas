@@ -446,15 +446,21 @@ End Function
 ' ReplaceOk - その位置で置換してよいか(対訳表§6 + §6.5)。**判定はここ1箇所**
 '   (SoftenOnce と HitList の両方が使う)。pos = 社内語の直後の位置。
 Private Function ReplaceOk(ByVal hay As String, ByVal pos As Long, _
-                           ByVal dstText As String, ByVal termText As String) As Boolean
+                           ByVal dstText As String, ByVal termText As String, _
+                           Optional ByVal startPos As Long = 0) As Boolean
     If Not IsTermAt(hay, pos, termText) Then Exit Function
     If UndoNeeded(dstText, hay, pos) Then Exit Function
+    ' 語頭側の重なり(裁定書43 検証者・W15 司令塔の手直し)。終端集合は直後しか
+    '   見ないので「保険付保の状況」→「保険保険のご加入…」が素通りしていた。
+    If startPos > 1 Then
+        If modValidate3.HeadOverlap(dstText, hay, startPos, V4_UNDO_TAIL_MAX) Then Exit Function
+    End If
     ReplaceOk = True
 End Function
 
-' UndoNeeded - 取り消し規則(対訳表§6.5。二重の安全網)。置換すると (a) 継ぎ目で
-'   同じ文字が V4_RUN_MAX 個以上続く / (b) 顧客語の末尾1〜V4_UNDO_TAIL_MAX 文字が
-'   直後の本文と重複する のいずれかなら True(=取り消して警告へ回す)。
+
+' UndoNeeded - 取り消し規則(対訳表§6.5)。(a) 継ぎ目で同じ文字が V4_RUN_MAX 個
+'   以上続く / (b) 顧客語の末尾が直後の本文と重複する なら True(=警告へ回す)。
 Private Function UndoNeeded(ByVal dstText As String, ByVal hay As String, _
                             ByVal pos As Long) As Boolean
     Dim k As Long
@@ -501,7 +507,7 @@ Private Function ReplaceableFound(ByVal hay As String, ByVal word As String, _
     p = InStr(1, hay, word, vbBinaryCompare)
     Do While p > 0
         If BoundaryOk(hay, p, word) Then
-            If ReplaceOk(hay, p + Len(word), dstText, termText) Then
+            If ReplaceOk(hay, p + Len(word), dstText, termText, p) Then
                 ReplaceableFound = True
                 Exit Function
             End If
@@ -599,7 +605,7 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
                         If BoundaryOk(bodyText, i, srcArr(k)) Then
                             ' 置換してよい文脈でなければ、この位置はここで
                             '   打ち切る(規約2)。
-                            If Not ReplaceOk(bodyText, i + wLen, dstArr(k), termText) Then
+                            If Not ReplaceOk(bodyText, i + wLen, dstArr(k), termText, i) Then
                                 Exit For
                             End If
                             matched = k + 1

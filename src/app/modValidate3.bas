@@ -545,3 +545,19 @@ End Function
 Private Function HasTopKey(ByVal srcJson As String, ByVal keyName As String) As Boolean
     HasTopKey = (TopValuePos(srcJson, keyName) > 0)
 End Function
+
+' HeadOverlap - 顧客語の先頭1〜maxLen 文字が、社内語の直前の本文の
+'   末尾と重複するか(語頭側の二重を防ぐ。UndoNeeded の語尾側と対の関係)。
+Public Function HeadOverlap(ByVal dstText As String, ByVal hay As String, _
+                            ByVal startPos As Long, ByVal maxLen As Long) As Boolean
+    Dim k As Long
+
+    For k = 1 To maxLen
+        If k <= Len(dstText) And startPos - k >= 1 Then
+            If Mid$(hay, startPos - k, k) = Left$(dstText, k) Then
+                HeadOverlap = True
+                Exit Function
+            End If
+        End If
+    Next k
+End Function
