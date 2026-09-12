@@ -322,6 +322,96 @@ Private Sub T_RankIndexAndCap()
     n = modKnowledge2.SelectRows(blkB, 4, "id", "industry", "09", 3, selOut, idsOut, _
                                   totalHits, "AAAAAAAA", "body", 0, 8)
     ChkS "Test_R1-03_19_行側の上限で打ち切られる_裁定書39R1-03", idsOut, "C1;C3"
+
+    ' 26 14章§6 の契約「大小文字・かな漢字はそのまま比較する」(裁定書40 P-m1)。
+    '    索引のキーが大小文字を畳むと、別物の行が重なったことにされて上位に来る
+    '    (Basic の Collection はキー照合で大小文字を区別しない=素のグラムを
+    '    キーにすると畳まれる)。**畳まれないこと**と**同一なら重なること**の
+    '    両方向を固定する(片側だけだと「常に0を返す」実装が緑になる)。
+    ChkB "Test_P-m1_26_大小文字違いのグラムは重ならない_裁定書40P-m1", _
+        (modKnowledgeRank.NgramOverlap("ABAB", "abab", 2) = 0) And _
+        (modKnowledgeRank.NgramOverlap("ABAB", "ABAB", 2) = 3), _
+        "大小文字違い=" & CStr(modKnowledgeRank.NgramOverlap("ABAB", "abab", 2)) & _
+        "(期待0) 同一=" & CStr(modKnowledgeRank.NgramOverlap("ABAB", "ABAB", 2)) & "(期待3)"
+
+    ' 27 案件側の索引は**行数によらず2回**(2字と3字で各1回)しか作らない
+    '    (裁定書40 P-M3(a))。行ごとに作り直す実装だと 4行=8回・12行=24回になる。
+    '    1呼び出しの NgramOverlap が1回であることも併せて見る(両方向)。
+    Dim rows12(1 To 12) As String
+    Dim b4 As Long, b12 As Long, b1 As Long
+    For i = 1 To 12
+        rows12(i) = "abcd" & String$(i, "x")
+    Next i
+    modKnowledgeRank.ResetIndexBuilds
+    n = modKnowledgeRank.RankRows("abcdefgh", rowTexts, order)
+    b4 = modKnowledgeRank.IndexBuilds()
+    modKnowledgeRank.ResetIndexBuilds
+    n = modKnowledgeRank.RankRows("abcdefgh", rows12, order)
+    b12 = modKnowledgeRank.IndexBuilds()
+    modKnowledgeRank.ResetIndexBuilds
+    n = modKnowledgeRank.NgramOverlap("abcdefgh", "abcd", 2)
+    b1 = modKnowledgeRank.IndexBuilds()
+    ChkB "Test_P-M3_27_索引は行数によらず2回しか作らない_裁定書40P-M3", _
+        (b4 = 2 And b12 = 2 And b1 = 1), _
+        "4行=" & CStr(b4) & " 12行=" & CStr(b12) & " 単発=" & CStr(b1) & " (期待 2/2/1)"
+
+    ' 28 索引を使い回しても点数が変わらない(=借りた個数を必ず返している)。
+    '    RankRows の並びが、1行ずつ NgramOverlap で数えた点数の降順に一致する。
+    '    使い回しで個数が減る実装だと、後ろの行ほど点数が下がって並びが崩れる。
+    Dim rowsX(1 To 5) As String
+    Dim scX(1 To 5) As Long
+    Dim caseX As String, okOrder As Boolean, scSum As Long
+    caseX = "abcdefghijklmnop"
+    rowsX(1) = "zzzzzzzz"
+    rowsX(2) = "abcdefgh"
+    rowsX(3) = "ijklmnop"
+    rowsX(4) = "abcdefghijklmnop"
+    rowsX(5) = "qrstuvwx"
+    n = modKnowledgeRank.RankRows(caseX, rowsX, order)
+    okOrder = (n = 5)
+    For i = 1 To 5
+        scX(i) = modKnowledgeRank.NgramOverlap(caseX, rowsX(i), 2) + _
+                 modKnowledgeRank.NgramOverlap(caseX, rowsX(i), 3)
+        scSum = scSum + scX(i)
+    Next i
+    If okOrder Then
+        For i = 2 To 5
+            If scX(order(i - 1)) < scX(order(i)) Then okOrder = False
+        Next i
+    End If
+    ChkB "Test_P-M3_28_索引を使い回しても点数と順位が変わらない_裁定書40P-M3", _
+        (okOrder And scSum > 0 And scX(4) > scX(2)), _
+        "点数=" & CStr(scX(1)) & "," & CStr(scX(2)) & "," & CStr(scX(3)) & "," & _
+        CStr(scX(4)) & "," & CStr(scX(5)) & " 順=" & Join(order, ",")
+
+    ' 29 候補行数の上限(config kb_rank_max_rows 相当の第13引数)。上限1なら
+    '    シート順で先頭の候補(C2)だけが順位付けの対象になり、C3 は採られない。
+    '    上限0(無制限)では両方採られる、の両方向を1本で固定する(裁定書40 P-M3(b))。
+    '    候補総数(第14引数)は上限に関係なく数える=run_log へ「打ち切った」と
+    '    書けるのはこの値が上限を超えたときだけ。
+    Dim blkCap As Variant, candSeen As Long
+    blkCap = MakeBlk("id;industry;body", _
+        "C1;09;pppppppp" & vbLf & _
+        "C2;07;AAAAAAAA" & vbLf & _
+        "C3;07;BBBBBBBB")
+    idsOut = vbNullString
+    totalHits = 0
+    candSeen = 0
+    n = modKnowledge2.SelectRows(blkCap, 4, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "BBBBBBBBAAAAAAAA", "body", 0, 0, 0, candSeen)
+    Dim idsNoCap As String, seenNoCap As Long
+    idsNoCap = idsOut
+    seenNoCap = candSeen
+    idsOut = vbNullString
+    totalHits = 0
+    candSeen = 0
+    n = modKnowledge2.SelectRows(blkCap, 4, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "BBBBBBBBAAAAAAAA", "body", 0, 0, 1, candSeen)
+    ChkB "Test_P-M3_29_候補行数の上限で並べ替えを打ち切る_裁定書40P-M3", _
+        (idsNoCap = "C1;C2;C3" And seenNoCap = 2 And idsOut = "C1;C2" And _
+         candSeen = 2 And totalHits = 2), _
+        "上限なし=[" & idsNoCap & "]/" & CStr(seenNoCap) & " 上限1=[" & idsOut & _
+        "]/" & CStr(candSeen) & " totalHits=" & CStr(totalHits)
 End Sub
 
 ' ============================================================================
@@ -335,14 +425,15 @@ Private Sub T_TotalHitsAndEmpty()
         "C3;07;zzzzzzzz" & vbLf & _
         "C4;07;abcdefgh")
 
-    ' 21 補充が起きたとき、totalHits は「完全一致の該当総数(C1の1件)+補充候補の
-    '    総数(C2/C3/C4の3件)」=4。使用数(3)を下回る値を返すと run_log の
-    '    kb_cut:cases=3/1 が読めない値になり、SEC-14 の「該当N件のうちM件」も
-    '    (total>used の条件で)消える。
+    ' 21 補充が起きたとき、totalHits は「完全一致の該当総数(C1の1件)+**実際に
+    '    補充で採用した行数**(C4/C2の2件。C3 は重なり0で採らない)」=3。
+    '    候補を作っただけで足すと、1行も打ち切っていない案件でも SEC-14 が
+    '    「該当N件のうちM件を使用」と出る(裁定書40 P-M2)。使用数を下回っても
+    '    ならない(kb_cut:cases=3/1 は読めない値)。
     idsOut = vbNullString
     n = modKnowledge2.SelectRows(blk, 5, "id", "industry", "09", 3, selOut, idsOut, _
                                   totalHits, "abcdefgh", "body")
-    ChkN "Test_R1-04_21_補充時のtotalHitsは完全一致+補充候補_裁定書39R1-04", totalHits, 4
+    ChkN "Test_P-M2_21_補充時のtotalHitsは完全一致+採用した補充行_裁定書40P-M2", totalHits, 3
 
     ' 22 lastRow=0(データ行が1本も無い)でも、補充の候補配列を ReDim(1 To 0) して
     '    実行時エラー9 を投げないこと。0件で静かに返る。
@@ -351,4 +442,29 @@ Private Sub T_TotalHitsAndEmpty()
     n = modKnowledge2.SelectRows(blk, 0, "id", "industry", "09", 3, selOut, idsOut, _
                                   totalHits, "abcdefgh", "body")
     ChkN "Test_G-1_22_lastRow0でも実行時エラーにならない_裁定書39G-1", n, 0
+
+    ' 23 補充候補はあるが**1件も採用しなかった**とき(重なり0の行しかない)は、
+    '    totalHits = 完全一致の該当数。ここが膨らむと modExportHtml の
+    '    `kbCasesTotal > kbCasesUsed` が常時真になり、打ち切っていない案件で
+    '    SEC-14 が「打ち切った」と嘘をつく(裁定書40 P-M2 の再現手順そのもの)。
+    Dim blkNo As Variant
+    blkNo = MakeBlk("id;industry;body", _
+        "C1;09;abcdefgh" & vbLf & _
+        "C2;07;zzzzzzzz" & vbLf & _
+        "C3;07;yyyyyyyy" & vbLf & _
+        "C4;07;wwwwwwww")
+    idsOut = vbNullString
+    totalHits = 0
+    n = modKnowledge2.SelectRows(blkNo, 5, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "abcdefgh", "body")
+    ChkN "Test_P-M2_23_補充0件ならtotalHitsは完全一致数_裁定書40P-M2", totalHits, 1
+
+    ' 24 lastRow<0(見出し行すら無いブロックを渡された)でも、入口の
+    '    ReDim hits(1 To lastRow + 1) で実行時エラー9 を投げない。本関数は
+    '    14章§6 の公開口であり、呼び出し側がエラーを握らない(裁定書40 P-m2)。
+    idsOut = vbNullString
+    totalHits = 0
+    n = modKnowledge2.SelectRows(blk, -1, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "abcdefgh", "body")
+    ChkN "Test_P-m2_24_lastRowが負でも実行時エラーにならない_裁定書40P-m2", n, 0
 End Sub

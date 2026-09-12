@@ -2825,6 +2825,11 @@
           "note": "並べ替え補充のn-gram比較に掛ける行本文の字数上限(裁定書39 R1-03)"
         },
         {
+          "name": "kb_rank_max_rows",
+          "value": 60,
+          "note": "並べ替え補充に掛ける候補行数の上限(裁定書40 P-M3)。超えた分はシート順で切り run_log へ残す"
+        },
+        {
           "name": "json_repair_retry",
           "value": 1,
           "note": "JSON修復リトライ回数"

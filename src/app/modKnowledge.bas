@@ -48,6 +48,11 @@ Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_
 '   上限が無いと案件本文2万字 x 全業種の行 の比較で Excel が数分〜数十分固まる。
 Private Const KB_RANK_CASE_CHARS As Long = 3000
 Private Const KB_RANK_ROW_CHARS As Long = 2000
+' 裁定書40 P-M3(b): 並べ替え(modKnowledgeRank.RankRows)に掛ける候補**行数**の
+'   上限。config `kb_rank_max_rows` が正(13章§2.3)。字数上限だけでは
+'   「候補行数 x 行の字数」で時間が伸び続けるため、行数にも天井を置く。
+'   超えた分はシート順で切り、打ち切ったことを run_log detail に残す。
+Private Const KB_RANK_MAX_ROWS As Long = 60
 
 Private Const KB_F_MENU As String = "^target_industries^is_active"
 Private Const KB_F_SCHEME As String = "^target_industries^^status^pattern_id"
@@ -76,6 +81,12 @@ Private Const KB_CUT_LABELS As String = "cases|incidents|schemes|risks"
 Private gKbCutUsed(0 To 3) As Long
 Private gKbCutTotal(0 To 3) As Long
 Private gKbCutSeen(0 To 3) As Boolean
+' 裁定書40 P-M3(b): 並べ替え候補の打切り。gKbRankSeen=上限を掛ける前の候補数、
+'   gKbRankCap=掛けた上限。seen > cap のときだけ run_log detail へ
+'   "<種別>_rank_cut=<上限>/<候補総数>" を足す(打ち切っていないのに
+'   「打ち切った」と書かない。P-M2 と同じ原則)。
+Private gKbRankSeen(0 To 3) As Long
+Private gKbRankCap(0 To 3) As Long
 
 ' === 公開関数(14章§6のmodKnowledge節。ここに無い名前は公開しない) ===
 
@@ -219,6 +230,8 @@ Public Sub ResetInjectedIds()
         gKbCutUsed(i) = 0
         gKbCutTotal(i) = 0
         gKbCutSeen(i) = False
+        gKbRankSeen(i) = 0
+        gKbRankCap(i) = 0
     Next i
 End Sub
 
@@ -237,6 +250,13 @@ Public Function LastKbCutNote() As String
         If gKbCutSeen(i) Then
             If LenB(acc) > 0 Then acc = acc & ";"
             acc = acc & CStr(labels(i)) & "=" & CStr(gKbCutUsed(i)) & "/" & CStr(gKbCutTotal(i))
+            ' 裁定書40 P-M3(b): 並べ替えの候補行を config kb_rank_max_rows で
+            '   切ったときだけ、同じ1語の中へ "<種別>_rank_cut=上限/候補総数" を足す
+            '   (切っていないときは何も足さない)。
+            If gKbRankCap(i) > 0 And gKbRankSeen(i) > gKbRankCap(i) Then
+                acc = acc & ";" & CStr(labels(i)) & "_rank_cut=" & _
+                      CStr(gKbRankCap(i)) & "/" & CStr(gKbRankSeen(i))
+            End If
         End If
     Next i
     If LenB(acc) > 0 Then LastKbCutNote = "kb_cut:" & acc
@@ -303,15 +323,19 @@ Private Function Inject(ByVal idx As Long, ByVal idCol As String, ByVal filterSp
     Dim totalHits As Long
     ' 裁定書39 R1-03: n-gram 比較に掛ける字数上限。並べ替え補充が走るとき
     ' (caseText 非空)だけ読む。0 を渡すと modKnowledge2 側で無制限になる。
-    Dim caseChars As Long, rowChars As Long
+    ' 裁定書40 P-M3(b): 並べ替えに掛ける候補**行数**の上限も同じときに読む。
+    Dim caseChars As Long, rowChars As Long, maxCandRows As Long, candSeen As Long
     If LenB(caseText) > 0 Then
         caseChars = CapCfg(0, "kb_rank_case_chars", KB_RANK_CASE_CHARS)
         rowChars = CapCfg(0, "kb_rank_row_chars", KB_RANK_ROW_CHARS)
+        maxCandRows = CapCfg(0, "kb_rank_max_rows", KB_RANK_MAX_ROWS)
     End If
     n = modKnowledge2.SelectRows(gKbBlocks(idx), gKbRows(idx), idCol, filterSpec, industryCode, _
-                   capRows, sel, ids, totalHits, caseText, rankCols, caseChars, rowChars)
+                   capRows, sel, ids, totalHits, caseText, rankCols, caseChars, rowChars, _
+                   maxCandRows, candSeen)
     Inject = FormatBy(fieldName, sel)
     RecordKbCut fieldName, n, totalHits
+    RecordRankCut fieldName, maxCandRows, candSeen
     If n <= 0 Then
         ' 0行は未装填文言(modKnowledgeFmt が返す)のまま usage_log へ記録する
         ' (16章 E-09。ナレッジ整備の優先度シグナル)
@@ -336,6 +360,22 @@ Private Sub RecordKbCut(ByVal fieldName As String, ByVal usedN As Long, ByVal to
     gKbCutUsed(i) = usedN
     gKbCutTotal(i) = totalN
     gKbCutSeen(i) = True
+End Sub
+
+' RecordRankCut - 裁定書40 P-M3(b): 並べ替え候補の上限と、上限を掛ける前の
+'   候補総数を覚える(LastKbCutNote が seen > cap のときだけ1語足す)。
+Private Sub RecordRankCut(ByVal fieldName As String, ByVal capRows As Long, _
+                          ByVal seenRows As Long)
+    Dim i As Long
+    Select Case fieldName
+        Case "cases": i = 0
+        Case "incidents": i = 1
+        Case "schemes": i = 2
+        Case "risk_lib": i = 3
+        Case Else: Exit Sub
+    End Select
+    gKbRankCap(i) = capRows
+    gKbRankSeen(i) = seenRows
 End Sub
 
 ' 種類名から modKnowledgeFmt の整形関数へ振り分ける(書式の正は15章・実装は
