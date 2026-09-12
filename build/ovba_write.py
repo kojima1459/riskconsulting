@@ -41,6 +41,7 @@ ovba_write.py -- MS-OVBA 準拠の vbaProject.bin **ライター**(裁定書27 W
 from __future__ import annotations
 
 import struct
+import uuid
 
 import ovba
 
@@ -768,3 +769,556 @@ def strip_attribute_lines(src: bytes) -> bytes:
     while i < len(lines) and lines[i].startswith(b"Attribute "):
         i += 1
     return b"\r\n".join(lines[i:])
+
+
+# ===========================================================================
+# 6. 第2段の一段化(17章 Z-42) -- UserForm と参照設定を bin へ足す
+# ---------------------------------------------------------------------------
+# 背景:
+#   2段ビルドの第2段(build/win/import_navi_modules.ps1)は Windows 実Excel の
+#   VBE COM で UserForm(frmNaviHtml)と参照設定(SHDocVw / MSForms)を足していた。
+#   社内IT環境 v1.1 §3.1 が「PowerShell 不可」なので、第2段を CI 側へ寄せる
+#   (= 一段化)。本節は **第1段の bin へ、フォーム1本と参照2本を書き足す**。
+#
+# 情報源(どこから作るか):
+#   ・コード本文       : src/ui/navi/frmNaviHtml.frm の Begin…End より後ろ
+#   ・デザイナ定義     : 同 .frm の VERSION 5.00〜End(OleObjectBlob 行を除く)
+#                        -> `frmNaviHtml/\x03VBFrame`
+#   ・コントロール情報 : src/ui/navi/frmNaviHtml.frx の OleObjectBlob(=CFB)
+#                        -> `frmNaviHtml/\x01CompObj` `f` `o`
+#   ・参照設定         : 下の定数(髙橋産物と template_skeleton の実測から作った。
+#                        **個人の絶対パスを含む値は使わない**。W9.2 と同じ理由)
+#   つまり **髙橋産物のファイルには依存しない**(CI に置けないので依存できない)。
+#
+# 実測の出典(2026-09-12・W15 班G):
+#   髙橋産物 scratchpad/tk2/final_stale_w12a/リスク提案ナビ.xlsm の
+#   xl/vbaProject.bin(6,885,376 B)を読んだ結果:
+#     dir(解凍後 20,699 B)
+#       off=132 REFERENCENAME "Office"      / off=162 REFERENCEREGISTERED
+#       off=326 REFERENCENAME "SHDocVw"     / off=359 REFERENCEREGISTERED(117 B)
+#       off=482 REFERENCENAME "MSForms"     / off=515 REFERENCEORIGINAL(111 B)
+#                                             off=632 REFERENCECONTROL(59 B)
+#                                             off=697 REFERENCENAME "MSForms"
+#                                             off=730 REFERENCECONTROL_EXT(161 B)
+#       off=897 PROJECTMODULES count=136 / off=905 PROJECTCOOKIE
+#       off=20427 MODULE frmNaviHtml: stream="frmNaviHtml" MODULEOFFSET=19484
+#                 MODULECOOKIE=60240 MODULETYPE=0x0022 + MODULEPRIVATE(0x0028)
+#     PROJECT   : 135行目 `BaseClass=frmNaviHtml`、[Workspace] に
+#                 `frmNaviHtml=392, 392, 2793, 1578, Z, 392, 392, 2793, 1578, C`
+#     PROJECTwm : 136エントリ(frmNaviHtml は 135 番目)
+#     designer  : frmNaviHtml/\x01CompObj(97 B)・\x03VBFrame(279 B)・f(38 B)・o(0 B)
+#     _VBA_PROJECT: 104,952 B(p-code キャッシュ入り。__SRP_* が 300 本超)
+#   当方の第1段 bin(1,071,104 B)は _VBA_PROJECT が 3,061 B の無害化版
+#   (Version=0xFFFF・PerformanceCache ゼロ埋め)で、全 MODULEOFFSET=0。
+#   **本節は _VBA_PROJECT と MODULEOFFSET をそのまま(無害化・0)に保つ**。
+#   p-code を持たないので Excel/LO はソースから再コンパイルする(第1段と同じ)。
+# ===========================================================================
+
+FORM_STREAM_NAMES = ("\x01CompObj", "\x03VBFrame", "f", "o")
+
+# --- 参照設定の値(個人の絶対パスを含まないものだけを使う) -------------------
+# SHDocVw: 髙橋産物の REFERENCEREGISTERED からバイトそのまま
+#          (C:\Windows\System32\ieframe.dll は Windows の既定位置で、
+#           個人情報を含まない)。
+SHDOCVW_LIBID = (b"*\\G{EAB22AC0-30C1-11CF-A7EB-0000C05BAE0B}#1.1#0#"
+                 b"C:\\Windows\\System32\\ieframe.dll#Microsoft Internet Controls")
+# MSForms: 髙橋産物の REFERENCEORIGINAL は C:\WINDOWS\system32\FM20.DLL、
+#   REFERENCECONTROL_EXT は C:\Users\nori\AppData\Local\Temp\VBE\MSForms.exd と
+#   **開発者名を含む**。W9.2 が MSForms 参照を落とした理由そのものなので、
+#   ここでは template_skeleton.xlsm 側の書き方(`*\H` = 登録名だけで引く形)を採る。
+MSFORMS_ORIGINAL_LIBID = (b"*\\H{0D452EE1-E08F-101A-852E-02608C4D0BB4}#2.0#0#"
+                          b"fm20.tlb#Microsoft Forms 2.0 Object Library")
+# 「ねじれた(twiddled)」libid。髙橋産物・template_skeleton の**両方で同一**の
+# 固定値(null GUID)だったので、そのまま使う。
+MSFORMS_TWIDDLED_LIBID = b"*\\G{00000000-0000-0000-0000-000000000000}#0.0#0##"
+# OriginalTypeLib([MS-OVBA] 2.3.4.2.2.3): MSForms の TypeLib GUID をバイト順で。
+MSFORMS_TYPELIB_GUID = uuid.UUID("{0D452EE1-E08F-101A-852E-02608C4D0BB4}").bytes_le
+
+# フォームモジュールの VB_Base(髙橋産物の実測。VBE が .frm 取込時に作る2つの
+# GUID で、**このフォーム固有の値**。同じフォームを焼き直す限り変える理由は無い)。
+FORM_VB_BASE = ("0{0F2C78AF-89C5-4EBD-A603-8EC02854C6FF}"
+                "{1672A8B2-35CB-45EF-BB30-E22D4679F96C}")
+# フォームの属性ヘッダ8行(髙橋産物のモジュールストリーム先頭と同じ並び)。
+_ATTR_FORM = (
+    'Attribute VB_Name = "%s"\r\n'
+    'Attribute VB_Base = "%s"\r\n'
+    'Attribute VB_GlobalNameSpace = False\r\n'
+    'Attribute VB_Creatable = False\r\n'
+    'Attribute VB_PredeclaredId = True\r\n'
+    'Attribute VB_Exposed = False\r\n'
+    'Attribute VB_TemplateDerived = False\r\n'
+    'Attribute VB_Customizable = False\r\n'
+)
+# [Workspace] の1行(髙橋産物の実測値そのまま。VBE の窓の位置なので機能に影響しない)。
+FORM_WORKSPACE = "%s=392, 392, 2793, 1578, Z, 392, 392, 2793, 1578, C"
+
+
+# ---------------------------------------------------------------------------
+# 6.1 パスで引ける CFB リーダー(ovba.CFBReader は名前が平坦で、ストレージ配下の
+#     `f` や `\x01CompObj` を引けないため、ここに木を辿る版を持つ)
+# ---------------------------------------------------------------------------
+def read_cfb_tree(data: bytes) -> dict:
+    """CFB を {name: bytes(ストリーム) | dict(ストレージ)} の入れ子で返す。"""
+    if data[:8] != CFB_MAGIC:
+        raise OvbaWriteError("CFB のシグネチャがありません")
+    num_fat = struct.unpack('<I', data[44:48])[0]
+    dir_start = struct.unpack('<I', data[48:52])[0]
+    minifat_start = struct.unpack('<I', data[60:64])[0]
+    difat_first = struct.unpack('<I', data[68:72])[0]
+    per = SECTOR_SIZE // 4
+
+    def sector(n):
+        off = (n + 1) * SECTOR_SIZE
+        return data[off:off + SECTOR_SIZE]
+
+    difat = [struct.unpack('<I', data[76 + 4 * k:80 + 4 * k])[0] for k in range(109)]
+    sec = difat_first
+    while sec not in (ENDOFCHAIN, FREESECT) and (sec + 2) * SECTOR_SIZE <= len(data):
+        block = list(struct.unpack('<%dI' % per, sector(sec)))
+        difat.extend(block[:-1])
+        sec = block[-1]
+    fat = []
+    for fs in difat[:max(num_fat, 1)]:
+        if fs in (ENDOFCHAIN, FREESECT) or (fs + 2) * SECTOR_SIZE > len(data):
+            continue
+        fat += list(struct.unpack('<%dI' % per, sector(fs)))
+
+    minifat = []
+    sec = minifat_start
+    while sec != ENDOFCHAIN and sec < len(fat):
+        minifat += list(struct.unpack('<128I', sector(sec)))
+        sec = fat[sec]
+
+    def chain_bytes(start, size):
+        blob = bytearray()
+        sec = start
+        while sec != ENDOFCHAIN and sec < len(fat):
+            blob += sector(sec)
+            sec = fat[sec]
+        return bytes(blob[:size])
+
+    dir_blob = chain_bytes(dir_start, 1 << 30)
+    entries = []
+    for i in range(0, len(dir_blob), 128):
+        e = dir_blob[i:i + 128]
+        if len(e) < 128:
+            break
+        nlen = struct.unpack('<H', e[64:66])[0]
+        name = e[:max(nlen - 2, 0)].decode('utf-16-le') if nlen else ''
+        entries.append({
+            'name': name, 'type': e[66],
+            'left': struct.unpack('<I', e[68:72])[0],
+            'right': struct.unpack('<I', e[72:76])[0],
+            'child': struct.unpack('<I', e[76:80])[0],
+            'start': struct.unpack('<I', e[116:120])[0],
+            'size': struct.unpack('<I', e[120:124])[0],
+        })
+    if not entries or entries[0]['type'] != 5:
+        raise OvbaWriteError("CFB のルートエントリがありません")
+
+    mini_blob = chain_bytes(entries[0]['start'], entries[0]['size'])
+
+    def stream_bytes(e):
+        if e['size'] == 0:
+            return b''
+        if e['size'] < MINI_CUTOFF:
+            blob = bytearray()
+            sec = e['start']
+            while sec != ENDOFCHAIN and sec < len(minifat):
+                blob += mini_blob[sec * MINI_SECTOR:(sec + 1) * MINI_SECTOR]
+                sec = minifat[sec]
+            return bytes(blob[:e['size']])
+        return chain_bytes(e['start'], e['size'])
+
+    def walk(idx, out, seen):
+        if idx == NOSTREAM or idx >= len(entries) or idx in seen:
+            return
+        seen.add(idx)
+        e = entries[idx]
+        walk(e['left'], out, seen)
+        if e['type'] == 1:
+            sub = {}
+            walk(e['child'], sub, set())
+            out[e['name']] = sub
+        elif e['type'] == 2:
+            out[e['name']] = stream_bytes(e)
+        walk(e['right'], out, seen)
+
+    root: dict = {}
+    walk(entries[0]['child'], root, set())
+    return root
+
+
+def _tree_to_children(tree: dict):
+    """read_cfb_tree の出力を write_cfb の root_children 形式へ戻す。"""
+    out = []
+    for name, val in tree.items():
+        if isinstance(val, dict):
+            out.append((name, 1, _tree_to_children(val)))
+        else:
+            out.append((name, 2, val))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 6.2 参照設定レコードの組み立て([MS-OVBA] 2.3.4.2.2)
+# ---------------------------------------------------------------------------
+def build_reference_registered(name: str, libid: bytes,
+                               codepage: str = "cp932") -> bytes:
+    """REFERENCENAME + REFERENCENAME_UNI + REFERENCEREGISTERED(0x000D)。
+
+    REFERENCEREGISTERED の本体 = SizeOfLibid(4) + Libid + Reserved1(4) + Reserved2(2)。
+    """
+    body = struct.pack('<I', len(libid)) + libid + b'\x00' * 6
+    return (_rec(REC_REFERENCENAME, _mbcs(name, codepage))
+            + _rec(REC_REFERENCENAME_UNI, name.encode('utf-16-le'))
+            + _rec(REC_REFERENCEREGISTERED, body))
+
+
+def build_reference_control(name: str, original: bytes, twiddled: bytes,
+                            extended: bytes, typelib_guid: bytes,
+                            cookie: int = 1, codepage: str = "cp932") -> bytes:
+    """REFERENCENAME(+UNI) + REFERENCEORIGINAL + REFERENCECONTROL
+    + NameRecordExtended + Reserved3(REFERENCECONTROL_EXT)。
+
+    ・REFERENCEORIGINAL(0x0033) の Size は SizeOfLibidOriginal そのもの
+      (本体に長さ前置きが無い)。髙橋産物で Size=111・本体111Bを実測。
+    ・REFERENCECONTROL(0x002F) 本体 = SizeOfLibidTwiddled(4) + Libid
+      + Reserved1(4) + Reserved2(2)。
+    ・Reserved3(0x0030) 本体 = SizeOfLibidExtended(4) + Libid + Reserved4(4)
+      + Reserved5(2) + OriginalTypeLib(16) + Cookie(4)。
+    """
+    if len(typelib_guid) != 16:
+        raise OvbaWriteError("OriginalTypeLib は 16 バイトです")
+    nm = _mbcs(name, codepage)
+    nu = name.encode('utf-16-le')
+    ctrl = struct.pack('<I', len(twiddled)) + twiddled + b'\x00' * 6
+    ext = (struct.pack('<I', len(extended)) + extended + b'\x00' * 6
+           + typelib_guid + struct.pack('<I', cookie))
+    return (_rec(REC_REFERENCENAME, nm)
+            + _rec(REC_REFERENCENAME_UNI, nu)
+            + _rec(REC_REFERENCEORIGINAL, original)
+            + _rec(REC_REFERENCECONTROL, ctrl)
+            + _rec(REC_REFERENCENAME, nm)
+            + _rec(REC_REFERENCENAME_UNI, nu)
+            + _rec(REC_REFERENCECONTROL_EXT, ext))
+
+
+def navi_reference_records() -> bytes:
+    """HTML画面に要る参照2本(SHDocVw / MSForms)の dir レコード列。"""
+    return (build_reference_registered("SHDocVw", SHDOCVW_LIBID)
+            + build_reference_control("MSForms", MSFORMS_ORIGINAL_LIBID,
+                                      MSFORMS_TWIDDLED_LIBID,
+                                      MSFORMS_ORIGINAL_LIBID,
+                                      MSFORMS_TYPELIB_GUID))
+
+
+# ---------------------------------------------------------------------------
+# 6.3 .frm / .frx を読む
+# ---------------------------------------------------------------------------
+def split_frm(text: str) -> tuple:
+    """VBE がエクスポートした .frm を (デザイナ行, 属性行, コード行) に割る。
+
+    .frm の形:
+        VERSION 5.00
+        Begin {C62A69F0-...} frmNaviHtml
+           ...
+           OleObjectBlob   =   "frmNaviHtml.frx":0000
+        End
+        Attribute VB_Name = "frmNaviHtml"
+        ...
+        (本文)
+    """
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if not lines or not lines[0].startswith("VERSION "):
+        raise OvbaWriteError(".frm が `VERSION` で始まっていません")
+    try:
+        end = next(i for i, l in enumerate(lines) if l.strip() == "End")
+    except StopIteration:
+        raise OvbaWriteError(".frm のデザイナ部に `End` 行がありません")
+    designer = lines[:end + 1]
+    rest = lines[end + 1:]
+    n = 0
+    while n < len(rest) and rest[n].startswith("Attribute "):
+        n += 1
+    return designer, rest[:n], rest[n:]
+
+
+def build_vbframe(designer_lines, codepage: str = "cp932") -> bytes:
+    """`<form>/\\x03VBFrame` ストリーム(デザイナ定義のテキスト)。
+
+    .frm のデザイナ部から **OleObjectBlob 行だけを落として** CRLF/CP932 にする。
+    (OleObjectBlob は .frx への参照であって、bin では `f`/`o` ストリームが
+     その中身を持つ。髙橋産物の \\x03VBFrame にも OleObjectBlob 行は無い。)
+    """
+    keep = [l for l in designer_lines if not l.strip().startswith("OleObjectBlob")]
+    return ("\r\n".join(keep) + "\r\n").encode(codepage)
+
+
+def frx_designer_streams(frx: bytes) -> dict:
+    """.frx の OleObjectBlob(埋め込み CFB)から designer ストリームを取り出す。
+
+    .frm の `OleObjectBlob = "xxx.frx":0000` が指す先は、小さなヘッダの後ろに
+    CFB がまるごと入った塊である(実測: frmNaviHtml.frx は 2,584 B で、
+    先頭 24 B がヘッダ、24 B 目から 2,560 B の CFB)。中身は
+    `\\x01CompObj`(110 B)・`f`(38 B)・`o`(0 B) の3本。
+    """
+    i = frx.find(CFB_MAGIC)
+    if i < 0:
+        raise OvbaWriteError(".frx に CFB が見つかりません(OleObjectBlob が壊れています)")
+    tree = read_cfb_tree(frx[i:])
+    out = {}
+    for name in ("\x01CompObj", "f", "o"):
+        if name not in tree or isinstance(tree[name], dict):
+            raise OvbaWriteError(".frx に %r ストリームがありません" % name)
+        out[name] = tree[name]
+    return out
+
+
+def build_designer_storage(frm_text: str, frx: bytes) -> dict:
+    """`<form>/` ストレージの4ストリームを .frm と .frx だけから作る。"""
+    designer, _attrs, _code = split_frm(frm_text)
+    out = dict(frx_designer_streams(frx))
+    out["\x03VBFrame"] = build_vbframe(designer)
+    missing = [n for n in FORM_STREAM_NAMES if n not in out]
+    if missing:
+        raise OvbaWriteError("designer ストレージに %r がありません" % (missing,))
+    return out
+
+
+def form_module_source(form_name: str, frm_text: str) -> bytes:
+    """フォームのモジュールストリームへ入れるソース(属性8行 + 本文)。"""
+    _designer, attrs, code = split_frm(frm_text)
+    names = [a.split("=", 1)[0].strip() for a in attrs]
+    if 'Attribute VB_Name' not in names:
+        raise OvbaWriteError(".frm に Attribute VB_Name 行がありません")
+    body = "\n".join(code)
+    return module_stream_source(form_name, body, "class",
+                                attributes=_ATTR_FORM % (form_name, FORM_VB_BASE))
+
+
+# ---------------------------------------------------------------------------
+# 6.4 dir / PROJECT / PROJECTwm への差し込み
+# ---------------------------------------------------------------------------
+def _module_record(name: str, stream_name: str, cookie: int = 0xFFFF,
+                   codepage: str = "cp932") -> bytes:
+    """designer(フォーム)1本ぶんの MODULE レコード。
+
+    MODULETYPE は 0x0022、そのあとに MODULEPRIVATE(0x0028・Size=0)が続く
+    (髙橋産物の frmNaviHtml の実測と同じ並び。クラスモジュールと同型)。
+    MODULEOFFSET は 0(p-code を置かない)。
+    """
+    return (_rec(REC_MODULENAME, _mbcs(name, codepage))
+            + _rec(REC_MODULENAMEUNICODE, name.encode('utf-16-le'))
+            + _rec(REC_MODULESTREAMNAME, _mbcs(stream_name, codepage))
+            + _rec(REC_MODULESTREAMNAME_UNI, stream_name.encode('utf-16-le'))
+            + _rec(REC_MODULEDOCSTRING, b'')
+            + _rec(REC_MODULEDOCSTRING_UNI, b'')
+            + _rec(REC_MODULEOFFSET, struct.pack('<I', 0))
+            + _rec(REC_MODULEHELPCONTEXT, struct.pack('<I', 0))
+            + _rec(REC_MODULECOOKIE, struct.pack('<H', cookie))
+            + _rec(REC_MODULETYPE_DOCUMENT, b'')
+            + _rec(REC_MODULEPRIVATE, b'')
+            + _rec(REC_MODULE_TERMINATOR, b''))
+
+
+def insert_into_dir(dir_dec: bytes, reference_records: bytes,
+                    module_record: bytes) -> bytes:
+    """解凍済み dir へ 参照レコード列 と MODULE レコードを差し込む。
+
+    ・参照は PROJECTMODULES(0x000F)の直前(= PROJECTREFERENCES の末尾)へ。
+    ・MODULE は DIR_TERMINATOR(0x0010)の直前へ。PROJECTMODULES の Count も +1。
+    """
+    modules_at = None
+    term_at = None
+    count = None
+    for off, rid, _size, body in iter_dir_records(dir_dec):
+        if rid == REC_PROJECTMODULES and modules_at is None:
+            modules_at = off
+            count = struct.unpack('<H', body)[0]
+        elif rid == REC_DIR_TERMINATOR:
+            term_at = off
+    if modules_at is None:
+        raise OvbaWriteError("dir に PROJECTMODULES(0x000F)がありません")
+    if term_at is None:
+        raise OvbaWriteError("dir に終端レコード(0x0010)がありません")
+    n_new = 1 if module_record else 0
+    head = dir_dec[:modules_at] + reference_records
+    mid = (_rec(REC_PROJECTMODULES, struct.pack('<H', count + n_new))
+           + dir_dec[modules_at + 8:term_at] + module_record)
+    return head + mid + dir_dec[term_at:]
+
+
+def insert_into_project(project: bytes, form_name: str,
+                        codepage: str = "cp932") -> bytes:
+    """PROJECT ストリームへ `BaseClass=<form>` と [Workspace] の1行を足す。"""
+    text = project.decode(codepage)
+    lines = text.split("\r\n")
+    base = "BaseClass=%s" % form_name
+    if base in lines:
+        raise OvbaWriteError("PROJECT に既に %s があります" % base)
+    last = -1
+    for i, l in enumerate(lines):
+        if l.startswith(("Module=", "Class=", "Document=", "BaseClass=")):
+            last = i
+    if last < 0:
+        raise OvbaWriteError("PROJECT に Module=/Document= 行がありません")
+    lines.insert(last + 1, base)
+    try:
+        ws = lines.index("[Workspace]")
+    except ValueError:
+        raise OvbaWriteError("PROJECT に [Workspace] がありません")
+    end = len(lines)
+    while end > ws and lines[end - 1] == "":
+        end -= 1
+    lines.insert(end, FORM_WORKSPACE % form_name)
+    return "\r\n".join(lines).encode(codepage)
+
+
+def insert_into_projectwm(wm: bytes, form_name: str,
+                          codepage: str = "cp932") -> bytes:
+    """PROJECTwm の終端 \\x00\\x00 の手前へ1エントリ足す。"""
+    if not wm.endswith(b'\x00\x00'):
+        raise OvbaWriteError("PROJECTwm が \\x00\\x00 で終わっていません")
+    entry = (_mbcs(form_name, codepage) + b'\x00'
+             + form_name.encode('utf-16-le') + b'\x00\x00')
+    return wm[:-2] + entry + b'\x00\x00'
+
+
+# ---------------------------------------------------------------------------
+# 6.5 本体
+# ---------------------------------------------------------------------------
+def add_userform(vba_bin: bytes, form_name: str, frm_text: str, frx: bytes,
+                 reference_records: bytes | None = None) -> bytes:
+    """第1段の bin へ UserForm 1本と参照設定を足した bin を返す。
+
+    第2段(import_navi_modules.ps1)の (1) フォーム取込 と (2) 参照設定 に相当。
+    _VBA_PROJECT・既存モジュールストリーム・MODULEOFFSET は一切触らない。
+    """
+    tree = read_cfb_tree(vba_bin)
+    if "VBA" not in tree or not isinstance(tree["VBA"], dict):
+        raise OvbaWriteError("bin に VBA ストレージがありません")
+    if form_name in tree:
+        raise OvbaWriteError("bin に既に %s ストレージがあります" % form_name)
+    vba = tree["VBA"]
+    if form_name in vba:
+        raise OvbaWriteError("bin に既に VBA/%s ストリームがあります" % form_name)
+    if "dir" not in vba:
+        raise OvbaWriteError("bin に VBA/dir がありません")
+
+    refs = navi_reference_records() if reference_records is None else reference_records
+    dir_dec = ovba.ovba_decompress(vba["dir"])
+    dir_dec = insert_into_dir(dir_dec, refs, _module_record(form_name, form_name))
+    vba["dir"] = ovba.ovba_compress(dir_dec, fast=True)
+    vba[form_name] = ovba.ovba_compress(form_module_source(form_name, frm_text),
+                                        fast=True)
+    tree["PROJECT"] = insert_into_project(tree["PROJECT"], form_name)
+    tree["PROJECTwm"] = insert_into_projectwm(tree["PROJECTwm"], form_name)
+    tree[form_name] = build_designer_storage(frm_text, frx)
+    return write_cfb(_tree_to_children(tree))
+
+
+def read_designer_storage(vba_bin: bytes, form_name: str) -> dict:
+    """完成品 bin から `<form>/` ストレージの4ストリームを読み戻す。"""
+    tree = read_cfb_tree(vba_bin)
+    st = tree.get(form_name)
+    if not isinstance(st, dict):
+        raise OvbaWriteError("bin に %s ストレージがありません" % form_name)
+    return {k: v for k, v in st.items() if not isinstance(v, dict)}
+
+
+# ===========================================================================
+# 7. 自己テスト(--selftest)
+# ===========================================================================
+def _selftest() -> int:
+    """template_skeleton だけから最小の bin を作り、フォームを足して読み戻す。
+
+    ここで確かめること(1つでも欠けたら赤):
+      ・モジュール集合(標準 + フォーム)
+      ・参照3本(Office / SHDocVw / MSForms)
+      ・designer ストレージ4本の実在と中身
+      ・PROJECT の BaseClass= 行 / PROJECTwm のエントリ
+      ・既存モジュールの MODULEOFFSET が 0 のままであること
+      ・フォーム本文が src/ui/navi/frmNaviHtml.frm のコード部と一致すること
+    """
+    import os
+    import zipfile
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(here)
+    ok = True
+
+    def check(cond, label):
+        nonlocal ok
+        print(("  PASS: " if cond else "  FAIL: ") + label)
+        if not cond:
+            ok = False
+
+    with zipfile.ZipFile(os.path.join(here, "template_skeleton.xlsm")) as z:
+        template_bin = z.read("xl/vbaProject.bin")
+    base = build_vba_project(template_bin, [
+        VbaModule("ThisWorkbook", module_stream_source(
+            "ThisWorkbook", "Option Explicit\r\n", "document"), "document"),
+        VbaModule("modDummy", module_stream_source(
+            "modDummy", "Option Explicit\r\n", "std"), "std"),
+    ])
+    frm_path = os.path.join(root, "src", "ui", "navi", "frmNaviHtml.frm")
+    frx_path = os.path.join(root, "src", "ui", "navi", "frmNaviHtml.frx")
+    with open(frm_path, encoding="utf-8") as fh:
+        frm_text = fh.read()
+    with open(frx_path, "rb") as fh:
+        frx = fh.read()
+
+    print("ovba_write --selftest (17章 Z-42 一段化)")
+    print("  template: %s (%d B) / 第1段相当 bin %d B"
+          % ("template_skeleton.xlsm", len(template_bin), len(base)))
+    out = add_userform(base, "frmNaviHtml", frm_text, frx)
+    print("  フォーム入り bin: %d B" % len(out))
+
+    mods = read_modules(out)
+    check(set(mods) == {"ThisWorkbook", "modDummy", "frmNaviHtml"},
+          "モジュール集合 = %s" % sorted(mods))
+    check(mods.get("frmNaviHtml", {}).get("type") == "class",
+          "frmNaviHtml の MODULETYPE が 0x0022(document 扱いでない)")
+    refs = read_reference_names(out)
+    check(refs == ["MSForms", "SHDocVw", "MSForms", "MSForms"] or
+          set(refs) >= {"SHDocVw", "MSForms"},
+          "参照設定 = %s" % refs)
+    check("SHDocVw" in refs and "MSForms" in refs,
+          "SHDocVw と MSForms がある")
+    st = read_designer_storage(out, "frmNaviHtml")
+    check(set(st) == set(FORM_STREAM_NAMES),
+          "designer ストレージ4本 = %r" % sorted(st))
+    check(st.get("\x03VBFrame", b"").startswith(b"VERSION 5.00\r\nBegin "),
+          "\\x03VBFrame がデザイナ定義で始まる(%d B)" % len(st.get("\x03VBFrame", b"")))
+    check(b"OleObjectBlob" not in st.get("\x03VBFrame", b""),
+          "\\x03VBFrame に OleObjectBlob 行が無い")
+    check(len(st.get("f", b"")) > 0, "f ストリームが空でない(%d B)" % len(st.get("f", b"")))
+    tree = read_cfb_tree(out)
+    proj = tree["PROJECT"].decode("cp932")
+    check("BaseClass=frmNaviHtml" in proj.split("\r\n"), "PROJECT に BaseClass= 行")
+    check(FORM_WORKSPACE % "frmNaviHtml" in proj, "PROJECT の [Workspace] に1行")
+    check(b"frmNaviHtml\x00" in tree["PROJECTwm"], "PROJECTwm にエントリ")
+    dir_dec = ovba.ovba_decompress(tree["VBA"]["dir"])
+    offs = [struct.unpack('<I', body)[0]
+            for _o, rid, _s, body in iter_dir_records(dir_dec)
+            if rid == REC_MODULEOFFSET]
+    check(offs == [0] * len(offs) and len(offs) == 3,
+          "全 MODULEOFFSET=0(p-code 無し・%d本)" % len(offs))
+    _d, _a, code = split_frm(frm_text)
+    want = "\n".join(code).replace("\r\n", "\n").replace("\n", "\r\n")
+    got = strip_attribute_lines(mods["frmNaviHtml"]["source"]).decode("cp932")
+    check(got.rstrip("\r\n") == want.rstrip("\r\n"),
+          "フォーム本文が .frm のコード部とバイト一致(%d 字)" % len(want))
+    print("結果: %s" % ("PASS" if ok else "FAIL"))
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    import argparse
+    _ap = argparse.ArgumentParser(description="MS-OVBA vbaProject.bin ライター")
+    _ap.add_argument("--selftest", action="store_true",
+                     help="一段化(Z-42)の読み戻し自己テストを走らせる")
+    _args = _ap.parse_args()
+    if _args.selftest:
+        raise SystemExit(_selftest())
+    _ap.error("--selftest を指定してください")

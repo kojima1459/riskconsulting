@@ -1,4 +1,6 @@
-# 24. 実機テスト手順書（Windows・実Excel）v7.4
+# 24. 実機テスト手順書（Windows・実Excel）v7.5
+
+v7.5変更概要（2026-09-12・W15 裁定書38 Z-42）: §8.1 の第2段手順を**「CI 産物が正、`.ps1` は予備」**へ改めた（`python3 build/build_rpn.py --final` が `dist/final/リスク提案ナビ.xlsm` と `ui/` を作る。12章§5.1a）。あわせて §8.1-6 として**実機で1回だけ確かめてもらうこと**（開く→VBAProject のコンパイル→HTML画面→参照設定→`data_key` のドロップダウン）を新設した。UserForm の描画（MSForms）と WebBrowser の実行（SHDocVw）・255字超のインライン入力規則は**LibreOffice では検証できない**ため、ここだけは実 Excel が要る。
 
 v7.4変更概要（2026-09-12・W14 裁定書37）: §7 に観察項目3つを追加（**レポート出力の確認チェック**＝確認前/確認済みで免責と表紙チップが変わること・**充足度 low の警告帯**＝資料が薄い案件で S1 直後に黄色帯が出ること・**調査指示文の 2,000 字警告**）。第2段ビルドの `.ps1` が会社の開発PCで実行できた条件（端末区分・実行ポリシー）は §8.1 の照会事項に追加（社内IT・AI環境 v1.1 §3.1 は「PowerShell 不可」）。
 
@@ -411,7 +413,26 @@ Python・git を使う開発環境で、次の順にリポジトリを取得し�
 2. `python -m pip install openpyxl olefile oletools` で部品を入れる。
 3. `python build/build_rpn.py --dev` / `--prod` / `--kb` で3つのファイル（開発版・本番版・ナレッジブック）を組み立てる（`dist` フォルダにできる）。
 4. できたファイルは**そのまま配れる**。開いて閉じるなどの下ごしらえは要らない（v3.4・裁定書27 W9-A）。§8.2 の検問を回してから配る。
-5. **第2段ビルド（`build/win/import_navi_modules.ps1`）と PowerShell の可否**（v7.4・裁定書37 A-04）: 社内IT・AI環境 v1.1 §3.1 は「PowerShell は不可」と定めるが、2026-09-08 に髙橋さんの開発PCで本 `.ps1` が実行できている。**どの条件（端末区分・例外申請・実行ポリシー）で動いたか**を髙橋さんへ照会中。「不可」が正なら第2段を `ovba_write` で機械化する Z-42 を昇格する。回答までは「第2段を実施できる端末は開発PC1台」を前提に置く。
+5. **HTML画面まで入った配布物は `--final` で作る＝CI産物が正**（v7.5・W15 裁定書38 Z-42）: 社内IT・AI環境 v1.1 §3.1 が「PowerShell は不可」であるため、第2段を当方CIへ寄せた。
+
+   ```
+   python3 build/build_rpn.py --prod     # dist/リスク提案ナビ.xlsm（標準モジュールだけ）
+   python3 build/build_rpn.py --final    # dist/final/リスク提案ナビ.xlsm ＋ 同じ場所へ ui/
+   ```
+
+   `--final` が UserForm `frmNaviHtml`・参照設定（`SHDocVw`／`MSForms`）・`case_data!data_key` の入力規則を足す。config の行・`案件一覧` 26列目 `archived_at`・`run_log!step` の `ch`・`ui/` の複写は第1段が既にやっている。配るのは **`dist/final/` の産物**である（12章§5.1a）。
+
+   **`build/win/import_navi_modules.ps1` は予備**（実 Excel でしか触れない事柄が新たに要るときの逃げ道）として残す。開発PCで動いた条件（端末区分・例外申請・実行ポリシー）の照会は続けるが、**配布は照会の回答を待たない**。
+
+6. **`--final` の産物は、髙橋さんの実機で1回だけ確かめてもらう**（v7.5・W15）: 当方に実 Excel は無い。CI で言えるのは `ship_check --final`（9条件）・`bin_roundtrip --final`（7条件）・`lo_xlsm`（LibreOffice がブックを開けて `frmNaviHtml` を含む全モジュールのコンパイルが通る）までで、**UserForm の描画（MSForms）と WebBrowser の実行（SHDocVw）は LibreOffice では検証できない**（17章 Z-43）。実機でお願いすること:
+
+   1. `dist/final/リスク提案ナビ.xlsm` を `ui` フォルダと同じ場所に置いて開く。
+   2. VBE で [デバッグ]>[VBAProject のコンパイル] を通す（エラーが出たら文面ごと連絡）。
+   3. HTML画面（モードレスの1枚窓）が出て「準備完了です」が見えることを確かめる。
+   4. [ツール]>[参照設定] が `Microsoft Internet Controls` と `Microsoft Forms 2.0 Object Library` を**壊れた参照**にしていないことを見る。
+   5. `case_data` シートの `data_key` 列でドロップダウンが開くことを見る（32値・382字。インラインの入力規則が255字を超えるので、実Excel の受け取り方はここでしか確かめられない）。
+
+   これが1回通れば、以後は CI 産物をそのまま配る。
 
 ### 8.1c 配り方＝OneDrive の配布フォルダを差し替えるだけ（v3.5・裁定書28）
 

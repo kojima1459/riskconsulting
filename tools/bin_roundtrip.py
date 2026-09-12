@@ -85,9 +85,16 @@ DEFAULT_BOOKS = (
     REPO_ROOT / "dist" / "リスク提案ナビ.xlsm",
 )
 DEV_SUFFIX = "_dev.xlsm"
+# 第2段の一段化(17章 Z-42)の産物 dist/final/ にだけ載る designer モジュール。
+# --final を付けたときだけ「居てよい」ものとして数える(既定の第1段検査は不変)。
+FINAL_FORM_NAME = "frmNaviHtml"
+FINAL_FORM_FRM = REPO_ROOT / "src" / "ui" / "navi" / "frmNaviHtml.frm"
+# designer(UserForm)の VB_Base は「そのフォーム固有の2つのGUID」であり、
+# クラスモジュールの固定値(CLASS_VB_BASE)とは別物。値源は build/ovba_write.py。
+FINAL_FORM_VB_BASE = 'Attribute VB_Base = "%s"' % ovba_write.FORM_VB_BASE
 
 
-def expected_sources(is_dev: bool) -> dict:
+def expected_sources(is_dev: bool, final: bool = False) -> dict:
     """台帳から {モジュール名: 期待するモジュール本文(bytes)} を作る。"""
     modules = build_rpn.load_manifest(str(REPO_ROOT / "build" / "modules.json"))
     # モード別ソース選択(裁定書30 裁定1(b))。dev ブックの modGatewayLink /
@@ -105,10 +112,19 @@ def expected_sources(is_dev: bool) -> dict:
         if not want.endswith(b"\r\n"):
             want += b"\r\n"
         out[m["name"]] = want
+    if final:
+        # UserForm は modules.json で type=form(第1段に載せない)。final の bin
+        # にだけ居るので、期待本文は .frm の Begin…End より後ろのコード部から作る。
+        with open(FINAL_FORM_FRM, encoding="utf-8") as fh:
+            _d, _a, code = ovba_write.split_frm(fh.read())
+        want = "\n".join(code).replace("\n", "\r\n").encode("cp932")
+        if not want.endswith(b"\r\n"):
+            want += b"\r\n"
+        out[FINAL_FORM_NAME] = want
     return out
 
 
-def check_book(book: Path) -> list[str]:
+def check_book(book: Path, final: bool = False) -> list[str]:
     errors: list[str] = []
     is_dev = book.name.endswith(DEV_SUFFIX)
     print("=" * 78)
@@ -144,7 +160,7 @@ def check_book(book: Path) -> list[str]:
         parser.close()
     print(f"[1] olevba が解凍したモジュール: {len(got)}本")
 
-    want = expected_sources(is_dev)
+    want = expected_sources(is_dev, final)
     doc_names = {n for n, info in ovba_write.read_modules(vba_bin).items()
                  if info["type"] == "document"}
     # 配布方式Bで焼く document module は ThisWorkbook のみ(build_rpn.py
@@ -222,6 +238,10 @@ def check_book(book: Path) -> list[str]:
     # 配布物にクラスモジュールが無いこと(W9.3)。document は ThisWorkbook 1本。
     cls_names = sorted(n for n, i in mods_info.items() if i["type"] == "class")
     print(f"[4b] クラスモジュール: {cls_names if cls_names else '0本'}")
+    if final:
+        # designer(UserForm)は dir 上はクラスと同型(0x0022 + MODULEPRIVATE)。
+        # --final のときだけ frmNaviHtml を除いて数える。他のクラスは依然禁止。
+        cls_names = [n for n in cls_names if n != FINAL_FORM_NAME]
     if cls_names:
         errors.append(
             f"{book.name}: 配布物にクラスモジュールが載っています(W9.3 の配布方針"
@@ -245,7 +265,34 @@ def check_book(book: Path) -> list[str]:
                       "(p-codeキャッシュが混入しています)")
 
     # --- [6] モジュールの「形」が Mac 実Excel 製と一致するか(W9.3) -----------
-    errors.extend(check_module_shapes(book.name, vba_bin, dir_dec, mods_info))
+    errors.extend(check_module_shapes(
+        book.name, vba_bin, dir_dec, mods_info,
+        designer_names=(FINAL_FORM_NAME,) if final else ()))
+
+    # --- [7] 一段化(Z-42)の産物だけの条件: 参照設定と designer ストレージ ---
+    if final:
+        refs = ovba_write.read_reference_names(vba_bin)
+        print(f"[7] 参照設定: {refs}")
+        for need in ("SHDocVw", "MSForms"):
+            if need not in refs:
+                errors.append(f"{book.name}: 参照設定 {need} がありません")
+        for r in refs:
+            if r not in ("VBA", "Excel", "stdole", "Office", "SHDocVw", "MSForms"):
+                errors.append(f"{book.name}: 許可していない参照設定があります: {r}")
+        try:
+            st = ovba_write.read_designer_storage(vba_bin, FINAL_FORM_NAME)
+        except ovba_write.OvbaWriteError as e:
+            st = {}
+            errors.append(f"{book.name}: {e}")
+        print(f"[7] designer ストレージ {FINAL_FORM_NAME}/: "
+              f"{sorted(repr(k) for k in st)}")
+        for nm in ovba_write.FORM_STREAM_NAMES:
+            if nm not in st:
+                errors.append(
+                    f"{book.name}: designer ストリーム {FINAL_FORM_NAME}/{nm!r} が"
+                    "ありません(フォームが開けません)")
+        if st.get("\x03VBFrame") and not st["\x03VBFrame"].startswith(b"VERSION "):
+            errors.append(f"{book.name}: \\x03VBFrame がデザイナ定義になっていません")
     return errors
 
 
@@ -276,7 +323,8 @@ def module_private_flags(dir_dec: bytes) -> dict[str, bool]:
 
 
 def check_module_shapes(book_name: str, vba_bin: bytes, dir_dec: bytes,
-                        mods_info: dict, verbose: bool = True) -> list[str]:
+                        mods_info: dict, verbose: bool = True,
+                        designer_names: tuple = ()) -> list[str]:
     """[6] 属性行と dir の MODULEPRIVATE が Mac 実Excel 製と同じ形か。"""
     errors: list[str] = []
     privates = module_private_flags(dir_dec)
@@ -306,6 +354,20 @@ def check_module_shapes(book_name: str, vba_bin: bytes, dir_dec: bytes,
             if has_private:
                 errors.append(f"{book_name}: 標準モジュール '{name}' に "
                               "MODULEPRIVATE(0x0028)があります(Excel は付けません)")
+        elif kind == "class" and name in designer_names:
+            # designer(UserForm)。属性8行は同じだが VB_Base はフォーム固有。
+            if len(header) != 8:
+                errors.append(
+                    f"{book_name}: designer '{name}' の属性行が8行では"
+                    f"ありません(実際{len(header)}行)")
+            if FINAL_FORM_VB_BASE not in header:
+                errors.append(
+                    f"{book_name}: designer '{name}' に "
+                    f"`{FINAL_FORM_VB_BASE}` がありません")
+            if not has_private:
+                errors.append(
+                    f"{book_name}: designer '{name}' の dir に "
+                    "MODULEPRIVATE(0x0028)がありません")
         elif kind == "class":
             if len(header) != 8:
                 errors.append(
@@ -406,6 +468,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="配布 vbaProject.bin の読み戻し検問(裁定書27 W9-A)")
     ap.add_argument("--book", help="検査するブック(既定: dist/ の dev と prod 両方)")
+    ap.add_argument("--final", action="store_true",
+                    help="第2段の一段化(17章 Z-42)の産物を検査する。"
+                         "UserForm frmNaviHtml と参照設定(SHDocVw/MSForms)と "
+                         "designer ストレージ4本が**在ること**を足して見る。"
+                         "--book を省くと dist/final/リスク提案ナビ.xlsm")
     args = ap.parse_args()
 
     if VBA_Parser is None:
@@ -416,6 +483,8 @@ def main() -> int:
     if args.book:
         p = Path(args.book)
         books = [p if p.is_absolute() else REPO_ROOT / p]
+    elif args.final:
+        books = [REPO_ROOT / "dist" / "final" / "リスク提案ナビ.xlsm"]
     else:
         books = [p for p in DEFAULT_BOOKS if p.exists()]
     if not books:
@@ -433,7 +502,7 @@ def main() -> int:
         if not b.exists():
             print(f"ERROR: ブックが見つかりません: {b}", file=sys.stderr)
             return 2
-        errors.extend(check_book(b))
+        errors.extend(check_book(b, final=args.final))
         print()
 
     print("-" * 78)
@@ -442,9 +511,10 @@ def main() -> int:
         for e in errors:
             print(f"  - {e}")
         return 1
-    print(f"結果: OK 検査したブック{len(books)}冊 / 6条件"
+    print(f"結果: OK 検査したブック{len(books)}冊 / {'7' if args.final else '6'}条件"
           "(本文バイト一致・モジュール数と集合・vba_src不在・禁止文字列不在・"
-          "MODULEOFFSET=0・モジュールの形がMac実Excel製と一致)")
+          "MODULEOFFSET=0・モジュールの形がMac実Excel製と一致"
+          + ("・参照設定と designer ストレージ" if args.final else "") + ")")
     return 0
 
 
