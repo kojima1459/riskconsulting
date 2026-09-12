@@ -153,6 +153,7 @@ Public Function ResolveDataKey(ByVal stepNo As Long, ByVal hasEdited As Boolean,
     If hasJson Then ResolveDataKey = "s" & n & "_json"
 End Function
 
+
 ' 案件IDから同日ぶんの連番を取り出す(日付不一致・形違いは0)。IDの形の判定は
 ' IsValidCaseId が唯一の値源(2箇所で書かない)。
 Private Function SerialOfCaseId(ByVal caseId As String, ByVal dayText As String) As Long
@@ -363,6 +364,8 @@ Public Function SaveData(ByVal caseId As String, ByVal dataKey As String, _
     If Not modCaseStore2.ReplaceSeqRows(ws, idText, keyText, parts, CS_SEQ_BAND) Then GoTo Failed
 
     SaveData = True
+    ' 17章 Z-51。成否確定後=記録失敗で保存を失敗にしない(詳細は3側)。
+    modCaseStore3.LogEditRatioOnSave idText, keyText, content
     Exit Function
 
 Failed:
@@ -595,12 +598,14 @@ Public Function SetReportPath(ByVal caseId As String, ByVal pathText As String) 
     modCaseStore2.PutText ws, blk, rowNo, "report_path", pathText
     modCaseStore2.PutText ws, blk, rowNo, "updated_at", modUtil.NowStamp()
     SetReportPath = True
+    modCaseStore3.LogEditRatiosOnReport caseId
     Exit Function
 
 Failed:
     modLog.LogError "E0603", "modCaseStore.SetReportPath", "write_failed", Err.Number
     SetReportPath = False
 End Function
+
 
 ' InvalidateDownstream - 上流を再実行するとき下流の成果物を無効化する(E-10)。
 '   fromStepNo より下流の成果物 data_key を消し、last_ok_step を fromStepNo へ
