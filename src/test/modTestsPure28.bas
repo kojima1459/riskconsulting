@@ -2,48 +2,53 @@ Attribute VB_Name = "modTestsPure28"
 Option Explicit
 
 ' ============================================================================
-' modTestsPure28 - W15 最終是正(裁定書42 §1)の純層テスト(17章§4-1 層(a))
+' modTestsPure28 - 対訳表の設計変更(裁定書43 §1)の純層テスト(17章§4-1 層(a))
 ' ----------------------------------------------------------------------------
 ' なぜ別モジュールか: modTestsPure27 が 30,000字契約の上限に達しているため
 '   (12章§2)。中身は27の G4/G5/G6(対訳表)の続きであり、値源は同じ
 '   docs/design/提案書_wide/対訳表_社内語から顧客語.md。
 '
-' 執筆方針: 期待値は**対訳表 §6.3 / §6.4 / §6.6 の文と統合レビュー(班W3)が
-'   実機で再現した壊れ方**だけから手で書き出した(17章§1。実装の出力を見てから
-'   期待値を合わせない)。
+' 執筆方針: 期待値は**対訳表§6(終端集合)・§6.1(mode)・§6.5(取り消し規則)の
+'   文だけ**から手で書き出した(17章§1。実装の出力を見てから期待値を合わせない)。
+'   前波まではここが「D&O保険 → 会社役員賠償責任保険」「PML額 → 想定最大損害額額」
+'   のように**壊れた出力を正解として固定**していた(裁定書43 §1-6)。新しい設計では
+'   どちらも「直後が漢字なので置換しない」が正解である。
 '
-' 対象と根拠(**全17本**。本数は modTestRunner.Check の呼び出し数の実測であり、
+' 対象と根拠(**全20本**。本数は modTestRunner.Check の呼び出し数の実測であり、
 '   wintest/tests_expected.txt の prod と必ず同時に直すこと):
-'   G1 用言の連用形(対訳表§6.3。統合レビュー「仕分けている→整理ている」)
-'      01 活用語尾が続く位置では置換しない(ている)
-'      02 同(ました)  03 同(られる)
-'      04 名詞の位置(の)は従来どおり置換する
-'      05 活用ではない「など」は置換する(1文字判定の取りこぼし防止)
-'      06 「仕分けする」は置換する(顧客語+する が成立するので印を付けない語)
-'   G2 表記ゆれ(対訳表§6.4。統合レビュー「引受けている→保険のお引き受けけている」)
-'      07 「引受けている」は置換しない=「保険のお引き受け」を1文字も出さない
-'      08 「引受けの方針」は置換する
-'      09 「引受する」はサ変印で見送る(裁定書40 S-M2 の据え置き確認)
-'      10 「引き受ける」は対訳表に無いので素通し(ふつうの日本語を壊さない)
-'      11 「座組み」は代表形と同じ顧客語へ寄る
-'   G3 末尾の重なりの吸収(対訳表§6.6。統合レビュー「D&O保険→…保険保険」)
-'      12 D&O保険  13 BCP計画  14 MFA認証
-'      15 重なりが1文字なら吸収しない(PML額。2文字以上という規約の境界)
-'   G4 対訳表そのもの
-'      16 TabooPairs は51行で、印つきは15行(general3/suru10/verb2)
-'      17 上の代表2件は冪等(2回通しても変わらない)
+'   G1 終端集合の文脈では置換する(対訳表§6)
+'      01 助詞(を)  02 記号(。)  03 文字列の末尾  04 全角空白
+'   G2 終端集合でない文脈では置換しない(型ごとに1本。**列挙ではなく型**)
+'      05 ひらがな(活用・サ変)  06 漢字(PML額)  07 カタカナ(ニューリスクリスク)
+'      08 英数(BCP2)  09 複合語(D&O保険/BCP計画)=末尾の重なりが出ない
+'   G3 mode=warn の対は一切置換しない(対訳表§6.1)
+'      10 一般語(抜け)  11 顧客語が述語(未充足)  12 動作性名詞×静的名詞句
+'      (ヒアリングを行う。**終端の文脈でも置換しない**のが warn の力)
+'      13 用言の連用形(仕分け)
+'   G4 最長一致と表記ゆれ(対訳表§6.4)
+'      14 引受の方針は置換し、引受けの方針(warn)は置換しない
+'      15 座組み(表記ゆれ)は代表形と同じ顧客語
+'   G5 対訳表そのもの
+'      16 51行・全行に mode がある・warn は10行
+'      17 mode の語は replace と warn の2語だけ(印を増やしていない)
+'      18 終端の文脈に残った replace の語は TabooHitStrict に出る
+'      19 warn と終端でない文脈の残りは TabooHitStrict に出ない(警告には出る)
+'      20 冪等(置換した文をもう一度通しても変わらない)
 '
-' 変異注入(出来レース禁止・裁定書38 §2):
-'   (a) modValidate4 の「仕分け」から verb 印を外すと 01..03 が落ちる。
-'   (b) V4_VERB_TAILS から「ない」「ます」を1文字の「な」「ま」に戻すと
-'       05 が落ちる(「仕分けなど」を取りこぼす)。
-'   (c) TabooPairs から「引受け」の行を消すと 07 が落ちる。
-'   (d) SoftenOnce の「印で見送った位置は打ち切る」を元の Exit For 無しへ
-'       戻すと 07 が落ちる(「保険のお引き受けけている」が出る)。
-'   (e) SoftenOnce から TailOverlap の1行を消すと 12..14 が落ちる。
-'   (f) V4_TAIL_MIN を 1 にすると 15 が落ちる。
-'   いずれも tools/render_proposal.py の check_glossary_impl /
-'   check_glossary_effective も同時に赤くなる(層を2つ持つ)。
+' 変異注入(出来レース禁止・裁定書38 §2・43 §1-5):
+'   (a) modValidate4 の終端集合から「を」を1字消すと 01 が落ちる
+'       (tools/render_proposal.py の check_glossary_impl も同時に赤くなる)。
+'   (b) 対訳表の「ヒアリング」の mode を replace にすると 12 と 16 が落ちる
+'       (実装の mode と食い違うので check_glossary_impl も赤)。
+'   (c) modValidate4.IsTermAt の「末尾なら True」をやめると 03 が落ちる。
+'   (d) IsTermAt を常に True にすると 05..09 と 14 が落ちる(=旧設計の壊れ方が
+'       そのまま戻る)。
+'   (e) SoftenOnce の「終端でない位置は打ち切る」(Exit For)をやめると 14 が
+'       落ちる(「引受けの方針」に「引受」が当たり送り仮名が残る)。
+'   取り消し規則(§6.5)は終端集合がある限り発火しない二重の安全網なので、
+'   純テストからは観測できない。**宣言(対訳表§6.5)と実装(V4_RUN_MAX /
+'   V4_UNDO_TAIL_MAX と ReplaceOk が UndoNeeded を呼ぶこと)の突合**を
+'   tools/render_proposal.py の check_glossary_impl が受け持つ。
 '
 ' 書き方の約束(LibreOffice Basic 対策): Dim はプロシージャの先頭にまとめ、
 '   判定は一度ローカル変数へ入れてから modTestRunner.Check へ渡す。
@@ -53,135 +58,183 @@ Option Explicit
 ' RunAll - modTestRunner.RunAllPureTests から呼ばれる入口。
 ' ============================================================================
 Public Sub RunAll()
-    T28Verb
-    T28Okurigana
-    T28TailOverlap
+    T28Term
+    T28NotTerm
+    T28Warn
+    T28Longest
     T28Table
 End Sub
 
-' --- G1 用言の連用形(対訳表§6.3) ---
-Private Sub T28Verb()
+' --- G1 終端集合の文脈では置換する(対訳表§6) ---
+Private Sub T28Term()
     Dim n As Long
     Dim after As String
     Dim ok As Boolean
 
-    after = modValidate4.SoftenTaboo("リスクを仕分けている。", n)
-    ok = (after = "リスクを仕分けている。") And (n = 0)
-    modTestRunner.Check "W15X1 verb 活用語尾(ている)では置換しない", ok, _
+    after = modValidate4.SoftenTaboo("付保を進めます。", n)
+    ok = (after = "保険のご加入を進めます。") And (n = 1)
+    modTestRunner.Check "W15Y1 終端集合の助詞(を)の直前では置換する", ok, _
                         "after=" & after & " n=" & n
 
-    after = modValidate4.SoftenTaboo("課題を仕分けました。", n)
-    ok = (after = "課題を仕分けました。")
-    modTestRunner.Check "W15X1 verb 活用語尾(ました)では置換しない", ok, _
+    after = modValidate4.SoftenTaboo("今回の方針は付保。", n)
+    ok = (after = "今回の方針は保険のご加入。")
+    modTestRunner.Check "W15Y1 終端集合の記号(。)の直前では置換する", ok, _
                         "after=" & after
 
-    after = modValidate4.SoftenTaboo("仕分けられる項目", n)
-    ok = (after = "仕分けられる項目")
-    modTestRunner.Check "W15X1 verb 活用語尾(られる)では置換しない", ok, _
-                        "after=" & after
-
-    after = modValidate4.SoftenTaboo("仕分けの方法", n)
-    ok = (after = "整理の方法") And (n = 1)
-    modTestRunner.Check "W15X1 verb 名詞の位置は置換する", ok, _
+    ' 「または W が文字列の末尾のとき」(対訳表§6 の後半)。
+    after = modValidate4.SoftenTaboo("今回の論点は付保", n)
+    ok = (after = "今回の論点は保険のご加入") And (n = 1)
+    modTestRunner.Check "W15Y1 社内語が文字列の末尾なら置換する", ok, _
                         "after=" & after & " n=" & n
 
-    after = modValidate4.SoftenTaboo("仕分けなどの作業", n)
-    ok = (after = "整理などの作業")
-    modTestRunner.Check "W15X1 verb 活用でない「など」は置換する", ok, _
-                        "after=" & after
-
-    after = modValidate4.SoftenTaboo("リスクを仕分けする。", n)
-    ok = (after = "リスクを整理する。")
-    modTestRunner.Check "W15X1 verb サ変語尾では見送らない(整理するは成立)", ok, _
+    after = modValidate4.SoftenTaboo("付保　の検討", n)
+    ok = (after = "保険のご加入　の検討")
+    modTestRunner.Check "W15Y1 終端集合の全角空白の直前では置換する", ok, _
                         "after=" & after
 End Sub
 
-' --- G2 表記ゆれ(対訳表§6.4) ---
-Private Sub T28Okurigana()
+' --- G2 終端集合でない文脈では置換しない(型ごとに1本) ---
+Private Sub T28NotTerm()
     Dim n As Long
     Dim after As String
     Dim ok As Boolean
 
-    after = modValidate4.SoftenTaboo("保険を引受けている。", n)
-    ok = (after = "保険を引受けている。")
-    ok = ok And (InStr(1, after, "保険のお引き受け", vbBinaryCompare) = 0)
-    modTestRunner.Check "W15X1 表記ゆれ 引受けている は置換しない", ok, _
-                        "after=" & after
-
-    after = modValidate4.SoftenTaboo("引受けの方針", n)
-    ok = (after = "保険のお引き受けの方針")
-    modTestRunner.Check "W15X1 表記ゆれ 引受けの は置換する", ok, _
-                        "after=" & after
-
-    after = modValidate4.SoftenTaboo("保険を引受する。", n)
-    ok = (after = "保険を引受する。")
-    modTestRunner.Check "W15X1 サ変印は据え置き(引受する)", ok, "after=" & after
-
-    after = modValidate4.SoftenTaboo("残余損害を保険で引き受ける", n)
-    ok = (after = "残余損害を保険で引き受ける") And (n = 0)
-    modTestRunner.Check "W15X1 引き受ける は対訳表に無く素通し", ok, _
+    ' ひらがな(サ変・活用語尾)。語尾を1つも列挙せずに型ごと消える。
+    after = modValidate4.SoftenTaboo("付保している拠点", n)
+    ok = (after = "付保している拠点") And (n = 0)
+    modTestRunner.Check "W15Y1 直後がひらがななら置換しない", ok, _
                         "after=" & after & " n=" & n
+
+    ' 漢字。裁定書43 §1-6: 前波は「想定最大損害額額」を正解に固定していた。
+    after = modValidate4.SoftenTaboo("PML額の試算", n)
+    ok = (after = "PML額の試算") And (n = 0)
+    modTestRunner.Check "W15Y1 直後が漢字なら置換しない(PML額。額額を作らない)", _
+                        ok, "after=" & after & " n=" & n
+
+    after = modValidate4.SoftenTaboo("ニューリスクリスクの整理", n)
+    ok = (after = "ニューリスクリスクの整理") And (n = 0)
+    modTestRunner.Check "W15Y1 直後がカタカナなら置換しない", ok, _
+                        "after=" & after & " n=" & n
+
+    after = modValidate4.SoftenTaboo("BCP2の版", n)
+    ok = (after = "BCP2の版") And (n = 0)
+    modTestRunner.Check "W15Y1 直後が英数なら置換しない", ok, _
+                        "after=" & after & " n=" & n
+
+    ' 複合語。終端集合があるので「顧客語の末尾を吸収する」特別規則が要らない。
+    after = modValidate4.SoftenTaboo("D&O保険のご案内とBCP計画の策定", n)
+    ok = (after = "D&O保険のご案内とBCP計画の策定") And (n = 0)
+    modTestRunner.Check "W15Y1 複合語は置換しない(保険保険・計画計画を作らない)", _
+                        ok, "after=" & after & " n=" & n
+End Sub
+
+' --- G3 mode=warn の対は一切置換しない(対訳表§6.1) ---
+Private Sub T28Warn()
+    Dim n As Long
+    Dim after As String
+    Dim ok As Boolean
+
+    after = modValidate4.SoftenTaboo("抜け漏れがないか確認します。", n)
+    ok = (after = "抜け漏れがないか確認します。") And (n = 0)
+    modTestRunner.Check "W15Y1 warn(一般語)は置換しない", ok, _
+                        "after=" & after & " n=" & n
+
+    ' 顧客語が述語の対。旧§6.5 の「保険の手当てが無いの領域」を warn で解消。
+    after = modValidate4.SoftenTaboo("未充足の領域があります。", n)
+    ok = (after = "未充足の領域があります。") And (n = 0)
+    modTestRunner.Check "W15Y1 warn(顧客語が述語)は置換しない", ok, _
+                        "after=" & after & " n=" & n
+
+    ' **終端集合の文脈(を)でも**置換しない。ここが mode の効き目。
+    after = modValidate4.SoftenTaboo("ヒアリングを行う予定です。", n)
+    ok = (after = "ヒアリングを行う予定です。") And (n = 0)
+    modTestRunner.Check "W15Y1 warn は終端の文脈でも置換しない(お伺いしたい事項を行う)", _
+                        ok, "after=" & after & " n=" & n
+
+    after = modValidate4.SoftenTaboo("仕分けられる項目を仕分けの方法で選ぶ", n)
+    ok = (after = "仕分けられる項目を仕分けの方法で選ぶ") And (n = 0)
+    modTestRunner.Check "W15Y1 warn(用言の連用形)は置換しない(整理られるを作らない)", _
+                        ok, "after=" & after & " n=" & n
+End Sub
+
+' --- G4 最長一致と表記ゆれ(対訳表§6.4) ---
+Private Sub T28Longest()
+    Dim n As Long
+    Dim after As String
+    Dim ok As Boolean
+
+    ' 「引受」は replace、送り仮名つきの「引受け」は warn(用言の連用形)。
+    ' 最長一致で「引受け」を見送った位置では**より短い「引受」も当てない**ので、
+    ' 「保険のお引き受けけの方針」は出ない。
+    after = modValidate4.SoftenTaboo("引受の方針と引受けの方針", n)
+    ok = (after = "保険のお引き受けの方針と引受けの方針") And (n = 1)
+    modTestRunner.Check "W15Y1 引受は置換し、引受け(warn)は送り仮名を残さず素通し", _
+                        ok, "after=" & after & " n=" & n
 
     after = modValidate4.SoftenTaboo("見守り型の座組みで進めます。", n)
     ok = (after = "見守り型のご提案の構成で進めます。")
-    modTestRunner.Check "W15X1 表記ゆれ 座組み は代表形と同じ顧客語", ok, _
+    modTestRunner.Check "W15Y1 表記ゆれ 座組み は代表形と同じ顧客語", ok, _
                         "after=" & after
 End Sub
 
-' --- G3 末尾の重なりの吸収(対訳表§6.6) ---
-Private Sub T28TailOverlap()
-    Dim n As Long
-    Dim after As String
-    Dim ok As Boolean
-
-    after = modValidate4.SoftenTaboo("D&O保険のご案内", n)
-    ok = (after = "会社役員賠償責任保険のご案内")
-    modTestRunner.Check "W15X1 末尾の重なりを吸収する(D&O保険)", ok, _
-                        "after=" & after
-
-    after = modValidate4.SoftenTaboo("BCP計画の策定", n)
-    ok = (after = "事業継続計画の策定")
-    modTestRunner.Check "W15X1 末尾の重なりを吸収する(BCP計画)", ok, _
-                        "after=" & after
-
-    after = modValidate4.SoftenTaboo("MFA認証の導入", n)
-    ok = (after = "多要素認証の導入")
-    modTestRunner.Check "W15X1 末尾の重なりを吸収する(MFA認証)", ok, _
-                        "after=" & after
-
-    ' 規約は「2文字以上の重なりだけ」。「額」1文字は吸収せず本文を残す
-    ' (1文字の偶然の一致で顧客向け本文を削らないための境界)。
-    after = modValidate4.SoftenTaboo("PML額", n)
-    ok = (after = "想定最大損害額額")
-    modTestRunner.Check "W15X1 重なりが1文字なら吸収しない(PML額)", ok, _
-                        "after=" & after
-End Sub
-
-' --- G4 対訳表そのもの ---
+' --- G5 対訳表そのものと TabooHitStrict ---
 Private Sub T28Table()
     Dim rows() As String
+    Dim onePair() As String
     Dim i As Long
     Dim total As Long
-    Dim marked As Long
+    Dim warnN As String
+    Dim modes As String
+    Dim mk As String
     Dim ok As Boolean
     Dim n As Long
     Dim a1 As String
     Dim a2 As String
+    Dim strictHit As String
+    Dim allHit As String
 
     rows = Split(modValidate4.TabooPairs(), vbLf)
     For i = LBound(rows) To UBound(rows)
         If LenB(rows(i)) > 0 Then
             total = total + 1
-            If UBound(Split(rows(i), vbTab)) >= 2 Then marked = marked + 1
+            onePair = Split(rows(i), vbTab)
+            If UBound(onePair) >= 2 Then
+                mk = onePair(2)
+                If mk = "warn" Then warnN = warnN & "*"
+                If InStr(1, modes, "[" & mk & "]", vbBinaryCompare) = 0 Then
+                    modes = modes & "[" & mk & "]"
+                End If
+            Else
+                modes = modes & "[なし]"
+            End If
         End If
     Next i
-    ok = (total = 51) And (marked = 15)
-    modTestRunner.Check "W15X1 対訳表は51行・印つき15行", ok, _
-                        "total=" & total & " marked=" & marked
+    ok = (total = 51) And (Len(warnN) = 10)
+    modTestRunner.Check "W15Y1 対訳表は51行で warn は10行(全行に mode がある)", ok, _
+                        "total=" & total & " warn=" & Len(warnN) & " modes=" & modes
 
-    a1 = modValidate4.SoftenTaboo("D&O保険と仕分けている件", n)
+    ok = (modes = "[replace][warn]") Or (modes = "[warn][replace]")
+    modTestRunner.Check "W15Y1 mode は replace と warn の2語だけ(印を増やさない)", _
+                        ok, "modes=" & modes
+
+    ' 終端の文脈に残った replace の語=置換の取りこぼし(実装の欠陥)。
+    strictHit = modValidate4.TabooHitStrict("料率を見直します。")
+    ok = (InStr(1, strictHit, "料率", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15Y1 終端の文脈に残った replace は取りこぼしとして出る", _
+                        ok, "strict=[" & strictHit & "]"
+
+    ' warn の語(ヒアリング)と、終端でない文脈の replace(PML額)は欠陥ではない。
+    strictHit = modValidate4.TabooHitStrict("ヒアリングを行い、PML額を見ます。")
+    allHit = modValidate4.TabooHit("ヒアリングを行い、PML額を見ます。")
+    ok = (LenB(strictHit) = 0)
+    If ok Then ok = (InStr(1, allHit, "ヒアリング", vbBinaryCompare) > 0)
+    If ok Then ok = (InStr(1, allHit, "PML", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15Y1 warn と終端外の残りは取りこぼしにしない(警告には出す)", _
+                        ok, "strict=[" & strictHit & "] all=[" & allHit & "]"
+
+    a1 = modValidate4.SoftenTaboo("付保の状況とPML額と仕分けの件", n)
     a2 = modValidate4.SoftenTaboo(a1, n)
-    ok = (a1 = a2) And (a1 = "会社役員賠償責任保険と仕分けている件")
-    modTestRunner.Check "W15X1 吸収と見送りを混ぜても冪等", ok, _
+    ok = (a1 = a2) And (a1 = "保険のご加入の状況とPML額と仕分けの件")
+    modTestRunner.Check "W15Y1 置換と見送りを混ぜても冪等", ok, _
                         "a1=" & a1 & " a2=" & a2
 End Sub

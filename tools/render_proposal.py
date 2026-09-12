@@ -202,6 +202,14 @@ def basic_driver(out_url: str, faithful: bool,
         '    oTin.setEncoding("UTF-8")\n'
         "    Do While Not oTin.isEOF()\n"
         "        lineText = oTin.readLine()\n"
+        "        ' 最後の1行だけ改行が付いたまま返ることがある(実測)。付いたまま\n"
+        "        '   だと出力のTSVが1件分ずれて、その1件が黙って検査から落ちる。\n"
+        "        Do While Len(lineText) > 0\n"
+        "            If Right$(lineText, 1) <> Chr(10) And Right$(lineText, 1) <> Chr(13) Then\n"
+        "                Exit Do\n"
+        "            End If\n"
+        "            lineText = Left$(lineText, Len(lineText) - 1)\n"
+        "        Loop\n"
         "        If Len(lineText) > 0 Then\n"
         "            r1 = modValidate4.SoftenTaboo(lineText, n1)\n"
         "            r2 = modValidate4.SoftenTaboo(r1, n2)\n"
@@ -380,7 +388,8 @@ def parse_glossary_terms(text: str) -> list[str]:
     """対訳表の「| n | 社内語 | 顧客語 |」行から社内語と顧客語の対を拾う。"""
     out = []
     for line in text.splitlines():
-        mm = re.match(r"^\|\s*(\d{1,3})\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$", line)
+        mm = re.match(r"^\|\s*(\d{1,3})\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|"
+                      r"\s*(?:replace|warn)\s*\|\s*$", line)
         if mm:
             out.append((mm.group(2), mm.group(3)))
     return out
@@ -505,31 +514,37 @@ def check_glossary(problems_sink: list[str]) -> None:
 
 
 # ==============================================================================
-# 対訳表の**実効出力**の検問(裁定書42 §1・統合レビュー「ゲートの死角」#1)
+# 対訳表の検問(裁定書43 §1-5。**3本立て**)
 # ------------------------------------------------------------------------------
-# それまでの check_glossary は「対訳表 Markdown ⇔ 15章§5.6 の system 本文」の
-# 1辺しか見ておらず、**実際に顧客向け本文を書き換える modValidate4.TabooPairs()
-# とは一度も突き合わせていなかった**。統合レビューは「料率 -> 保険料の水準」を
-# 「料率 -> ZZZ壊れた顧客語」へ書き換えても全ゲートが緑のままであることを実証
-# している。ここで2本立てで閉じる:
-#   check_glossary_impl      対訳表(§1〜§3 + §4.1 + §6.4)と TabooPairs() の
-#                            社内語・顧客語・印を1行ずつ突き合わせる(静的)
-#   check_glossary_effective LibreOffice で**実物の SoftenTaboo** を回し、
-#                            全対 × 代表文脈の実効出力を、対訳表から組み立てた
-#                            参照実装の出力と1件ずつ比べる(冪等も同時に見る)
-# 値源(対訳表)と実装(VBA)を別々に辿るので、どちらか一方だけが変わると赤くなる。
+# 1. check_glossary_impl      宣言(対訳表 Markdown)⇔実装(modValidate4)の
+#                             **全列突合**。対の社内語・顧客語・mode の3列と、
+#                             §6 の**終端集合を1文字ずつ**、mode の語彙も見る。
+# 2. check_glossary_effective LibreOffice で**実物の SoftenTaboo** を回し、
+#                             全対 × 全文脈(終端集合の各文字・非終端の代表文字・
+#                             活用語尾)の出力に**壊れの徴候**が1件も無いことを
+#                             見る((a)同一文字3連続 (b)顧客語末尾と直後の重複
+#                             (c)置換が起きたのに直後が終端集合でない)。加えて
+#                             対訳表の宣言だけから組み立てた参照実装と1件ずつ
+#                             比べる(値源と実装を別経路で辿る)。
+# 3. 冪等                     2回通して変わらないこと(2 と同じ採取で見る)。
+# 前波はここが「対の数と一部」しか見ておらず、実装の語尾リストを半分に削っても
+# 全ゲートが緑だった。列を1つ足したら宣言と実装の両方に要る。
 # ==============================================================================
 GLOSSARY_OUT_NAME = "glossary_out.tsv"
 
-# 代表文脈。素・助詞・サ変・活用語尾・末尾の重なりを1本ずつ持つ(対訳表§6.1 の
-# 検算枠 A/B/C/D をそのまま機械化したもの)。
-GL_SUFFIXES = [
-    "", "する", "した", "して", "している", "しており", "される", "させる",
-    "できる", "を行う", "の件", "です", "、", "て", "た", "ている", "ており",
-    "られる", "ました", "ます", "ない", "など", "まで", "の",
-    "保険", "リスク", "計画", "認証", "管理", "シート",
+# 非終端の代表文字と活用語尾(**終端集合は対訳表§6 の宣言から読む**ので、ここに
+# は1文字も書かない=列挙を2箇所に置かない)。漢字/ひらがな/カタカナ/英数。
+GL_NONTERM = [
+    "額", "保険", "計画", "認証", "指標", "力", "策", "品", "型", "直す",
+    "する", "した", "して", "している", "され", "させる", "できる",
+    "て", "た", "ている", "ながら", "やすい", "ました", "ます", "ない",
+    "など", "まで", "リスク", "シート", "ABC", "1",
 ]
 GL_FRAME = "本件の{0}をご説明します。"
+GL_MODES = ("replace", "warn")
+# 行単位で LO へ渡す経路なので、タブ・CR・LF は入力に載せられない(TSV が壊れる)。
+# この3文字は check_glossary_impl の**終端集合の1文字ずつの突合**で見る。
+GL_UNSENDABLE = "\t\r\n"
 
 
 def _md_section(text: str, head: str, next_heads: list[str]) -> str:
@@ -559,91 +574,141 @@ def _md_rows(body: str) -> list[list[str]]:
     return out
 
 
-def glossary_from_md(text: str) -> tuple[list[tuple[str, str, str]], dict]:
-    """対訳表 Markdown から (社内語, 顧客語, 印) の一覧と、判定に使う規則を読む。
+def term_from_md(text: str) -> tuple[str, list[str]]:
+    """対訳表§6 の終端集合ブロック(フェンス)を読む。`U+XXXX` 表記も解く。"""
+    problems: list[str] = []
+    body = _md_section(text, "### 終端集合", ["## 6.1"])
+    parts = body.split("```")
+    if len(parts) < 3:
+        return "", ["対訳表§6 の終端集合のブロックを読み取れませんでした"]
+    chars: list[str] = []
+    for line in parts[1].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        label, _sp, rest = line.partition(" ")
+        if label == "コード":
+            for tok in rest.split():
+                mm = re.fullmatch(r"U\+([0-9A-Fa-f]{4,6})", tok)
+                if mm:
+                    chars.append(chr(int(mm.group(1), 16)))
+                else:
+                    problems.append(f"対訳表§6 の終端集合に読めない字があります: {tok}")
+        else:
+            chars.extend(rest.strip())
+    dup = [c for c in set(chars) if chars.count(c) > 1]
+    if dup:
+        problems.append(f"対訳表§6 の終端集合に重複があります: {''.join(sorted(dup))}")
+    return "".join(chars), problems
 
-    - §1〜§3 の番号付き表 46語(check_glossary が15章と突き合わせている辺)
-    - §4.1「削り損ねたときに機械が当てる代替語」3語
-    - §6.4「表記ゆれ」2語
-    印は §6(general) / §6.1(suru) / §6.3(verb) の表が値源。§6.4 の印の列は
-    その写しであり、食い違えば問題として報告する。
+
+def glossary_from_md(text: str) -> tuple[list[tuple[str, str, str]], dict]:
+    """対訳表 Markdown から (社内語, 顧客語, mode) の一覧と置換規則を読む。
+
+    対を書く表は3つあり、**どれも mode 列を持つ**(裁定書43 §1-2):
+    - §1〜§3 の番号付き46語 / §4.1 の代替語3語 / §6.4 の表記ゆれ2語
     """
     problems: list[str] = []
-    pairs: list[tuple[str, str]] = list(parse_glossary_terms(text))
+    rows: list[tuple[str, str, str]] = []
+
+    for line in text.splitlines():
+        mm = re.match(r"^\|\s*(\d{1,3})\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|"
+                      r"\s*([^|]*?)\s*\|\s*$", line)
+        if mm:
+            rows.append((mm.group(2), mm.group(3), mm.group(4)))
 
     sec41 = _md_section(text, "### 4.1 ", ["## 5."])
     for cells in _md_rows(sec41):
-        if len(cells) >= 2 and cells[0] != "社内語":
-            pairs.append((cells[0], cells[1]))
+        if len(cells) >= 3 and cells[0] != "社内語":
+            rows.append((cells[0], cells[1], cells[2]))
 
     sec64 = _md_section(text, "## 6.4 ", ["## 6.5"])
-    var_marks: dict[str, str] = {}
     for cells in _md_rows(sec64):
         if len(cells) >= 4 and cells[0] != "表記ゆれ":
-            pairs.append((cells[0], cells[2]))
-            var_marks[cells[0]] = "" if cells[3].startswith("（なし") else cells[3]
+            rows.append((cells[0], cells[2], cells[3]))
 
-    marks: dict[str, str] = {}
-    for head, nxt, name in (("## 6. ", "## 6.1", "general"),
-                            ("## 6.1 ", "## 6.2", "suru"),
-                            ("## 6.3 ", "## 6.4", "verb")):
-        body = _md_section(text, head, [nxt])
-        if not body:
-            problems.append(f"対訳表の {head.strip()} 節を読み取れませんでした")
-        for cells in _md_rows(body):
-            if len(cells) >= 2 and cells[0] not in ("社内語", "表記ゆれ"):
-                marks[cells[0]] = name
-    for word, mk in var_marks.items():
-        if marks.get(word, "") != mk:
+    for src, dst, mode in rows:
+        if mode not in GL_MODES:
             problems.append(
-                f"対訳表§6.4 の「{word}」の印({mk or 'なし'})が"
-                f"§6/§6.1/§6.3 の宣言({marks.get(word, 'なし')})と違います")
+                f"対訳表の「{src}」の mode が [{mode}] です"
+                f"({' / '.join(GL_MODES)} のどちらかを必ず書きます)")
 
-    rules = {"problems": problems}
-    body = _md_section(text, "## 6.1 ", ["## 6.2"])
-    mm = re.search(r"直後が\s*(.+?)\s*のときだけ", body)
-    rules["suru_tails"] = re.findall(r"`([^`]+)`", mm.group(1)) if mm else []
-    body = _md_section(text, "## 6.3 ", ["## 6.4"])
-    mm = re.search(r"V4_VERB_TAILS[^:：]*[:：]\s*(.+)", body)
-    rules["verb_tails"] = (
-        re.findall(r"`([^`]+)`", mm.group(1).split("。")[0]) if mm else [])
-    body = _md_section(text, "## 6.6 ", ["## 7."])
-    mm = re.search(r"重なりは\*\*(\d+)文字以上", body)
-    rules["tail_min"] = int(mm.group(1)) if mm else 0
-
-    return [(s, d, marks.get(s, "")) for s, d in pairs], rules
+    term, term_problems = term_from_md(text)
+    problems.extend(term_problems)
+    rules = {"problems": problems, "term": term}
+    body = _md_section(text, "## 6.5 ", ["## 6.6"])
+    mm = re.search(r"V4_RUN_MAX = (\d+)", body)
+    rules["run_max"] = int(mm.group(1)) if mm else 0
+    mm = re.search(r"V4_UNDO_TAIL_MAX = (\d+)", body)
+    rules["undo_tail"] = int(mm.group(1)) if mm else 0
+    if not rules["run_max"] or not rules["undo_tail"]:
+        problems.append("対訳表§6.5 から取り消し規則の字数を読み取れませんでした")
+    return rows, rules
 
 
-VBA_TOKEN = re.compile(r'"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*)')
-VBA_MARKS = {"V4_SURU": "suru", "V4_GENERAL": "general", "V4_VERB": "verb"}
+VBA_TOKEN = re.compile(r'"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_]*)')
+VBA_MODES = {"V4_REPLACE": "replace", "V4_WARN": "warn"}
+VBA_TERM_TOKEN = re.compile(r'ChrW\(&H([0-9A-Fa-f]+)\)|([A-Za-z_]\w*)')
+VBA_TERM_CONST = re.compile(r'^Private Const (V4_TERM_\w+) As String = "((?:[^"]|"")*)"',
+                            re.MULTILINE)
+VBA_CONSTANTS = {"vbTab": "\t", "vbCr": "\r", "vbLf": "\n"}
 
 
 def glossary_from_vba(src: str) -> list[tuple[str, str, str]]:
-    """modValidate4.bas の TabooPairs() が組み立てる行を読む。"""
+    """modValidate4.bas の TabooPairs() が組み立てる行(社内語・顧客語・mode)。"""
     if "Public Function TabooPairs()" not in src:
         return []
     body = src.split("Public Function TabooPairs()", 1)[1].split("End Function", 1)[0]
     rows = []
     for line in body.splitlines():
-        if "s = s &" not in line:
+        if "AdPair " not in line:
             continue
-        texts, mark = [], ""
-        for lit, ident in VBA_TOKEN.findall(line.split("s = s &", 1)[1]):
+        texts, mode = [], ""
+        for lit, ident in VBA_TOKEN.findall(line.split("AdPair ", 1)[1]):
             if ident:
-                mark = VBA_MARKS.get(ident, mark)
+                mode = VBA_MODES.get(ident, mode)
             else:
-                texts.append(lit)
+                texts.append(lit.replace('""', '"'))
         if len(texts) >= 2:
-            rows.append((texts[0], texts[1], mark))
+            rows.append((texts[0], texts[1], mode))
     return rows
 
 
+def term_from_vba(src: str) -> tuple[str, list[str]]:
+    """modValidate4.TermChars() が返す終端集合を**実装の字面から**組み立てる。"""
+    consts = {m.group(1): m.group(2).replace('""', '"')
+              for m in VBA_TERM_CONST.finditer(src)}
+    if "Private Function TermChars() As String" not in src:
+        return "", ["modValidate4.TermChars() を読み取れませんでした"]
+    body = src.split("Private Function TermChars() As String", 1)[1]
+    body = body.split("End Function", 1)[0]
+    expr = body.split("TermChars =", 1)[1]
+    problems, out = [], []
+    for mm in VBA_TERM_TOKEN.finditer(expr):
+        if mm.group(1):
+            out.append(chr(int(mm.group(1), 16)))
+        elif mm.group(2) in consts:
+            out.append(consts[mm.group(2)])
+        elif mm.group(2) in VBA_CONSTANTS:
+            out.append(VBA_CONSTANTS[mm.group(2)])
+        elif mm.group(2) == "_":
+            continue                     # 行継続
+        else:
+            problems.append(
+                f"modValidate4.TermChars() に読めない項があります: {mm.group(2)}")
+    rest = VBA_TERM_TOKEN.sub("", expr)
+    if set(rest) - set(" &_\r\n"):
+        problems.append(
+            f"modValidate4.TermChars() に想定外の式があります: {rest.strip()}")
+    return "".join(out), problems
+
+
 def check_glossary_impl(problems_sink: list[str]) -> int:
-    """対訳表の宣言と modValidate4.TabooPairs() の実物を1行ずつ突き合わせる。"""
+    """1本目: 宣言(対訳表)と実装(modValidate4)の**全列**を突き合わせる。"""
     md_rows, rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
     problems_sink.extend(rules["problems"])
-    vba_rows = glossary_from_vba(
-        (REPO_ROOT / "src" / "app" / "modValidate4.bas").read_text(encoding="utf-8"))
+    vba_src = (REPO_ROOT / "src" / "app" / "modValidate4.bas").read_text(encoding="utf-8")
+    vba_rows = glossary_from_vba(vba_src)
     if not vba_rows:
         problems_sink.append("modValidate4.bas の TabooPairs() を読み取れませんでした")
         return 0
@@ -660,12 +725,47 @@ def check_glossary_impl(problems_sink: list[str]) -> int:
                 "(実装だけが知っている禁止語=誰も検算していない)")
         elif md_map[word] != vba_map[word]:
             problems_sink.append(
-                f"「{word}」の顧客語/印が対訳表と実装で違います"
+                f"「{word}」の顧客語/mode が対訳表と実装で違います"
                 f"(対訳表={md_map[word]} / TabooPairs={vba_map[word]})")
-    if not rules["suru_tails"] or not rules["verb_tails"] or not rules["tail_min"]:
+
+    # 終端集合を**1文字ずつ**。ここが前波の死角(実装の語尾リストを半分に削っても
+    # 全ゲートが緑だった)を閉じる本体である。
+    vba_term, term_problems = term_from_vba(vba_src)
+    problems_sink.extend(term_problems)
+    md_term = rules["term"]
+    for ch in sorted(set(md_term) - set(vba_term)):
         problems_sink.append(
-            "対訳表§6.1/§6.3/§6.6 から置換規則(サ変語尾・活用語尾・"
-            "末尾の重なりの最小字数)を読み取れませんでした")
+            f"対訳表§6 の終端集合の U+{ord(ch):04X} が modValidate4 にありません")
+    for ch in sorted(set(vba_term) - set(md_term)):
+        problems_sink.append(
+            f"modValidate4 の終端集合の U+{ord(ch):04X} が対訳表§6 にありません")
+    if not md_term:
+        problems_sink.append("対訳表§6 の終端集合が空です(検査を飛ばして緑にはしません)")
+    # 取り消し規則(対訳表§6.5)。終端集合がある限り発火しない二重の安全網なので
+    # 出力からは観測できない。**宣言の数字と実装の定数**、および「ReplaceOk が
+    # UndoNeeded を呼ぶこと」を見て、規則を外す変異が必ず赤くなるようにする。
+    for name, want in (("V4_RUN_MAX", rules["run_max"]),
+                       ("V4_UNDO_TAIL_MAX", rules["undo_tail"])):
+        mm = re.search(rf"Private Const {name} As Long = (\d+)", vba_src)
+        if not mm:
+            problems_sink.append(f"modValidate4 に {name} がありません(対訳表§6.5)")
+        elif int(mm.group(1)) != want:
+            problems_sink.append(
+                f"取り消し規則の {name} が対訳表§6.5 の宣言({want})と違います"
+                f"(実装={mm.group(1)})")
+    body = vba_src.split("Private Function ReplaceOk(", 1)
+    if len(body) < 2 or "UndoNeeded(" not in body[1].split("End Function", 1)[0]:
+        problems_sink.append(
+            "modValidate4.ReplaceOk が UndoNeeded を呼んでいません"
+            "(対訳表§6.5 の取り消し規則が外れています)")
+    # mode の語彙も実装と突き合わせる(印を増やしていないことの機械検査)。
+    vba_modes = sorted(
+        m.group(2) for m in re.finditer(
+            r'Private Const (V4_REPLACE|V4_WARN) As String = "(\w+)"', vba_src))
+    if vba_modes != sorted(GL_MODES):
+        problems_sink.append(
+            f"modValidate4 の mode の語彙が {vba_modes} です"
+            f"(対訳表§6.1 の2区分 {sorted(GL_MODES)} だけにします)")
     return len(md_map)
 
 
@@ -683,32 +783,51 @@ def _boundary_ok(hay: str, pos: int, word: str) -> bool:
     return not (end < len(hay) and hay[end].isascii() and hay[end].isalpha())
 
 
-def _tail_overlap(hay: str, pos: int, dst: str, tail_min: int) -> int:
-    for k in range(len(dst), tail_min - 1, -1):
-        if hay[pos:pos + k] == dst[-k:]:
-            return k
-    return 0
+def _has_run(text: str, run_max: int) -> bool:
+    n = 1
+    for i in range(1, len(text)):
+        if text[i] == text[i - 1]:
+            n += 1
+            if n >= run_max:
+                return True
+        else:
+            n = 1
+    return False
+
+
+def _undo_needed(dst: str, hay: str, pos: int, rules: dict) -> bool:
+    """取り消し規則(対訳表§6.5)。modValidate4.UndoNeeded と同じ判断。"""
+    for k in range(1, rules["undo_tail"] + 1):
+        if k <= len(dst) and hay[pos:pos + k] == dst[-k:]:
+            return True
+    seam = dst[-(rules["run_max"] - 1):] + hay[pos:pos + rules["run_max"] - 1]
+    return _has_run(seam, rules["run_max"])
+
+
+def _replace_ok(hay: str, pos: int, dst: str, rules: dict) -> bool:
+    """置換してよい位置か(対訳表§6 の終端集合 + §6.5 の取り消し規則)。"""
+    if pos < len(hay) and hay[pos] not in rules["term"]:
+        return False
+    return not _undo_needed(dst, hay, pos, rules)
 
 
 def soften_reference(text: str, rows: list[tuple[str, str, str]], rules: dict,
                      passes: int = 4) -> str:
     """対訳表§6〜§6.6 の規約どおりに置換する参照実装(modValidate4 とは別実装)。"""
-    use = sorted([r for r in rows if r[2] != "general"], key=lambda r: -len(r[0]))
+    use = sorted([r for r in rows if r[2] == "replace"], key=lambda r: -len(r[0]))
     heads = {r[0][0] for r in use}
-    tails = {"suru": rules["suru_tails"], "verb": rules["verb_tails"]}
     for _ in range(passes):
         out, i, hits, n = [], 0, 0, len(text)
         while i < n:
             hit = None
             if text[i] in heads:
-                for src, dst, mark in use:
+                for src, dst, _mode in use:
                     if text[i:i + len(src)] != src:
                         continue
                     if not _boundary_ok(text, i, src):
                         continue
-                    guard = tails.get(mark) or []
-                    if any(text.startswith(t, i + len(src)) for t in guard):
-                        break            # 印で見送った位置は打ち切る(規約2)
+                    if not _replace_ok(text, i + len(src), dst, rules):
+                        break            # 終端でない位置は打ち切る(規約2)
                     hit = (src, dst)
                     break
             if hit is None:
@@ -718,7 +837,6 @@ def soften_reference(text: str, rows: list[tuple[str, str, str]], rules: dict,
             src, dst = hit
             out.append(dst)
             i += len(src)
-            i += _tail_overlap(text, i, dst, rules["tail_min"])
             hits += 1
         text = "".join(out)
         if hits == 0:
@@ -726,11 +844,17 @@ def soften_reference(text: str, rows: list[tuple[str, str, str]], rules: dict,
     return text
 
 
-def glossary_inputs(rows: list[tuple[str, str, str]]) -> list[str]:
-    """全対 × 代表文脈の入力文(LO へ渡す1行1件)。"""
+def glossary_inputs(rows: list[tuple[str, str, str]], rules: dict) -> list[str]:
+    """全対 × 全文脈の入力文(LO へ渡す1行1件)。
+
+    文脈は「素」「終端集合の各文字(**対訳表の宣言から**)」「非終端の代表文字」
+    「活用語尾」。対や終端集合を1つ足すと、検査も自動で増える。
+    """
+    suffixes = [""] + [c for c in rules["term"] if c not in GL_UNSENDABLE]
+    suffixes += GL_NONTERM
     seen, out = set(), []
-    for src, _dst, _mark in rows:
-        for suf in GL_SUFFIXES:
+    for src, _dst, _mode in rows:
+        for suf in suffixes:
             for body in (src + suf, GL_FRAME.format(src + suf)):
                 if body not in seen:
                     seen.add(body)
@@ -739,32 +863,69 @@ def glossary_inputs(rows: list[tuple[str, str, str]]) -> list[str]:
 
 
 def check_glossary_effective(problems_sink: list[str], sweep_path: Path) -> int:
-    """実物の SoftenTaboo の出力を、対訳表から組み立てた参照実装と比べる。"""
+    """2本目と3本目: 実物の SoftenTaboo の出力に壊れの徴候が無いこと・冪等。"""
     if not sweep_path.exists():
         problems_sink.append(
             "対訳表の実効出力(SoftenTaboo)を LibreOffice で採取できませんでした"
             "(検査を飛ばして緑にはしません)")
         return 0
     rows, rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
+    term = set(rules["term"])
     checked, shown = 0, 0
+    seen_inputs: set[str] = set()
+
+    def report(msg: str) -> None:
+        nonlocal shown
+        if shown < 12:
+            shown += 1
+            problems_sink.append(msg)
+
     for line in sweep_path.read_text(encoding="utf-8").splitlines():
         cells = line.split("\t")
         if len(cells) < 3:
             continue
         body, got1, got2 = cells[0], cells[1], cells[2]
         checked += 1
+        seen_inputs.add(body)
+        # (a) 同一文字が3つ以上連続(入力に無かったものだけ)
+        if _has_run(got1, rules["run_max"]) and not _has_run(body, rules["run_max"]):
+            report(f"対訳表の実効出力に同一文字の{rules['run_max']}連続が出ました: "
+                   f"[{body}] → [{got1}]")
+        for src, dst, mode in rows:
+            if mode != "replace" or dst in body or dst not in got1:
+                continue
+            p = got1.find(dst)
+            while p >= 0:
+                nxt = p + len(dst)
+                # (b) 顧客語の末尾1〜3文字が直後の文字列と重複する
+                for k in range(1, rules["undo_tail"] + 1):
+                    if k <= len(dst) and got1[nxt:nxt + k] == dst[-k:]:
+                        report(f"対訳表の実効出力で顧客語の末尾が直後と重複しました: "
+                               f"[{body}] → [{got1}]")
+                        break
+                # (c) 置換が起きたのに、置換した位置の直後が終端集合でない
+                if nxt < len(got1) and got1[nxt] not in term:
+                    report(f"終端集合でない文脈で置換が起きました: "
+                           f"[{body}] → [{got1}](「{src}」の直後は "
+                           f"U+{ord(got1[nxt]):04X})")
+                p = got1.find(dst, p + 1)
+        # (d) 対訳表の宣言だけから組み立てた参照実装と一致すること
         want = soften_reference(body, rows, rules)
-        if got1 != want and shown < 12:
-            shown += 1
-            problems_sink.append(
-                f"対訳表の実効出力が宣言と違います: [{body}] → 実装[{got1}] / "
-                f"対訳表どおりなら[{want}]")
-        if got2 != got1 and shown < 12:
-            shown += 1
-            problems_sink.append(
-                f"SoftenTaboo が冪等ではありません: [{body}] → [{got1}] → [{got2}]")
+        if got1 != want:
+            report(f"対訳表の実効出力が宣言と違います: [{body}] → 実装[{got1}] / "
+                   f"対訳表どおりなら[{want}]")
+        # 3本目: 冪等
+        if got2 != got1:
+            report(f"SoftenTaboo が冪等ではありません: [{body}] → [{got1}] → [{got2}]")
     if checked == 0:
         problems_sink.append("対訳表の実効出力を1件も検査できませんでした")
+    # 入力した文脈が**1件残らず**採れていること(採取が欠けた分だけ検査が静かに
+    # 減るのを防ぐ。実測で最後の1行が落ちていた)。
+    lost = [s for s in glossary_inputs(rows, rules) if s not in seen_inputs]
+    if lost:
+        problems_sink.append(
+            f"対訳表の実効出力の採取が{len(lost)}件欠けています"
+            f"(例: [{lost[0]}])。検査を飛ばして緑にはしません")
     return checked
 
 
@@ -1329,9 +1490,9 @@ def main() -> int:
               "実行できません(検査を飛ばして緑にはしません)")
         return 2
 
-    # 裁定書42 §1: 対訳表の実効出力を同じ LO の実行で採る(全対 × 代表文脈)。
-    gl_rows, _gl_rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
-    gl_inputs = glossary_inputs(gl_rows)
+    # 裁定書43 §1-5: 対訳表の実効出力を同じ LO の実行で採る(全対 × 全文脈)。
+    gl_rows, gl_rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
+    gl_inputs = glossary_inputs(gl_rows, gl_rules)
 
     soffice = lo.find_soffice()
     work_dir = Path(tempfile.mkdtemp(prefix="rpn_proposal_"))
@@ -1349,6 +1510,7 @@ def main() -> int:
         problems += check_literals(html, disclaimer, todo)
         check_glossary(problems)
         n_pairs = check_glossary_impl(problems)
+        n_term = len(set(gl_rules["term"]))
         n_eff = check_glossary_effective(problems, work_dir / GLOSSARY_OUT_NAME)
         check_s5_required(problems)
         problems += check_dom(out_path, slides, todo, args.faithful, args.verbose)
@@ -1378,8 +1540,10 @@ def main() -> int:
         print(f"[render_proposal] OK: 全{len(slides)}枚の登録と描画後DOM"
               "(発表者ノートを壊しても22枚が描かれ印が立つことを含む)、"
               "20章§5.1の19変数・§8の免責・"
-              f"対訳表{n_pairs}対と15章§5.6/TabooPairs の一致、"
-              f"SoftenTaboo の実効出力{n_eff}件(冪等を含む)、"
+              f"対訳表{n_pairs}対と15章§5.6/TabooPairs の全列一致"
+              f"(終端集合{n_term}文字を1文字ずつ含む)、"
+              f"SoftenTaboo の実効出力{n_eff}件に壊れの徴候が無いこと"
+              "(同一文字3連続・顧客語末尾の重複・終端でない置換)と冪等、"
               f"{review_text}"
               "EP_S5_REQUIRED と15章§5.6 required の一致を確認しました。")
         return 0
