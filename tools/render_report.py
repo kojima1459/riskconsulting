@@ -45,7 +45,8 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
     python3 tools/render_report.py --faithful      # 素材合成なし(round 1)
     python3 tools/render_report.py --reviewed 山田太郎  # 確認済みの態(R2-17)
     python3 tools/render_report.py --out <path>    # 出力先を明示する
-    # exit code: 0 = 生成+検査OK / 1 = 生成できたが検査NG / 2 = 生成できず
+    python3 tools/render_report.py --selftest      # 検査器の回帰網だけ(LO不要)
+    # exit code: 0 = 生成+検査OK / 1 = 生成できたが検査NG / 2 = 生成できず・自己テスト失敗
 
 検査(DoD):
     (1) 先頭付近に `<meta charset="utf-8"` がある(18章§5.3(3))
@@ -175,6 +176,36 @@ SAMPLE_REVIEWED_AT = "2026/09/01 15:30:10"
 def vba_str(value: str) -> str:
     """VBA の文字列リテラルへ埋め込む(二重引用符を重ねる)。"""
     return value.replace('"', '""')
+
+
+def html_safe(value: str) -> str:
+    """`modUtilText.HtmlSafe`(18章§5.3 NFR-S7③)と同じ置換・同じ順序。
+
+    HTML**ソース**と突き合わせる期待値はこれを通す(W15 Round2 T-m1)。
+    通さないと、確認者名に `"` `<` `&` `'` `>` が1文字でも入った時点で
+    「生成物は正しいのに検査だけが赤くなる」偽陽性になる。DOM の textContent
+    と突き合わせる側(check_dom)は**素のまま**が正しいので通さない。
+    順序は製品コードと同じ: & を最初に置かないと二重エスケープになる。
+    """
+    t = value.replace("&", "&amp;")
+    t = t.replace("<", "&lt;")
+    t = t.replace(">", "&gt;")
+    t = t.replace('"', "&quot;")
+    t = t.replace("'", "&#39;")
+    return t
+
+
+# 18章§3.5 の3項分岐のうち「確認済み」の1文。**確認者名は素のまま**受け取る。
+# 使い分け(T-m1):
+#   DOM(textContent)と照合 -> disclaimer_reviewed_line(name)
+#   HTMLソース(<noscript>)と照合 -> disclaimer_reviewed_line(html_safe(name))
+DISCLAIMER_REVIEWED_HEAD = "本資料はAI支援により作成した骨子を担当者が確認・編集したものです"
+DISCLAIMER_UNREVIEWED = "（AI生成・担当者確認前）"
+
+
+def disclaimer_reviewed_line(name_as_rendered: str) -> str:
+    return (DISCLAIMER_REVIEWED_HEAD + "（確認: " + name_as_rendered + " / "
+            + SAMPLE_REVIEWED_AT + "）。")
 
 
 def basic_driver(out_url: str, theme: str, faithful: bool,
@@ -522,12 +553,13 @@ def check_reviewed(html: str, reviewed_by: str) -> list[str]:
             problems.append(
                 f"meta.reviewed_at が [{got_at!r}] です"
                 f"(期待 [{SAMPLE_REVIEWED_AT}])")
-        want = ("本資料はAI支援により作成した骨子を担当者が確認・編集したものです"
-                "（確認: " + reviewed_by + " / " + SAMPLE_REVIEWED_AT + "）。")
+        # <noscript> は HTML **ソース**なので、確認者名は HtmlSafe 後の姿で入る
+        # (T-m1)。素の名前で照合すると `"` `<` `&` などで偽陽性になる。
+        want = disclaimer_reviewed_line(html_safe(reviewed_by))
         if want not in noscript:
             problems.append(
                 f"<noscript> の免責が確認済みの文になっていません(期待: [{want}])")
-        if "（AI生成・担当者確認前）" in noscript:
+        if DISCLAIMER_UNREVIEWED in noscript:
             problems.append(
                 "確認者名を渡したのに <noscript> に「（AI生成・担当者確認前）」が"
                 "残っています(18章§3.5 の3項分岐が切り替わっていない)")
@@ -535,11 +567,11 @@ def check_reviewed(html: str, reviewed_by: str) -> list[str]:
         if got_by != "":
             problems.append('確認者名を渡していないのに meta.reviewed_by が'
                             f"[{got_by!r}] です")
-        if "（AI生成・担当者確認前）" not in noscript:
+        if DISCLAIMER_UNREVIEWED not in noscript:
             problems.append(
                 "確認者名を渡していないのに <noscript> が「（AI生成・担当者確認前）」"
                 "になっていません(18章§3.5)")
-        if "本資料はAI支援により作成した骨子を担当者が確認・編集したものです" in noscript:
+        if DISCLAIMER_REVIEWED_HEAD in noscript:
             problems.append(
                 "確認者名が空なのに <noscript> が「担当者が確認・編集した」と"
                 "名乗っています(裁定書37 B-06)")
@@ -643,8 +675,9 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool,
                 f"(裁定書37 B-06。--reviewed の確認済みの態)")
         if "確認前" in texts_a:
             problems.append("確認者名を渡したのに表紙に「確認前」のチップが出ています")
-        want_disc = ("本資料はAI支援により作成した骨子を担当者が確認・編集したものです"
-                     "（確認: " + reviewed_by + " / " + SAMPLE_REVIEWED_AT + "）。")
+        # DOM の textContent はエスケープが解けた**素の**姿なので html_safe は
+        # 通さない(<noscript> はソースなので通す。T-m1 の非対称)。
+        want_disc = disclaimer_reviewed_line(reviewed_by)
         if want_disc not in texts_a:
             problems.append(
                 f"SEC-15 の1行目が確認済みの文になっていません(期待: [{want_disc}])")
@@ -884,6 +917,89 @@ def check_data_literal(html: str) -> list[str]:
     return problems
 
 
+# ==============================================================================
+# 自己テスト(W15 Round2 T-m3): 確認前/確認済みの**両方向**を LibreOffice 無しで固定する。
+# ------------------------------------------------------------------------------
+# R2-17 の回帰網は scratchpad の絶対パス直書きスクリプトにしか無く、worktree を
+# 消せば実行不能だった。ここへ移し、`--selftest` と毎回の生成の前段で回す。
+# 合成HTMLは check_reviewed が読む2箇所(<noscript> と DATA リテラル)だけを
+# 製品と同じ作りで持つ(JSの文字列リテラル → その中身がJSON の二重包み)。
+# ==============================================================================
+def _sample_html(reviewed_by: str, escape_noscript: bool = True) -> str:
+    """確認前/確認済みの最小HTMLを合成する。
+
+    escape_noscript=False は「製品が HtmlSafe を掛け忘れた」形(負例)。
+    """
+    if reviewed_by:
+        shown = html_safe(reviewed_by) if escape_noscript else reviewed_by
+        disc = disclaimer_reviewed_line(shown)
+        at = SAMPLE_REVIEWED_AT
+    else:
+        disc = "本資料はAIが作成した骨子です" + DISCLAIMER_UNREVIEWED + "。"
+        at = ""
+    meta = {"meta": {"reviewed_by": reviewed_by, "reviewed_at": at}}
+    inner = json.dumps(json.dumps(meta, ensure_ascii=False))  # 二重包み
+    return ("<noscript><p>" + disc + "</p></noscript>\n"
+            "<script>var DATA=JSON.parse(" + inner + ");</script>\n")
+
+
+def self_test() -> bool:
+    cases: list[tuple[str, bool]] = []
+    name = "山田 太郎"
+    plain = _sample_html("")
+    reviewed = _sample_html(name)
+
+    # HtmlSafe の写し(製品 modUtilText.HtmlSafe と同じ置換・同じ順序)。
+    cases.append(("HtmlSafe 5文字",
+                  html_safe("&<>\"'") == "&amp;&lt;&gt;&quot;&#39;"))
+    cases.append(("HtmlSafe は & を最初に置く(二重エスケープしない順)",
+                  html_safe("&amp;") == "&amp;amp;"))
+    cases.append(("HtmlSafe 無害な名前は素通し", html_safe(name) == name))
+
+    # 態の照合(正例・負例の両方向)。
+    cases.append(("確認前を確認前として検査 → 緑", check_reviewed(plain, "") == []))
+    cases.append(("確認済みを確認済みとして検査 → 緑",
+                  check_reviewed(reviewed, name) == []))
+    cases.append(("確認前を確認済みとして検査 → 赤",
+                  len(check_reviewed(plain, name)) > 0))
+    cases.append(("確認済みを確認前として検査 → 赤",
+                  len(check_reviewed(reviewed, "")) > 0))
+    cases.append(("別人の名前で検査 → 赤",
+                  len(check_reviewed(reviewed, "鈴木 次郎")) > 0))
+    cases.append(("<noscript> が無ければ赤",
+                  len(check_reviewed('<script>var DATA=JSON.parse("{}");</script>',
+                                     "")) > 0))
+
+    # T-m1: HtmlSafe が掛かる文字を含む確認者名。
+    tricky = 'A"B&C<D'
+    cases.append(("HtmlSafe 対象文字を含む名前でも緑(偽陽性を出さない)",
+                  check_reviewed(_sample_html(tricky), tricky) == []))
+    cases.append(("製品がエスケープを掛け忘れたら赤(見逃さない)",
+                  len(check_reviewed(_sample_html(tricky, escape_noscript=False),
+                                     tricky)) > 0))
+
+    # DOM 側(textContent)は**素のまま**が正しい = ソース側との非対称を固定する。
+    cases.append(("ソース側の期待値は HtmlSafe 後",
+                  disclaimer_reviewed_line(html_safe(tricky)) !=
+                  disclaimer_reviewed_line(tricky)))
+    cases.append(("DOM側の期待値は素の名前を含む",
+                  tricky in disclaimer_reviewed_line(tricky)))
+
+    # DATA リテラルの読み出し(二重包みを解けているか)。
+    got = parse_data_json(reviewed) or {}
+    cases.append(("meta.reviewed_by を読める",
+                  got.get("meta", {}).get("reviewed_by") == name))
+    cases.append(("meta.reviewed_at を読める",
+                  got.get("meta", {}).get("reviewed_at") == SAMPLE_REVIEWED_AT))
+    cases.append(("DATA が無ければ None", parse_data_json("<p>x</p>") is None))
+
+    bad = [n for n, ok in cases if not ok]
+    for n in bad:
+        print("  自己テスト NG: %s" % n)
+    print("  自己テスト: %d/%d" % (len(cases) - len(bad), len(cases)))
+    return not bad
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="サンプルHTMLレポートを生成する(T-33/T-35)")
     ap.add_argument("--theme", default="standard", help="18章§5.2のテーマ名(standard / mono)")
@@ -893,8 +1009,18 @@ def main() -> int:
     ap.add_argument("--reviewed", default="", metavar="確認者名",
                     help="確認者名を入れて「確認済み」の態で出す(18章§3.5の"
                          "3項分岐のうち残り2態。既定 dist/サンプルレポート_確認済.html)")
+    ap.add_argument("--selftest", action="store_true",
+                    help="検査器の自己テスト(回帰網)だけを回す(LibreOffice 不要)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
+
+    if args.selftest:
+        print("[render_report] 検査器の自己テスト(R2-17 / T-m1)")
+        if not self_test():
+            print("[render_report] 結果: 自己テスト失敗(検査器が壊れています)")
+            return 2
+        print("[render_report] 結果: 自己テストOK")
+        return 0
 
     if args.out:
         out_path = Path(args.out)
@@ -904,6 +1030,11 @@ def main() -> int:
         out_path = REVIEWED_OUT
     else:
         out_path = DEFAULT_OUT
+
+    # 検査器そのものの回帰網。毎回のゲートで回す(骨抜き防止。T-m3)。
+    if not self_test():
+        print("[render_report] 結果: 自己テスト失敗(検査器が壊れています)")
+        return 2
 
     soffice = lo.find_soffice()
     work_dir = Path(tempfile.mkdtemp(prefix="rpn_render_"))
