@@ -472,8 +472,10 @@ Public Function AsmS4System(ByVal variantName As String, ByVal tier As String, _
     ' §5 system 本文には tier 依存のプレースホルダが無い(クイック5枚固定と
     ' フルドシエ5からN枚の両方が固定文で書かれている)ので本文は変わらない。
     ' 枚数の出し分けが実際に効くのは §5 user の slideCountHint(AsmS4User)。
-    AsmS4System = FillNamed(modPromptsCore.BuildS4System(), _
-        "BLOCK_S4_VARIANT|pptMaxSlidesT2", vals)
+    ' 裁定書37 B-01: S4のガードは AsmS4System の戻り値末尾へ(代入点は
+    '   modPipeline.bas 側だが、system の最終組立はここで閉じるため)。
+    AsmS4System = AsmGuarded(FillNamed(modPromptsCore.BuildS4System(), _
+        "BLOCK_S4_VARIANT|pptMaxSlidesT2", vals))
 End Function
 
 ' AsmS4User - 15章§5 user。slideCountHint は ctx.dossier_tier から決める
@@ -546,6 +548,20 @@ Public Function AsmPFUser(ByVal theme As String, ByVal body As String, ByVal rul
     vals(6) = researching
     AsmPFUser = FillNamed(BuildPFUser(), _
         "theme|body|rulesText|menusSummary|schemesText|patternsText|researchingText", vals)
+End Function
+
+' AsmGuarded - 裁定書37 B-01/A-07/C-1。9代入点(S1/S2/S3/S4/PF/S2C/S3C/
+'   S2改訂/S3改訂)が唯一通す出口。sysText の末尾へ 15章§1.3 BlockGuard() を
+'   連結する。sysText が空ならガードも付けず空のまま返す(空systemを送る経路
+'   自体が既に異常であり、ここで隠さない)。**代入点で手書き連結しない**
+'   (伝書鳩Part2②の複製腐敗対策。呼出側は必ず本関数を通す)。壁打ち
+'   (BuildSparringSystem)には適用しない(15章§1.3が明記する唯一の例外)。
+Public Function AsmGuarded(ByVal sysText As String) As String
+    If LenB(sysText) = 0 Then
+        AsmGuarded = sysText
+        Exit Function
+    End If
+    AsmGuarded = sysText & vbLf & modPromptsBlocks.BlockGuard()
 End Function
 
 ' === 組立層の内部ヘルパー(いずれも純関数) ===

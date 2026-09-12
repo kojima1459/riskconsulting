@@ -178,7 +178,7 @@ Public Function RunPreflight(ByVal inboxId As String) As Boolean
     safeBody = Sanitized(bodyText, detailPre)
 
     Dim sysText As String, userText As String, schemaText As String
-    sysText = modPromptsOps.BuildPFSystem()
+    sysText = modPromptsOps.AsmGuarded(modPromptsOps.BuildPFSystem())
     userText = modPromptsOps.AsmPFUser(safeTheme, safeBody, rulesText, menusSummary, _
                                        schemesText, patternsText, researchingText)
     schemaText = modSchemas.SchemaPF()
@@ -341,7 +341,7 @@ Private Function Defend(ByVal rawText As String, ByVal refIds As String, _
     If extraCount > 0 Then AddNote detailAcc, "extra_json=" & CStr(extraCount)
 
     If LenB(extracted) = 0 Then
-        Defend = "[E0302] 応答からJSONを抽出できませんでした（説明文のみ・括弧の欠落など）"
+        Defend = modPipeline3.MsgE0302()
         Exit Function
     End If
 

@@ -111,6 +111,76 @@ SECTION_MAP: list[tuple[str, list[str], str]] = [
     ("RepairSuffix", ["RepairSuffix"], "modPromptsOps"),
 ]
 
+# ==============================================================================
+# 配線ゲート(裁定書37 B-01/B-02。B_dr_quality.md §3 B-02/§4)
+# ------------------------------------------------------------------------------
+# 15章が「systemの末尾へ差し込む」と定める Block* 9関数が、src/ 全体で
+# 1件以上「呼ばれている」ことを検査する。SECTION_MAP の文言一致ゲートとは別物
+# (文言が15章と一字一句一致していても、どこからも呼ばれていなければ0件のまま
+# 本番に出る=伝書鳩3-1で実際に起きたBlockGuard未配線)。
+# fail-closed: src/ に .bas が読めない・1本も無いときも赤にする。
+# ==============================================================================
+WIRED_BLOCKS: dict[str, str] = {
+    "BlockCtx": "§1.1", "BlockRenewalS1": "§1.2", "BlockRenewalS2": "§1.2",
+    "BlockRenewalS3": "§1.2", "BlockNewS2": "§1.2b", "BlockRound2Focus": "§1.2c",
+    "BlockGuard": "§1.3", "BlockS4Proposal": "§5", "BlockS4Alliance": "§5",
+}
+WIRING_ROOT = REPO_ROOT / "src"
+_WIRE_DEF_RE = re.compile(r"^\s*(Public|Private)\s+Function\s+(\w+)", re.IGNORECASE)
+
+
+def block_wiring_counts() -> tuple[dict[str, int], bool]:
+    """{関数名: 呼び出し件数} と、src/ が読めたか(.basが1本以上あったか)を返す。
+    定義行(Public|Private Function Xxx)自身と、`'` で始まるコメント行は
+    呼び出しに数えない。"""
+    counts = {fn: 0 for fn in WIRED_BLOCKS}
+    try:
+        # src/test はテストからの呼び出しであり「製品の配線」ではないので数えない
+        # (テストだけが呼んでいる状態を緑にしないため。司令塔検収 W14)。
+        bas_files = sorted(p for p in WIRING_ROOT.rglob("*.bas")
+                           if "test" not in p.relative_to(WIRING_ROOT).parts)
+    except OSError:
+        return counts, False
+    if not bas_files:
+        return counts, False
+
+    call_patterns = {fn: re.compile(r"\b" + re.escape(fn) + r"\s*\(")
+                      for fn in WIRED_BLOCKS}
+    read_ok = False
+    for path in bas_files:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        read_ok = True
+        for line in lines:
+            if line.strip().startswith("'"):
+                continue
+            m = _WIRE_DEF_RE.match(line)
+            def_name = m.group(2) if m else None
+            for fn, pat in call_patterns.items():
+                if def_name == fn:
+                    continue
+                if pat.search(line):
+                    counts[fn] += 1
+    return counts, read_ok
+
+
+def check_block_wiring() -> list[str]:
+    """WIRED_BLOCKS の各関数が1件以上呼ばれているかを検査する。
+    戻り値は問題メッセージの一覧(空=全件配線済み)。fail-closed。"""
+    counts, ok = block_wiring_counts()
+    if not ok:
+        return ["[配線] src/ に .bas が1本も読めません(fail-closed)"]
+    problems: list[str] = []
+    for fn in sorted(WIRED_BLOCKS):
+        if counts[fn] == 0:
+            problems.append(
+                f"[配線] {fn}() が src/ で1件も呼ばれていません"
+                f"(15章{WIRED_BLOCKS[fn]}が「差し込む」と定める)")
+    return problems
+
+
 HEADING_RE = re.compile(r"^#{2,4}\s+(.*)$")
 FENCE_RE = re.compile(r"^```")
 EXAMPLE_LEAD_RE = re.compile(r"^\s*例[:：]")
@@ -471,6 +541,9 @@ def main() -> int:
                     help="未実装関数も差分として数える(T-23の最終確認用)。"
                          "突合先ディレクトリ不在・対象0件のときも不合格(exit 1)にする"
                          "(--strict なしはこれらを exit 0 でスキップ)")
+    ap.add_argument("--list", action="store_true",
+                    help="配線ゲート(WIRED_BLOCKS)の呼び出し件数を9関数すべて"
+                         "一覧表示する(既定は問題がある行だけを表示)")
     args = ap.parse_args()
 
     spec_path = Path(args.spec).resolve()
@@ -544,7 +617,22 @@ def main() -> int:
     diffs += run_schema_checks(code)
 
     print("-" * 78)
-    print(f"一致: {matched}件 / 差分(スキーマJSON違反を含む): {diffs}件 / "
+    print("配線ゲート (裁定書37 B-02。15章が定める Block* 9関数の呼び出し件数)")
+    wiring_counts, wiring_ok = block_wiring_counts()
+    wiring_problems = check_block_wiring()
+    if not wiring_ok:
+        print("  [配線] src/ に .bas が1本も読めません(fail-closed)")
+    elif args.list or wiring_problems:
+        for fn in sorted(WIRED_BLOCKS):
+            status = "OK" if wiring_counts[fn] > 0 else "NG"
+            print(f"  {status:<4}  {fn} [15章{WIRED_BLOCKS[fn]}]: "
+                  f"{wiring_counts[fn]}件")
+    else:
+        print(f"  OK    {len(WIRED_BLOCKS)}関数すべて1件以上配線済み")
+    diffs += len(wiring_problems)
+
+    print("-" * 78)
+    print(f"一致: {matched}件 / 差分(スキーマJSON違反・配線ゲートを含む): {diffs}件 / "
           f"未実装(スキップ): {len(skipped)}件")
     if skipped:
         print(f"  未実装: {', '.join(skipped)}")

@@ -290,6 +290,11 @@ PURE_ALLOWLIST = [
     # modTestsPure22: W12-A(裁定書34 §1.3)の純層3本。data_dir.txt の1行の
     #   親フォルダ(modUtil.PointerParentOf)。modTestsPure21.RunAll の末尾から呼ぶ。
     "modTestsPure22",
+    # modTestsPure23: W14(裁定書37 班1)の純層。BlockGuard配線(7 step種の
+    #   system組立が末尾でBlockGuard()と一致すること・壁打ちは非配線)と
+    #   modPii.HasPii(URLスパンの読み飛ばし・従来検知の回帰)を叩く。
+    #   modTestsPure22.RunAll の末尾から呼ぶ。
+    "modTestsPure23",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON
