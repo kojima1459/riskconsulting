@@ -61,6 +61,15 @@ Private Const LOG_MAX_ROWS_DEFAULT As Long = 2000
 ' 裁定書28: data_dir の下のログ置き場(csv の複製先)。
 Private Const LOG_CSV_FOLDER As String = "ログ"
 
+' EditRatio(17章 Z-51)の文字計数表。文字コードを添字にした計数表と、その
+'   要素が「今回の呼び出しで書かれたか」を示す世代印。呼び出しごとに
+'   65,536要素を 0 で埋め直す費用を避けるためだけの作業領域で、呼び出しを
+'   またいで意味のある状態は持たない(結果は毎回入力だけで決まる)。
+Private gErCount() As Long
+Private gErStampAt() As Long
+Private gErStamp As Long
+Private gErReady As Boolean
+
 ' ============================================================================
 ' 純ロジック(Excel非依存。LibreOffice実行テストで直接叩ける。14章§6)
 ' ----------------------------------------------------------------------------
@@ -134,6 +143,103 @@ Public Function CsvLineOf(ByRef fields() As String) As String
 End Function
 
 ' ============================================================================
+' EditRatio - AI原案と人の修正後の「文字ベースの差分率」(0〜100の整数)
+' ----------------------------------------------------------------------------
+' 17章 Z-51(効果測定の機械計測)の計測核。`sN_json`(AI原案)と `sN_edited`
+'   (人が直したもの)を渡すと「どれだけ直したか」を百分率で返す。
+'
+' 定義(**ここが唯一の値源**): 両方を**文字の多重集合**(どの文字が何個ある
+'   か)とみなし、共通する個数 common を数えて
+'       差分率 = 100 x (LenA + LenB - 2 x common) / (LenA + LenB)
+'   を四捨五入した整数を返す。同一なら 0、共通文字が1つも無ければ 100。
+'   両方空なら 0、片方だけ空なら 100。
+'
+' なぜ編集距離(レーベンシュタイン)にしないか: 編集距離は O(|a|x|b|) で、
+'   1セル上限 32,000字(16章 E-22)どうしでは 10億回の走査になり、案件保存の
+'   たびに数分固まる(裁定書40 P-M3 で同じ轍を踏んだ)。多重集合の差は
+'   O(|a|+|b|) で、**文字の並べ替えだけの修正は 0% と出る**代わりに加筆・
+'   削除・書き換えの量を実用十分な精度で表す。この割切りは「どれだけ直したか」
+'   の傾向を月次で集計する Z-51 の用途に合わせたもので、厳密な差分表示には
+'   使わない(画面に差分を出す機能はこの関数を使わないこと)。
+'
+' 数え方の実装: 文字コード(0〜65535)を添字にした計数表をモジュール変数として
+'   1度だけ確保し、呼び出しごとに増える**世代印**で各要素の有効/無効を決める。
+'   毎回 65,536要素を 0 で埋め直す費用を避けるための作法であり、計算結果は
+'   埋め直す版と同じである(世代印が上限へ近づいたら表ごと作り直す)。
+'   AscW は符号付き16bitを返すので 65536 を足して正へ直す
+'   (modKnowledgeRank.CharCodes / modPii.CodePointOf と同じ作法)。
+' ============================================================================
+Public Function EditRatio(ByVal draftText As String, ByVal editedText As String) As Long
+    Dim la As Long, lb As Long
+    Dim i As Long, v As Long, common As Long, diff As Long
+
+    la = Len(draftText)
+    lb = Len(editedText)
+
+    ' 両方空 = 直していない(0%)。片方だけ空 = 全とっかえ(100%)。
+    If la = 0 Then
+        If lb = 0 Then Exit Function
+        EditRatio = 100
+        Exit Function
+    End If
+    If lb = 0 Then
+        EditRatio = 100
+        Exit Function
+    End If
+    ' 完全一致の近道(大小文字・かな漢字はそのまま比較する=vbBinaryCompare)。
+    If StrComp(draftText, editedText, vbBinaryCompare) = 0 Then Exit Function
+
+    If Not gErReady Then
+        ReDim gErStampAt(0 To 65535)
+        ReDim gErCount(0 To 65535)
+        gErReady = True
+        gErStamp = 0
+    End If
+    If gErStamp >= 2000000000 Then
+        ' 世代印の桁が尽きる前に表ごと 0 へ戻す(ReDim は全要素を 0 にする)。
+        ReDim gErStampAt(0 To 65535)
+        gErStamp = 0
+    End If
+    gErStamp = gErStamp + 1
+
+    For i = 1 To la
+        v = AscW(Mid$(draftText, i, 1))
+        If v < 0 Then v = v + 65536
+        If gErStampAt(v) = gErStamp Then
+            gErCount(v) = gErCount(v) + 1
+        Else
+            gErStampAt(v) = gErStamp
+            gErCount(v) = 1
+        End If
+    Next i
+
+    For i = 1 To lb
+        v = AscW(Mid$(editedText, i, 1))
+        If v < 0 Then v = v + 65536
+        If gErStampAt(v) = gErStamp Then
+            If gErCount(v) > 0 Then
+                common = common + 1
+                gErCount(v) = gErCount(v) - 1
+            End If
+        End If
+    Next i
+
+    diff = la + lb - 2 * common
+    ' 四捨五入(VBA の Round は銀行丸めなので使わない)。
+    EditRatio = Int((100# * diff) / (la + lb) + 0.5)
+End Function
+
+' EditRatioNote - usage_log の detail に載せる1項目 `edit_ratio_sN=R` を組む
+'   (17章 Z-51・13章§2.4)。書式を1箇所に閉じ、呼び出し側が独自に組み立てる
+'   のを防ぐ。stepNo が 1〜5 の外、ratio が 0〜100 の外なら空文字を返す。
+'   複数段を並べるときの区切りは呼び出し側が ";" でつなぐ。
+Public Function EditRatioNote(ByVal stepNo As Long, ByVal ratio As Long) As String
+    If stepNo < 1 Or stepNo > 5 Then Exit Function
+    If ratio < 0 Or ratio > 100 Then Exit Function
+    EditRatioNote = "edit_ratio_s" & CStr(stepNo) & "=" & CStr(ratio)
+End Function
+
+' ============================================================================
 ' LogError - err_log へ1行記録する(16章の全エラーコード共通の口)。
 ' ----------------------------------------------------------------------------
 '   errCode   : E01xx-E07xx(正は16章§1の code 列)
@@ -199,12 +305,25 @@ Public Sub LogUsage(ByVal eventName As String, ByVal caseId As String, ByVal det
     Dim r As Long
     r = NextRow(ws)
 
-    PutText ws, hdr, r, "logged_at", modUtil.NowStamp()
+    Dim stamp As String
+    stamp = modUtil.NowStamp()
+
+    PutText ws, hdr, r, "logged_at", stamp
     PutText ws, hdr, r, "event", eventName
     PutText ws, hdr, r, "case_id", caseId
     PutText ws, hdr, r, "detail", TruncDetail(detail)
 
     TrimLog ws
+
+    ' csv 複製(裁定書28 と同じ理由。13章§2.4 の usage_log の列順そのまま)。
+    ' 17章 Z-51 の効果測定は各自の data_dir からこの csv を集めて数えるので、
+    ' シートにしか残らないと集められない(本体xlsm は毎朝 D: から消える)。
+    Dim csvFields(0 To 3) As String
+    csvFields(0) = stamp
+    csvFields(1) = eventName
+    csvFields(2) = caseId
+    csvFields(3) = TruncDetail(detail)
+    AppendCsv LOG_SHEET_USAGE, CsvLineOf(csvFields)
     Exit Sub
 
 Failed:

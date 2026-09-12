@@ -356,3 +356,121 @@ Private Sub AppendId(ByRef acc As String, ByVal idText As String)
     If LenB(acc) > 0 Then acc = acc & CS3_SEP
     acc = acc & idText
 End Sub
+
+' ============================================================================
+' 効果測定(17章 Z-51)の記録。AI原案(`sN_json`)と人の修正後(`sN_edited`)の
+'   差分率を usage_log へ残す。差分率の算数は純関数 modLog.EditRatio、detail の
+'   書式は modLog.EditRatioNote が唯一持ち、ここは「原案を読んで渡す」だけ。
+'   modCaseStore が 30,000字契約で満杯のためこちらへ置いた(呼び出しは
+'   modCaseStore.SaveData / SetReportPath から。依存の向きは従来どおり
+'   modCaseStore -> modCaseStore3 の一方向)。
+'   記録の失敗でアプリを止めない(modLog と同じ扱い。Debug.Print には残す)。
+' ============================================================================
+
+' EditedStepNoOf - data_key が `sN_edited`(人が直したもの)なら N を返す純核。
+'   それ以外(`sN_json` / `input_*` / 空 / 形違い)は 0。「今保存したのは人の
+'   修正後か」を見分ける唯一の値源で、data_key の綴りを2箇所に書かないために
+'   ここへ置く。N は 1〜5(S5=顧客向け提案書まで)。
+Public Function EditedStepNoOf(ByVal dataKey As String) As Long
+    Dim t As String
+    Dim n As Long
+
+    t = Trim$(dataKey)
+    If Len(t) <> 9 Then Exit Function
+    If StrComp(Left$(t, 1), "s", vbBinaryCompare) <> 0 Then Exit Function
+    If StrComp(Mid$(t, 3), "_edited", vbBinaryCompare) <> 0 Then Exit Function
+    Select Case Mid$(t, 2, 1)
+        Case "1", "2", "3", "4", "5"
+            n = CLng(Mid$(t, 2, 1))
+    End Select
+    EditedStepNoOf = n
+End Function
+
+' LogEditRatioOnSave - 案件保存時(modCaseStore.SaveData が sN_edited を書けた
+'   とき)の1件。原案が無い段は記録しない(比べる相手が無いのであって
+'   「100%直した」ではない。0 とも取り違えない)。
+Public Sub LogEditRatioOnSave(ByVal caseId As String, ByVal dataKey As String, _
+                              ByVal editedText As String)
+    On Error GoTo Failed
+
+    Dim stepNo As Long
+    Dim draftText As String, note As String
+
+    stepNo = EditedStepNoOf(dataKey)
+    If stepNo = 0 Then Exit Sub
+
+    draftText = DraftJsonOf(caseId, stepNo)
+    If LenB(Trim$(draftText)) = 0 Then Exit Sub
+
+    note = modLog.EditRatioNote(stepNo, modLog.EditRatio(draftText, editedText))
+    If LenB(note) = 0 Then Exit Sub
+
+    modLog.LogUsage "edit_ratio", caseId, note
+    Exit Sub
+
+Failed:
+    Debug.Print "[" & CS3_SRC & ":効果測定の記録失敗(保存時)] " & caseId & " " & dataKey
+End Sub
+
+' LogEditRatiosOnReport - レポート出力時(modCaseStore.SetReportPath)の1行。
+'   その時点の s1..s4 を「;」でつないで `edit_ratio_s1=..;edit_ratio_s2=..` の
+'   形にする(13章§2.4)。人が直していない段(sN_edited が空)と原案が無い段は
+'   項目ごと落とす=「直していない」と「0%だった」を取り違えないため 0 を
+'   並べない。1件も無ければ行そのものを書かない。
+Public Sub LogEditRatiosOnReport(ByVal caseId As String)
+    On Error GoTo Failed
+
+    Dim i As Long
+    Dim editedText As String, draftText As String
+    Dim one As String, note As String
+
+    For i = 1 To 4
+        editedText = modCaseStore.LoadData(caseId, "s" & CStr(i) & "_edited")
+        If LenB(Trim$(editedText)) > 0 Then
+            draftText = DraftJsonOf(caseId, i)
+            If LenB(Trim$(draftText)) > 0 Then
+                one = modLog.EditRatioNote(i, modLog.EditRatio(draftText, editedText))
+                If LenB(one) > 0 Then
+                    If LenB(note) > 0 Then note = note & CS3_SEP
+                    note = note & one
+                End If
+            End If
+        End If
+    Next i
+
+    If LenB(note) = 0 Then Exit Sub
+    modLog.LogUsage "edit_ratio_report", caseId, note
+    Exit Sub
+
+Failed:
+    Debug.Print "[" & CS3_SRC & ":効果測定の記録失敗(出力時)] " & caseId
+End Sub
+
+' DraftJsonOf - 人が直した相手 = 画面に出ていた原案。13章§2.2 の参照優先から
+'   sN_edited を除いたもの(N=2,3 は sNr_json > sN_json / N=1,4 は sN_json)で、
+'   その判断は純核 modCaseStore.ResolveDataKey が唯一の値源(答えを2箇所に
+'   書かない)。S5 に改訂パスは無く ResolveDataKey の範囲(1〜4)の外なので
+'   s5_json を直に読む。
+Private Function DraftJsonOf(ByVal caseId As String, ByVal stepNo As Long) As String
+    Dim n As String
+    Dim revisedText As String, jsonText As String
+
+    n = CStr(stepNo)
+    If stepNo = 5 Then
+        DraftJsonOf = modCaseStore.LoadData(caseId, "s5_json")
+        Exit Function
+    End If
+    If stepNo = 2 Or stepNo = 3 Then
+        revisedText = modCaseStore.LoadData(caseId, "s" & n & "r_json")
+    End If
+    jsonText = modCaseStore.LoadData(caseId, "s" & n & "_json")
+
+    Select Case modCaseStore.ResolveDataKey(stepNo, False, _
+                                            LenB(Trim$(revisedText)) > 0, _
+                                            LenB(Trim$(jsonText)) > 0)
+        Case "s" & n & "r_json"
+            DraftJsonOf = revisedText
+        Case "s" & n & "_json"
+            DraftJsonOf = jsonText
+    End Select
+End Function
