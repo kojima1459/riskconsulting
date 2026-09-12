@@ -432,6 +432,35 @@ python3 tools/ship_check.py
 - (4)(5) は Windows 実機が要るため本スクリプトでは**未実施**として申告する。
   合格扱いにはしない
 
+### `bin_roundtrip.py --final` - 一段化(Z-42)の産物の検査(裁定書38 班G)
+
+```bash
+python3 build/build_rpn.py --prod     # 第1段: dist/リスク提案ナビ.xlsm
+python3 build/build_rpn.py --final    # 一段化: dist/final/リスク提案ナビ.xlsm + ui/
+python3 tools/bin_roundtrip.py --final          # dist/final/ を7条件で見る
+python3 tools/ship_check.py --final             # ⑨ 第2段の産物の4条件
+python3 tools/lo_xlsm.py --book dist/final/リスク提案ナビ.xlsm
+python3 build/ovba_write.py --selftest          # ライター単体の自己テスト
+```
+
+`--final` を付けたときだけ足して見るもの(既定の第1段検査は**一切変えない**):
+
+- 期待するモジュール集合に UserForm `frmNaviHtml` を足す(本文の期待値は
+  `src/ui/navi/frmNaviHtml.frm` の `Begin…End` より後ろから作る)
+- `frmNaviHtml` を「配布物にクラスモジュールは載せない」規則の**例外**にする
+  (designer は dir 上はクラスと同型 = `0x0022` + `MODULEPRIVATE`)。
+  他のクラスは引き続き禁止。designer の `VB_Base` はフォーム固有の値なので
+  クラスの固定値 (`CLASS_VB_BASE`) ではなく `ovba_write.FORM_VB_BASE` と突合する
+- **[7]** 参照設定に `SHDocVw` と `MSForms` が在り許可外が無いこと、
+  designer ストレージ `frmNaviHtml/` の4本(`\x01CompObj` `\x03VBFrame` `f` `o`)が
+  在ること。**ここが ship_check ⑨ では見ていない部分**である
+  (⑨ は参照設定名までしか見ない。designer ストリームを1本落とすと ⑨ は緑のまま
+  [7] だけが赤くなる。2026-09-12 の変異注入で実演済み)
+
+**言えることの上限**: 当方に実 Excel は無い。UserForm の描画(MSForms)と
+WebBrowser の実行(SHDocVw)、255字超のインライン入力規則の受け取りは
+**LibreOffice では検証できない**(17章 Z-43)。実機での確認手順は docs/24 §8.1-6。
+
 ## 補足: `build/template_skeleton.xlsm` について
 
 `build/build_rpn.py` はテンプレートの**本物の `vbaProject.bin`** を成果物へ引き継ぎ、

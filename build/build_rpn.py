@@ -2669,6 +2669,241 @@ endlocal
 UI_DIR_NAME = "ui"
 
 
+# ===========================================================================
+# 第2段の一段化(17章 Z-42): --final
+# ---------------------------------------------------------------------------
+# 何をするか:
+#   入力 = 第1段の産物 dist/リスク提案ナビ.xlsm(標準モジュールだけ)
+#   出力 = dist/final/リスク提案ナビ.xlsm(**名前は変えない**)+ 同じ場所へ ui/
+#   足すもの(build/win/import_navi_modules.ps1 の (1)(2)(5) に相当):
+#     (1) UserForm frmNaviHtml(.frm のコード部 + .frx の designer ストリーム)
+#     (2) 参照設定 SHDocVw(Microsoft Internet Controls)と MSForms
+#     (5) case_data!data_key の入力規則(32値・382字)
+#   ps1 の (3) config・(4) 案件一覧 archived_at・(6) run_log!step の ch・
+#   (7) ui/ の複写は、**第1段が既にやっている**(2026-09-12・W15 班G 実測)。
+#   ps1 は予備として残す(実Excel が要る手順が必要になったときの逃げ道)。
+#
+# **言えることの上限**(ここを曖昧にしない):
+#   当方に実 Excel は無い。CI で言えるのは
+#     ・LibreOffice がブックを開けてモジュール集合が一致しコンパイルが通ること
+#       (tools/lo_xlsm.py)
+#     ・bin を読み戻してモジュール本文がバイト一致すること(tools/bin_roundtrip.py)
+#     ・tools/ship_check.py --final の9条件
+#   だけである。**UserForm の描画(MSForms)と WebBrowser(SHDocVw)の実行は
+#   LibreOffice では検証できない**。髙橋さんの実機で1回だけ、
+#   「開く → VBE の [デバッグ]>[VBAProject のコンパイル] → HTML画面の起動」を
+#   確かめてもらう必要がある(12章§5.1・docs/24 §8.1)。
+# ===========================================================================
+FINAL_DIR_NAME = "final"
+FINAL_FORM_NAME = "frmNaviHtml"
+FINAL_FORM_FRM = os.path.join("src", "ui", "navi", "frmNaviHtml.frm")
+FINAL_FORM_FRX = os.path.join("src", "ui", "navi", "frmNaviHtml.frx")
+# case_data!data_key の入力規則。値源は 19章§3 = build/sheets_main.json の enums。
+FINAL_DV_SHEET = "case_data"
+FINAL_DV_COLUMN = "data_key"
+FINAL_DV_ENUM = "data_key"
+FINAL_DV_LAST_ROW = 51
+
+
+def _check_form_source_limits(frm_text: str) -> None:
+    """12章§2 の契約(30,000字 / 1物理行 1,000 CP932バイト)を .frm にも当てる。
+    ps1 が同じ検査をしていた(import_navi_modules.ps1)。落ちたら止める。"""
+    if len(frm_text) > MODULE_CONTRACT_LIMIT:
+        raise BuildError(f"{FINAL_FORM_FRM} が {MODULE_CONTRACT_LIMIT:,}字を超えています"
+                         f"({len(frm_text):,}字)")
+    for i, line in enumerate(frm_text.replace("\r\n", "\n").split("\n"), 1):
+        try:
+            n = len(line.encode("cp932"))
+        except UnicodeEncodeError as e:
+            raise BuildError(f"{FINAL_FORM_FRM}:{i} に CP932 で表せない文字があります: {e}")
+        if n > MAX_LINE_CP932_BYTES:
+            raise BuildError(f"{FINAL_FORM_FRM}:{i} が 1物理行 "
+                             f"{MAX_LINE_CP932_BYTES:,} CP932バイトを超えています({n})")
+
+
+def _add_data_key_validation(wb, sheets_data) -> str:
+    """case_data!data_key へ入力規則(リスト)を足す。ps1 の (5) に相当。
+
+    第1段は Excel のインライン入力規則の255字上限を理由にこの列を省いている
+    (build/sheets_main.json の dv_skipped)。ps1 は実Excel の COM で入れていた。
+    ここでは openpyxl で同じものを書く。**255字超のインラインリストを実Excel が
+    どう扱うかは実機でしか確かめられない**(LibreOffice は受け付ける)。
+    """
+    values = sheets_data["enums"][FINAL_DV_ENUM]
+    ws = wb[FINAL_DV_SHEET]
+    col = None
+    for c in range(1, ws.max_column + 1):
+        if ws.cell(1, c).value == FINAL_DV_COLUMN:
+            col = c
+            break
+    if col is None:
+        raise BuildError(f"{FINAL_DV_SHEET} に {FINAL_DV_COLUMN} 列がありません")
+    formula = '"' + ",".join(values) + '"'
+    target = (f"{get_column_letter(col)}2:"
+              f"{get_column_letter(col)}{FINAL_DV_LAST_ROW}")
+    dv = DataValidation(type="list", formula1=formula, allow_blank=True,
+                        showErrorMessage=True)
+    ws.add_data_validation(dv)
+    dv.add(target)
+    return f"{FINAL_DV_SHEET}!{target} ({len(values)}値・{len(formula)}字)"
+
+
+def build_final(src_book: str, out_book: str, root: str, sheets_data,
+                present_modules) -> None:
+    """第1段の産物から dist/final/ の完成品を作る(17章 Z-42)。"""
+    if not os.path.exists(src_book):
+        raise BuildError(f"第1段の産物がありません: {src_book}"
+                         "(先に `python3 build/build_rpn.py --prod` を走らせてください)")
+    if os.path.abspath(src_book) == os.path.abspath(out_book):
+        raise BuildError("入力と出力を同じパスにはできません")
+    if os.path.basename(out_book) != os.path.basename(src_book):
+        raise BuildError(f"出力の名前は {os.path.basename(src_book)} のままにしてください")
+
+    frm_path = os.path.join(root, FINAL_FORM_FRM)
+    frx_path = os.path.join(root, FINAL_FORM_FRX)
+    for p in (frm_path, frx_path):
+        if not os.path.exists(p):
+            raise BuildError(f"{os.path.relpath(p, root)} がありません(.frm と .frx は対で要ります)")
+    with open(frm_path, encoding="utf-8") as f:
+        frm_text = f.read()
+    with open(frx_path, "rb") as f:
+        frx = f.read()
+    _check_form_source_limits(frm_text)
+    print(f"  フォーム: {FINAL_FORM_FRM} ({len(frm_text):,}字) + "
+          f"{FINAL_FORM_FRX} ({len(frx):,} bytes)")
+
+    # --- (5) 入力規則を足したブックを一時保存 --------------------------------
+    wb = openpyxl.load_workbook(src_book, keep_vba=True)
+    dv_desc = _add_data_key_validation(wb, sheets_data)
+    print(f"  入力規則を追加: {dv_desc}")
+    with tempfile.NamedTemporaryFile(suffix=".xlsm", delete=False) as tmp:
+        tmp_path = tmp.name
+    wb.save(tmp_path)
+
+    # --- (1)(2) bin へフォームと参照設定を足す -------------------------------
+    with zipfile.ZipFile(tmp_path) as zin:
+        parts = {n: zin.read(n) for n in zin.namelist()}
+    os.unlink(tmp_path)
+    _patch_content_types(parts)
+    if "xl/vbaProject.bin" not in parts:
+        raise BuildError("第1段の産物に xl/vbaProject.bin がありません")
+    stage1_bin = parts["xl/vbaProject.bin"]
+    try:
+        final_bin = ovba_write.add_userform(stage1_bin, FINAL_FORM_NAME, frm_text, frx)
+    except ovba_write.OvbaWriteError as e:
+        raise BuildError(f"vbaProject.bin へフォームを足せませんでした: {e}")
+    parts["xl/vbaProject.bin"] = final_bin
+    print(f"  vbaProject.bin: {len(stage1_bin):,} -> {len(final_bin):,} bytes"
+          f"(フォーム1本 + 参照2本)")
+
+    os.makedirs(os.path.dirname(out_book), exist_ok=True)
+    base, ext = os.path.splitext(out_book)
+    staging = f"{base}.building{ext}"
+    _ordered = ["[Content_Types].xml", "_rels/.rels"]
+    with zipfile.ZipFile(staging, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for n in _ordered:
+            if n in parts:
+                zout.writestr(n, parts[n])
+        for n, data in parts.items():
+            if n not in _ordered:
+                zout.writestr(n, data)
+
+    errors = verify_final(staging, present_modules, root, sheets_data)
+    if errors:
+        failed = f"{base}.failed{ext}"
+        if os.path.exists(failed):
+            os.remove(failed)
+        os.replace(staging, failed)
+        raise BuildError("--final 自己検証 失敗:\n    - " + "\n    - ".join(errors)
+                         + f"\n  不良な出力: {failed}")
+    os.replace(staging, out_book)
+    print(f"  出力: {out_book} ({os.path.getsize(out_book):,} bytes)")
+
+
+def verify_final(book: str, present_modules, root: str, sheets_data) -> list:
+    """--final の産物を読み戻して確かめる(出来レース禁止: 実測だけを見る)。"""
+    errors: list = []
+    with zipfile.ZipFile(book) as z:
+        vba_bin = z.read("xl/vbaProject.bin")
+
+    # (a) モジュール集合 = 第1段の標準モジュール + フォーム1本
+    got = ovba_write.read_modules(vba_bin)
+    if FINAL_FORM_NAME not in got:
+        errors.append(f"フォーム {FINAL_FORM_NAME} が bin にありません")
+    elif got[FINAL_FORM_NAME]["type"] != "class":
+        errors.append(f"{FINAL_FORM_NAME} の MODULETYPE が designer(0x0022)ではありません")
+    want = {m["name"] for m in present_modules
+            if m.get("type") != "form" and m.get("ship") is not False}
+    missing = sorted(want - set(got))
+    if missing:
+        errors.append(f"第1段のモジュールが落ちています: {missing}")
+
+    # (b) 参照設定(SHDocVw / MSForms が在り、許可外が無い)
+    refs = ovba_write.read_reference_names(vba_bin)
+    for need in ("SHDocVw", "MSForms"):
+        if need not in refs:
+            errors.append(f"参照設定 {need} がありません(HTML画面が起動しません)")
+    for r in refs:
+        if r not in ("VBA", "Excel", "stdole", "Office", "SHDocVw", "MSForms"):
+            errors.append(f"許可していない参照設定があります: {r}")
+
+    # (c) designer ストレージ4本
+    try:
+        st = ovba_write.read_designer_storage(vba_bin, FINAL_FORM_NAME)
+    except ovba_write.OvbaWriteError as e:
+        st = {}
+        errors.append(str(e))
+    for name in ovba_write.FORM_STREAM_NAMES:
+        if name not in st:
+            errors.append(f"designer ストリーム {FINAL_FORM_NAME}/{name!r} がありません")
+    if st.get("\x03VBFrame") and not st["\x03VBFrame"].startswith(b"VERSION "):
+        errors.append("\\x03VBFrame がデザイナ定義になっていません")
+
+    # (d) PROJECT の BaseClass= と PROJECTwm
+    tree = ovba_write.read_cfb_tree(vba_bin)
+    proj = tree["PROJECT"].decode("cp932", errors="replace")
+    if f"BaseClass={FINAL_FORM_NAME}" not in proj.split("\r\n"):
+        errors.append(f"PROJECT に BaseClass={FINAL_FORM_NAME} 行がありません")
+    if (FINAL_FORM_NAME.encode("cp932") + b"\x00") not in tree["PROJECTwm"]:
+        errors.append(f"PROJECTwm に {FINAL_FORM_NAME} がありません")
+
+    # (e) p-code を持ち込んでいないこと(全 MODULEOFFSET=0)
+    dir_dec = ovba.ovba_decompress(tree["VBA"]["dir"])
+    offs = [struct.unpack("<I", body)[0]
+            for _o, rid, _s, body in ovba_write.iter_dir_records(dir_dec)
+            if rid == ovba_write.REC_MODULEOFFSET]
+    if any(offs):
+        errors.append(f"MODULEOFFSET が 0 でないモジュールがあります({sum(1 for o in offs if o)}本)")
+    if any(n.startswith("__SRP_") for n in tree.get("VBA", {})):
+        errors.append("p-code キャッシュ(__SRP_*)が混入しています")
+
+    # (f) フォーム本文が src/ の .frm と一致
+    with open(os.path.join(root, FINAL_FORM_FRM), encoding="utf-8") as f:
+        _d, _a, code = ovba_write.split_frm(f.read())
+    want_src = "\n".join(code).replace("\n", "\r\n").rstrip("\r\n")
+    if FINAL_FORM_NAME in got:
+        got_src = ovba_write.strip_attribute_lines(
+            got[FINAL_FORM_NAME]["source"]).decode("cp932").rstrip("\r\n")
+        if got_src != want_src:
+            errors.append("フォーム本文が src/ui/navi/frmNaviHtml.frm と一致しません")
+
+    # (g) 配布禁止文字列(prod と同じ表)
+    for h in forbidden_strings_in_bin(vba_bin, prod=True):
+        errors.append(f"配布禁止の文字列があります: {h}")
+
+    # (h) 入力規則
+    wb = openpyxl.load_workbook(book, keep_vba=True)
+    keys = set(sheets_data["enums"][FINAL_DV_ENUM])
+    found = False
+    for dv in wb[FINAL_DV_SHEET].data_validations.dataValidation:
+        vals = set((dv.formula1 or "").strip('"').split(","))
+        if vals == keys:
+            found = True
+    if not found:
+        errors.append(f"{FINAL_DV_SHEET}!{FINAL_DV_COLUMN} の入力規則({len(keys)}値)がありません")
+    return errors
+
+
 def write_ui_assets(dist_dir: str, root: str) -> int:
     """<repo>/ui/ を dist/ui/ へ複写する(裁定書34 §1.4)。
 
@@ -2756,6 +2991,11 @@ def main():
                       help="開発ビルド(config mock_llm=TRUE)。既定出力: リスク提案ナビ_dev.xlsm")
     mode.add_argument("--prod", action="store_true",
                       help="本番ビルド(config mock_llm=FALSE)。既定出力: リスク提案ナビ.xlsm")
+    mode.add_argument("--final", action="store_true",
+                      help="第2段の一段化(17章 Z-42)。第1段の産物 dist/リスク提案ナビ.xlsm へ "
+                           "UserForm(frmNaviHtml)と参照設定(SHDocVw/MSForms)と "
+                           "case_data!data_key の入力規則を足し、dist/final/ へ書く。"
+                           "**実Excel での確認は別途1回必要**(12章§5.1)")
     mode.add_argument("--kb", action="store_true",
                       help="ナレッジブック(マクロ無し.xlsx)をビルドする(13章§3・17章T-03)。"
                            "既定出力: <root>/dist/ナレッジブック.xlsx。"
@@ -2780,6 +3020,37 @@ def main():
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
+
+    if args.final:
+        try:
+            sheets_data, _sheets = load_sheets(args.sheets)
+            modules = select_variant_paths(load_manifest(args.modules), False)
+            present, _missing = validate_modules(modules, root, True)
+            src_book = os.path.abspath(args.out) if args.out else os.path.join(
+                root, "dist", "リスク提案ナビ.xlsm")
+            out_book = os.path.join(root, "dist", FINAL_DIR_NAME,
+                                    os.path.basename(src_book))
+            print("=== build_rpn.py (final: 第2段の一段化・17章 Z-42) ===")
+            print(f"入力: {src_book}")
+            print(f"出力: {out_book}")
+            _sweep_build_leftovers(os.path.dirname(out_book))
+            shipped = _shipped_modules(present, False)
+            build_final(src_book, out_book, root, sheets_data, shipped)
+        except BuildError as e:
+            sys.exit(f"ERROR: {e}")
+        write_ui_assets(os.path.dirname(out_book), root)
+        print("\n自己検証 OK: モジュール集合(第1段 + frmNaviHtml) / "
+              "参照設定(SHDocVw・MSForms を含み許可外なし) / "
+              "designer ストレージ4本 / PROJECT の BaseClass= と PROJECTwm / "
+              "全 MODULEOFFSET=0(p-code 無し) / "
+              "フォーム本文が src/ui/navi/frmNaviHtml.frm と一致 / "
+              "配布禁止文字列なし / case_data!data_key の入力規則")
+        print("※ **実 Excel での確認が1回だけ別途必要**: 開く → VBE の "
+              "[デバッグ]>[VBAProject のコンパイル] → HTML画面の起動。"
+              "MSForms の描画と SHDocVw の実行は LibreOffice では検証できない"
+              "(12章§5.1・docs/24 §8.1)。")
+        print("\nDone.")
+        return
 
     if args.kb:
         kb_json_path = os.path.abspath(args.sheets_kb)
