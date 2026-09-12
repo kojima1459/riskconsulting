@@ -49,6 +49,8 @@ GATES = [
      r"自己検証 OK|Done"),
     ("build-kb",     [sys.executable, "build/build_rpn.py", "--kb"],
      r"自己検証 OK|Done"),
+    ("build-final",  [sys.executable, "build/build_rpn.py", "--final"],
+     r"自己検証 OK|Done"),  # 一段化: frm/frx と参照設定を bin へ(裁定書38 Z-42)。build-prod の後
     ("sheet",        [sys.executable, "tools/sheet_check.py"],
      r"OK: 全\d+項目一致"),
     ("sheet-kb",     [sys.executable, "tools/sheet_check.py", "--kb"],
@@ -65,6 +67,11 @@ GATES = [
      r"結果: OK .*6条件"),
     ("lo-xlsm",      [sys.executable, "tools/lo_xlsm.py"],
      r"結果: OK 3条件"),
+    ("bin-rt-final", [sys.executable, "tools/bin_roundtrip.py", "--final"],
+     r"結果: OK"),  # final の参照設定と designer 4本(裁定書38 Z-42)
+    ("lo-xlsm-final", [sys.executable, "tools/lo_xlsm.py", "--book",
+                       "dist/final/リスク提案ナビ.xlsm"],
+     r"結果: OK 3条件"),  # LO が frmNaviHtml 込みで読めてコンパイルできる
     ("prompt-diff",  [sys.executable, "tools/prompt_diff.py", "--strict"],
      r"一致: \d+件"),
     ("dossier",      [sys.executable, "tools/dossier_check.py"],

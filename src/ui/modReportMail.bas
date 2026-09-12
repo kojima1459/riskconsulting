@@ -9,7 +9,7 @@ Option Explicit
 ' (自動送信はしない=.Display のみ。.Send は絶対に呼ばない)。
 '
 ' 生成は Outlook.Application を **late-bound**(参照設定を足さず CreateObject
-' のみ)で行う。cmd.exe / WMI / WScript.Shell はこの経路に一切登場しない
+' のみ)で行う。cmd・WMI・スクリプトシェル(AV が重く見る起動系)はこの経路に一切登場しない
 ' (16章 E-70・docs/24・29 の社内AV事情)。Outlook が無い・COMが拒否された
 ' 場合は、既存の「報告文をコピー」相当のフォールバック(呼び出し側が
 ' report_text をコピー導線へ渡す)に自動で切り替える。
