@@ -166,6 +166,46 @@ def block_wiring_counts() -> tuple[dict[str, int], bool]:
     return counts, read_ok
 
 
+_CALLSITE_RE = re.compile(r"\b(Build\w+System)\s*\(")
+# 15章§1.3 の例外=壁打ち。案件チャット(BuildChatSystem)は15章§1.3 の7本に
+# 含まれない(ガード要否は Z-52 で裁定)ため、ここでは対象外として明示する。
+_CALLSITE_EXEMPT = {"BuildSparringSystem", "BuildChatSystem"}
+
+
+def check_guard_callsites() -> list[str]:
+    """司令塔検収(W14 抜き打ち): 配線ゲートは「1件以上呼ばれている」しか見ない
+    ので、9代入点のうち1つから AsmGuarded を外しても緑のままだった(実演済み)。
+    そこで system 組立関数 Build*System を呼ぶ行は、modPromptsOps 自身
+    (AsmS4System の内側で包む)と _CALLSITE_EXEMPT を除き、同じ行で AsmGuarded(
+    に包まれていることを要求する。定義行・コメント行・src/test は対象外。
+    S4 は modPromptsOps.AsmS4System の戻り値代入行が AsmGuarded( を含むことを見る。"""
+    problems: list[str] = []
+    s4_guarded = False
+    for path in sorted(WIRING_ROOT.rglob("*.bas")):
+        rel = path.relative_to(WIRING_ROOT)
+        if "test" in rel.parts:
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if path.name == "modPromptsOps.bas":
+            s4_guarded = any(
+                l.lstrip().startswith("AsmS4System =") and "AsmGuarded(" in l
+                for l in lines)
+            continue
+        for no, line in enumerate(lines, 1):
+            if line.strip().startswith("'") or _WIRE_DEF_RE.match(line):
+                continue
+            m = _CALLSITE_RE.search(line)
+            if not m or m.group(1) in _CALLSITE_EXEMPT:
+                continue
+            if "AsmGuarded(" not in line:
+                problems.append(
+                    f"[代入点] {rel}:{no} の {m.group(1)}() が AsmGuarded( に包まれていません"
+                    f"(裁定書37 B-01: 9代入点は全て AsmGuarded を通す)")
+    if not s4_guarded:
+        problems.append("[代入点] modPromptsOps.AsmS4System の戻り値が AsmGuarded( で包まれていません")
+    return problems
+
+
 def check_block_wiring() -> list[str]:
     """WIRED_BLOCKS の各関数が1件以上呼ばれているかを検査する。
     戻り値は問題メッセージの一覧(空=全件配線済み)。fail-closed。"""
@@ -619,7 +659,7 @@ def main() -> int:
     print("-" * 78)
     print("配線ゲート (裁定書37 B-02。15章が定める Block* 9関数の呼び出し件数)")
     wiring_counts, wiring_ok = block_wiring_counts()
-    wiring_problems = check_block_wiring()
+    wiring_problems = check_block_wiring() + check_guard_callsites()
     if not wiring_ok:
         print("  [配線] src/ に .bas が1本も読めません(fail-closed)")
     elif args.list or wiring_problems:
@@ -629,6 +669,9 @@ def main() -> int:
                   f"{wiring_counts[fn]}件")
     else:
         print(f"  OK    {len(WIRED_BLOCKS)}関数すべて1件以上配線済み")
+    for msg in wiring_problems:
+        if msg.startswith("[代入点]"):
+            print(f"  NG    {msg}")
     diffs += len(wiring_problems)
 
     print("-" * 78)
