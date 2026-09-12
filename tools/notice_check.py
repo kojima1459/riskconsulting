@@ -296,14 +296,23 @@ def check_dom_ground(verbose: bool,
     if verbose:
         print(f"[notice_check] {summary}")
 
+    # 件数は**実際に回した判定を1本ずつ数える**(裁定書43 §2 Y-7)。以前は
+    # `record("実DOM SEC-09", 4)` と定数だったため、下の4本を丸ごと消しても
+    # 要点行が1文字も変わらず exit 0 になった(検証者が実測)。n_sec09 を
+    # 判定の直前で +1 するので、判定を削れば件数が必ず減る。
+    n_sec09 = 0
+
+    n_sec09 += 1
     if hit0:
         problems.append(
             f"meta.ground_unmatched が空なのに「{NOTE_HEAD}」がカード{hit0}に"
             "出ています(18章§3 SEC-09。判定が反転している疑い)")
+    n_sec09 += 1
     if hit1 != [0]:
         problems.append(
             f"meta.ground_unmatched=[\"E1\"] のとき印が1枚目のカードだけに"
             f"出ていません(実際の位置={hit1})")
+    n_sec09 += 1
     if len(p2["cards"]) < 2:
         problems.append("パスP2 でニューリスクを2枚にできていません(検査が空振り)")
     elif hit2 != [1]:
@@ -311,6 +320,7 @@ def check_dom_ground(verbose: bool,
             f"meta.ground_unmatched=[\"E2\"] のとき印が2枚目のカードだけに"
             f"出ていません(実際の位置={hit2}。E採番は出現順の1始まり="
             "modGround.GroundNotes と同じ数え方)")
+    n_sec09 += 1
     if hit3:
         problems.append(
             f"範囲外の番号 [\"E9\"] で「{NOTE_HEAD}」がカード{hit3}に出ています"
@@ -321,7 +331,7 @@ def check_dom_ground(verbose: bool,
     # ここにも実DOMの回帰が無かった(裁定書40 Q-M2 の横展開)。
     # P0〜P3 の4通りを**実際に**描いて測った(node が無ければここへ来ない)。
     if checked is not None:
-        checked.record("実DOM SEC-09", 4)
+        checked.record("実DOM SEC-09", n_sec09)
     rows0 = p0["rows"]
     if not p0.get("hasSource") or not rows0:
         problems.append("SEC-14(sec-source)の主表が1行も描かれていません(検査が空振り)")
@@ -525,6 +535,9 @@ def check_banner_wire(verbose: bool,
                                      re.sub(r"\s+_\s*\n\s*", " ", text)))
         true_calls += len(re.findall(r"DrawAllSteps\s+caseId,\s*True",
                                      re.sub(r"\s+_\s*\n\s*", " ", text)))
+    # この1本も配線の判定なので、他の点と同じカウンタで数える(裁定書43 §2 Y-7。
+    # 以前は record(…, _WIRE_N[0] + 1) とリテラルを足していた=同じ型)。
+    _WIRE_N[0] += 1
     if true_calls != 2:
         problems.append(
             f"afterRun=True を渡している呼び口が{true_calls}箇所あります"
@@ -532,7 +545,7 @@ def check_banner_wire(verbose: bool,
     summary = (f"照合 {_WIRE_N[0]}点 / afterRun=True の呼び口 "
                f"{true_calls}箇所(期待2)")
     if checked is not None:
-        checked.record("E-02 配線", _WIRE_N[0] + 1)
+        checked.record("E-02 配線", _WIRE_N[0])
     if verbose:
         print(f"[notice_check] {summary}")
     return (problems, summary)

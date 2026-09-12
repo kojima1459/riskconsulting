@@ -10,10 +10,16 @@
     どこからも参照されていないものを機械で数える。
 
 参照集合(すべて1つでもヒットすればセーフ):
-    (a) 自モジュール外のコード、および全モジュールの文字列リテラル
-        (OnAction/OnTime/Run の宛先文字列を含む。実装は「定義行」と
-        「戻り値代入行」を除く全statementに対する \\bNAME\\b 走査で、
-        コードと文字列リテラルの両方を一度にカバーする)
+    (a) **コード**での出現(「定義行」と「戻り値代入行」を除く全statementの、
+        文字列リテラルを潰した姿に対する \\bNAME\\b 走査)。
+        **文字列リテラルの中は「宛先が特定できるとき」だけ**(裁定書43 §2 Y-6):
+        以前は裸の `"名前"` がどこにあっても使用に数えたため、(c) が宛先
+        モジュールで閉じているのに `"ShowAreaZzz"` を1つ書くだけで**迂回**
+        できた(無関係モジュールの未配線 Public が永久に緑)。いまは
+          (i)  `"モジュール名.名前"` … 宣言モジュールと一致するときだけ
+          (ii) `"名前"` 単独 … OnAction / OnTime / Application.Run の**宛先
+               引数**であるときだけ(W9.2 のブック名修飾なしの宛先が実在する)
+        の2形だけを配線に数える。増やさない。
         **自モジュール内の「自分の名札」は使用に数えない**(W15 Round2
         R2-16): `SRC & ".名前"` のような**ドットで始まる文字列リテラル**は
         ログの発生元表示であって呼び出しではない。これを使用に数えていた
@@ -22,7 +28,11 @@
         `"モジュール名.名前"` という**完全な**文字列なので、この規則では
         落ちない(同一モジュール内の宛先登録は従来どおり救済される)。
     (b) build/ tools/ 配下のテキストファイルの**実行される部分**
-        (手順書・ビルド入力の文字列から呼ばれる入口を救済する)
+        (手順書・ビルド入力の文字列から呼ばれる入口を救済する)。
+        ここも (a) と同じく**宛先で閉じる**(裁定書43 §2 Y-6):
+        `モジュール名.名前` か、OnAction/OnTime/Run の宛先だけを数える。
+        裸の名前が検問ツールの文言にしか無いものは `TEXT_ONLY_BASELINE` へ
+        理由付きで登記する(登記が陳腐化したら赤)。
         **コメントと docstring は救済しない**(W15 §3 X3-2): docs/ を外した
         のと同じ理屈で、`tools/` `build/` の**散文**に名前が出ることも
         「使っている」ことではない。実測: 呼出0件の Public が
@@ -31,9 +41,13 @@
         救済に数えるのは次だけ(`strip_nonexecutable_text`):
           - .py … コメント(`#`)と docstring を落とした残り
                   (**文字列リテラルと実コードだけ**)
-          - .md … フェンス付きコードブロックとインラインコード(`` ` ``)だけ
-                  (地の文は散文=コメントと同じ)
-          - .ps1/.bat/.yml/.ini/.cfg … 行コメント(`#` `REM` `::` `;`)を落とす
+          - .md … **フェンス付きコードブロックだけ**(裁定書43 §2 Y-5)。
+                  インラインコードも地の文(README は識別子をバッククォートで
+                  書くのが常態なので、`` `名前` `` 1組で救済されていた)
+          - .ps1/.bat/.yml/.ini/.cfg … 行コメント(`#` `REM` `::` `;`)を
+                  **行末コメントも含めて**落とす(裁定書43 §2 Y-5。以前は
+                  行頭だけだったので `$a=1  # 名前 を呼びます` が救済された)。
+                  マーカーは大小を区別せず、引用符の内側は落とさない
           - .json/.csv/.txt … データなのでそのまま(散文の器ではない)
         **docs/ は救済しない**(W15 Round2 R1-01): 仕様書に名前を書くことは
         「使っている」ことではない。仕様を先に書く本PJの手順では、
@@ -131,6 +145,10 @@ REGISTRY_ONLY_TEXT: dict[str, tuple[str, ...] | None] = {
     "build/modules.json": None,
     # 公開契約表(14章§6の写し)とモジュール一覧。**登記の本丸**。
     "tools/vba_lint.py": ("MODULE_REGISTRY", "CONTRACT"),
+    # 本ファイル自身の登記(裁定書43 §2 Y-6)。冒頭に書いた**自己言及の罠**その
+    # もので、`"modUIGuide.AdvActionRow"` と書いた瞬間に自分がその名前を救済して
+    # しまう(実測で踏んだ)。登記は使用ではないので自分の表も外す。
+    "tools/orphan_check.py": ("TEXT_ONLY_BASELINE",),
 }
 
 UNUSED_MARK = "@unused:"
@@ -362,6 +380,15 @@ def rescue_rule_for(module: str, name: str,
 STRING_LITERAL = re.compile(r'"[^"]*"')
 
 
+def blank_string_literals(stmt: str) -> str:
+    """文字列リテラルを空白で潰した「コードだけ」の姿を返す(裁定書43 §2 Y-6)。
+
+    コードでの出現は呼び出し、リテラルでの出現は宛先(Y-6 の (i)(ii))という
+    線を引くための下ごしらえ。長さを変えないので桁の意味は壊さない。
+    """
+    return STRING_LITERAL.sub(lambda m: " " * len(m.group(0)), stmt)
+
+
 def strip_self_labels(stmt: str, name: str) -> str:
     """自モジュール内の `SRC & ".名前"` を statement から落とす。
 
@@ -415,13 +442,48 @@ def blank_assignment_block(text: str, var_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 裸の名前の宛先(裁定書43 §2 Y-6)
+# ---------------------------------------------------------------------------
+# (c) は「宛先モジュール × 接尾辞の形」で閉じているのに、(a)(b) が**名前一致
+# だけ**だったため、`"ShowAreaZzz"` という裸のリテラルを1つ書くだけで (c) を
+# 迂回できた(無関係モジュールの未配線 Public が永久に緑)。そこで
+# **コードでない出現(文字列リテラル・外部テキスト)は、宛先が特定できるとき
+# だけ配線に数える**。宛先が特定できるのは次の2形だけ(増やさない):
+#   (i)  `モジュール名.名前` … 宛先が書かれている完全な形。宣言モジュールと
+#        一致するときだけ数える(別モジュールの同名は数えない)。
+#   (ii) `名前` 単独 … **実行コマンドの宛先引数**であるときだけ。VBA が実際に
+#        その文字列で実行する形(OnAction / OnTime / Application.Run)に限る。
+#        ブック名修飾なしの宛先は W9.2 の規約で実在する(modBootNavi の
+#        `Application.OnTime Now, "OpenNaviTool"`)ので、この形は残す。
+# コード(文字列リテラルの外)での出現は従来どおり「呼び出し」として数える。
+RUN_DEST_LITERAL = re.compile(
+    r'(?:OnAction"?\s*(?::=|[:=])\s*|OnTime\b[^"\n]*?,\s*|'
+    r'Application\.Run\s*\(?\s*|\.Run\s*\(?\s*)"([^"\n]+)"',
+    re.IGNORECASE)
+
+# 裸の名前が build/ tools/ の**実行されないテキスト**にしか出ない Public の登記
+# (裁定書43 §2 Y-6)。Y-6 で (b) を宛先モジュール認識にすると、検問ツールの
+# エラー文言や期待値文字列だけで緑だったものが表に出る。いずれも**本当に未配線**
+# だが、担当ファイルが班Y2 の外(裁定書43 §2 の担当表)なので、ここへ理由付きで
+# 登記して handoff する。**増やすときは必ず理由を書く**。配線されるか削除されて
+# この表が陳腐化したら赤にする(債務が黙って居座らないようにする)。
+TEXT_ONLY_BASELINE: dict[str, str] = {
+    "modUIGuide.AdvActionRow":
+        "裁定書43 §2 handoff: VBA の呼出元0件。tools/caption_check.py の"
+        "エラー文言(実行時に VBA を呼ばない文字列)だけで緑だった",
+    "frmNaviHtml.IsReady":
+        "裁定書43 §2 handoff: VBA の呼出元0件。tools/ui_check.py が持つ"
+        "期待値の VBA 断片(実行はしない)だけで緑だった",
+}
+
+# ---------------------------------------------------------------------------
 # 実行されない散文の除去(W15 §3 X3-2)
 # ---------------------------------------------------------------------------
 # docs/ を救済集合から外した理由(「名前を書くことは使うことではない」)は、
 # build/ tools/ の**コメント・docstring・README の地の文**にもそのまま当たる。
 # ここで落とすのは「人へ向けた散文」だけで、文字列リテラル・コード・データは
 # 残す(残さないと本物の配線まで赤くなる)。
-LINE_COMMENT_EXTS = {".ps1": ("#",), ".bat": ("REM ", "::", "rem "),
+LINE_COMMENT_EXTS = {".ps1": ("#",), ".bat": ("rem ", "::"),
                      ".yml": ("#",), ".yaml": ("#",),
                      ".ini": ("#", ";"), ".cfg": ("#", ";")}
 MD_FENCE = re.compile(r"^\s*(?:```|~~~)")
@@ -469,7 +531,14 @@ def strip_py_prose(text: str) -> str:
 
 
 def strip_md_prose(text: str) -> str:
-    """Markdown はコードブロックとインラインコードだけを残す(地の文=散文)。"""
+    """Markdown は**フェンス付きコードブロックだけ**を残す(裁定書43 §2 Y-5)。
+
+    以前はインラインコード(`` `名前` ``)も残していたが、README は識別子を
+    バッククォートで書くのが常態(`modPii` `frmNaviHtml` 等が実在)なので、
+    「地の文に名前が出ているだけ」がバッククォート1組で配線扱いになっていた
+    (検証者が実測)。地の文か否かは**囲み記号では決まらない**ので、行が
+    フェンスの内側にあるか、という位置の規則だけで線を引く。
+    """
     kept: list[str] = []
     in_fence = False
     for line in text.split("\n"):
@@ -478,19 +547,51 @@ def strip_md_prose(text: str) -> str:
             continue
         if in_fence:
             kept.append(line)
-        else:
-            kept.extend(MD_INLINE_CODE.findall(line))
     return "\n".join(kept)
 
 
 def strip_line_comments(text: str, markers: tuple) -> str:
+    """行コメントを**行末コメントも含めて**落とす(裁定書43 §2 Y-5)。
+
+    以前は「行頭がマーカーで始まる行」だけを落としていたので、
+    `$a = 1  # ZzTName を呼びます` のような**行末コメント**がそのまま救済集合に
+    残っていた(検証者が .ps1/.yml/.ini/.cfg で実測)。マーカーの照合は
+    大文字小文字を区別しない(.bat の `Rem ` が抜けていた)。
+    引用符の内側のマーカーはコメントではないので落とさない(本物の文字列を
+    消すと配線まで赤くなる=誤検知)。
+    """
+    low_markers = tuple(mk.lower() for mk in markers)
     out = []
     for line in text.split("\n"):
-        st = line.lstrip()
-        if any(st.startswith(mk) for mk in markers):
-            continue
-        out.append(line)
+        out.append(_cut_line_comment(line, low_markers))
     return "\n".join(out)
+
+
+def _cut_line_comment(line: str, low_markers: tuple) -> str:
+    """引用符の外で最初に現れたマーカー以降を落とす(行頭・行末どちらも)。"""
+    quote = ""
+    i = 0
+    low = line.lower()
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'":
+            quote = ch
+            i += 1
+            continue
+        for mk in low_markers:
+            if not low.startswith(mk, i):
+                continue
+            # 語形のマーカー(REM 等)は行頭か空白の直後だけをコメントとみなす。
+            if mk[0].isalpha() and i > 0 and not line[i - 1].isspace():
+                continue
+            return line[:i]
+        i += 1
+    return line
 
 
 def strip_nonexecutable_text(rel_path: str, text: str) -> str:
@@ -598,11 +699,19 @@ def run_checks(src_root: Path, verbose: bool,
 
     # 外部テキスト(救済する build/tools と、救済しない docs を分けて持つ)
     ext_text = load_external_text(REPO_ROOT, EXTERNAL_DIRS)
+    # 裸の名前で実行される宛先(Y-6 の (ii))。src の全statement と外部テキストの
+    # 両方から、OnAction / OnTime / Application.Run の宛先リテラルだけを集める。
+    run_dests = {d.lower() for d in RUN_DEST_LITERAL.findall(ext_text)}
+    for _mod, stmts in module_stmts.items():
+        for _lineno, stmt in stmts:
+            run_dests.update(d.lower() for d in RUN_DEST_LITERAL.findall(stmt))
+    baseline_seen: set[str] = set()
     # docs/ は「名前がそこにしか無い」を言い当てるためだけに読むので、
     # 散文を落とさない(落とすと docs-only の診断そのものが効かなくなる)。
     doc_text = load_external_text(REPO_ROOT, DOC_DIRS, strip_prose=False)
 
     errors: list[Decl] = []
+    n_stale = 0
     doc_only: list[Decl] = []
     skips: list[Decl] = []
     rescued: list[tuple[Decl, str]] = []
@@ -612,9 +721,11 @@ def run_checks(src_root: Path, verbose: bool,
             skips.append(d)
             continue
 
-        # (a) 自モジュール外のコード + 全モジュールの文字列リテラル。
-        #     ただし自モジュールの「定義行」と「戻り値代入行」は使用に数えない。
+        # (a) コードでの出現(自モジュールの「定義行」と「戻り値代入行」は除く)。
+        #     文字列リテラルの中は**宛先が特定できるときだけ**(Y-6)。
         pat = re.compile(r"\b%s\b" % re.escape(name), re.IGNORECASE)
+        qual_pat = re.compile(r"\b%s\.%s\b" % (re.escape(module),
+                                                 re.escape(name)), re.IGNORECASE)
         ret_pat = re.compile(RETURN_ASSIGN_TMPL.format(name=re.escape(name)),
                              re.IGNORECASE)
         used = False
@@ -627,8 +738,11 @@ def run_checks(src_root: Path, verbose: bool,
                         continue  # 戻り値代入行
                     # 自分の名札(`SRC & ".名前"`)は呼び出しではない(R2-16)
                     stmt = strip_self_labels(stmt, name)
-                if pat.search(stmt):
-                    used = True
+                if pat.search(blank_string_literals(stmt)):
+                    used = True   # コードでの呼び出し
+                    break
+                if qual_pat.search(stmt):
+                    used = True   # `モジュール名.名前` の完全な宛先(Y-6 (i))
                     break
             if used:
                 break
@@ -636,8 +750,19 @@ def run_checks(src_root: Path, verbose: bool,
         if used:
             continue
 
-        # (b) build/ tools/ のテキスト(docs/ は救済しない = R1-01)
-        if pat.search(ext_text):
+        # (ii) 裸の名前は**実行コマンドの宛先**のときだけ配線に数える(Y-6)。
+        if name.lower() in run_dests:
+            continue
+
+        # (b) build/ tools/ のテキスト(docs/ は救済しない = R1-01)。ここも
+        #     宛先が特定できる `モジュール名.名前` だけ(Y-6)。
+        if qual_pat.search(ext_text):
+            continue
+
+        # 裸の名前が build/tools の実行されないテキストにしか無いものの登記。
+        full = "%s.%s" % (module, name)
+        if full in TEXT_ONLY_BASELINE and pat.search(ext_text):
+            baseline_seen.add(full)
             continue
 
         # (c) 動的連結の救済(宛先モジュールと接尾辞の形が合うものだけ)
@@ -682,11 +807,20 @@ def run_checks(src_root: Path, verbose: bool,
         print("ERROR %s:%d %s %s (呼び出し元・文字列リテラル・build/tools "
               "のいずれにも出現しません)" % (rel, d.lineno, kind, d.name))
 
+    # 登記の陳腐化(配線された/消えた/救済に頼らなくなった)は赤。債務を黙って
+    # 居座らせない。合成リポジトリ(自己テスト)には実在名が無いので見ない。
+    if src_root.resolve() == DEFAULT_SRC_ROOT.resolve():
+        for full in sorted(set(TEXT_ONLY_BASELINE) - baseline_seen):
+            print("ERROR TEXT_ONLY_BASELINE の %s は、もう裸のテキスト救済に"
+                  "頼っていません(登記を消してください)" % full)
+            n_stale += 1
+
     checked.record("モジュール", len(modules))
+    checked.record("裸の名前の登記", len(TEXT_ONLY_BASELINE))
     checked.record("Public宣言", len(decls))
     checked.record("動的連結規則", len(dyn_rules))
 
-    n_error = len(errors) + len(doc_only)
+    n_error = len(errors) + len(doc_only) + n_stale
     print("孤児Public候補(機械検出): %d件 (うち docs/ のみ %d件) / "
           "動的連結で救済: %d件 / @unused でSKIP: %d件"
           % (n_error + len(rescued), len(doc_only), len(rescued), len(skips)))
@@ -751,6 +885,33 @@ BAS_ONACTION = (
     "End Sub\n"
 )
 
+# Y-6: 裸の文字列リテラル / 宛先付き / OnTime 宛先 の3形。
+BAS_BARE_LITERAL = (
+    'Attribute VB_Name = "modZzT"\n'
+    "Option Explicit\n"
+    "\n"
+    "Public Sub ZzTNotWired()\n"
+    "    Dim i As Long\n"
+    "    i = 1\n"
+    "End Sub\n"
+    "\n"
+    "Public Sub ZzTCaller()\n"
+    '    Dim s As String\n'
+    '    s = "ZzTNotWired"\n'
+    "    Call ZzTCaller2\n"
+    "End Sub\n"
+    "\n"
+    "Public Sub ZzTCaller2()\n"
+    "    Call ZzTCaller\n"
+    "End Sub\n"
+)
+
+BAS_QUALIFIED_LITERAL = BAS_BARE_LITERAL.replace(
+    's = "ZzTNotWired"', 's = "modZzT.ZzTNotWired"')
+
+BAS_ONTIME_BARE = BAS_BARE_LITERAL.replace(
+    's = "ZzTNotWired"', 'Application.OnTime Now, "ZzTNotWired"')
+
 # `tools/vba_lint.py` の写し(登記だけ / 登記の外にドライバ文字列がある の2形)。
 VBA_LINT_REGISTRY_ONLY = (
     "# 公開契約表の見出し。ZzTInHeadComment もここに名前だけがある。\n"
@@ -811,20 +972,44 @@ def regression_cases() -> list[tuple[str, bool]]:
     cases.append(("R1-01 docs/のみの言及では救済しない",
                   _run_synth(BAS_DOC_ONLY,
                              docs_text="14章: `ZzTDocOnly` は S5 を実行する。") == 1))
-    # 逆方向: tools/ の普通のファイルの言及は従来どおり救済する(締めすぎ防止)。
-    cases.append(("tools/ の普通のファイルの言及は救済",
+    # Y-6: tools/ に**裸の名前**が出るだけでは救済しない(宛先が特定できない)。
+    cases.append(("Y-6 tools/ の裸の名前では救済しない",
                   _run_synth(BAS_DOC_ONLY,
-                             tools_files={"zz_tool.py": "x = 'ZzTDocOnly'\n"}) == 0))
-    # 逆方向: build/ の普通のファイルの言及も救済する。
-    cases.append(("build/ の普通のファイルの言及は救済",
+                             tools_files={"zz_tool.py": "x = 'ZzTDocOnly'\n"}) == 1))
+    # 逆方向: 宛先まで書いた `モジュール名.名前` なら救済する(締めすぎ防止)。
+    cases.append(("Y-6 tools/ の宛先付きは救済",
+                  _run_synth(BAS_DOC_ONLY,
+                             tools_files={"zz_tool.py":
+                                          "x = 'modZzT.ZzTDocOnly'\n"}) == 0))
+    # 逆方向: 裸でも**実行コマンドの宛先**なら救済する(W9.2 のブック名修飾なし)。
+    cases.append(("Y-6 build/ の onAction 宛先は裸でも救済",
                   _run_synth(BAS_DOC_ONLY,
                              build_files={"zz_build.json":
                                           '{"onAction": "ZzTDocOnly"}'}) == 0))
+    # Y-6: 同じ build/ でも宛先でない裸の名前は救済しない。
+    cases.append(("Y-6 build/ の宛先でない裸の名前は救済しない",
+                  _run_synth(BAS_DOC_ONLY,
+                             build_files={"zz_build.json":
+                                          '{"note": "ZzTDocOnly"}'}) == 1))
+    # Y-6: **別モジュール**の修飾では救済しない((c) と同じく宛先で閉じる)。
+    cases.append(("Y-6 別モジュールの修飾では救済しない",
+                  _run_synth(BAS_DOC_ONLY,
+                             tools_files={"zz_tool.py":
+                                          "x = 'modZzOther.ZzTDocOnly'\n"}) == 1))
 
     # T-M1 本丸: vba_lint の CONTRACT / MODULE_REGISTRY への登記だけでは救済しない。
     cases.append(("T-M1 vba_lint の登記だけでは救済しない",
                   _run_synth(BAS_DOC_ONLY,
                              tools_files={"vba_lint.py": VBA_LINT_REGISTRY_ONLY}) == 1))
+    # Y-6: src の**裸の文字列リテラル**で (c) の宛先規則を迂回できない。
+    cases.append(("Y-6 src の裸のリテラルでは救済しない",
+                  _run_synth(BAS_BARE_LITERAL) == 1))
+    # 逆方向: 同じ形でも `モジュール名.名前` と宛先まで書けば救済する。
+    cases.append(("Y-6 src の宛先付きリテラルは救済",
+                  _run_synth(BAS_QUALIFIED_LITERAL) == 0))
+    # 逆方向: 裸でも OnTime の宛先なら救済(modBootNavi の実例と同じ形)。
+    cases.append(("Y-6 src の裸の OnTime 宛先は救済",
+                  _run_synth(BAS_ONTIME_BARE) == 0))
     # 逆方向: 同じ vba_lint.py でも**登記の外**(VBAを呼ぶ文字列)なら救済する。
     cases.append(("T-M1 登記の外の呼び出し文字列は救済する",
                   _run_synth(BAS_DOC_ONLY,
@@ -835,10 +1020,15 @@ def regression_cases() -> list[tuple[str, bool]]:
                              build_files={"modules.json":
                                           '{"_note": "ZzTDocOnly を呼ぶ"}'}) == 1))
     # 逆方向: 同じ内容でもファイル名が違えば(台帳でなければ)救済する。
+    #   Y-6 で裸の名前は宛先にならないので、宛先まで書いた形で比べる。
     cases.append(("T-M1 台帳でない build/ の同内容は救済する",
                   _run_synth(BAS_DOC_ONLY,
                              build_files={"zz_other.json":
-                                          '{"_note": "ZzTDocOnly を呼ぶ"}'}) == 0))
+                                          '{"_note": "modZzT.ZzTDocOnly"}'}) == 0))
+    cases.append(("T-M1 台帳なら宛先付きでも救済しない",
+                  _run_synth(BAS_DOC_ONLY,
+                             build_files={"modules.json":
+                                          '{"_note": "modZzT.ZzTDocOnly"}'}) == 1))
 
     # R2-16: 自モジュールのログ用名札 `SRC & ".名前"` だけでは使用に数えない。
     cases.append(("R2-16 自分の名札だけの Public は赤", _run_synth(BAS_SELF_LABEL) == 1))
@@ -955,16 +1145,44 @@ def self_test() -> bool:
                   "ZzTInFence" in
                   strip_nonexecutable_text("tools/README.md",
                                            "説明\n```\nZzTInFence\n```\n")))
-    cases.append(("X3-2 Markdown のインラインコードは残る",
-                  "ZzTInBacktick" in
+    # Y-5: 地の文はバッククォートで囲んでも散文(README は識別子を `` で書く)。
+    cases.append(("Y-5 Markdown のインラインコードは落ちる",
+                  "ZzTInBacktick" not in
                   strip_nonexecutable_text("tools/README.md",
                                            "手順: `ZzTInBacktick` を押す。\n")))
     cases.append(("X3-2 ps1 の行コメントは落ちる",
                   "ZzTInPs1Comment" not in
                   strip_nonexecutable_text("build/win/z.ps1", "# ZzTInPs1Comment\n$a=1\n")))
+    # Y-5: 行末コメントも落とす(行頭だけを見ていたのが抜け道だった)。
+    cases.append(("Y-5 ps1 の行末コメントは落ちる",
+                  "ZzTPs1Trailing" not in
+                  strip_nonexecutable_text("build/win/z.ps1",
+                                           "$a=1  # ZzTPs1Trailing を呼びます\n")))
+    cases.append(("Y-5 yml の行末コメントは落ちる",
+                  "ZzTYmlTrailing" not in
+                  strip_nonexecutable_text("build/z.yml", "a: 1  # ZzTYmlTrailing\n")))
+    cases.append(("Y-5 ini の行末コメントは落ちる",
+                  "ZzTIniTrailing" not in
+                  strip_nonexecutable_text("build/z.ini", "a=1 ; ZzTIniTrailing\n")))
+    cases.append(("Y-5 bat の Rem は大小を問わず落ちる",
+                  "ZzTBatRem" not in
+                  strip_nonexecutable_text("build/z.bat", "Rem ZzTBatRem\n")))
+    cases.append(("Y-5 行末コメントでも手前のコードは残る",
+                  "ZzTPs1Code" in
+                  strip_nonexecutable_text("build/win/z.ps1",
+                                           "$a = 'ZzTPs1Code'  # 説明\n")))
+    cases.append(("Y-5 引用符の中の # はコメントにしない",
+                  "ZzTPs1InQuote" in
+                  strip_nonexecutable_text("build/win/z.ps1",
+                                           "$a = '# ZzTPs1InQuote'\n")))
     cases.append(("X3-2 json はデータなのでそのまま",
                   "ZzTInJson" in
                   strip_nonexecutable_text("build/z.json", '{"a": "ZzTInJson"}')))
+
+    # Y-6: コードと文字列リテラルを分ける下ごしらえ。
+    cases.append(("Y-6 文字列リテラルは潰れコードは残る",
+                  blank_string_literals('Call Foo("ZzTInLit")') ==
+                  'Call Foo(          )'))
 
     # 自分の名札(W15 Round2 R2-16)。名札だけの出現は使用に数えない。
     label_stmt = 'modLog.LogError "E0101", MOD_SRC & ".Foo", "bad"'
@@ -1017,11 +1235,15 @@ def self_test() -> bool:
                   strip_registry_text("build/modules.json", "ZzTLedger") is None))
     cases.append(("担当外のパスは素通し",
                   strip_registry_text("tools/zz_tool.py", "ZzTPlain") == "ZzTPlain"))
-    cases.append(("登記リストは vba_lint の2表と台帳のみ",
+    cases.append(("登記リストは vba_lint の2表・台帳・本ファイルの表",
                   sorted(REGISTRY_ONLY_TEXT) ==
-                  ["build/modules.json", "tools/vba_lint.py"] and
+                  ["build/modules.json", "tools/orphan_check.py",
+                   "tools/vba_lint.py"] and
                   REGISTRY_ONLY_TEXT["tools/vba_lint.py"] ==
                   ("MODULE_REGISTRY", "CONTRACT")))
+    cases.append(("Y-6 本ファイルの登記は自分を救済しない",
+                  REGISTRY_ONLY_TEXT["tools/orphan_check.py"]
+                  == ("TEXT_ONLY_BASELINE",)))
     # 「実行時に VBA を呼ぶ」側は**外さない**(外すと本物の配線が赤くなる)。
     cases.append(("VBAを呼ぶ側は登記リストに入れない",
                   not any(p in REGISTRY_ONLY_TEXT for p in

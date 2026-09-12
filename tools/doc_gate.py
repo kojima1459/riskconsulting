@@ -359,21 +359,28 @@ def run_checks(verbose: bool,
 
     # 自己確認(4): 除外規則が実際に効くか(README以下は対象外にならないこと・
     # docs/spec配下は対象外になること)を空撃ちで見る。
+    # 件数は**表を回した回数**で数える(裁定書43 §2 Y-7)。以前は
+    # `record("対象外判定", 4)` と定数だったため、判定を削っても要点行が
+    # 変わらなかった。表から1行消せば件数が必ず減る。
+    exclude_probes = (
+        ("docs/spec/13_データ設計.md", True, "docs/spec/ 配下が除外されていません"),
+        ("docs/受領/髙橋_実行フロー解説資料_v1.0.md", True,
+         "docs/受領/ 配下が除外されていません"),
+        ("docs/22_実装前監査記録_20260829.md", True,
+         "日付付きファイル名が除外されていません"),
+        ("docs/25_利用ガイド.md", False,
+         "対象文書 docs/25 が誤って除外されています"),
+    )
     n4 = 0
-    if not is_excluded("docs/spec/13_データ設計.md"):
-        err("(4) docs/spec/ 配下が除外されていません(設計)")
-        n4 += 1
-    if not is_excluded("docs/受領/髙橋_実行フロー解説資料_v1.0.md"):
-        err("(4) docs/受領/ 配下が除外されていません(設計)")
-        n4 += 1
-    if not is_excluded("docs/22_実装前監査記録_20260829.md"):
-        err("(4) 日付付きファイル名が除外されていません(設計)")
-        n4 += 1
-    if is_excluded("docs/25_利用ガイド.md"):
-        err("(4) 対象文書 docs/25 が誤って除外されています(設計)")
-        n4 += 1
-    print("  (4) 対象外判定の自己確認         不一致 %d件" % n4)
-    checked.record("対象外判定", 4)
+    n4_checked = 0
+    for rel, want_excluded, msg in exclude_probes:
+        n4_checked += 1
+        if is_excluded(rel) != want_excluded:
+            err("(4) %s(設計)" % msg)
+            n4 += 1
+    print("  (4) 対象外判定の自己確認         %d件 / 不一致 %d件"
+          % (n4_checked, n4))
+    checked.record("対象外判定", n4_checked)
     checked.record("対象文書", len(docs_texts))
 
     if not SHEETS_JSON.exists():

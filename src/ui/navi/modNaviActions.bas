@@ -545,9 +545,9 @@ Public Function ActExportProposal(ByVal caseId As String, ByVal reviewedBy As St
                                        modCaseStore.ResolveStepJson(caseId, 3))
     ' 断る理由(確認者名が無い=20章§8-3 / 上流が未了)は純関数1本に寄せてある
     ' (modNaviActions2.ProposalBlockOf。裁定書40 R-M2/R-m3)。確認の判断は
-    ' AI呼出(S5)より前に引く=作ってから断ると1回むだになる。
+    ' AI呼出(S5)より前に引く。前処理は挟まない(裁定書43 Y-3。Trim$ を外した)。
     reason = modNaviActions2.ProposalBlockOf( _
-        modExportProposal.NeedsReviewMessage(Trim$(reviewedBy)), plan)
+        modExportProposal.NeedsReviewMessage(reviewedBy), plan)
     If LenB(reason) > 0 Then
         ActExportProposal = reason
         Exit Function
