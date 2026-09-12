@@ -7,51 +7,41 @@ Option Explicit
 ' 執筆方針: 期待値は**裁定書38 §1 班C の文と 15章§5.6 / 20章だけ**から手で
 '   書き出した(17章§1。実装の出力を見てから期待値を合わせない)。
 '
-' 対象と根拠(**全61本**。G1=14 / G2=5 / G3=4 / G4=3 / G5=16 / G6=19。
-'   本数は `modTestRunner.Check` と `ChkFires` の呼び出し数の実測であり、
-'   wintest/tests_expected.txt の prod と必ず同時に直すこと。裁定書40 S-m で
-'   「全14本」「全26本」という申告が実数と食い違っていたのを直した):
+' 対象と根拠(**全61本**。G1=14 / G2=5 / G3=4 / G4=3 / G5=16 / G6=19。本数は
+'   `modTestRunner.Check` と `ChkFires` の呼び出し数の実測であり、
+'   wintest/tests_expected.txt の prod と必ず同時に直すこと):
 '   G1 CheckS5(15章§5.6 の検証表。**1ケース1本**。tools/validate_check.py が
 '      「§11の全ケースIDに対しテストが1本ずつ」を機械で見る)
 '      00 mock(MK-S5)は1件も発火しない  01..13 V-S5-01 から V-S5-13
-'   G2 提案書テンプレとDATA(20章)
-'      14 スライド登録表は22枚で no は 1 から 22
-'      15 提案書JSONが空ならDATAを組まない(空データで落ちない)
-'      16 内部の値がDATAに入らない(20章§3)
-'      17 S2 由来の社内語はDATAへ入る前に機械置換される
-'      18 免責は20章§8の1文
-'   G3 確認必須とファイル名(裁定書38 §1 班C 2・3)
-'      19 reviewedBy 空なら案内文  20 非空なら空文字(生成へ進む)
-'      21 提案書のファイル名規則  22 レポートも同じ規則(先頭語だけ違う)
-'   G4 対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)
-'      23 30語以上ある  24 SoftenTaboo は置換して件数を返す
-'      25 英字の禁止語は語境界で見る(IoT の中の OT を拾わない)
-'   G5 W15 Round 2(裁定書39 R2-02 / R2-11 / R2-12 / R2-04受け。全16本)
-'      26..33 R2-02 最長一致・一般語・冪等・英字の語境界(8本)
-'      34     R2-11 機械置換の件数を呼出側が受け取る
-'      35..40 R2-12 描画例外の印と ?debug=1 の赤枠・S5必須キー2本と
-'             R2-04受け 空白類だけの確認者名を認めない2本(6本)
-'   G6 W15 Round 2 の検収是正(裁定書40。全19本)
-'      41..42 Q-M1 会社名のTABで表紙のフィールドがずれない(両方向)
-'      43..45 S-M1 残った社内語を呼出側へ知らせる(出る/出ない)と警告文の値源
-'      46..49 S-M2 サ変語幹は「〜する」の直前だけ置換しない(名詞の位置は置換)
-'      50..54 S-m  TabooHitStrict の両方向・語境界(BIG/OTC/SLAB)・連鎖する対
-'      55..57 S-M4 置換後の CheckS5 が通る/通らない素材の見分け
-'      58..59 S-m  確認者名の NBSP・VT・FF(両方向)
+'   G2 提案書テンプレとDATA(20章): 14 登録表22枚 / 15 空データで落ちない /
+'      16 内部の値がDATAに入らない / 17 S2 由来は機械置換される / 18 免責1文
+'   G3 確認必須とファイル名(裁定書38 §1 班C 2・3): 19 空なら案内文 /
+'      20 非空なら生成へ / 21 提案書のファイル名規則 / 22 レポートも同じ規則
+'   G4 対訳表: 23 30語以上 / 24 置換して件数を返す / 25 英字は語境界で見る
+'   G5 W15 Round 2(裁定書39。全16本): 26..33 R2-02 最長一致・警告だけの対・
+'      冪等・英字の語境界 / 34 R2-11 置換の件数を呼出側が受け取る /
+'      35..40 R2-12 描画例外の印・?debug=1・S5必須キー・空白類の確認者名
+'   G6 W15 Round 2 の検収是正(裁定書40。全19本): 41..42 Q-M1 会社名のTAB /
+'      43..45 S-M1 残った社内語を呼出側へ知らせる(出る/出ない)と警告文の値源 /
+'      46..49 S-M2 「〜する」の直前では置換しない(名詞の位置は置換。裁定書43
+'      §1 で判定が印から**終端集合**へ変わった) / 50..54 S-m TabooHitStrict の
+'      両方向・語境界・連鎖する対 / 55..57 S-M4 置換後の CheckS5 の見分け /
+'      58..59 S-m 確認者名の NBSP・VT・FF
 '
 ' 変異注入(出来レース禁止・裁定書38 §2):
 '   (a) modExportProposal.NeedsReviewMessage を常に "" にすると 19 が落ちる。
 '   (b) modProposalHtml1.SlidesJs から登録行を1本消すと 14 が落ち、
-'       tools/render_proposal.py も同時に赤くなる。
+'       render_proposal.py も同時に赤くなる。
 '   (c) modExportProposal の Soft() を素通しにすると 17 が落ちる。
 '   (d) modValidate4.SoftPairs の並べ替えを昇順にすると 26..28 が落ちる。
 '   (e) modExportProposal.Soft() が件数を捨てると 34 が落ちる。
-'   (f) modExportProposal.StripFieldSeps の vbTab 除去をやめると 41 が落ちる
-'       (裁定書40 Q-M1。レポート側の Test_W15_25/26 と同じ型の網)。
-'   (g) modValidate4 の suru 印を1行でも外すと 46 が落ちる(S-M2)。
-'   (h) modValidate4.MarkGuardFollows を常に False にすると 46 が落ち、True に
+'   (f) StripFieldSeps の vbTab 除去をやめると 41 が落ちる(裁定書40 Q-M1)。
+'   (g) modValidate4 の終端集合へ「し」を足すと 46 が落ちる(裁定書43 §1-1)。
+'   (h) modValidate4.IsTermAt を常に True にすると 46 が落ち、常に False に
 '       すると 47(名詞の位置では置換する)が落ちる。
 '   (i) BuildProposalDataEx の tabooLeft を空のままにすると 43 が落ちる(S-M1)。
+'       strictLeft を本文ではなく語の一覧から数えると 34 が落ちる(一覧では語の
+'       うしろが ";"=終端集合の字になり、全部が取りこぼしに見える)。
 '
 ' 書き方の約束(LibreOffice Basic 対策): Dim はプロシージャの先頭にまとめ、
 '   判定は一度ローカル変数へ入れてから modTestRunner.Check へ渡す
@@ -104,7 +94,7 @@ Public Sub RunAll()
 
     Err.Clear
     W15R40Suru
-    If Err.Number <> 0 Then W15Fail "W15-G6 R40 サ変語幹"
+    If Err.Number <> 0 Then W15Fail "W15-G6 R40 する直前"
 
     Err.Clear
     W15R40Strict
@@ -186,10 +176,9 @@ Private Sub W15CheckS5()
 End Sub
 
 ' 当該ケースIDの行が出ることを見る。
-'   テスト名は**呼び出し側にリテラルで書く**(tools/validate_check.py は
-'   `Check "..."` / `Chk* "..."` の第1引数の文字列リテラルからテスト名を拾うため、
-'   ここで連結して作るとケースIDが機械から見えなくなる)。名前にケースIDを
-'   1つだけ含めるのが「1テスト1ケース」規約。
+'   テスト名は**呼び出し側にリテラルで書く**(tools/validate_check.py が第1引数の
+'   文字列リテラルから拾うため、連結して作るとケースIDが機械から見えなくなる)。
+'   名前にケースIDを1つだけ含めるのが「1テスト1ケース」規約。
 Private Sub ChkFires(ByVal testName As String, ByVal caseId As String, _
                      ByVal jsonText As String, ByVal s2 As String)
     Dim r As String
@@ -334,9 +323,9 @@ Private Sub W15Glossary()
 End Sub
 
 ' ============================================================================
-' G5-1 W15 Round 2(裁定書39 R2-02 / R2-11)。対訳表の機械置換。
-'   期待値は**壊す班 R2 が実測した壊れ方**(R2_break.md §2 R2-02 の S2..S7)を
-'   そのまま裏返して書いた。実装の出力を見てから合わせていない(17章§1)。
+' G5-1 W15 Round 2(裁定書39 R2-02 / R2-11)。対訳表の機械置換。期待値は
+'   **壊す班 R2 が実測した壊れ方**(R2_break.md §2 R2-02 S2..S7)の裏返しであり、
+'   実装の出力を見てから合わせていない(17章§1)。
 ' ============================================================================
 Private Sub W15Round2Soften()
     Dim changed As Long
@@ -389,8 +378,7 @@ Private Sub W15Round2Soften()
         "changed=" & CStr(changed) & " after=" & after
 
     ' 置換しないだけで見逃しはしない(裁定書39 R2-02「警告のみ」)。テスト名に
-    ' ケースIDを書かないこと: tools/validate_check.py は「1ケース1テスト」を
-    ' テスト名の文字列リテラルから数えるため、ここで書くと2本目と数えられる。
+    ' ケースIDを書かないこと(validate_check.py が2本目と数える)。
     hit = modValidate4.TabooHit("本社を移転する計画があります。")
     ok = (InStr(1, hit, "移転", vbBinaryCompare) > 0)
     modTestRunner.Check "W15 R2-02 一般語も禁止語の一覧(TabooHit)には出る", ok, "hit=" & hit
@@ -426,6 +414,8 @@ Private Sub W15Round2Count()
     Dim softDirty As Long
     Dim leftClean As String
     Dim leftDirty As String
+    Dim strictClean As String
+    Dim strictDirty As String
     Dim ok As Boolean
 
     s2 = modMockLlm3.BuildS2RnwJson()
@@ -433,17 +423,20 @@ Private Sub W15Round2Count()
     meta = modExportProposal.BuildProposalMetaJson(W15_COMPANY, s5, _
         "2026/09/12 10:00:00", "2.4.0", W15_REVIEWER, "2026/09/12 10:05:00")
 
-    dataJson = modExportProposal.BuildProposalDataEx(meta, s2, s5, softClean, leftClean)
+    dataJson = modExportProposal.BuildProposalDataEx(meta, s2, s5, softClean, _
+                                                    leftClean, strictClean)
     ' S2 の control_note 全件の先頭へ社内語を差し込む(置換が必ず起きる素材)。
     s2Dirty = Replace(s2, """control_note"":""", """control_note"":""リスクユニバースと")
-    dataJson = modExportProposal.BuildProposalDataEx(meta, s2Dirty, s5, softDirty, leftDirty)
+    dataJson = modExportProposal.BuildProposalDataEx(meta, s2Dirty, s5, softDirty, _
+                                                    leftDirty, strictDirty)
 
     ok = (softDirty > 0)
     If ok Then ok = (softDirty > softClean)
     If ok Then ok = (InStr(1, dataJson, "リスクユニバース", vbBinaryCompare) = 0)
-    ' 機械置換が責任を持つ語は1語も残らない(残るのは印のある語だけ)。
-    If ok Then ok = (LenB(modValidate4.TabooHitStrict(leftClean)) = 0)
-    If ok Then ok = (LenB(modValidate4.TabooHitStrict(leftDirty)) = 0)
+    ' 置換の取りこぼしは1語も無い(残るのは warn の対と、終端集合でない文脈に
+    '   あった語だけ。判定が位置に依るので**本文から**数えた strictLeft を見る)。
+    If ok Then ok = (LenB(strictClean) = 0)
+    If ok Then ok = (LenB(strictDirty) = 0)
     modTestRunner.Check "W15 R2-11 提案書DATAの機械置換の件数を呼出側が受け取る", ok, _
         "clean=" & CStr(softClean) & " dirty=" & CStr(softDirty)
 End Sub
@@ -500,7 +493,7 @@ End Sub
 '   (validate_check.py が「1ケース1テスト」を名前から数えるため)。
 ' ============================================================================
 
-' G6-1 Q-M1: coverFields(vbTab区切り)へ入れる前に区切りを落とす。再現手順は
+' G6-1 Q-M1: coverFields(TAB区切り)へ入れる前に区切りを落とす。再現手順は
 '   検証者レポート「会社名を `甲斐<TAB>A<TAB>B<TAB>山田` にして提案書を出す」。
 '   落とさないと <title> が「ご提案 甲斐」で切れ、<noscript> の題が会社名の
 '   後半(攻撃者が決めた文字列)に化ける。
@@ -541,8 +534,9 @@ Private Sub W15R40Cover()
         "長さ=" & CStr(Len(docClean))
 End Sub
 
-' G6-2 S-M1: 置換しない語(一般語・サ変語幹)が顧客向け本文に残ったら、
-'   呼出側へ**必ず知らせる**(usage_log と警告文の値源)。
+' G6-2 S-M1: 置換しない語(mode=warn の対と、終端集合でない文脈の語)が顧客向け
+'   本文に残ったら呼出側へ**必ず知らせる**(usage_log と警告文の値源)。逆向きの
+'   素材は「移転」(warn)と「BCP」(「BCP発動基準」=直後が漢字)を顧客語へ直す。
 Private Sub W15R40Left()
     Dim s2 As String
     Dim s5 As String
@@ -552,6 +546,7 @@ Private Sub W15R40Left()
     Dim dummy As String
     Dim soft As Long
     Dim leftText As String
+    Dim strictText As String
     Dim warnLine As String
     Dim ok As Boolean
 
@@ -560,9 +555,10 @@ Private Sub W15R40Left()
     meta = modExportProposal.BuildProposalMetaJson(W15_COMPANY, s5, _
         "2026/09/12 10:00:00", "2.4.0", W15_REVIEWER, "2026/09/12 10:05:00")
 
-    ' 一般語「移転」は機械置換しない(日本語が壊れるため)。残るなら知らせる。
+    ' warn の「移転」は機械置換しない(日本語が壊れるため)。残るなら知らせる。
     s2Dirty = Replace(s2, """control_note"":""", """control_note"":""本社を移転する案もあり、")
-    dummy = modExportProposal.BuildProposalDataEx(meta, s2Dirty, s5, soft, leftText)
+    dummy = modExportProposal.BuildProposalDataEx(meta, s2Dirty, s5, soft, _
+                                                 leftText, strictText)
     ok = (InStr(1, leftText, "移転", vbBinaryCompare) > 0)
     modTestRunner.Check "W15 R40 一般語が顧客向け本文に残ったら呼出側へ知らせる", ok, _
         "left=[" & leftText & "] soft=" & CStr(soft)
@@ -571,8 +567,9 @@ Private Sub W15R40Left()
     '   ないこと)。mock の S2 は control_note に一般語「移転」を持つので
     '   (検証者が dist/サンプル提案書.html で実測した箇所)、そこだけを
     '   顧客語へ直した素材で見る。
-    s2Clean = Replace(s2, "移転", "お引き受け")
-    dummy = modExportProposal.BuildProposalDataEx(meta, s2Clean, s5, soft, leftText)
+    s2Clean = Replace(Replace(s2, "移転", "お引き受け"), "BCP", "事業継続計画")
+    dummy = modExportProposal.BuildProposalDataEx(meta, s2Clean, s5, soft, _
+                                                 leftText, strictText)
     ok = (LenB(leftText) = 0)
     modTestRunner.Check "W15 R40 社内語が残っていなければ知らせない", ok, _
         "left=[" & leftText & "]"
@@ -585,9 +582,9 @@ Private Sub W15R40Left()
         ok, "line=[" & warnLine & "]"
 End Sub
 
-' G6-3 S-M2: サ変語幹(「〜する」に続けて使う社内語)は、その位置では置換
-'   しない。検証者が実測した「保険化する → 保険での備え方の設計する」と同型の
-'   壊れ方を全語で禁じる。名詞として使われている位置では従来どおり置換する。
+' G6-3 S-M2: 「〜する」に続けて使う社内語はその位置では置換しない(検証者が
+'   実測した「保険化する → 保険での備え方の設計する」を全語で禁じる)。**印では
+'   なく §6 の終端集合が弾く**(`し` `す` `さ` は終端集合の外)。
 Private Sub W15R40Suru()
     Dim words() As String
     Dim i As Long
@@ -610,33 +607,34 @@ Private Sub W15R40Suru()
         after = modValidate4.SoftenTaboo(srcText, changed)
         If after <> srcText Then ng = ng & "[" & after & "]"
     Next i
-    modTestRunner.Check "W15 R40 サ変語幹は する/し/さ の直前では置換しない", _
+    modTestRunner.Check "W15 R40 する/し/さ の直前では置換しない(終端集合の外)", _
         (LenB(ng) = 0), "壊れた出力=" & ng
 
-    ' 逆向き(1): 名詞として使われている位置は置換する(見逃しにしない)。
+    ' 逆向き(1): 名詞の位置(直後が終端)は置換する(見逃しにしない)。
     after = modValidate4.SoftenTaboo("保険化の検討と付保の状況。", changed)
     ok = (InStr(1, after, "保険での備え方の設計の検討", vbBinaryCompare) > 0)
     If ok Then ok = (InStr(1, after, "保険のご加入の状況", vbBinaryCompare) > 0)
     If ok Then ok = (changed = 2)
-    modTestRunner.Check "W15 R40 サ変語幹でも名詞の位置では顧客語へ置換する", ok, _
+    modTestRunner.Check "W15 R40 名詞の位置(直後が終端)では顧客語へ置換する", ok, _
         "after=" & after & " changed=" & CStr(changed)
 
-    ' 逆向き(2): 顧客語がサ変名詞の対まで外していない(過剰な印を禁じる)。
+    ' 逆向き(2): 用言の連用形は mode=warn なので置換しない(裁定書43 §1。
+    '   「に」「よ」「ら」は終端集合の助詞であると同時に活用語尾の頭でもあり、
+    '   「仕分けられる」→「整理られる」を構造的に防げないため)。
     after = modValidate4.SoftenTaboo("リスクを仕分けする。", changed)
-    ok = (InStr(1, after, "整理する", vbBinaryCompare) > 0)
-    If ok Then ok = (changed = 1)
-    modTestRunner.Check "W15 R40 顧客語がサ変名詞の対は する でも置換する", ok, _
+    ok = (after = "リスクを仕分けする。")
+    If ok Then ok = (changed = 0)
+    modTestRunner.Check "W15 R40 用言の連用形は warn なので置換しない", ok, _
         "after=" & after & " changed=" & CStr(changed)
 
     ' サ変語幹も禁止語の一覧(警告)には出る=置換しないことと見逃すことは別。
     ok = (InStr(1, modValidate4.TabooHit("保険化する予定です。"), "保険化", vbBinaryCompare) > 0)
-    modTestRunner.Check "W15 R40 サ変語幹も禁止語の一覧には出る", ok, _
+    modTestRunner.Check "W15 R40 置換しなかった語も禁止語の一覧には出る", ok, _
         "hit=" & modValidate4.TabooHit("保険化する予定です。")
 End Sub
 
-' G6-4 S-m: TabooHitStrict(機械置換が責任を持つ語だけ)の両方向。
-'   この関数は S5 の受け入れ判断と提案書の記録で使うのに、テストが1本も
-'   無かった(裁定書40 S-m)。
+' G6-4 S-m: TabooHitStrict(置換の取りこぼしだけ)の両方向。裁定書43 §1-4 で
+'   **mode=replace の語が終端集合の文脈に残っているとき**だけ非空になった。
 Private Sub W15R40Strict()
     Dim strictHit As String
     Dim allHit As String
@@ -646,19 +644,20 @@ Private Sub W15R40Strict()
 
     strictHit = modValidate4.TabooHitStrict("リスクユニバースを整理します。")
     ok = (InStr(1, strictHit, "リスクユニバース", vbBinaryCompare) > 0)
-    modTestRunner.Check "W15 R40 機械置換の担当語は TabooHitStrict に出る", ok, _
+    modTestRunner.Check "W15 R40 終端の文脈に残った担当語は TabooHitStrict に出る", ok, _
         "strict=[" & strictHit & "]"
 
+    ' 「移転」は warn、「保険化する」は終端でない文脈=どちらも欠陥ではない。
     strictHit = modValidate4.TabooHitStrict("本社を移転する。保険化する。")
     allHit = modValidate4.TabooHit("本社を移転する。保険化する。")
     ok = (LenB(strictHit) = 0)
     If ok Then ok = (InStr(1, allHit, "移転", vbBinaryCompare) > 0)
     If ok Then ok = (InStr(1, allHit, "保険化", vbBinaryCompare) > 0)
-    modTestRunner.Check "W15 R40 印のある語は TabooHitStrict に出ない(警告には出る)", _
+    modTestRunner.Check "W15 R40 warn と終端外の残りは TabooHitStrict に出ない", _
         ok, "strict=[" & strictHit & "] all=[" & allHit & "]"
 
-    ' G6-5 S-m: 語境界の検査(BoundaryOk)を**実際に通る**素材。最長一致だけでは
-    '   通らない組み合わせを選ぶ(BIG / OTC / SLAB は対訳表に無い語)。
+    ' G6-5 S-m: 語境界(BoundaryOk)を**実際に通る**素材(BIG/OTC/SLAB は対訳表に
+    '   無い語で、最長一致だけでは通らない組み合わせ)。
     after = modValidate4.SoftenTaboo("BIGデータとOTC医薬品とSLABの話。", ch)
     ok = (after = "BIGデータとOTC医薬品とSLABの話。")
     If ok Then ok = (ch = 0)
@@ -685,9 +684,8 @@ End Sub
 ' G6-7 S-M4: 機械置換したあとの受け入れ判断の材料。**置換しても CheckS5 が
 '   1件でも発火する素材は採用してはいけない**(前波はここが緩み、検証に
 '   不合格の S5 が顧客向け提案書の材料になっていた)。判断そのもの
-'   (modPipeline5.SoftenedOrEmpty)は PURE_ALLOWLIST に modPipeline5 が
-'   無いため層(a)から呼べないので、判断が使う2つの材料(置換件数・置換後の
-'   CheckS5)を両方向で固定する(allowlist へ1行=司令塔へ handoff)。
+'   (modPipeline5.SoftenedOrEmpty)は層(a)から呼べない(PURE_ALLOWLIST に無い=
+'   司令塔へ handoff)ので、材料(置換件数・置換後の CheckS5)を両方向で固定する。
 Private Sub W15R40Accept()
     Dim s2 As String
     Dim s5 As String

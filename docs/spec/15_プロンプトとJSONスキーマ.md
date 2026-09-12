@@ -1639,7 +1639,7 @@ PL保険 -> 生産物賠償責任保険
 | V-S5-13 | share_items[].priority | 全件 false（優先の印が1つも無い） | 警告 | `[V-S5-13] share_items に優先の印がありません(4件程度に印を付けてください)` |
 
 - **V-S5-12 の砦（docs/29 §5.3）**: 禁止語が残れば修復1回を掛ける。**修復後も V-S5-12 だけが残る場合は、`modValidate4.SoftenTaboo` が対訳表で機械置換して生成を続行し、run_log の detail へ `taboo_softened=n` を残す**（生成を止めない。置換したことを黙らせない）。V-S5-12 以外の不合格が残っている場合は通常どおり失敗させる。
-- 禁止語の値源は `modValidate4.TabooPairs()`（`社内語<TAB>顧客語` を vbLf で並べた1本の文字列）であり、`docs/design/提案書_wide/対訳表_社内語から顧客語.md` と `tools/render_proposal.py` が突き合わせる。
+- 禁止語の値源は `modValidate4.TabooPairs()`（`社内語<TAB>顧客語<TAB>mode` を vbLf で並べた1本の文字列。`mode` は `replace` / `warn` の2区分で全行にある）であり、`docs/design/提案書_wide/対訳表_社内語から顧客語.md` と `tools/render_proposal.py` が全列を突き合わせる（裁定書43 §1）。
 
 ### mock 応答（MK-S5）
 

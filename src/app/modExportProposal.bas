@@ -130,7 +130,8 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
     Dim docText As String
     Dim softened As Long
     Dim tabooLeft As String
-    docText = BuildProposalHtmlEx(metaJson, s2Text, s5Text, softened, tabooLeft)
+    Dim strictLeft As String
+    docText = BuildProposalHtmlEx(metaJson, s2Text, s5Text, softened, tabooLeft, strictLeft)
     If LenB(docText) = 0 Then
         modLog.LogError EP_CODE_FAIL, EP_SRC & ".GenerateProposalHtml", "build_failed"
         GenerateProposalHtml = "提案書の組み立てに失敗しました。"
@@ -162,10 +163,10 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
     ' 対訳表の機械置換を**必ず1行残す**(裁定書39 R2-11。docs/29 §5.3
     ' 「黙って直さない」。0件のときも記録して「1件も直していない」を示す)。
     modLog.LogUsage "proposal_taboo_softened", caseId, "n=" & CStr(softened)
-    ' 置換しても残った社内語は**警告**として残す(裁定書40 S-M1。一般語と
-    ' サ変語幹を機械置換の対象から外した代償。警告なので生成は止めず、
-    ' 戻り値(=呼出側が失敗として扱う経路)にも載せない)。
-    TabooLeftNote caseId, tabooLeft
+    ' 置換しても残った社内語は**警告**として残す(裁定書40 S-M1 / 43 §1-4。
+    ' mode=warn の対と終端でない文脈の語を置換しない代償。警告なので生成は
+    ' 止めず、戻り値(=呼出側が失敗として扱う経路)にも載せない)。
+    TabooLeftNote caseId, tabooLeft, strictLeft
     outPath = pathText
     Exit Function
 
@@ -243,28 +244,33 @@ Public Function BuildProposalHtml(ByVal metaJson As String, ByVal s2Json As Stri
                                   ByVal s5Json As String) As String
     Dim softened As Long
     Dim tabooLeft As String
-    BuildProposalHtml = BuildProposalHtmlEx(metaJson, s2Json, s5Json, softened, tabooLeft)
+    Dim strictLeft As String
+    BuildProposalHtml = BuildProposalHtmlEx(metaJson, s2Json, s5Json, softened, _
+                                            tabooLeft, strictLeft)
 End Function
 
 ' ==========================================================
 ' BuildProposalHtmlEx - 上と同じだが、呼出側が記録に使う2つを返す。
 '   softened  : 対訳表の機械置換の**箇所数**(裁定書39 R2-11)
 '   tabooLeft : 置換しても顧客向け本文に**残った**社内語(";"区切り。裁定書40
-'               S-M1)。一般語・サ変語幹は機械置換の対象外なので残りうる。
-'               これは**警告であって不合格ではない**ので戻り値には載せず、
-'               呼出側が usage_log へ記録する(裁定書40 §0 の警告チャネル規約)。
+'               S-M1)。mode=warn の対と、終端集合でない文脈の語は機械置換の
+'               対象外なので残りうる。これは**警告であって不合格ではない**ので
+'               戻り値には載せず、呼出側が usage_log へ記録する(裁定書40 §0)。
+'   strictLeft: そのうち置換の取りこぼし(=実装の欠陥)だけ(裁定書43 §1-4)。
 ' ==========================================================
 Public Function BuildProposalHtmlEx(ByVal metaJson As String, ByVal s2Json As String, _
                                     ByVal s5Json As String, _
                                     ByRef softened As Long, _
-                                    ByRef tabooLeft As String) As String
+                                    ByRef tabooLeft As String, _
+                                    ByRef strictLeft As String) As String
     On Error GoTo Failed
     softened = 0
     tabooLeft = vbNullString
+    strictLeft = vbNullString
     If LenB(Trim$(metaJson)) = 0 Then Exit Function
 
     Dim dataJson As String
-    dataJson = BuildProposalDataEx(metaJson, s2Json, s5Json, softened, tabooLeft)
+    dataJson = BuildProposalDataEx(metaJson, s2Json, s5Json, softened, tabooLeft, strictLeft)
     If LenB(dataJson) = 0 Then Exit Function
 
     ' 5項目とも**必ず** StripFieldSeps を通してから並べる(裁定書40 Q-M1)。
@@ -313,7 +319,9 @@ Public Function BuildProposalData(ByVal metaJson As String, ByVal s2Json As Stri
                                   ByVal s5Json As String) As String
     Dim softened As Long
     Dim tabooLeft As String
-    BuildProposalData = BuildProposalDataEx(metaJson, s2Json, s5Json, softened, tabooLeft)
+    Dim strictLeft As String
+    BuildProposalData = BuildProposalDataEx(metaJson, s2Json, s5Json, softened, _
+                                            tabooLeft, strictLeft)
 End Function
 
 ' ==========================================================
@@ -323,18 +331,23 @@ End Function
 '                顧客文面が黙って書き換わっていた)
 '   tabooLeft : 組み上がったDATA(=顧客の目に触れる本文のすべて)に**残った**
 '               社内語(";"区切り。空=1語も残っていない。裁定書40 S-M1)。
-'               一般語・サ変語幹は機械置換の対象外なので残りうるし、
-'               `s5_edited` を人が直した経路は CheckS5 を通らないので S5 側の
-'               本文にも残りうる。**DATA全体**を見るのはこの2経路を1箇所で
-'               押さえるためである。
+'               mode=warn の対と、終端集合でない文脈にあった語は機械置換の
+'               対象外なので残りうるし、`s5_edited` を人が直した経路は CheckS5 を
+'               通らないので S5 側の本文にも残りうる。**DATA全体**を見るのは
+'               この2経路を1箇所で押さえるためである。
+'   strictLeft: そのうち**置換の取りこぼし**(=実装の欠陥)だけ(裁定書43 §1-4)。
+'               判定が位置に依るので、**語の一覧ではなく本文**から数える
+'               (一覧は語のうしろが ";" になり、";" は終端集合の字である)。
 ' ==========================================================
 Public Function BuildProposalDataEx(ByVal metaJson As String, ByVal s2Json As String, _
                                     ByVal s5Json As String, _
                                     ByRef softened As Long, _
-                                    ByRef tabooLeft As String) As String
+                                    ByRef tabooLeft As String, _
+                                    ByRef strictLeft As String) As String
     Dim p As String
     softened = 0
     tabooLeft = vbNullString
+    strictLeft = vbNullString
     p = modJsonLite.ExtractJsonBlock(s5Json)
     If LenB(Trim$(p)) = 0 Then Exit Function
 
@@ -351,6 +364,7 @@ Public Function BuildProposalDataEx(ByVal metaJson As String, ByVal s2Json As St
     ' 顧客向け本文に残った社内語を**最後に1回だけ**数える(裁定書40 S-M1)。
     ' 不合格にはしない(ここで止めると語1つで提案書が作れなくなる)。
     tabooLeft = modValidate4.TabooHit(s)
+    strictLeft = modValidate4.TabooHitStrict(s)
     BuildProposalDataEx = s
 End Function
 
@@ -610,21 +624,21 @@ End Function
 
 ' ==========================================================
 ' TabooLeftNote - 顧客向け本文に**残った**社内語を usage_log へ1行残す
-'   (裁定書40 S-M1)。一般語(移転・保有・抜け)とサ変語幹(付保・保険化ほか)を
-'   機械置換の対象から外した代償として裁定が求めた警告であり、
-'   **件数**(n=)と V-S5-12 の警告文(語の一覧)の両方を残す。
-'   出力は止めない: ここは検証ではなく注記のチャネルである(裁定書40 §0)。
-'   機械置換が責任を持つ語(TabooHitStrict)が残っていたら、それは置換の
-'   取りこぼし=実装の欠陥なので**別の行**で区別して残す(strict=)。
+'   (裁定書40 S-M1 / 43 §1-4)。mode=warn の対と、終端集合でない文脈にあった
+'   ために置換しなかった語が対象で、**件数**(proposal_jargon_left=N)と
+'   V-S5-12 の警告文(語の一覧)の両方を残す。出力は止めない: ここは検証では
+'   なく注記のチャネルである(裁定書40 §0)。営業向けレポートには出さない。
+'   置換の取りこぼし(strictLeft。本文から数えたもの)があれば、それは実装の
+'   欠陥なので**別の行**で区別して残す(strict=)。
 ' ==========================================================
-Private Sub TabooLeftNote(ByVal caseId As String, ByVal tabooLeft As String)
+Private Sub TabooLeftNote(ByVal caseId As String, ByVal tabooLeft As String, _
+                          ByVal strictLeft As String)
     If LenB(tabooLeft) = 0 Then Exit Sub
 
     modLog.LogUsage "proposal_taboo_left", caseId, _
-        "n=" & CStr(SepCount(tabooLeft)) & " " & modValidate4.TabooWarnLine(tabooLeft)
+        "proposal_jargon_left=" & CStr(SepCount(tabooLeft)) & " " & _
+        modValidate4.TabooWarnLine(tabooLeft)
 
-    Dim strictLeft As String
-    strictLeft = modValidate4.TabooHitStrict(tabooLeft)
     If LenB(strictLeft) > 0 Then
         modLog.LogUsage "proposal_taboo_left", caseId, "strict=" & strictLeft
     End If
