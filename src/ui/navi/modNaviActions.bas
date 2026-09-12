@@ -531,16 +531,9 @@ End Function
 '   確認が必須である判断の正は modExportProposal の1箇所(画面を直しても抜けない)。
 '   案件の status は動かさない(出力は段の進行ではない。16章 E-48)。
 Public Function ActExportProposal(ByVal caseId As String, ByVal reviewedBy As String) As String
-    Dim path As String, reason As String, plan As String
+    Dim path As String, reason As String, plan As String, steps As Variant, i As Long
     If Not FlushOwnedSheets(caseId, 5, reason) Then
         ActExportProposal = Failure(reason, "E0302")
-        Exit Function
-    End If
-    ' 確認が無いときは modExportProposal が生成しない(20章§8-3)。その判断を
-    ' **S5 を作る前に**引いておく(作ってから断るとAI呼出が1回むだになる)。
-    reason = modExportProposal.NeedsReviewMessage(Trim$(reviewedBy))
-    If LenB(reason) > 0 Then
-        ActExportProposal = Failure(reason, "E0101")
         Exit Function
     End If
     plan = modNaviState.ProposalPlanOf(modCaseStore.LoadData(caseId, "s5_json"), _
@@ -548,27 +541,41 @@ Public Function ActExportProposal(ByVal caseId As String, ByVal reviewedBy As St
                                        modCaseStore.ResolveStepJson(caseId, 1), _
                                        modCaseStore.ResolveStepJson(caseId, 2), _
                                        modCaseStore.ResolveStepJson(caseId, 3))
-    If plan = "upstream_missing" Then
-        ActExportProposal = Failure("先に[まとめて分析]を実行してください。", "E0101")
+    ' 断る理由(確認者名が無い=20章§8-3 / 上流が未了)は純関数1本に寄せてある
+    ' (modNaviActions2.ProposalBlockOf。裁定書40 R-M2/R-m3)。確認の判断は
+    ' AI呼出(S5)より前に引く=作ってから断ると1回むだになる。
+    reason = modNaviActions2.ProposalBlockOf( _
+        modExportProposal.NeedsReviewMessage(Trim$(reviewedBy)), plan)
+    If LenB(reason) > 0 Then
+        ActExportProposal = reason
         Exit Function
     End If
-    If plan = "run_s5" Then
-        modNaviHost.ShowBusy "お客さま向け提案書の文章", ProgressJson(1, 1, "お客さま向け提案書の文章")
-        DoEvents
-        If Not modPipeline5.RunStep5(caseId) Then
-            ' 16章 E-71: 案件は壊さない(s5_json は汚さず status も動かさない)。
-            ' 骨子(4. 提案骨子)が健在なので商談には行ける、と案内する。
-            ActExportProposal = Failure("提案書を作れませんでした。" & _
-                "今回は提案骨子（4. 提案の骨子）をご利用ください。", "E0302")
-            Exit Function
+    ' 手順の並び(S5 を作ってから出力する)の正は modNaviState.ProposalStepsOf。
+    ' ここはその並びを前から順に実行するだけにする(裁定書40 R-M2)。
+    steps = Split(modNaviState.ProposalStepsOf(plan), ";")
+    For i = LBound(steps) To UBound(steps)
+        If steps(i) = "run_s5" Then
+            modNaviHost.ShowBusy "お客さま向け提案書の文章", ProgressJson(1, 1, "お客さま向け提案書の文章")
+            DoEvents
+            If Not modPipeline5.RunStep5(caseId) Then
+                ActExportProposal = modNaviActions2.ProposalS5FailedJson()
+                Exit Function
+            End If
+        ElseIf steps(i) = "export" Then
+            reason = modExportProposal.GenerateProposalHtml(caseId, path, reviewedBy)
+            If LenB(reason) > 0 Or LenB(path) = 0 Then
+                ActExportProposal = Failure(reason, "E0603")
+                Exit Function
+            End If
         End If
-    End If
-    reason = modExportProposal.GenerateProposalHtml(caseId, path, reviewedBy)
-    If LenB(reason) > 0 Or LenB(path) = 0 Then
-        ActExportProposal = Failure(reason, "E0603")
+    Next i
+    If LenB(path) = 0 Then
+        ' 1手も実行しなかった(=段取りが空)。黙って成功にしない。
+        ActExportProposal = Failure("提案書を出力できませんでした。", "E0603")
         Exit Function
     End If
     ' 裁定書39 R2-06: 保存先を state(区画④の出力一覧)とトーストの両方へ出す。
+    ' 裁定書40 R-m1: state は案件データ(nav_basics)へ残るので再起動しても消えない。
     modNaviState.SetProposalPath caseId, path
     ActExportProposal = SavedResult(caseId, "提案書を出力しました。" & _
         "内容をご確認のうえお渡しください。保存先: " & path)
@@ -610,12 +617,12 @@ End Function
 '   **レポートと提案書の2本**だけを開いてよい対象にする(画面から来たパスを
 '   そのまま開くと、任意のファイルを開く口になる。この照合が防波堤)。
 Public Function ActOpenReport(ByVal caseId As String, ByVal data As String) As String
-    Dim path As String, given As String, ok As Boolean, proposal As String
-    path = modCaseRead.CaseColumnOf(caseId, "report_path")
-    proposal = modNaviState.ProposalPathOf(caseId)
-    given = modJsonLite.GetStr(data, "path")
-    If LenB(given) > 0 And LenB(proposal) > 0 And given = proposal Then path = proposal
-    If LenB(path) = 0 Or (LenB(given) > 0 And given <> path) Then
+    Dim path As String, ok As Boolean
+    ' 開いてよいパスの判断は純関数1本(modNaviActions2.OpenTargetOf。裁定書40)。
+    path = modNaviActions2.OpenTargetOf(modCaseRead.CaseColumnOf(caseId, "report_path"), _
+                                        modNaviState.ProposalPathOf(caseId), _
+                                        modJsonLite.GetStr(data, "path"))
+    If LenB(path) = 0 Then
         ActOpenReport = Failure("この案件に登録されたレポートがありません。", "E0101")
         Exit Function
     End If
