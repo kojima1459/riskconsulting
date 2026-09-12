@@ -1,5 +1,7 @@
 # 15. プロンプトとJSONスキーマ v2.7（本製品の核心）
 
+> v2.9（W15 Round2・裁定書39 R1-09 / X-1）: **`sources` の欠落を `CheckS1` の不合格から外した**。Schema-S1 のルート required は**17キーのまま**（direct 経路ではスキーマを強制できるので落とす理由がない）だが、実運用のリボン経路は**スキーマを強制できない**ため、モデルが新設キーを落とすと V-S1-01（不合格）→ 修復リトライ1回 → `PL_RES_FAILED` → 案件 status=error となり、**その案件は二度と S1 を通せなくなる**（mock は必ず `sources` を返すので純層・ゲートでは絶対に露見しない）。そこで (a) `modValidate.CheckS1` の必須キー検査を**16キー**（`sources` を除く）とし、(b) 欠落は新設の **V-S1-16（警告）** で印だけ残し、(c) `modValidate.NormalizeLlmJson`（S1のとき）が**空配列 `"sources":[]` を補填**してから検証へ渡す（＝実運用では V-S1-16 は発火せず、補填が効かない壊れたJSONのときだけ出る安全網）。あわせて `missing_info[].kind` に検証が1つも無かった穴を **V-S1-17（enum 外は警告）** で塞いだ。§11 は**計92件**（不合格73 / 警告17 / 合格判定2）。実装は容量（12章§2）の都合で `modValidate3.SoftNotesS1` / `modValidate3.PostNormalize` に置き、入口は従来どおり `modValidate.CheckS1` / `modValidate.NormalizeLlmJson` である。
+>
 > v2.7（W15・裁定書38 班A「S1の証拠と出典」）: §2 S1 を**出典が残る形**へ改訂した。**system**: 冒頭に証拠階層の1段落（一次資料 > 調査AIアプリの要約 > 学習済み知識は使わない）を置き、**ルール11**（入力にそのまま現れたURLだけを `sources` に列挙・URLを創作しない）を新設した（既存のルール1～10の番号と文言は不変）。**user**: 出力JSON例へ `missing_info[].kind` と `sources[]` を足し、※行を2本足した。**Schema-S1**: `missing_info[].kind`（enum `conflict` / `undisclosed` / `not_found` / `hearing_only`・required）と `sources[]`（`label` / `url` / `aspect`・0～20件・required・空配列可。`aspect` は14観点キーまたは `other`）を追加し、ルートの required を**17キー**へ。**§11**: CheckS1 へ **V-S1-14**（sources[].url の貼付原文実在。警告）と **V-S1-15**（接頭辞・出所の不整合。警告）を新設し**計77件**（不合格61 / 警告14 / 合格判定2）へ。この2件は落とさない警告のため実装は `modValidate3.CheckS1Notes` に置き、`modPipeline3` の注記経路から run_log と HTML meta へ渡す（§2 の注記）。§10.2 の §2 system / user の実装モジュールを **modPromptsCore2**（modPromptsCore が30,000字契約に達したための分割先。12章§2）へ改めた。
 
 > v2.6（W7・裁定書25「W7センターピン整合」）: UC案v0.1＋髙橋FB（8/26-27）へ核を合わせた。**S1**: 新規案件でも付保ギャップを立てられるようにした（§1.2b `BLOCK_NEW_S2` 新設・CheckS2 の V-S2-12 を廃止し V-S2-12b を新設・Schema-S1 `current_coverage[].certainty`〔confirmed/assumed〕追加・V-S1-04 の発火条件を訂正・V-S1-12 新設）。**S2**: Schema-S3 へ `talk_script`（opening/flow/closing/taboo）を required で追加し、S3 system 第12ルールと V-S3-19〜21 を新設した（描画は18章 SEC-18）。**S3**: Schema-S1 へ `financials`（fiscal_year/net_assets/sales/operating_profit/source/note）を required で追加、S1 system 第10ルールと S1 user の【決算・財務】ブロックを新設し、V-S1-13 を追加。S2 systemルール11を「純資産との対比を必ず出す」へ改訂し V-S2-18 を新設した。**S4**: §1.2c `BLOCK_ROUND2_FOCUS` を新設し S2/S3 user へ挿入した。**S5**: `insurability.line_note` を `line_note`（想定種目）と `gap_note`（確認点）へ分離した。**S6**: S2 user へ `{{incidentsText}}`（事故事例）の注入枠を新設し、§0.7 の切詰め表へ加えた。**S7**: `emerging_risks` を0～5件へ（V-S2-16 の閾値5）。**S9**: §5 S4 system の「PowerPoint骨子」を「提案書骨子」へ改めた。§10.2 へ `BlockNewS2()` / `BlockRound2Focus()` を追加（Block* は9関数・対応表は33関数）。§11 は**計75件**（CheckS1 13 / CheckS2 18 / CheckS3 21）。
@@ -492,8 +494,12 @@ S1はこの観点の充足度を診断し（input_quality。判定基準はテ�
 | V-S1-13 | financials.source | enum（yuho/kessan_kokoku/tdb/view/memo/unknown）以外（v2.6・裁定書25 S3） | 不合格 | `[V-S1-13] financials.source が不正です: {value}` |
 | V-S1-14 | sources[].url | 貼付原文（`modPipeline3.BuildHaystack` の `input_*` 全欄）に `InStr` で見つからない（v2.7・裁定書38 B-04） | 警告 | `[V-S1-14] sources[{i}].url が貼付原文に見当たりません: {value}` |
 | V-S1-15 | current_coverage[].certainty / financials | `certainty="assumed"` の要素の値に接頭辞「(見立て)」が1つも無い、または `financials.source` が `unknown` 以外なのに4項目すべてが「不明」（v2.7・裁定書38 B-12） | 警告 | `[V-S1-15] 接頭辞・出所の不整合があります: {detail}` |
+| V-S1-16 | sources | ルートに `sources` が無い（v2.9・裁定書39 R1-09）。**不合格にしない**（リボン経路でモデルが落とすと修復リトライ地獄になる）。`NormalizeLlmJson` が空配列を補填したあとのJSONでは発火しない | 警告 | `[V-S1-16] sources がありません(空として続けます)` |
+| V-S1-17 | missing_info[].kind | enum（conflict / undisclosed / not_found / hearing_only）以外（v2.9・裁定書39 X-1）。リボン経路はスキーマを強制しないため `conflicted` のような値が素通りし、SEC-03/04 の分離表示（`kind==='conflict'`）から静かに外れていた | 警告 | `[V-S1-17] missing_info[{i}].kind が不正です: {value}` |
 
 **V-S1-14 / V-S1-15 の実装位置（v2.7・裁定書38 班A）**: この2件は**警告であり、出力を落とさない・修復リトライを起こさない**。`modValidate.CheckS1` の戻り値（＝不合格と同じ経路で `modPipeline.Defend` が受ける文字列）に載せると修復リトライが走ってしまうため、実体は **`modValidate3.CheckS1Notes(json, haystack)`** に置き、`modPipeline3.DefendNotes`（S1成功時）から呼んで run_log の `detail` へ `s1_warn=V-S1-14:2,V-S1-15:1` の形で記録し、HTMLレポートの `meta.s1_warn`（18章§2）へ配列で渡す。`haystack` は `modPipeline3.BuildHaystack(caseId, "")`＝**貼付原文だけ**（S1出力を混ぜると捏造URLが自分自身と一致してしまうため、第2引数には空文字を渡す）。
+
+**`sources` の fail-open（v2.9・裁定書39 R1-09）**: Schema-S1 のルート required は17キーのままだが、`modValidate.CheckS1` が**不合格**にする必須キーは `sources` を除いた**16キー**である。`sources` の欠落は **V-S1-16（警告）** に降格し、`modValidate.NormalizeLlmJson`（`stepName="s1"` のとき）が正規化の直後に `"sources":[]` を補ってから検証へ渡す（実体は `modValidate3.PostNormalize`）。理由は、スキーマを強制できるのは direct 経路だけで、実運用のリボン経路ではモデルが新設キーを落としうるからである。落としたときに不合格にすると 15章§7 の修復リトライが1回走り、それでも落ちれば `FailStep` で案件 status=error となり、**その案件の S1 が永久に通らない**。mock（§8.1）は必ず `sources` を返すので、この事故は純層でもゲートでも再現しない。補填後は `sources` が空配列として下流（V-S1-14 / HTMLレポート SEC-14 の出典表）へ届くので、「キーが無い」で描画が割れることもない。
 
 **充足度ゲート（modPipeline）**: overall=low のとき「この入力では一般論に近い出力になります。{{advice}}」を警告表示（続行可）。overall と missing aspect数を run_log の detail に記録。research_requests は案件入力シートの「追加収集」欄に一覧表示し、各行に「コピー」操作を付ける（営業は調査AIアプリへ貼るだけ。11章）。
 補足: 現場メモ未提供時は field_insights=[]（V-S1-11 は現場メモ提供時のみ判定する）。field_insights は s1Json に含まれるため、S2/S4・壁打ちへは追加配線なしで原文のまま届く（蒸留しないパススルー。docs/09 F-01）。S3へは s1Json 全体ではなく要約（{{s1SummaryJson}}。§4）で届くが、field_insights は要約の対象キーに含めるため原文のまま渡る。
@@ -1989,7 +1995,7 @@ PL保険 -> 生産物賠償責任保険
 
 | Check関数 | ケースID | 不合格 | 警告 | 合格判定 |
 |---|---|---|---|---|
-| CheckS1 | V-S1-01 ～ V-S1-15（15件） | 01/02/03/06/07/09/10/12/13 | 04/05/08/11/14/15 | - |
+| CheckS1 | V-S1-01 ～ V-S1-17（17件） | 01/02/03/06/07/09/10/12/13 | 04/05/08/11/14/15/16/17 | - |
 | CheckS2 | V-S2-01 ～ V-S2-18（18件） | 01/02/03/04/05/06/07/08/09/12/13/16/17（06は一覧未提供時も不合格。**12 の実体は枝番 V-S2-12b**＝下の注記） | 10/11/14/15/18 | - |
 | CheckS3 | V-S3-01 ～ V-S3-21（21件） | 01/02/03/04/05/06/07/08/09/10/11/12/14/15/16/17/18/19/20（03から06は一覧未提供時も不合格） | 13/21 | - |
 | CheckS4 | V-S4-01 ～ V-S4-06（6件） | 01/02/03/04/05/06 | - | - |
@@ -1998,7 +2004,7 @@ PL保険 -> 生産物賠償責任保険
 | CheckS3C | V-S3C-01 ～ V-S3C-05（5件） | 01/02/03/04 | - | 05（lands全true かつ issues 0件=改訂スキップ） |
 | CheckS5 | V-S5-01 ～ V-S5-13（13件） | 01/02/03/04/05/06/07/08/09/10/11/12（03は一覧未提供時も不合格） | 13 | - |
 
-**合計90件**（不合格73件 / 警告15件 / 合格判定2件）。W15・裁定書38 班C で CheckS5（V-S5-01 から V-S5-13。13件＝不合格12件・警告1件）を追加した。ケースIDは削除する場合も番号を再利用しない（追番のみ）。
+**合計92件**（不合格73件 / 警告17件 / 合格判定2件）。W15・裁定書38 班C で CheckS5（V-S5-01 から V-S5-13。13件＝不合格12件・警告1件）を、W15 Round2・裁定書39 で **V-S1-16**（`sources` 欠落。R1-09 の fail-open）と **V-S1-17**（`missing_info[].kind` の enum。X-1）の警告2件を追加した。ケースIDは削除する場合も番号を再利用しない（追番のみ）。
 
 **枝番 `V-S2-12b` と欠番 `V-S2-12` の扱い（v2.6・裁定書25 S1）**: 旧 `V-S2-12`（新規案件で gaps が1件以上→不合格）は撤回した。**番号 `V-S2-12` は永久欠番**とし再利用しない。その位置に新しい条件を置くため、裁定書25の指定どおり**枝番 `V-S2-12b`** を新設した（CheckS2 の実体は 01..11 / **12b** / 13..18 の18件）。上の表の範囲表記が `V-S2-01 ～ V-S2-18` の連番形なのは照合器（`tools/validate_check.py`）が範囲を機械展開するためであり、**12 の位置に立つ実体は `V-S2-12b` である**。照合器は枝番と欠番をまだ解さないため、**この2つを解釈できるようにするのは実装側の作業**（17章 T-55）である。それまで `validate` ゲートは `V-S2-12` を要求して赤くなるが、それは仕様の誤りではない。エラー文テンプレの `{...}` は実行時に値を埋める箇所であり、テストは行頭の `[ケースID]` の有無で照合する。
 

@@ -297,6 +297,9 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "kb_scheme_rows", "10"
     modConfig.RegisterDefault "kb_incident_rows", "5"
     modConfig.RegisterDefault "kb_mech_rows", "40"
+    ' 裁定書39 R1-03: 並べ替え補充のn-gram比較に掛ける字数上限(13章§2.3)。
+    modConfig.RegisterDefault "kb_rank_case_chars", "3000"
+    modConfig.RegisterDefault "kb_rank_row_chars", "2000"
     modConfig.RegisterDefault "json_repair_retry", "1"
     ' 裁定書27 W9-C2: 成果物の保存先は data_dir が正。html_out_dir は空を既定に
     ' して「data_dir に従う」を既定動作にし、分けたい管理者だけが値を入れる。

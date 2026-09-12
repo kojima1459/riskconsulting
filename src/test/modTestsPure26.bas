@@ -25,6 +25,18 @@ Option Explicit
 '     13 21字の一致は成立する
 '     14 無関係な文字列は一致しない
 '
+' W15 Round2(裁定書39 §1)で追加した8本:
+'   G5 modKnowledgeRank の索引化と上限(R1-03)
+'     15 多重集合の共通部の値(手計算)。索引化しても数え方が変わらないこと
+'     16 索引版が素朴版(このモジュールが持つ参照実装 NaiveOverlap)と一致する
+'     17 順位が素朴版のスコア降順(同点は元の並び)と一致する
+'     18 案件側の上限 kb_rank_case_chars で打ち切られること
+'     19 行側の上限 kb_rank_row_chars で打ち切られること
+'     20 上限0は無制限(既存の呼出と挙動が変わらないこと)
+'   G6 打切り総数と境界(R1-04 / G-1)
+'     21 補充が起きたとき totalHits は「完全一致の該当総数+補充候補の総数」
+'     22 lastRow=0 でも実行時エラー(Err9)にならず0件で返ること
+'
 ' 変異注入(出来レース禁止・裁定書38 共通規約):
 '   (a) modKnowledgeRank.RankRows の並べ替えを昇順に変えると04/05が落ちる。
 '   (b) modPii.SharesLongFragment の判定を `>= minLen - 1` 等へずらすと
@@ -35,7 +47,7 @@ Option Explicit
 
 Public Sub RunAll()
     Dim i As Long, grpName As String
-    For i = 1 To 4
+    For i = 1 To 6
         grpName = "W15B-G" & CStr(i)
         On Error Resume Next
         Err.Clear
@@ -56,6 +68,8 @@ Private Sub RunGroup(ByVal idx As Long)
     Case 2: T_SelectRows
     Case 3: T_PiiKinds
     Case 4: T_SharesLongFragment
+    Case 5: T_RankIndexAndCap
+    Case 6: T_TotalHitsAndEmpty
     End Select
 End Sub
 
@@ -206,4 +220,135 @@ Private Sub T_SharesLongFragment()
     ChkB "Test_W15B_14_無関係な文字列は一致しない_裁定書38Z-49", _
         Not modPii.SharesLongFragment("ZZZZZZZZZZZZZZZZZZZZ", src, 20), _
         "無関係な断片が誤って一致した"
+End Sub
+
+' ============================================================================
+' G5 modKnowledgeRank の索引化と上限(裁定書39 R1-03)
+' ----------------------------------------------------------------------------
+' 期待値の出典: 14章§6 の NgramOverlap 契約(「共通して現れるn文字グラムの
+'   延べ数=多重集合の共通部」「貪欲マッチング(先勝ち)」)と、裁定書39 §1 R1-03
+'   (「比較文字列に上限」「n-gram を Collection で索引化して O(N+M) へ」)。
+'
+' NaiveOverlap は**この表の契約からテスト側で書き起こした参照実装**(二重ループ)。
+'   実装を索引版へ入れ替えても数え方が1件も変わらないことを、これと突き合わせて
+'   固定する(索引版だけを見て期待値を作らない)。
+' ============================================================================
+Private Function NaiveOverlap(ByVal a As String, ByVal b As String, ByVal n As Long) As Long
+    If n <= 0 Then Exit Function
+    Dim la As Long, lb As Long
+    la = Len(a) - n + 1
+    lb = Len(b) - n + 1
+    If la < 1 Or lb < 1 Then Exit Function
+
+    Dim used() As Boolean
+    ReDim used(1 To lb)
+    Dim i As Long, j As Long, cnt As Long, gramA As String
+    For i = 1 To la
+        gramA = Mid$(a, i, n)
+        For j = 1 To lb
+            If Not used(j) Then
+                If gramA = Mid$(b, j, n) Then
+                    used(j) = True
+                    cnt = cnt + 1
+                    Exit For
+                End If
+            End If
+        Next j
+    Next i
+    NaiveOverlap = cnt
+End Function
+
+Private Sub T_RankIndexAndCap()
+    ' 15 多重集合の共通部(手計算)。"aaaa" の2字グラムは "aa" が3個、"aa" は1個
+    '    なので共通部は min(3,1)=1。"aaaa" どうしなら min(3,3)=3。
+    ChkN "Test_R1-03_15a_重複グラムは多重集合の共通部で数える_裁定書39R1-03", _
+        modKnowledgeRank.NgramOverlap("aaaa", "aa", 2), 1
+    ChkN "Test_R1-03_15b_同一文字列の重複グラムは全数が共通部_裁定書39R1-03", _
+        modKnowledgeRank.NgramOverlap("aaaa", "aaaa", 2), 3
+
+    ' 16 索引版と素朴版の一致(重複の多い入力・部分一致・無関係を混ぜる)。
+    Dim aTxt As String, i As Long, diffSum As Long
+    Dim bTxt(1 To 4) As String
+    aTxt = String$(40, "a") & "bcbcbcbc" & String$(20, "d")
+    bTxt(1) = String$(15, "a") & "cbcbcb"
+    bTxt(2) = "bcbcbcbc"
+    bTxt(3) = String$(30, "d")
+    bTxt(4) = "zzzzzzzzzz"
+    For i = 1 To 4
+        diffSum = diffSum + _
+            Abs(modKnowledgeRank.NgramOverlap(aTxt, bTxt(i), 2) - NaiveOverlap(aTxt, bTxt(i), 2)) + _
+            Abs(modKnowledgeRank.NgramOverlap(aTxt, bTxt(i), 3) - NaiveOverlap(aTxt, bTxt(i), 3))
+    Next i
+    ChkN "Test_R1-03_16_索引版は素朴版と同じ重なり数を返す_裁定書39R1-03", diffSum, 0
+
+    ' 17 順位も素朴版と同じ(13 / 5 / 5 / 0 -> 3,2,4,1。同点は元の並び)。
+    Dim rowTexts(1 To 4) As String
+    Dim order() As Long
+    Dim n As Long
+    rowTexts(1) = "zzzzzzzz"
+    rowTexts(2) = "abcdxxxx"
+    rowTexts(3) = "abcdefgh"
+    rowTexts(4) = "efghyyyy"
+    n = modKnowledgeRank.RankRows("abcdefgh", rowTexts, order)
+    ChkB "Test_R1-03_17_索引版でも順位は素朴版と同じ_裁定書39R1-03", _
+        (n = 4 And order(1) = 3 And order(2) = 2 And order(3) = 4 And order(4) = 1), _
+        "実際の順=" & Join(order, ",")
+
+    ' 18/20 案件側の上限(kb_rank_case_chars 相当)で打ち切られること。
+    '    caseText の後半(BBBBBBBB)を切ると C2 の重なりが0になり補充されない。
+    Dim blkA As Variant, selOut As Variant, idsOut As String, totalHits As Long
+    blkA = MakeBlk("id;industry;body", _
+        "C1;09;pppppppp" & vbLf & _
+        "C2;07;BBBBBBBB" & vbLf & _
+        "C3;07;AAAAAAAA")
+
+    idsOut = vbNullString
+    n = modKnowledge2.SelectRows(blkA, 4, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "AAAAAAAABBBBBBBB", "body", 0, 0)
+    ChkS "Test_R1-03_20_上限0は無制限で従来どおり補充する_裁定書39R1-03", idsOut, "C1;C2;C3"
+
+    idsOut = vbNullString
+    n = modKnowledge2.SelectRows(blkA, 4, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "AAAAAAAABBBBBBBB", "body", 8, 0)
+    ChkS "Test_R1-03_18_案件側の上限で打ち切られる_裁定書39R1-03", idsOut, "C1;C3"
+
+    ' 19 行側の上限(kb_rank_row_chars 相当)で打ち切られること。
+    Dim blkB As Variant
+    blkB = MakeBlk("id;industry;body", _
+        "C1;09;pppppppp" & vbLf & _
+        "C2;07;ZZZZZZZZAAAAAAAA" & vbLf & _
+        "C3;07;AAAAAAAAZZZZZZZZ")
+    idsOut = vbNullString
+    n = modKnowledge2.SelectRows(blkB, 4, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "AAAAAAAA", "body", 0, 8)
+    ChkS "Test_R1-03_19_行側の上限で打ち切られる_裁定書39R1-03", idsOut, "C1;C3"
+End Sub
+
+' ============================================================================
+' G6 打切り総数と境界(裁定書39 R1-04 / G-1)
+' ============================================================================
+Private Sub T_TotalHitsAndEmpty()
+    Dim blk As Variant, selOut As Variant, idsOut As String, totalHits As Long, n As Long
+    blk = MakeBlk("id;industry;body", _
+        "C1;09;たまご" & vbLf & _
+        "C2;07;abcdxxxx" & vbLf & _
+        "C3;07;zzzzzzzz" & vbLf & _
+        "C4;07;abcdefgh")
+
+    ' 21 補充が起きたとき、totalHits は「完全一致の該当総数(C1の1件)+補充候補の
+    '    総数(C2/C3/C4の3件)」=4。使用数(3)を下回る値を返すと run_log の
+    '    kb_cut:cases=3/1 が読めない値になり、SEC-14 の「該当N件のうちM件」も
+    '    (total>used の条件で)消える。
+    idsOut = vbNullString
+    n = modKnowledge2.SelectRows(blk, 5, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "abcdefgh", "body")
+    ChkN "Test_R1-04_21_補充時のtotalHitsは完全一致+補充候補_裁定書39R1-04", totalHits, 4
+
+    ' 22 lastRow=0(データ行が1本も無い)でも、補充の候補配列を ReDim(1 To 0) して
+    '    実行時エラー9 を投げないこと。0件で静かに返る。
+    idsOut = vbNullString
+    totalHits = 0
+    n = modKnowledge2.SelectRows(blk, 0, "id", "industry", "09", 3, selOut, idsOut, _
+                                  totalHits, "abcdefgh", "body")
+    ChkN "Test_G-1_22_lastRow0でも実行時エラーにならない_裁定書39G-1", n, 0
 End Sub

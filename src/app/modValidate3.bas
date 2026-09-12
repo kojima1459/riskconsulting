@@ -7,10 +7,16 @@ Option Explicit
 ' 12章§2: modValidate(残328字)・modValidate2(残352字)が30,000字契約で満杯の
 '   ため新設した(裁定書38 班A・B班報告 §6 C-3)。
 '
-' 責務は2件だけである。
+' 責務は次の4件である(2〜4件目は裁定書39 で追加)。
 '   V-S1-14(B-04): sources[].url が**貼付原文**に実在するか(InStr)。
 '   V-S1-15(B-12): 接頭辞・出所の不整合(「(見立て)」の欠落・financials の
 '                  出所と値の食い違い)。
+'   V-S1-16 / V-S1-17(R1-09 / X-1): sources の欠落と missing_info[].kind の
+'                  enum 外。**この2件だけは modValidate.CheckS1 の戻り値に載る**
+'                  (15章§11 の CheckS1 表に載せた警告なので、判定の出口は
+'                  CheckS1 で1つに保つ)。置き場所がこちらなのは modValidate が
+'                  30,000字契約に達しているためであり、責務の移動ではない。
+'   PostNormalize(R1-09): S1 の正規化直後に sources の空配列を補う fail-open。
 '
 ' **戻り値を modValidate.CheckS1 に混ぜない**: CheckS1 の戻り値は
 '   modPipeline.Defend の errText となり、非空なら修復リトライと
@@ -18,6 +24,12 @@ Option Explicit
 '   出力を落としてはならないので、呼び出しは modPipeline3.DefendNotes(S1成功時)
 '   からの**注記経路**だけとする(run_log の detail と HTMLレポートの
 '   meta.s1_warn へ印を残す)。15章§2 の注記が正。
+'
+' 裁定書39 R1-10 / G-2: 値は**対象オブジェクトを切り出してから**読む。
+'   json 全体へ GetStr(json,"source") を掛けると「最初に現れた同名キー」(15章§14)
+'   を拾うためスキーマのキー順に依存し、生のJSON片へ InStr を掛けるとスキーマ外の
+'   フィールドに現れた「(見立て)」で警告が消える。どちらもリボン経路(スキーマ
+'   強制なし)で現実に起きる。
 '
 ' 照合に使う「貼付原文」は modPipeline3.BuildHaystack(caseId, "") である
 '   (第2引数に s1Json を渡さない。S1の出力を混ぜると、捏造したURLが自分自身と
@@ -43,6 +55,20 @@ Private Const V3_HEARSAY2 As String = "（見立て）"
 
 ' financials の「不明」(15章§2 ルール10)。
 Private Const V3_UNKNOWN As String = "不明"
+
+' 裁定書39 G-2: 「(見立て)」を探す**対象の値**(Schema-S1 の current_coverage[])。
+'   生のJSON片へ InStr を掛けると、スキーマ外のフィールド(リボン経路はスキーマを
+'   強制しないので混ざりうる)に現れた「(見立て)」を拾って警告を握りつぶす。
+Private Const V3_CC_VALUE_KEYS As String = "line_name|coverage_summary|limit_note|special_note"
+
+' 裁定書39 R1-10: financials の4項目(AllUnknown の判定対象)。
+Private Const V3_FIN_KEYS As String = "fiscal_year|net_assets|sales|operating_profit"
+
+' 裁定書39 X-1: missing_info[].kind の enum(19章§3・Schema-S1。V-S1-17)。
+Private Const V3_MI_KIND As String = "|conflict|undisclosed|not_found|hearing_only|"
+
+' 空白とみなす文字(JSONのトークン間)。
+Private Const V3_WS As String = " " & vbTab & vbCr & vbLf
 
 ' ============================================================================
 ' CheckS1Notes - V-S1-14 / V-S1-15 の警告行(改行区切り)を返す。空=指摘なし。
@@ -80,14 +106,13 @@ End Function
 ' --- V-S1-15: 接頭辞・出所の不整合 -----------------------------------------
 Private Function PrefixNotes(ByVal json As String) As String
     Dim it As Variant, idx As Long, oneText As String, r As String
-    Dim srcText As String
+    Dim srcText As String, finText As String
 
     idx = 0
     For Each it In modJsonLite.GetArrayItems(json, "current_coverage")
         oneText = CStr(it)
         If LCase$(Trim$(modJsonLite.GetStr(oneText, "certainty"))) = "assumed" Then
-            If InStr(1, oneText, V3_HEARSAY1, vbBinaryCompare) = 0 _
-               And InStr(1, oneText, V3_HEARSAY2, vbBinaryCompare) = 0 Then
+            If Not HasHearsay(oneText) Then
                 r = Join2(r, "[V-S1-15] 接頭辞・出所の不整合があります: current_coverage[" & _
                              idx & "] は certainty=assumed ですが「(見立て)」がありません")
             End If
@@ -95,9 +120,18 @@ Private Function PrefixNotes(ByVal json As String) As String
         idx = idx + 1
     Next it
 
-    srcText = LCase$(Trim$(modJsonLite.GetStr(json, "source")))
+    ' 裁定書39 R1-10: GetStr は「最初に現れた同名キー」を返す(15章§14)ので、
+    '   json 全体へ "source" を引くと sources[] の要素やトップレベルの同名キーを
+    '   拾う。リボン経路はキー順を強制できない以上、**financials を切り出してから**
+    '   読む(W14 で潰した「スキーマ順に依存した読み」を再導入しない)。
+    finText = ObjOf(json, "financials")
+    If LenB(finText) = 0 Then
+        PrefixNotes = r
+        Exit Function
+    End If
+    srcText = LCase$(Trim$(modJsonLite.GetStr(finText, "source")))
     If LenB(srcText) > 0 And srcText <> "unknown" Then
-        If AllUnknown(json) Then
+        If AllUnknown(finText) Then
             r = Join2(r, "[V-S1-15] 接頭辞・出所の不整合があります: financials.source=" & _
                          srcText & " ですが4項目すべてが「不明」です")
         End If
@@ -105,12 +139,147 @@ Private Function PrefixNotes(ByVal json As String) As String
     PrefixNotes = r
 End Function
 
+' current_coverage[] の1要素について、**値**のどれかに「(見立て)」があるか
+'   (裁定書39 G-2)。キー名やスキーマ外のフィールドは見ない。
+Private Function HasHearsay(ByVal itemJson As String) As Boolean
+    Dim keyList() As String, i As Long, v As String
+
+    keyList = Split(V3_CC_VALUE_KEYS, "|")
+    For i = LBound(keyList) To UBound(keyList)
+        v = modJsonLite.GetStr(itemJson, keyList(i))
+        If LenB(v) > 0 Then
+            If InStr(1, v, V3_HEARSAY1, vbBinaryCompare) > 0 Then
+                HasHearsay = True
+                Exit Function
+            End If
+            If InStr(1, v, V3_HEARSAY2, vbBinaryCompare) > 0 Then
+                HasHearsay = True
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
 ' financials の4項目がすべて「不明」か(前後の空白は落として完全一致で見る)。
-Private Function AllUnknown(ByVal json As String) As Boolean
-    AllUnknown = (Trim$(modJsonLite.GetStr(json, "fiscal_year")) = V3_UNKNOWN) _
-             And (Trim$(modJsonLite.GetStr(json, "net_assets")) = V3_UNKNOWN) _
-             And (Trim$(modJsonLite.GetStr(json, "sales")) = V3_UNKNOWN) _
-             And (Trim$(modJsonLite.GetStr(json, "operating_profit")) = V3_UNKNOWN)
+'   引数は **financials オブジェクトそのもの**(ObjOf で切り出したもの)。
+Private Function AllUnknown(ByVal finJson As String) As Boolean
+    Dim keyList() As String, i As Long
+
+    keyList = Split(V3_FIN_KEYS, "|")
+    For i = LBound(keyList) To UBound(keyList)
+        If Trim$(modJsonLite.GetStr(finJson, keyList(i))) <> V3_UNKNOWN Then Exit Function
+    Next i
+    AllUnknown = True
+End Function
+
+' ============================================================================
+' ObjOf - トップレベル(深さ1)のキー keyName が持つオブジェクト値 "{...}" を
+'   そのまま切り出す(不在・オブジェクト以外・壊れたJSONは "")。
+'   modJsonLite にオブジェクト取り出しの口が無いための最小ヘルパ。
+' ============================================================================
+Private Function ObjOf(ByVal srcJson As String, ByVal keyName As String) As String
+    Dim valPos As Long, endPos As Long
+
+    valPos = TopValuePos(srcJson, keyName)
+    If valPos = 0 Then Exit Function
+    If Mid$(srcJson, valPos, 1) <> "{" Then Exit Function
+    endPos = ObjEndPos(srcJson, valPos)
+    If endPos = 0 Then Exit Function
+    ObjOf = Mid$(srcJson, valPos, endPos - valPos + 1)
+End Function
+
+' TopValuePos - トップレベル(深さ1)のキー keyName の**値の開始位置**(0=不在)。
+'   modJsonLite.GetStr が「最初に現れた同名キー」を返す(深さを見ない)のに対し、
+'   ここは深さ1だけを見る(裁定書39 R1-09 / R1-10)。
+Private Function TopValuePos(ByVal srcJson As String, ByVal keyName As String) As Long
+    Dim n As Long, i As Long, depth As Long
+    Dim ch As String, endPos As Long, rawKey As String
+
+    n = Len(srcJson)
+    i = 1
+    Do While i <= n
+        ch = Mid$(srcJson, i, 1)
+        If ch = """" Then
+            endPos = StrEndPos(srcJson, i)
+            If endPos = 0 Then Exit Function
+            rawKey = Mid$(srcJson, i + 1, endPos - i - 1)
+            i = SkipWs(srcJson, endPos + 1)
+            If i <= n Then
+                If Mid$(srcJson, i, 1) = ":" And depth = 1 And rawKey = keyName Then
+                    i = SkipWs(srcJson, i + 1)
+                    If i > n Then Exit Function
+                    TopValuePos = i
+                    Exit Function
+                End If
+            End If
+        ElseIf ch = "{" Or ch = "[" Then
+            depth = depth + 1
+            i = i + 1
+        ElseIf ch = "}" Or ch = "]" Then
+            depth = depth - 1
+            i = i + 1
+        Else
+            i = i + 1
+        End If
+    Loop
+End Function
+
+' 空白を読み飛ばした次の位置。
+Private Function SkipWs(ByVal s As String, ByVal pos As Long) As Long
+    Dim n As Long, i As Long
+    n = Len(s)
+    i = pos
+    Do While i <= n
+        If InStr(1, V3_WS, Mid$(s, i, 1), vbBinaryCompare) = 0 Then Exit Do
+        i = i + 1
+    Loop
+    SkipWs = i
+End Function
+
+' quotePos の開き引用符に対応する閉じ引用符の位置(0=見つからない)。
+'   "\" のエスケープは2文字まとめて読み飛ばす。
+Private Function StrEndPos(ByVal s As String, ByVal quotePos As Long) As Long
+    Dim n As Long, i As Long, ch As String
+    n = Len(s)
+    i = quotePos + 1
+    Do While i <= n
+        ch = Mid$(s, i, 1)
+        If ch = "\" Then
+            i = i + 2
+        ElseIf ch = """" Then
+            StrEndPos = i
+            Exit Function
+        Else
+            i = i + 1
+        End If
+    Loop
+End Function
+
+' openPos の "{" に対応する "}" の位置(0=見つからない)。文字列の中の波括弧は数えない。
+Private Function ObjEndPos(ByVal s As String, ByVal openPos As Long) As Long
+    Dim n As Long, i As Long, depth As Long, ch As String, e As Long
+    n = Len(s)
+    i = openPos
+    Do While i <= n
+        ch = Mid$(s, i, 1)
+        If ch = """" Then
+            e = StrEndPos(s, i)
+            If e = 0 Then Exit Function
+            i = e + 1
+        ElseIf ch = "{" Then
+            depth = depth + 1
+            i = i + 1
+        ElseIf ch = "}" Then
+            depth = depth - 1
+            If depth = 0 Then
+                ObjEndPos = i
+                Exit Function
+            End If
+            i = i + 1
+        Else
+            i = i + 1
+        End If
+    Loop
 End Function
 
 ' ============================================================================
@@ -166,4 +335,74 @@ Private Function CountOf(ByVal hay As String, ByVal needle As String) As Long
         p = InStr(p + Len(needle), hay, needle, vbBinaryCompare)
     Loop
     CountOf = n
+End Function
+
+' ============================================================================
+' SoftNotesS1 - V-S1-16 / V-S1-17(裁定書39 R1-09 / X-1)。modValidate.CheckS1 が
+'   自分の戻り値へ連結する。空="指摘なし"。
+' ============================================================================
+Public Function SoftNotesS1(ByVal json As String) As String
+    Dim r As String, it As Variant, idx As Long, kindText As String
+
+    ' V-S1-16: sources の欠落。Schema-S1 のルート required には残すが(direct 経路
+    '   では強制できる)、CheckS1 の**不合格**からは外した。リボン経路でモデルが
+    '   新設キーを落とすと、不合格 -> 修復リトライ1回 -> 失敗 で案件が二度と
+    '   S1 を通せなくなるため(mock は必ず返すのでゲートでは露見しない)。
+    If Not HasTopKey(json, "sources") Then
+        r = Join2(r, "[V-S1-16] sources がありません(空として続けます)")
+    End If
+
+    ' V-S1-17: missing_info[].kind の enum。リボン経路はスキーマを強制しないので
+    '   "conflicted" のような値が素通りし、SEC-03/04 の分離表示(kind==='conflict')
+    '   から静かに外れていた。
+    idx = 0
+    For Each it In modJsonLite.GetArrayItems(json, "missing_info")
+        kindText = modJsonLite.GetStr(CStr(it), "kind")
+        If InStr(1, V3_MI_KIND, "|" & kindText & "|", vbBinaryCompare) = 0 Then
+            r = Join2(r, "[V-S1-17] missing_info[" & idx & "].kind が不正です: " & kindText)
+        End If
+        idx = idx + 1
+    Next it
+    SoftNotesS1 = r
+End Function
+
+' ============================================================================
+' PostNormalize - modValidate.NormalizeLlmJson が正規化の直後に掛ける後処理。
+'   いまは S1 の sources 補填だけ(裁定書39 R1-09)。他の step は素通し。
+' ============================================================================
+Public Function PostNormalize(ByVal stepName As String, ByVal json As String) As String
+    PostNormalize = json
+    If LCase$(Trim$(stepName)) <> "s1" Then Exit Function
+    PostNormalize = FillEmptySources(json)
+End Function
+
+' トップレベルに "sources" が無ければ空配列を足す。オブジェクトとして読めない
+'   文字列(抽出失敗・空・配列)は触らない。
+Private Function FillEmptySources(ByVal json As String) As String
+    Dim t As String, p As Long
+
+    FillEmptySources = json
+    If HasTopKey(json, "sources") Then Exit Function
+    t = RTrim$(json)
+    If LenB(t) = 0 Then Exit Function
+    If Left$(t, 1) <> "{" Then Exit Function
+    If Right$(t, 1) <> "}" Then Exit Function
+
+    ' 閉じ "}" の直前が "{" なら空オブジェクトなので "," を置かない。
+    p = Len(t) - 1
+    Do While p >= 1
+        If InStr(1, V3_WS, Mid$(t, p, 1), vbBinaryCompare) = 0 Then Exit Do
+        p = p - 1
+    Loop
+    If p < 1 Then Exit Function
+    If Mid$(t, p, 1) = "{" Then
+        FillEmptySources = Left$(t, Len(t) - 1) & """sources"":[]}"
+    Else
+        FillEmptySources = Left$(t, Len(t) - 1) & ",""sources"":[]}"
+    End If
+End Function
+
+' トップレベル(深さ1)に keyName があるか。
+Private Function HasTopKey(ByVal srcJson As String, ByVal keyName As String) As Boolean
+    HasTopKey = (TopValuePos(srcJson, keyName) > 0)
 End Function
