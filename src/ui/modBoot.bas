@@ -298,8 +298,6 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "kb_incident_rows", "5"
     modConfig.RegisterDefault "kb_mech_rows", "40"
     modConfig.RegisterDefault "json_repair_retry", "1"
-    modConfig.RegisterDefault "ppt_out_dir", "%USERPROFILE%\Documents\RPN出力"
-    modConfig.RegisterDefault "ppt_template_path", vbNullString
     ' 裁定書27 W9-C2: 成果物の保存先は data_dir が正。html_out_dir は空を既定に
     ' して「data_dir に従う」を既定動作にし、分けたい管理者だけが値を入れる。
     ' 裁定書31 裁定1: data_dir の既定は**空**(値源は data_dir.txt。環境変数を
@@ -328,6 +326,9 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "feature_judgelog", "TRUE"
     ' 裁定書14 裁定6: 初回ガイドツアーを見終えたか("1"=済)。既定は "0"。
     modConfig.RegisterDefault "guide_tour_done", "0"
+    ' 裁定書38 班H(13章§2.3・11章§7.2(c)・§3.6): 使い方タブ⑦「上級」の5行を
+    ' 出すか。既定はTRUE("使い方タブ⑦の5行を出す")。
+    modConfig.RegisterDefault "ui_advanced", "TRUE"
     ' 裁定書26 B/C/D(13章§2.3): 全画面表示・社内ディープリサーチのURL3本と
     ' [コピー]直後に開くか・部のポータル。
     modConfig.RegisterDefault "ui_fullscreen", "TRUE"

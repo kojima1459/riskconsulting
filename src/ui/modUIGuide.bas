@@ -198,9 +198,16 @@ Public Sub EnsureGuideButtons()
     names = Split(UG_ADV_SHEETS, vbLf)
     Dim i As Long
     For i = LBound(names) To UBound(names)
-        modUISheet.EnsureButtonEx ws, "btn_gd_adv" & CStr(i + 1), "表示する", _
-                                  r + i, c, 100#, _
-                                  "modUIGuide.ShowAdvanced" & CStr(i + 1), "plain"
+        ' 個別の機能フラグ(11章。feature_inbox/feature_judgelogがFALSEの間は
+        '   その1行だけ図形を作らない。ui_advancedとは別に、その機能だけ隠せる)。
+        If (names(i) = "受信箱" And Not modConfig.GetBool("feature_inbox", True)) Or _
+           (names(i) = "判断台帳" And Not modConfig.GetBool("feature_judgelog", True)) Then
+            ' skip: 導線を作らない
+        Else
+            modUISheet.EnsureButtonEx ws, "btn_gd_adv" & CStr(i + 1), "表示する", _
+                                      r + i, c, 100#, _
+                                      "modUIGuide.ShowAdvanced" & CStr(i + 1), "plain"
+        End If
     Next i
 
     ' ⑦上級の動作ボタン3本(裁定書22)。ui_advanced が FALSE のときは上で
