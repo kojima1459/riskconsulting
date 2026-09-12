@@ -8,8 +8,8 @@ Option Explicit
 '   18章§2・§3.5 だけ**から手で書き出した(17章§1。実装の出力を見てから期待値を
 '   合わせない)。
 '
-' 対象と根拠(全35本。W15 Round 2 の G6 10本は裁定書39 §1・裁定書40 §1 だけを、
-'   G7 2本は裁定書42 §2 だけを根拠に追記した):
+' 対象と根拠(全36本。W15 Round 2 の G6 10本は裁定書39 §1・裁定書40 §1 だけを、
+'   G7 3本は裁定書42 §2 と裁定書43 §2 だけを根拠に追記した):
 '   G1 原文照合(modGround。B-03 のテスト観点6つをそのまま置いた)
 '     01 引用の**先頭20字より後ろ**を1字変えても照合できる(表記揺れ耐性)
 '     02 丸ごと捏造した引用は未照合として検出する
@@ -33,8 +33,9 @@ Option Explicit
 '   G6 W15 Round 2(裁定書39 班Q / 裁定書40 班Q2)
 '     23/24 R2-04  25/26 R2-05  27 R1-05  28 R1-08(Q-M2で論理へ)  29/30 R1-07
 '     31 Q-m1(E-02の帯は実行直後のS1だけ)  32 Q-m3(E-02の帯とdeepを併記)
-'   G7 W15 最終是正(裁定書42 §2。確認導線の一本化)
-'     33 空白類に NBSP/ZWSP/BOM を含める  34 レポートと提案書の判定が対称
+'   G7 W15 最終是正(裁定書42 §2 確認導線の一本化 / 裁定書43 §2 Y-2)
+'     33 見えない文字に NBSP/ZWSP/BOM を含める  34 レポートと提案書の判定が対称
+'     35 見えない文字は**範囲**で決まる(範囲の境界の内外。列挙ではない)
 '
 ' 変異注入(出来レース禁止・裁定書37 §2):
 '   (a) modGround.QuoteFound を常に True にすると 02 と 07 が落ちる。
@@ -518,26 +519,51 @@ Private Function DocOfCompany(ByVal company As String) As String
 End Function
 
 ' ============================================================================
-' G7 W15 最終是正(裁定書42 §2)。確認導線の一本化。
+' G7 W15 最終是正(裁定書42 §2 確認導線の一本化 / 裁定書43 §2 Y-2)。
 ' ----------------------------------------------------------------------------
-'   33 空白類の一覧は modUtilText.HasVisibleText が唯一持ち、NBSP(U+00A0)・
-'      ZWSP(U+200B)・BOM(U+FEFF)も空白類として数える。
-'   34 **レポートと提案書の判定が対称**であること。空白類の表を1つ持ち、
-'      10種すべてで「レポートは未確認・提案書は生成しない」を同時に見る。
+'   33 見えない文字の定義は modUtilText.HasVisibleText が唯一持ち、NBSP
+'      (U+00A0)・ZWSP(U+200B)・BOM(U+FEFF)・SOFT HYPHEN(U+00AD)・
+'      EN SPACE(U+2002)・ZWNJ(U+200C)・WORD JOINER(U+2060)も見えない文字
+'      として数える。
+'   34 **レポートと提案書の判定が対称**であること。33 と同じ標本表を使い、
+'      全件で「レポートは未確認・提案書は生成しない」を同時に見る。
 '      裁定書40 S-m では提案書側だけへ NBSP の前処理を足したため、NBSP だけの
 '      確認者名でレポートが「担当者が確認・編集したもの」に切り替わっていた
 '      (=「片方だけ直す」型の3回目)。表を1つにすれば非対称は作れない。
-'   変異注入: modUtilText.HasVisibleText の Select Case から ChrW$(160) か
-'      ChrW$(8203) か ChrW$(65279) を1つ削ると 33 と 34 が落ちる。
+'   35 見えない文字が**閉じた範囲の集合**で決まること(裁定書43 §0)。33/34 が
+'      使う標本表は**定義ではなく標本**であり、表を長くしても網羅にはならない
+'      (裁定書43 までに3回それで漏れた)。35 は範囲の**境界の内外**だけを見る:
+'      範囲の内側の端は必ず False、その1つ外は必ず True。1文字ずつは列挙しない。
+'   変異注入: modUtilText.IsInvisibleCodeUnit の範囲を1つ削る/端を1つずらすと
+'      35 が落ちる(削った範囲が 33/34 の標本を含めば 33/34 も落ちる)。
 '      modExportProposal.NeedsReviewMessage に前処理(Replace)を挟み直すと
 '      34 が落ちる(レポート側だけが通す形に戻るため)。
 ' ============================================================================
 
-' 空白類の表(10種)。modUtilText.HasVisibleText の Select Case と**同じ数**で
-'   あることを 33 が見る。追加するときは両方へ足すこと。
+' 見えない文字の**標本**表(定義ではない)。33 が「1つも可視にならない」ことを、
+'   34 が「レポートと提案書で同じ答えになる」ことをこの表で見る。定義そのものは
+'   modUtilText.IsInvisibleCodeUnit の範囲で、その網羅は 35 が境界で押さえる。
 Private Function BlankKinds() As Variant
     BlankKinds = Array(" ", "　", vbTab, vbLf, vbCr, Chr$(11), Chr$(12), _
-                       ChrW$(160), ChrW$(8203), ChrW$(65279))
+                       ChrW$(&HA0&), ChrW$(&HAD&), ChrW$(&H2002&), _
+                       ChrW$(&H200B&), ChrW$(&H200C&), ChrW$(&H2060&), _
+                       ChrW$(&HFEFF&))
+End Function
+
+' 範囲の**内側の端**(すべて見えない文字でなければならない)。U+0000 側は
+'   符号なしなので下限の外が存在しない=U+0001 を内側の端として持つ。
+Private Function InvisibleEdges() As Variant
+    InvisibleEdges = Array(&H1&, &H20&, &H7F&, &HA0&, &HAD&, &H180E&, _
+                           &H2000&, &H200F&, &H2028&, &H202F&, &H205F&, _
+                           &H2060&, &H3000&, &HFEFF&)
+End Function
+
+' 上の範囲の**1つ外**(すべて可視でなければならない=落としすぎの検出)。
+Private Function VisibleEdges() As Variant
+    VisibleEdges = Array(&H21&, &H7E&, &H80&, &H9F&, &HA1&, &HAC&, &HAE&, _
+                         &H180D&, &H180F&, &H1FFF&, &H2010&, &H2027&, _
+                         &H2030&, &H205E&, &H2061&, &H2FFF&, &H3001&, _
+                         &HFEFE&, &HFF00&)
 End Function
 
 Private Sub T_W15Final()
@@ -559,7 +585,7 @@ Private Sub T_W15Final()
     Next i
 
     ' 33 空白類だけなら False。可視文字が1つでもあれば True(落としすぎない)。
-    ChkB "Test_W15_33_HasVisibleTextはNBSPとZWSPとBOMも空白類に数える_裁定書42", _
+    ChkB "Test_W15_33_HasVisibleTextはNBSPやZWSPやBOMも見えない文字に数える_裁定書42", _
         okBlank And _
         (modUtilText.HasVisibleText(mixed) = False) And _
         (modUtilText.HasVisibleText(ChrW$(160) & "田" & ChrW$(8203)) = True) And _
@@ -586,5 +612,42 @@ Private Sub T_W15Final()
         (modExportProposal.NeedsReviewMessage(mixed) <> "") And _
         (modExportHtml.ReviewerOf(ChrW$(160) & "山田") <> "") And _
         (modExportProposal.NeedsReviewMessage(ChrW$(160) & "山田") = ""), _
-        "非対称だった空白類=" & ngName
+        "非対称だった標本=" & ngName
+
+    T_W15Ranges
+End Sub
+
+' ---- 35 見えない文字は範囲で決まる(境界の内外) ----------------------------
+Private Sub T_W15Ranges()
+    Dim edges As Variant
+    Dim i As Long
+    Dim okIn As Boolean, okOut As Boolean
+    Dim ngIn As String, ngOut As String
+
+    ' 範囲の内側の端: 1文字だけなら「入力なし」でなければならない。
+    okIn = True
+    edges = InvisibleEdges()
+    For i = LBound(edges) To UBound(edges)
+        If modUtilText.HasVisibleText(ChrW$(CLng(edges(i)))) Then
+            okIn = False
+            ngIn = ngIn & "U+" & Hex$(CLng(edges(i))) & " "
+        End If
+    Next i
+
+    ' 範囲の1つ外: 1文字でも「入力あり」でなければならない(落としすぎない)。
+    okOut = True
+    edges = VisibleEdges()
+    For i = LBound(edges) To UBound(edges)
+        If Not modUtilText.HasVisibleText(ChrW$(CLng(edges(i)))) Then
+            okOut = False
+            ngOut = ngOut & "U+" & Hex$(CLng(edges(i))) & " "
+        End If
+    Next i
+
+    ChkB "Test_W15_35_見えない文字は範囲の境界の内外で決まる_裁定書43Y-2", _
+        okIn And okOut And _
+        (modUtilText.HasVisibleText(ChrW$(&H200C&) & ChrW$(&H2060&) & _
+                                    ChrW$(&HAD&) & ChrW$(&H2002&)) = False) And _
+        (modUtilText.HasVisibleText(ChrW$(&HAD&) & "山" & ChrW$(&H2060&)) = True), _
+        "内側なのに可視=[" & ngIn & "] 外側なのに不可視=[" & ngOut & "]"
 End Sub

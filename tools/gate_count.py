@@ -28,6 +28,16 @@
         gate.py 側は要点行に `検査実施: [1-9]\\d*件` を登録すれば、
         「要点行なし」=検査の証拠なし を目で見つけられる(登録行は司令塔)。
 
+もう1つの役目(件数がリテラル定数でないこと。裁定書43 §2 Y-7):
+    (1) の「数える」は、**その場で数えた実測値**でなければ意味がない。件数が
+    `record("描画後DOM", n_dom + 14)` のようにリテラル定数を含んでいると、
+    検査本体から判定を14本抜いても要点行が1文字も変わらず exit 0 になる
+    (検証者が render_report.py と notice_check.py の2本で実証した)。これは
+    本件の出発点である「描画後DOM18本を確認しました」という嘘の再生産なので、
+    `record(名前, 件数)` の**件数の式に数値リテラルが現れないこと**を構文木で
+    見る。直せない分は `LITERAL_COUNT_PENDING` へ**理由付きで登記**し、登記が
+    陳腐化(定数が消えた)したら赤にする。
+
 もう1つの役目(登記の網羅):
     `python3 tools/gate_count.py` は `tools/gate.py` の GATES を読み、
     **すべてのゲートの実行ファイル**が
@@ -91,6 +101,16 @@ PENDING_TOOLS: dict[str, str] = {
     "ribbon_wire_check.py": "件数化は次波",
     "ui_check.py": "条件数を要点行に出している",
     "gate_count.py": "本ファイル自身(契約の登記を見る側)",
+}
+
+# 件数にリテラル定数が残っているものの登記(裁定書43 §2 Y-7)。
+# **理由を書かずにここへ足さない**。裁定書43 §2 の担当表は班Y2 の担当を
+# notice_check.py / doc_gate.py / orphan_check.py / gate_count.py に限っている
+# ので、render_report.py は handoff として登記する。
+LITERAL_COUNT_PENDING: dict[str, str] = {
+    "render_report.py": "裁定書43 §2 handoff: 班Y2 の担当ファイル外。"
+                        "免責の態=4 / 描画後DOM=n_dom+14 / DATAリテラル=1 の"
+                        "3箇所を実測へ直すのは別担当",
 }
 
 
@@ -186,6 +206,93 @@ def gate_scripts(gate_src: str) -> list[tuple[str, str]]:
     return out
 
 
+# 自己テストの器(合成の Checked に作り物の件数を積む)は「検査の件数」では
+# ないので見ない。ここだけが例外で、本物の検査は必ず見る。
+FIXTURE_FUNCS = ("self_test", "self_test_count", "regression_cases")
+
+
+def _literal_in_count(node: "ast.AST") -> bool:
+    """件数の式に**数値リテラルの値**が混ざっているか。
+
+    添字(`_WIRE_N[0]` の 0)は件数ではなく置き場所なので数えない。
+    `len(rows)` のような実測は当然数えない。`4` や `n + 14` は数える。
+    """
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, (int, float)) \
+            and not isinstance(node.value, bool)
+    if isinstance(node, ast.Subscript):
+        return _literal_in_count(node.value)
+    return any(_literal_in_count(ch) for ch in ast.iter_child_nodes(node))
+
+
+def literal_count_sites(src: str) -> list[tuple[int, str]]:
+    """`record(名前, 件数)` の**件数の式に数値リテラルが現れる**箇所を返す。
+
+    戻り値は (行番号, 件数の式の姿) のリスト。`4` も `n_dom + 14` も
+    「その場で数えていない」ので同じように拾う。名前(第1引数)は見ない。
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return [(0, "<構文エラーで読めません>")]
+    fixture_lines: set = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                and node.name in FIXTURE_FUNCS:
+            fixture_lines.update(range(node.lineno,
+                                       (node.end_lineno or node.lineno) + 1))
+    out: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        name = fn.attr if isinstance(fn, ast.Attribute) else (
+            fn.id if isinstance(fn, ast.Name) else "")
+        if name != "record" or len(node.args) < 2:
+            continue
+        if node.lineno in fixture_lines:
+            continue
+        count = node.args[1]
+        if _literal_in_count(count):
+            try:
+                shown = ast.unparse(count)
+            except Exception:       # pragma: no cover (古い Python)
+                shown = "<式>"
+            out.append((getattr(count, "lineno", 0), shown))
+    return out
+
+
+def audit_literal_counts(tools: set, verbose: bool) -> tuple[int, int]:
+    """件数がリテラル定数でないことを見る。戻り値: (違反件数, 見た本数)。"""
+    violations = 0
+    seen = 0
+    for script in sorted(tools):
+        path = TOOLS_DIR / script
+        if not path.exists():
+            continue
+        seen += 1
+        sites = literal_count_sites(path.read_text(encoding="utf-8",
+                                                   errors="ignore"))
+        if script in LITERAL_COUNT_PENDING:
+            if not sites:
+                print("ERROR %s は LITERAL_COUNT_PENDING に登記されていますが、"
+                      "件数にリテラル定数はもうありません(登記を消してください)"
+                      % script)
+                violations += 1
+            elif verbose:
+                print("  PENDING %s (%s)" % (script, LITERAL_COUNT_PENDING[script]))
+            continue
+        for lineno, shown in sites:
+            print("ERROR %s:%d 要点行の件数がリテラル定数です: record(…, %s)"
+                  "(実際に回した回数をカウンタで数えてください。定数だと検査を"
+                  "抜いても件数が変わらず『確認しました』と名乗れます)"
+                  % (script, lineno, shown))
+            violations += 1
+        if verbose and not sites:
+            print("  OK      %s (件数は実測)" % script)
+    return (violations, seen)
+
+
 def tool_follows_contract(path: Path) -> bool:
     """そのツールが本契約(数える・名乗る・落ちる)を実際に使っているか。"""
     if not path.exists():
@@ -245,6 +352,19 @@ def audit(verbose: bool) -> tuple[int, Checked]:
               "(--only で二度走り、赤の数も二重に数えられます)" % n)
         violations += 1
     checked.record("ゲート名の重複", len(entries))
+
+    # 件数がリテラル定数でないこと(裁定書43 §2 Y-7)。契約適用ツールと、
+    # 契約の側に立つ本ファイル自身を見る(自分だけ例外にしない)。
+    lit_targets = set(CONTRACT_TOOLS) | set(LITERAL_COUNT_PENDING) | {"gate_count.py"}
+    lit_violations, lit_seen = audit_literal_counts(lit_targets, verbose)
+    violations += lit_violations
+    checked.record("件数の実測", lit_seen)
+
+    # 登記の掃除(GATES にも契約にも無いのに登記だけ残っている)。
+    for script in sorted(set(LITERAL_COUNT_PENDING) - lit_targets):
+        print("ERROR %s は LITERAL_COUNT_PENDING の登記だけが残っています"
+              % script)
+        violations += 1
     return (violations, checked)
 
 
@@ -288,6 +408,35 @@ def self_test() -> bool:
     cases.append(("回していれば緑", rc(c, required=("あ", "い")) == 0))
     cases.append(("必須が0件なら赤", rc(zero, required=("あ",)) == 1))
 
+    # 件数がリテラル定数か(裁定書43 §2 Y-7)。両方向を固定する。
+    cases.append(("Y-7 定数の件数を拾う",
+                  [s for _l, s in literal_count_sites(
+                      'c.record("a", 4)\n')] == ["4"]))
+    cases.append(("Y-7 定数を足した式も拾う",
+                  [s for _l, s in literal_count_sites(
+                      'c.record("a", n + 14)\n')] == ["n + 14"]))
+    cases.append(("Y-7 実測の件数は拾わない",
+                  literal_count_sites('c.record("a", len(rows))\n') == []))
+    cases.append(("Y-7 カウンタの件数は拾わない",
+                  literal_count_sites('c.record("a", n_hit)\n') == []))
+    cases.append(("Y-7 名前(第1引数)の中は見ない",
+                  literal_count_sites('c.record("SEC-09", n)\n') == []))
+    cases.append(("Y-7 record 以外は見ない",
+                  literal_count_sites('c.append("a", 4)\n') == []))
+    cases.append(("Y-7 読めない Python は fail-closed",
+                  literal_count_sites("def (:\n") != []))
+    cases.append(("Y-7 添字の数字は件数ではない",
+                  literal_count_sites('c.record("a", _N[0])\n') == []))
+    cases.append(("Y-7 添字でも足した定数は拾う",
+                  [s for _l, s in literal_count_sites(
+                      'c.record("a", _N[0] + 1)\n')] == ["_N[0] + 1"]))
+    cases.append(("Y-7 自己テストの器は見ない",
+                  literal_count_sites(
+                      'def self_test():\n    c.record("a", 3)\n') == []))
+    cases.append(("Y-7 本物の検査は自己テストの外なので見る",
+                  literal_count_sites(
+                      'def audit():\n    c.record("a", 3)\n') != []))
+
     # GATES の読み取り(構文木)。
     src = (
         "import sys\n"
@@ -305,7 +454,18 @@ def self_test() -> bool:
     for name in bad:
         print("  自己テスト NG: %s" % name)
     print("  自己テスト: %d/%d" % (len(cases) - len(bad), len(cases)))
+    _SELFTEST_N[0] = len(cases)
     return not bad
+
+
+# 自己テストの本数(要点行へ出す実測値。定数を書かない = Y-7 を自分にも適用)。
+_SELFTEST_N = [0]
+
+
+def self_test_count() -> int:
+    _SELFTEST_N[0] = 0
+    self_test()
+    return _SELFTEST_N[0]
 
 
 def main() -> int:
@@ -327,7 +487,7 @@ def main() -> int:
     if not self_test():
         print("結果: 自己テスト失敗(検出器が壊れています)")
         return 2
-    checked.record("自己テスト", 1)
+    checked.record("自己テスト", _SELFTEST_N[0])
 
     rc = report(checked, required=("ゲート登録", "契約適用"))
     if violations:
