@@ -1012,6 +1012,14 @@
       "type": "std",
       "wave": "W15",
       "_note": "裁定書38 班C。CheckS5 の13件・スライド登録表・DATA の内部値排除・reviewedBy 空・ファイル名規則。modTestRunner.RunAllPureTests から結線する。"
+    },
+    {
+      "name": "modTestsPure28",
+      "path": "src/test/modTestsPure28.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書42 §1。対訳表の用言(§6.3)・表記ゆれ(§6.4)・末尾の重なり(§6.6)の実効出力。modTestsPure27 が30,000字上限に達したための続き。modTestRunner.RunAllPureTests から結線する。"
     }
   ]
 }

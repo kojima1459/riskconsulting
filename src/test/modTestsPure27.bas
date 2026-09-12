@@ -49,7 +49,7 @@ Option Explicit
 '   (f) modExportProposal.StripFieldSeps の vbTab 除去をやめると 41 が落ちる
 '       (裁定書40 Q-M1。レポート側の Test_W15_25/26 と同じ型の網)。
 '   (g) modValidate4 の suru 印を1行でも外すと 46 が落ちる(S-M2)。
-'   (h) modValidate4.SuruFollows を常に False にすると 46 が落ち、常に True に
+'   (h) modValidate4.MarkGuardFollows を常に False にすると 46 が落ち、True に
 '       すると 47(名詞の位置では置換する)が落ちる。
 '   (i) BuildProposalDataEx の tabooLeft を空のままにすると 43 が落ちる(S-M1)。
 '
