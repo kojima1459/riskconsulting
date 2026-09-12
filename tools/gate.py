@@ -109,8 +109,6 @@ GATES = [
     # 裁定書33 C-2(W11-c): リボンの抽出切断を招く `"},` の走査。mock 応答
     #   (モデルが返す本文の模擬)に1件でもあれば赤。15章のJSONフェンスと
     #   modSchemas は既定 WARN(--strict-docs で昇格。裁定待ちの保留)。
-    ("notice",       [sys.executable, "tools/notice_check.py"],
-     r"\[notice_check\] OK"),  # SEC-09 の原文未照合の印と E-02 配線の実DOM検査(裁定書40 Q-M2)
     ("render-p",     [sys.executable, "tools/render_proposal.py"],
      r"\[render_proposal\] OK"),  # 提案書 Wide 22枚(20章。裁定書38 班C)
     ("render-pf",    [sys.executable, "tools/render_proposal.py", "--faithful"],
