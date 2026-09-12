@@ -73,13 +73,13 @@ Private Sub ShowDeepWarning()
     warnText = modPipeline2.DeepWarningOf(outcome)
     If LenB(warnText) = 0 Then Exit Sub
 
-    ' 裁定書40 Q-m3: hm_warning は1枠しかないので、そのまま書くと直前に
-    ' DrawStep が書いた 16章 E-02 の帯を**上書きして消して**しまう。実際に
-    ' 出した帯を取り直して**併記**する(HTML画面の modNaviActions.ActRunPipeline
-    ' も同じ2本を vbLf で連結している。予備経路だけ挙動を変えない)。併記の
-    ' 仕方は modUICase2.NoticeJoin の1本(この画面の警告は全部そこを通す)。
-    modUIHome.ShowWarning _
-        modUICase2.NoticeJoin(modUICase2.LastStepNotice(), warnText), "warn"
+    ' 裁定書40 Q-m3 / 裁定書41 §2: hm_warning は1枠しかないので、そのまま書くと
+    ' 直前に DrawStep が書いた 16章 E-02 の帯と**部屋あふれの警告**を上書きして
+    ' 消してしまう。書くのは modUICase2 の1本に任せる(そこだけが3本=帯・
+    ' 切捨て・deep を NoticeJoin で併記できる。切捨ての文言 TruncWarnText は
+    ' Private なので、ここで NoticeJoin しても併記できなかった)。
+    ' HTML画面の modNaviActions.ActRunPipeline と同じ順(E-02 が先)になる。
+    modUICase2.ShowDeepNotice warnText
 End Sub
 
 ' ============================================================================

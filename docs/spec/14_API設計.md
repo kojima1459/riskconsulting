@@ -910,7 +910,10 @@ Public Function SufficiencyNoteOf(ByVal s1Json As String) As String
 Public Sub S1Notes(ByVal caseId As String, ByVal s1Json As String, _
                    ByRef detailAcc As String)
 ' `DefendNotes`（stepNo=1）から呼ぶ。`modValidate3.CheckS1Notes` の結果を
-'   `WarnNoteOf` で畳み、0件でなければ detail へ `s1_warn=V-S1-14:2,V-S1-15:1` を足す。
+'   `WarnNoteOf` で畳み、0件でなければ detail へ `s1_warn=V-S1-14:2,V-S1-16:1` のように足す。
+'   **運ぶケースIDは V-S1-14 / V-S1-15 / V-S1-16 / V-S1-17 の4件**（v2.10・裁定書40
+'   P-M1 で V-S1-16〔`sources` 欠落〕と V-S1-17〔`kind` が enum 外〕も注記チャネルへ
+'   移した。並びは `modValidate3` の `V3_CASE_IDS` の順で固定）
 '   照合する原文は **`BuildHaystack(caseId, "")`＝貼付原文だけ**（S1の出力を混ぜない）
 Public Function LastS1Notes() As String
 ' 直近のS1警告の集計（`LastGroundNote` と同型・同理由。""＝指摘なし）
@@ -931,12 +934,23 @@ Public Function S1DiffCount(ByVal prevJson As String, ByVal curJson As String) A
 '   `modExportHtml.GenerateHtmlReportEx` の2箇所だけ。
 Public Function CheckS1Notes(ByVal json As String, ByVal haystack As String) As String
 ' 15章§11 の **V-S1-14**（`sources[].url` が貼付原文に `InStr` で実在するか。
-'   `haystack` が空なら検査しない＝fail-open）と **V-S1-15**（`certainty="assumed"` の
-'   要素に「(見立て)」が無い／`financials.source<>"unknown"` なのに4項目すべて「不明」）の
-'   警告行を vbLf 区切りで返す。各行は `[ケースID] ` で始まる（15章§0 原則10）
+'   `haystack` が空なら検査しない＝fail-open）、**V-S1-15**（`certainty="assumed"` の
+'   要素に「(見立て)」が無い／`financials.source<>"unknown"` なのに4項目すべて「不明」）、
+'   **V-S1-16**（`sources` の欠落）、**V-S1-17**（`missing_info[].kind` が enum 外。
+'   欠落・空は警告しない＝`PostNormalize` が補填する）の警告行を vbLf 区切りで返す
+'   （V-S1-16 / V-S1-17 は v2.10・裁定書40 P-M1 で `modValidate.CheckS1` の戻り値から
+'   ここへ移した。戻り値に載せると修復リトライ→案件 status=error を起こすため）。
+'   各行は `[ケースID] ` で始まる（15章§0 原則10）
 Public Function WarnNoteOf(ByVal notesText As String) As String
-' 上の警告行を run_log / `meta.s1_warn` 用の1語 `"V-S1-14:2,V-S1-15:1"` へ畳む
-'   （0件のケースは出さない。全件0なら空文字）
+' 上の警告行を run_log / `meta.s1_warn` 用の1語 `"V-S1-14:2,V-S1-16:1"` へ畳む
+'   （0件のケースは出さない。全件0なら空文字。並びは V-S1-14→15→16→17）
+Public Function PostNormalize(ByVal stepName As String, ByVal json As String) As String
+' `modValidate.NormalizeLlmJson` が正規化の直後に掛ける後処理。`stepName="s1"` の
+'   ときだけ働き、他の step は素通し。(a) `sources` が無ければ空配列を足す
+'   （v2.9・裁定書39 R1-09）。(b) `missing_info[]` の各要素の `kind` が無い／空白だけ
+'   なら **`"not_found"` を実際に書き込む**（v2.11・裁定書41 §2。警告を抑えるだけだと
+'   18章 SEC-04 の「種別」列が空欄で出る）。どちらも**読めない形なら1字も変えない**
+'   （`missing_info` が配列でない・要素がオブジェクトでない・閉じていない）
 Public Function TrimUrl(ByVal rawUrl As String) As String
 ' URLの前後の空白と、末尾の句読点・閉じ括弧（`。、．，.,;:)）」』】>＞` と空白）を落とす
 
@@ -1571,8 +1585,9 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
 '   `reviewedBy` / `reviewedAt` は18章§2 の `meta.reviewed_by` / `reviewed_at`（未確認は
 '   両方とも空文字。v1.4・裁定書37 B-06）。`groundNote` は `meta.ground_unmatched` の値源
 '   （`";"` 区切りの risk_no。同 B-03）。**`s1WarnNote`**（v2.8・裁定書38 班A）は
-'   `meta.s1_warn` の値源で、`modValidate3.WarnNoteOf` が返す `"V-S1-14:2,V-S1-15:1"` 形式の
-'   `";"` 区切り文字列。空なら空配列を書く（既定値があるので旧13引数の呼び出しは壊さない）
+'   `meta.s1_warn` の値源で、`modValidate3.WarnNoteOf` が返す `"V-S1-14:2,V-S1-16:1"` 形式の
+'   `";"` 区切り文字列（運ぶケースIDは V-S1-14 / 15 / **16** / **17** の4件。v2.10・
+'   裁定書40 P-M1）。空なら空配列を書く（既定値があるので旧13引数の呼び出しは壊さない）
 Public Function BuildReportHtml(ByVal metaJson As String, ByVal s1Json As String, _
                                 ByVal s2Json As String, ByVal s3Json As String, _
                                 ByVal themeName As String) As String
@@ -1695,7 +1710,7 @@ Public Function RunExcelTests2() As Long
   | - | **`modUIResearch.OpenDrFull()` / `OpenDrQuick()` / `DrUrlOf(kind, cfgText) As String` / `DrUrlDefaultOf(kind) As String`** ＋ 図形 **`btn_nv_dr_full` / `btn_nv_dr_quick`** | 公開関数・図形（ui層。`DrUrlOf` / `DrUrlDefaultOf` は**純関数**） | 本章§6・11章§3.2・13章§2.3・§2.10 | 区画①の見出しの直下の2本。`DrUrlOf` は config が空・欠落のとき `DrUrlDefaultOf` の既定URLへ倒す（設定を消しただけで導線が死なない）。開く手段は `ThisWorkbook.FollowHyperlink` で、**`Hyperlinks.Add` は使わない**。[コピー]の直後にも `dr_url_full` を開く（config `dr_open_after_copy`） |
   | - | **`modUINav.NavRowSec1B() As String` / `NavRowFooter() As String` / `FooterCaption() As String` / `DrawNavFooter()` / `OpenPortal()`** ＋ **`modUIGuide.EnsureFooterButton()`** ＋ **`modUISheet.EnsureFooterButton(ws, shapeKey, caption, anchorRow, anchorCol, widthPt, onActionName) As Boolean`** ＋ 図形 **`btn_nv_footer` / `btn_gd_footer`** | 公開関数・図形（ui層） | 本章§6・11章§3.1・13章§2.10 | 最下部のフッター[© リスクコンサルティング支援部]（淡色・枠なし・中央）。キャプションの値源は `FooterCaption()` 1本で、丸C は CP932 に無いため `ChrW(169)` で組む。押すと config `portal_url` を既定ブラウザで開く。`modUISheet.EnsureFooterButton` が唯一の描き口 |
   | - | config `ui_fullscreen` / `dr_url_menu` / `dr_url_quick` / `dr_url_full` / `dr_open_after_copy` / `portal_url` | configキー | 13章§2.3・19章§4 | 既定値と意味は13章§2.3が正 |
-  | - | **`modKnowledgeRank.NgramOverlap(a, b, n) As Long` / `RankRows(caseText, rowTexts(), ByRef order()) As Long`** ＋ `modKnowledge2.SelectRows` の `ByRef totalHits` と任意引数 `caseText` / `rankCols` ＋ `modKnowledge.LastKbCutNote() As String` / `LastCasesUsed() As Long` / `LastCasesTotal() As Long` ＋ `CasesFor` の任意引数 `caseText` | 新設（app層。`NgramOverlap`/`RankRows`は**純関数**） | 本章§6・13章§3.1・15章§0.7・16章 E-09 | 裁定書38 B-10（伝書鳩3-3）。業種コード完全一致で `kb_case_rows` 等の上限に満たないとき、全業種の行から案件本文（`business_summary`＋業種名＋`field_insights`原文。`modPipeline.CaseTextFor`）と行本文の2〜3字n-gram重なり数で上位を補う。`totalHits`（打切り前の該当総数）は `kb_cut:cases=使用/該当` として run_log detail へ、`meta.kb_usage` としてHTML SEC-14へ渡す |
+  | - | **`modKnowledgeRank.NgramOverlap(a, b, n) As Long` / `RankRows(caseText, rowTexts(), ByRef order()) As Long` / `IndexBuilds() As Long` / `ResetIndexBuilds()`** ＋ `modKnowledge2.SelectRows` の `ByRef totalHits` と任意引数 `caseText` / `rankCols` / `caseChars` / `rowChars`（v2.9・裁定書39 R1-03）/ `maxCandRows` / `ByRef candSeenOut`（v2.10・裁定書40 P-M3）＋ `modKnowledge.LastKbCutNote() As String` / `LastCasesUsed() As Long` / `LastCasesTotal() As Long` ＋ `CasesFor` の任意引数 `caseText` | 新設（app層。`NgramOverlap`/`RankRows`は**純関数**） | 本章§6・13章§3.1・15章§0.7・16章 E-09 | **`IndexBuilds` / `ResetIndexBuilds` は計測専用の口**（v2.11・裁定書41 §2 で登記。索引を作った累計回数を返す／0に戻すだけで、重なり数の判定には一切使わない。「案件側の索引を行ごとに作り直していない」を時間ではなく**回数**で固定する層(a)の回帰網〔`Test_P-M3_27`〕の唯一の入口。本番経路からは呼ばない）。裁定書38 B-10（伝書鳩3-3）。業種コード完全一致で `kb_case_rows` 等の上限に満たないとき、全業種の行から案件本文（`business_summary`＋業種名＋`field_insights`原文。`modPipeline.CaseTextFor`）と行本文の2〜3字n-gram重なり数で上位を補う。`totalHits`（打切り前の該当総数）は `kb_cut:cases=使用/該当` として run_log detail へ、`meta.kb_usage` としてHTML SEC-14へ渡す |
   | - | **`ThisWorkbook`（文書モジュール。`Workbook_Open` / `Workbook_Activate` / `Workbook_Deactivate` / `Workbook_BeforeClose`。すべて `Private`）** | 文書モジュール（ビルドが焼く。ソースの値源は `build/build_rpn.py` の `_BAKED_THISWORKBOOK_TEXT`） | 本章§6・11章§3.1・12章§2・13章§2.9 | ブックイベントを受ける唯一の口（v3.4・W9.3）。`Workbook_Open` は `modBoot.Boot` を直接呼ぶ（文字列でのブック名解決を使わない。W9.2）。`Workbook_Activate` は `modUIViewport.ApplyFullScreen`、`Workbook_Deactivate` と `Workbook_BeforeClose` は `modUIToast.CancelToast` → `modUIViewport.RestoreScreen` の順に呼ぶ。4本とも `On Error Resume Next` の配下で、**判断は持たない**。**本文は ASCII のみ**（非ASCIIをホストに解釈させない）。**旧 `clsAppEvents`（`WithEvents` を持つ唯一の `.cls`）と `modBoot.AppEventsReady` は撤去した**（Mac の実Excel でクラスモジュールを含むだけで読み込み時に「実行時エラー 5」が出た。焼き方の不一致そのものは 17章 Z-24 で解決したが、配布物は可動部品を減らすためクラスを持たない）。焼き込まれたスタブの形は `tools/bin_roundtrip.py` [4b] が検査する |
 
   **登記の移設（v3.0・17章§7 Z-13の30,000字契約分割）**: 下表は**新機能ではなく移設**である。移設した公開名は移設先モジュールへ読み替える（挙動・シグネチャ・文言は1字も変えていない）。

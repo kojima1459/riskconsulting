@@ -417,10 +417,15 @@ CONTRACT: dict[str, dict] = {
             "MissingColsOf", "BadRowsOf",
         ],
     },
-    # modKnowledgeRank: 裁定書38 B-10。全業種補充の順位付け専用の純関数2本。
+    # modKnowledgeRank: 裁定書38 B-10。全業種補充の順位付け専用の純関数2本と、
+    #   裁定書40 P-M3(c) の計測専用2本(IndexBuilds / ResetIndexBuilds。索引を
+    #   作った累計回数。判定には使わない)。**closed=True** にして、以後この
+    #   モジュールに本番経路から呼ばれない Public が黙って増えないようにする
+    #   (裁定書41 §2。検証者 newIssues: 計測口が 14章§6 にも CONTRACT にも
+    #   登記されておらず、どのゲートも赤くならなかった)。
     "modKnowledgeRank": {
-        "closed": False,
-        "required": ["NgramOverlap", "RankRows"],
+        "closed": True,
+        "required": ["NgramOverlap", "RankRows", "IndexBuilds", "ResetIndexBuilds"],
     },
     # 14章§6(裁定書6 B/C)。整形の純関数はここが唯一の実装。
     # 14章§6 modUtil節(裁定書6 項目8で契約化)。10関数。

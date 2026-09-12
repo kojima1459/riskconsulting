@@ -49,7 +49,8 @@
       (b) modUICase2.ShowStepNotice が hm_warning とトーストの両方へ書くこと
       (c) modUIHome.DrawAllSteps が afterRun をそのまま DrawStep へ渡すこと
       (d) modUIHome2.RunStepUi / HomeRunAll が**実行直後だけ** True を渡すこと
-      (e) modUIHome2.ShowDeepWarning が LastStepNotice() を取り直して併記すること
+      (e) modUIHome2.ShowDeepWarning が modUICase2.ShowDeepNotice へ本文を渡し、
+          自分では hm_warning へ書かないこと(裁定書41 §2。書き手を1本に寄せる)
       (f) 実行ではない呼び口(modNaviActions の open_step_sheet・RefreshHome の
           描き直し・企業ファイル取込)が True を渡して**いない**こと
     (a)(e) は検証者が素通りさせた2つの変異(呼び出し行の削除・上書き)に対応する。
@@ -426,11 +427,22 @@ def check_banner_wire(verbose: bool) -> tuple[list[str], str]:
          "裁定書40 Q-m3: 上書きする側が取り直せるよう、出した本文を覚える")
     cell = joined_body(case2, "WriteWarnCell")
     want(problems, cell, "modUICase2.WriteWarnCell",
-         "NoticeJoin(gStepNotice, TruncWarnText())",
-         "裁定書40 Q-m3 の横展開: 16章 E-02 の帯と部屋あふれの警告が"
-         "同じ1枠を奪い合うので、両方を併記する")
+         "NoticeJoin(NoticeJoin(gStepNotice, TruncWarnText()), gDeepNotice)",
+         "裁定書40 Q-m3 / 裁定書41 §2 の横展開: 16章 E-02 の帯・部屋あふれ・"
+         "入念モードの E-35/E-36 が同じ1枠を奪い合うので、3本とも併記する")
     want(problems, cell, "modUICase2.WriteWarnCell", "modUISheet.WriteNamed U2_WARN",
          "hm_warning へ実際に書くのはここ1本")
+    # 実行以外の描画で前の実行の帯・deep 警告を手放すガード(検証者 newIssues #4)。
+    # これを消すと、実行後に[シートで編集]や案件切替で描き直したあとで部屋あふれ
+    # が起きたとき、WriteWarnCell が**前の実行の帯**を hm_warning へ復活させる。
+    want(problems, draw, "modUICase2.DrawStep",
+         "If Not afterRun Then",
+         "実行でない描画が起きた時点で「実行直後」は終わる。前の実行の帯を"
+         "ここで手放さないと、あとの警告に混ざって復活する")
+    want(problems, draw, "modUICase2.DrawStep", "gStepNotice = vbNullString",
+         "同上(16章 E-02 の帯を手放す)")
+    want(problems, draw, "modUICase2.DrawStep", "gDeepNotice = vbNullString",
+         "同上(入念モードの警告を手放す。裁定書41 §2)")
     trunc = joined_body(case2, "NoteTruncation")
     want(problems, trunc, "modUICase2.NoteTruncation", "WriteWarnCell",
          "部屋あふれの警告も同じ1本を通す(直に書くと E-02 の帯が消える)")
@@ -459,11 +471,23 @@ def check_banner_wire(verbose: bool) -> tuple[list[str], str]:
     want(problems, runall, "modUIHome2.HomeRunAll", "modUICase2.ResetStepNotice",
          "実行の開始時に前回の帯を1回だけ消す")
 
-    # (e) deep の警告が E-02 の帯を上書きで消さない
+    # (e) deep の警告が E-02 の帯と部屋あふれの警告を上書きで消さない
     deep = joined_body(home2, "ShowDeepWarning")
     want(problems, deep, "modUIHome2.ShowDeepWarning",
-         "modUICase2.NoticeJoin(modUICase2.LastStepNotice(), warnText)",
-         "裁定書40 Q-m3: hm_warning は1枠なので、そのまま書くと E-02 の帯が消える")
+         "modUICase2.ShowDeepNotice warnText",
+         "裁定書40 Q-m3 / 裁定書41 §2: hm_warning は1枠なので、ここで直に書くと"
+         "E-02 の帯と部屋あふれの警告が消える。書くのは WriteWarnCell の1本")
+    want_not(problems, deep, "modUIHome2.ShowDeepWarning",
+             "modUIHome.ShowWarning",
+             "裁定書41 §2: modUIHome.ShowWarning は同じ hm_warning へ直に書くので、"
+             "切捨ての警告(TruncWarnText は Private)を併記できず上書きで消す")
+    shown = joined_body(case2, "ShowDeepNotice")
+    want(problems, shown, "modUICase2.ShowDeepNotice", "gDeepNotice = deepText",
+         "3本を併記できるよう、deep の本文も覚えてから WriteWarnCell を呼ぶ")
+    want(problems, shown, "modUICase2.ShowDeepNotice", "WriteWarnCell",
+         "hm_warning へ書くのは WriteWarnCell の1本")
+    want(problems, shown, "modUICase2.ShowDeepNotice", "modUIToast.ShowToast",
+         "裁定書17 H2/H4: セルは見られていないのでトーストでも出す")
 
     # (f) 実行ではない呼び口は True を渡さない
     for mod_name, text, proc in (("modNaviActions", navi, "Dispatch"),

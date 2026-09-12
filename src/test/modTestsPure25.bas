@@ -388,4 +388,37 @@ Private Sub T_Round2Fixes()
     ChkS "Test_W15R3_27_s1_warnはsources欠落とkind不正も畳む_裁定書40P-M1", _
         modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(j, W15_HAY)), _
         "V-S1-16:1,V-S1-17:1"
+
+    ' 28 kind の**補填**(裁定書41 §2。裁定書40 P-M1「空なら not_found」の残り
+    '    半分)。警告を抑えるだけでは 18章 SEC-04 の「種別」列が空欄で出るので、
+    '    正規化の時点で値を実際に書き込む。3要素で3方向を一度に押さえる:
+    '      [0] キーが無い          -> 足す
+    '      [1] 空白だけの値がある  -> **置き換える**(足すと同名キーが2つ並び、
+    '                                 15章§14 で空のほうが勝って補填が効かない)
+    '      [2] 正しい値がある      -> 1字も触らない
+    Dim miCol As Collection
+    j = "{""missing_info"":[{""item"":""A"",""why_needed"":""B""}," & _
+        "{""item"":""C"",""why_needed"":""D"",""kind"":""  ""}," & _
+        "{""item"":""E"",""why_needed"":""F"",""kind"":""conflict""}],""sources"":[]}"
+    norm = modValidate.NormalizeLlmJson("s1", j, removed)
+    Set miCol = modJsonLite.GetArrayItems(norm, "missing_info")
+    ChkS "Test_W15R3_28_kindの欠落と空をnot_foundで補填する_裁定書41§2", _
+        CStr(miCol.count) & "|" & _
+        modJsonLite.GetStr(CStr(miCol(1)), "kind") & "|" & _
+        modJsonLite.GetStr(CStr(miCol(2)), "kind") & "|" & _
+        modJsonLite.GetStr(CStr(miCol(3)), "kind") & "|" & _
+        modJsonLite.GetStr(CStr(miCol(1)), "item"), _
+        "3|not_found|not_found|conflict|A"
+
+    ' 29 補填は**壊れた入力でJSONを壊さない**(fail-open)。missing_info が無い/
+    '    配列でない/要素がオブジェクトでない、のどれでも 1字も変えずに返す。
+    '    補う要素が1件も無いときも作り直さない(= s1 以外の step と同じ素通し)。
+    ChkS "Test_W15R3_29_補填はmissing_infoが読めない形なら素通しする_裁定書41§2", _
+        modValidate3.PostNormalize("s1", "{""missing_info"":""x"",""sources"":[]}") & "|" & _
+        modValidate3.PostNormalize("s1", "{""sources"":[]}") & "|" & _
+        modValidate3.PostNormalize("s1", _
+            "{""missing_info"":[""A""],""sources"":[]}") & "|" & _
+        modValidate3.PostNormalize("s2", "{""missing_info"":[{""item"":""A""}]}"), _
+        "{""missing_info"":""x"",""sources"":[]}|{""sources"":[]}|" & _
+        "{""missing_info"":[""A""],""sources"":[]}|{""missing_info"":[{""item"":""A""}]}"
 End Sub

@@ -92,10 +92,20 @@ GATES = [
      r"OK: 全\d+本"),
     ("t48",          [sys.executable, "tools/t48_check.py"],
      r"OK: 4条件"),
+    # 裁定書40 Q-M2 / Q-m2 で新設したが**どのゲートにも載っていなかった**ので、
+    #   裁定書41 §2 で登録した(載せるまで、SEC-09「原文未照合」の判定を反転
+    #   させる変異が全ゲートを素通りする状態が続いていた)。検査①は LibreOffice
+    #   で実物のHTMLを組み、node の最小DOMスタブでページ内JSを実際に走らせる。
+    ("notice",       [sys.executable, "tools/notice_check.py"],
+     r"\[notice_check\] OK"),
+    # 裁定書41 §2: 要点行から `|生成:` を落とした。旧パターンは OK 行が無くても
+    #   「生成: …」を要点として表示できたので、DOM検査を飛ばした回でも
+    #   ゲート一覧が成功したように読めた(render_report.py 側の fail-open も同時に
+    #   塞いだ。node が無ければ exit 2 で赤)。
     ("render",       [sys.executable, "tools/render_report.py"],
-     r"OK: .*確認しました|生成:"),
+     r"OK: .*確認しました"),
     ("render-f",     [sys.executable, "tools/render_report.py", "--faithful"],
-     r"OK: .*確認しました|生成:"),
+     r"OK: .*確認しました"),
     # 裁定書33 C-2(W11-c): リボンの抽出切断を招く `"},` の走査。mock 応答
     #   (モデルが返す本文の模擬)に1件でもあれば赤。15章のJSONフェンスと
     #   modSchemas は既定 WARN(--strict-docs で昇格。裁定待ちの保留)。

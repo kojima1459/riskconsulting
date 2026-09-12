@@ -412,7 +412,100 @@ Private Sub T_RankIndexAndCap()
          candSeen = 2 And totalHits = 2), _
         "上限なし=[" & idsNoCap & "]/" & CStr(seenNoCap) & " 上限1=[" & idsOut & _
         "]/" & CStr(candSeen) & " totalHits=" & CStr(totalHits)
+
+    ' 30 **合算版と素朴版の等価**(裁定書41 §2)。RankRows が使う合算走査
+    '    (2字と3字を1回の走査で数える Overlap23)の点数が、2字と3字を別々に
+    '    数えた点数の和と一致すること。27/28 はこの枝を踏まないので、合算走査を
+    '    静かに壊す変異(3字探査の枝刈り条件・3字の借用返却)が素通りしていた。
+    '    点数そのものは外から取れないので、**並びで**突き合わせる(並べ替えは
+    '    安定なので、点数が1つでもずれれば並びが変わる検体を選ぶ)。
+    '    第3引数は手計算の並び。同点で素通りする検体を混ぜないための担保。
+    '      A "abcQabQ": 行1=2字2+3字1=3 / 行2=2字3+3字1=4  -> 2,1
+    '      B "abcdefghij": 行1=5+4=9 / 行2=7+6=13          -> 2,1
+    Dim eq30 As String
+    eq30 = Equiv23("abcQabQ", "abc|abZabZabc", "2,1")
+    If LenB(eq30) = 0 Then eq30 = Equiv23("abcdefghij", "abcdef|abcdefgh", "2,1")
+    If LenB(eq30) = 0 Then eq30 = Equiv23("abcabcabc", "abcabc|abc|cba|abcabcabc", "4,1,2,3")
+    If LenB(eq30) = 0 Then eq30 = Equiv23("aaaaab", "aaaa|aab|baaa|ab", "1,2,3,4")
+    If LenB(eq30) = 0 Then eq30 = Equiv23("abcdefghij", "zzzz|ij|hij|defghij", "4,3,2,1")
+    If LenB(eq30) = 0 Then eq30 = Equiv23("xyzxyzxyz", "xyzxyz|yzxyzx|zxy|qqq", "1,2,3,4")
+    ChkS "Test_P-M3_30_合算走査の点数が2字と3字の和と一致する_裁定書41§2", eq30, ""
 End Sub
+
+' ============================================================================
+' Equiv23 - RankRows の並びが「NaiveOverlap(2)+NaiveOverlap(3) の安定降順」と
+'   一致するかを1検体ぶん確かめる。一致すれば ""、違えば理由を返す。
+' ----------------------------------------------------------------------------
+'   期待値の出典は 14章§6 の RankRows 契約(「関連度の高い順」「重なり数は
+'   2〜3字n-gramの多重集合の共通部」)と、このモジュールが持つ参照実装
+'   NaiveOverlap だけ。**実装の出力は見ない**(17章§1)。
+'   wantOrder には手計算の並びを渡す(非空のときだけ照合)。同点ばかりで
+'   「点数が変わっても並びが変わらない」検体を混ぜていないことの担保であり、
+'   これが無いと Test_P-M3_28 と同じ骨抜きが起きる。
+' ============================================================================
+Private Function Equiv23(ByVal caseText As String, ByVal rowsPipe As String, _
+                         ByVal wantOrder As String) As String
+    Dim parts() As String, i As Long, j As Long, cnt As Long
+    parts = Split(rowsPipe, "|")
+    cnt = UBound(parts) - LBound(parts) + 1
+    If cnt < 2 Then
+        Equiv23 = "[" & caseText & "] 検体の行数が" & CStr(cnt) & "件です(2件以上)"
+        Exit Function
+    End If
+
+    Dim rw() As String, sc() As Long, ord() As Long
+    ReDim rw(1 To cnt)
+    ReDim sc(1 To cnt)
+    ReDim ord(1 To cnt)
+    For i = 1 To cnt
+        rw(i) = parts(LBound(parts) + i - 1)
+        sc(i) = NaiveOverlap(caseText, rw(i), 2) + NaiveOverlap(caseText, rw(i), 3)
+        ord(i) = i
+    Next i
+
+    ' 安定な挿入ソート(降順・同点は元の並び)。14章§6 の「関連度の高い順」。
+    Dim ks As Long, ki As Long
+    For i = 2 To cnt
+        ks = sc(i)
+        ki = ord(i)
+        j = i - 1
+        Do While j >= 1
+            If sc(j) < ks Then
+                sc(j + 1) = sc(j)
+                ord(j + 1) = ord(j)
+                j = j - 1
+            Else
+                Exit Do
+            End If
+        Loop
+        sc(j + 1) = ks
+        ord(j + 1) = ki
+    Next i
+
+    Dim got() As Long, n As Long, gotText As String, wantText As String
+    n = modKnowledgeRank.RankRows(caseText, rw, got)
+    If n <> cnt Then
+        Equiv23 = "[" & caseText & "] RankRows が" & CStr(n) & "件(期待" & CStr(cnt) & ")"
+        Exit Function
+    End If
+    For i = 1 To cnt
+        If i > 1 Then
+            gotText = gotText & ","
+            wantText = wantText & ","
+        End If
+        gotText = gotText & CStr(got(i))
+        wantText = wantText & CStr(ord(i))
+    Next i
+    If gotText <> wantText Then
+        Equiv23 = "[" & caseText & "] 合算版=" & gotText & " 素朴版=" & wantText
+        Exit Function
+    End If
+    If LenB(wantOrder) > 0 Then
+        If wantText <> wantOrder Then
+            Equiv23 = "[" & caseText & "] 素朴版=" & wantText & " 手計算=" & wantOrder
+        End If
+    End If
+End Function
 
 ' ============================================================================
 ' G6 打切り総数と境界(裁定書39 R1-04 / G-1)

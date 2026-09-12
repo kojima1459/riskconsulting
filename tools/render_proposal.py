@@ -530,12 +530,20 @@ def check_s5_required(problems_sink: list[str]) -> None:
             "ままになっています")
 
 
+def find_node() -> str | None:
+    """DOM検査に使う node の場所(無ければ None)。"""
+    return shutil.which("node") or shutil.which("nodejs")
+
+
 def check_dom(html_path: Path, slides: list, todo: str, faithful: bool,
               verbose: bool) -> list[str]:
-    node = shutil.which("node") or shutil.which("nodejs")
+    node = find_node()
     if node is None:
-        print("[render_proposal] (node が無いためDOM検査はスキップしました)")
-        return []
+        # 裁定書41 §2: **fail-open 禁止**。旧実装はここで空リストを返していたので、
+        # DOMを1枚も組まないまま「全22枚の登録と描画後DOM…を確認しました」と出して
+        # exit 0 になっていた(裁定書40 T-M1 の orphan_check と同型)。
+        return ["node が見つからないため描画後DOMの検査を実行できません"
+                "(検査を飛ばして緑にはしません。裁定書41 §2)"]
     stub = html_path.parent / "dom_stub_proposal.js"
     stub.write_text(DOM_STUB_JS, encoding="utf-8")
     proc = subprocess.run([node, str(stub), str(html_path)],
@@ -614,6 +622,14 @@ def main() -> int:
         return 2
     disclaimer = parse_disclaimer(spec)
     todo = parse_todo_line(spec)
+
+    # 裁定書41 §2: DOM検査には node が要る。無いまま進むと「全22枚の登録と
+    # 描画後DOM…を確認しました」という**偽の成功文言**で緑になるので、ここで
+    # 赤にして止める(tools/notice_check.py と同じ exit 2 = 検査を実行できない)。
+    if find_node() is None:
+        print("[render_proposal] 結果: node が見つからないため描画後DOMの検査を"
+              "実行できません(検査を飛ばして緑にはしません)")
+        return 2
 
     soffice = lo.find_soffice()
     work_dir = Path(tempfile.mkdtemp(prefix="rpn_proposal_"))

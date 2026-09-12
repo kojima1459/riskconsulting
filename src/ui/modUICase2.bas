@@ -41,10 +41,14 @@ Private Const U2_MSG_MISMATCH As String = "画面の案件と保存先が一致�
 '                  ために、書いた本文をそのまま覚えておく。modPipeline2 の
 '                  LastDeepOutcome / ResetDeepOutcome と同じ形(実行の開始時に
 '                  呼出側が ResetStepNotice で1回だけ消す)。
+'   gDeepNotice  = 入念モードの警告(16章 E-35/E-36)の本文(裁定書41 §2)。
+'                  これも同じ hm_warning の1枠を使うので、gStepNotice と同じ
+'                  ように覚えて WriteWarnCell が3本まとめて書く。
 Private gDrawStep As Long
 Private gTruncStep(1 To 4) As Boolean
 Private gTruncNote As String
 Private gStepNotice As String
+Private gDeepNotice As String
 Private Const U2_MAX_ROOM As Long = 200        ' 最終ブロックの部屋の上限
 Private Const U2_HDR_WIDTH As Long = 24        ' 見出し行の探索幅(列番号ではない)
 Private Const U2_FIRST_COL As Long = 1         ' ブロックの左端列(build/sheets_main.json)
@@ -341,9 +345,12 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long, _
     gTruncStep(stepNo) = False
     gTruncNote = vbNullString
     ' 裁定書40 Q-m1: 実行**以外**の描画([シートで編集]・案件切替・取込)が
-    ' 起きた時点で「実行直後」は終わる。前の実行で出した 16章 E-02 の帯を
-    ' ここで手放し、以後の警告へ混ぜない。
-    If Not afterRun Then gStepNotice = vbNullString
+    ' 起きた時点で「実行直後」は終わる。前の実行で出した 16章 E-02 の帯と
+    ' 入念モードの警告をここで手放し、以後の警告へ混ぜない(裁定書41 §2)。
+    If Not afterRun Then
+        gStepNotice = vbNullString
+        gDeepNotice = vbNullString
+    End If
 
     Dim jsonText As String
     jsonText = modCaseStore.ResolveStepJson(caseId, stepNo)
@@ -369,8 +376,9 @@ Public Function DrawStep(ByVal caseId As String, ByVal stepNo As Long, _
     ' 裁定書39 R1-07(a) / 裁定書40 Q-m1: シート画面にも 16章 E-02(実行後)の
     ' 警告帯を出す。**出すかどうかと文言は StepNoticeOf の1本**が持ち(純関数)、
     ' ここは書く場所を知っているだけ。RunStepUi は S1 成功後にここを必ず通る。
-    ' 一括実行では S2〜S4 の描画で部屋あふれの警告が同じ hm_warning へ来るが、
-    ' WriteWarnCell が両方を併記するので帯は消えない(裁定書40 Q-m3)。
+    ' 一括実行では S2〜S4 の描画で部屋あふれの警告が、そのあと入念モードの
+    ' 警告(16章 E-35/E-36)が同じ hm_warning へ来るが、WriteWarnCell が3本とも
+    ' 併記するので帯は消えない(裁定書40 Q-m3・裁定書41 §2)。
     ShowStepNotice StepNoticeOf(stepNo, jsonText, afterRun)
 
     ' ここまで来たら画面はこの案件の内容で描けている(13章§2.12)。ただし
@@ -432,14 +440,40 @@ End Function
 ' 注記を HOME の hm_warning とトーストへ出す。空なら**何も書かない**。
 '   書いた本文は gStepNotice に覚えておく。hm_warning は1枠しかないので、
 '   放っておくと「あとから書いた1本が前の1本を消す」が必ず起きる
-'   (裁定書40 Q-m3)。消さないために、この画面から出る警告は**すべて
-'   WriteWarnCell の1本**を通し、NoticeJoin で併記する。
+'   (裁定書40 Q-m3)。
+'   **実行にともなって出る3本**(16章 E-02 の帯・部屋あふれ・入念モードの
+'   E-35/E-36)は、消し合わないよう WriteWarnCell の1本を通して NoticeJoin で
+'   併記する。SaveEditedStep の3本(:103 / :112 / :148)は**保存を止めた理由を
+'   単独で伝える場面**なので、いまも直に WriteNamed して1本だけを出す
+'   (描画していないので併記すべき相手が無い。裁定書41 §2 でここを事実どおり
+'   書き直した。以前の注記は「この画面から出る警告はすべて WriteWarnCell を
+'   通す」と書いていたが、実物はそうなっていなかった)。
 Private Sub ShowStepNotice(ByVal noticeText As String)
     On Error Resume Next
     If LenB(noticeText) = 0 Then Exit Sub
     gStepNotice = noticeText
     WriteWarnCell
     modUIToast.ShowToast noticeText, "warn"
+End Sub
+
+' ============================================================================
+' ShowDeepNotice - 入念モードの警告(16章 E-35/E-36)を hm_warning へ出す唯一の
+'   口(裁定書41 §2)。modUIHome2.ShowDeepWarning から呼ぶ。
+' ----------------------------------------------------------------------------
+'   以前は modUIHome2 が modUIHome.ShowWarning へ直行し、NoticeJoin で
+'   E-02 の帯だけを併記していた。切捨ての警告(TruncWarnText。Private)は
+'   外から取れないので**併記できず**、一括実行で S1〜S4 のどれかが部屋あふれ
+'   した回は「編集を保存すると残りが失われるため、この画面の保存は行いません。」
+'   が deep の警告に上書きされて消えていた(利用者は切り捨てに気付けない)。
+'   本文を覚えて WriteWarnCell に3本まとめて書かせれば、どれも消えない。
+'   トーストは ShowStepNotice と同じく**その回に出す本文だけ**を出す。
+' ============================================================================
+Public Sub ShowDeepNotice(ByVal deepText As String)
+    On Error Resume Next
+    If LenB(deepText) = 0 Then Exit Sub
+    gDeepNotice = deepText
+    WriteWarnCell
+    modUIToast.ShowToast deepText, "warn"
 End Sub
 
 ' ============================================================================
@@ -450,7 +484,7 @@ End Sub
 '   modNaviActions.ActRunPipeline が同じ2本を同じ順で連結しているので、
 '   予備経路(シート画面)だけ挙動を変えない。
 '   警告を出す側が各々 WriteNamed すると必ず上書きが起きるので、**併記の仕方は
-'   この1本**が持つ(modUIHome2.ShowDeepWarning も deep の警告でこれを呼ぶ)。
+'   この1本**が持つ(WriteWarnCell が3本を2回に分けてここへ通す)。
 ' ============================================================================
 Public Function NoticeJoin(ByVal firstText As String, _
                            ByVal secondText As String) As String
@@ -473,27 +507,30 @@ Private Function TruncWarnText() As String
         "。編集を保存すると残りが失われるため、この画面の保存は行いません。"
 End Function
 
-' この画面から出る警告をまとめて hm_warning へ書く唯一の口(裁定書40 Q-m3)。
-'   16章 E-02 の帯(実行直後のS1)と部屋あふれの警告は**どちらも消さない**。
-'   一括実行では S1 の帯のあとに S2〜S4 の切捨てが来るので、両方が起きると
-'   片方しか残らなかった。
+' 実行にともなう警告3本をまとめて hm_warning へ書く唯一の口(裁定書40 Q-m3・
+'   裁定書41 §2)。16章 E-02 の帯(実行直後のS1)・部屋あふれ・入念モードの
+'   E-35/E-36 は**どれも消さない**。一括実行では S1 の帯 -> S2〜S4 の切捨て ->
+'   deep の警告の順に来るので、放っておくと最後の1本しか残らなかった。
+'   並びは HTML画面の modNaviActions.ActRunPipeline と同じ「E-02 が先」。
 Private Sub WriteWarnCell()
     On Error Resume Next
     Dim bodyText As String
-    bodyText = NoticeJoin(gStepNotice, TruncWarnText())
+    bodyText = NoticeJoin(NoticeJoin(gStepNotice, TruncWarnText()), gDeepNotice)
     If LenB(bodyText) = 0 Then Exit Sub
     modUISheet.WriteNamed U2_WARN, modUIToast.WarnLine(bodyText, "warn")
 End Sub
 
-' LastStepNotice - 直近の実行で実際に出した注記(無ければ "")。
-Public Function LastStepNotice() As String
-    LastStepNotice = gStepNotice
-End Function
+' LastStepNotice(裁定書40 Q-m3)は**削除した**(裁定書41 §2)。唯一の呼び口だった
+'   modUIHome2.ShowDeepWarning が、警告本文を取り出して自分で書く形をやめ、
+'   ShowDeepNotice へ本文を渡す形へ変わったため、外へ出す口が要らなくなった
+'   (src 全体・docs・tools を grep して他の参照が無いことを確かめた)。
 
 ' ResetStepNotice - 明示リセット口(modPipeline2.ResetDeepOutcome と同じ考え方)。
-'   **実行の開始時に1回だけ**呼ぶ(前回の実行の帯を今回の警告に混ぜない)。
+'   **実行の開始時に1回だけ**呼ぶ(前回の実行の帯と deep 警告を今回の警告に
+'   混ぜない。裁定書41 §2 で gDeepNotice も同時に手放すようにした)。
 Public Sub ResetStepNotice()
     gStepNotice = vbNullString
+    gDeepNotice = vbNullString
 End Sub
 
 Private Sub DrawS2(ByVal jsonText As String)
