@@ -2878,6 +2878,11 @@
           "note": "[コピー]の直後に dr_url_full をブラウザで開くか。FALSEで開かない(コピーだけ)"
         },
         {
+          "name": "dr_input_max_chars",
+          "value": 2000,
+          "note": "調査指示文(展開後)の目安上限字数。裁定書37 B-09。BuildPromptsがchars/overを付け、超過時は画面が赤字で警告する([コピー]は押せるままにする)"
+        },
+        {
           "name": "portal_url",
           "value": "http://www.portal.s1.ms-ad-ins.co.jp/loader/hp/OpenContents/A201203280048/toppage.html",
           "note": "フッター[© リスクコンサルティング支援部]を押したときに開く部のポータル"

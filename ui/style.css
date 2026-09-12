@@ -111,7 +111,11 @@ body.state-demo .transport-band { display:block; }
 .form-row { display:flex; margin-bottom:9px; } .form-row > div { flex:1; } .form-row > div + div { margin-left:8px; }
 .form-row input,.form-row select { width:100%; }
 .form-footer { display:flex; align-items:center; justify-content:flex-end; margin-top:6px; } .chat-form .form-footer { margin-top:0; } .form-footer button { margin-left:8px; } .form-footer .muted { margin-right:auto; max-width:68%; }
+.form-footer button.primary,.form-footer button.strong { min-height:40px; padding:8px 18px; font-weight:bold; }
 .subhead { font-size:0.8462rem; font-weight:600; color:#5f746a; margin:12px 0 7px; letter-spacing:.3px; }
+.field-check { display:flex; align-items:center; font-weight:400; line-height:1.7; margin:8px 0; }
+.field-check input { flex:0 0 auto; min-height:0; width:16px; height:16px; margin:0 8px 0 0; }
+.chat-warn { background:#fff4d6; color:#8a5a00; border:1px solid #e8c97a; border-radius:5px; padding:7px 10px; font-size:0.8462rem; line-height:1.6; margin-bottom:8px; }
 
 /* 調べる文 */
 .prompt-row { display:flex; align-items:center; border:1px solid #e1ebe5; border-radius:6px; padding:7px 9px; margin-bottom:6px; background:#fbfdfc; }
@@ -121,6 +125,7 @@ body.state-demo .transport-band { display:block; }
 .prompt-row .p-meta { font-size:0.8462rem; color:#1d6b4f; margin:0 8px; white-space:nowrap; }
 .prompt-row button { margin-left:4px; }
 .more-prompts { display:none; } .more-prompts.open { display:block; }
+.prompt-over { display:block; color:#b42318; font-size:0.8462rem; font-weight:600; white-space:normal; margin-top:2px; }
 
 /* 貼付欄 */
 .area-row { display:flex; align-items:center; border:1px solid #e1ebe5; border-radius:6px; padding:8px 9px; margin-bottom:6px; background:#fff; }
@@ -577,3 +582,10 @@ button.chip { min-height:30px; font-size:.8462rem; padding:4px 10px; }
  #app[data-context-overflow="true"] .compact-pane-tabs { top:204px; }
  #app[data-context-overflow="true"] #workspace { top:246px; }
 }
+
+/* 高DPI・大文字設定(ui_font_scale=large)でも帯が画面外へはみ出さない保険
+   (D#4)。通常時ははみ出さないので見た目は変わらない。行が折り返した分だけ
+   #workspace 側へ余白を足す(実機のみで確定できる=17章§7 Z-43。念のための保険)。 */
+.topbar,.top-actions,.context-bar { flex-wrap:wrap; }
+.topbar { height:auto; min-height:56px; }
+.context-bar { height:auto; min-height:48px; }
