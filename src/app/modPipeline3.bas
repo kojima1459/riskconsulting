@@ -33,6 +33,12 @@ Private Const P3_NONE_TEXT As String = "なし"
 ' 15章§1.2c {{focus_line_ids}} の空時の既定文言。
 Private Const P3_FOCUS_NONE As String = "指定なし"
 
+' 直近の原文照合で未照合だった risk_no の一覧(";" 区切り。""=全部照合できた)。
+'   **モジュール変数による状態保持**は modPipeline2.LastDeepOutcome と同型で、
+'   理由も同じ(RunStep の Boolean 戻り値の契約を変えずに ui・HTML へ渡す口が
+'   他に無い)。読む口は LastGroundNote のみ。書くのは GroundHook のみ。
+Private mLastGroundNote As String
+
 ' --------------------------------------------------------------------------
 ' 純関数(15章の各プレースホルダの値づくり)
 ' --------------------------------------------------------------------------
@@ -135,3 +141,105 @@ Public Function S3UserText(ByRef ctx As TCaseCtx, ByVal caseId As String, _
     S3UserText = modPromptsOps.AsmS3User(ctx, s1Summary, s2Json, menus, lines, schemes, _
                                          cases, FocusIdsOf(caseId), RoundNoOf(caseId))
 End Function
+
+' ============================================================================
+' 裁定書37 B-03 / B-05: 原文照合(modGround)と充足度の run_log 記録
+' ----------------------------------------------------------------------------
+' modPipeline は30,000字契約でほぼ満杯のため、値源の組立(BuildHaystack)・
+'   config の読み・注記の保持(LastGroundNote)をここへ置き、modPipeline からは
+'   DefendNotes の**1行**で呼ぶ(B班報告 §3 B-03 の「呼び出し点は1箇所」)。
+' **落とさない・修復リトライを起こさない**。run_log の detail に印を残すだけで、
+'   検証の戻り値(modValidate の *Core の結果)には一切触れない。
+' ============================================================================
+
+' DefendNotes - modPipeline.OneCall が Defend の**直後**に1行で呼ぶ入口。
+'   validateOk=False(検証不合格)のときは何もしない(捨てられる出力を測らない)。
+'   stepNo=1 -> 充足度(B-05) / stepNo=2 -> 原文照合(B-03)。
+Public Sub DefendNotes(ByVal stepNo As Long, ByVal caseId As String, _
+                       ByVal stepJson As String, ByVal s1Json As String, _
+                       ByVal validateOk As Boolean, ByRef detailAcc As String)
+    On Error Resume Next
+    If Not validateOk Then Exit Sub
+    If stepNo = 1 Then
+        P3AddNote detailAcc, SufficiencyNoteOf(stepJson)
+    ElseIf stepNo = 2 Then
+        GroundHook caseId, stepJson, s1Json, detailAcc
+    End If
+End Sub
+
+' GroundHook - S2の出力を貼付原文と突き合わせ、注記だけを残す(裁定書37 B-03)。
+'   config ground_check=FALSE なら何もしない。haystack が空なら検査せず
+'   `ground_skipped` を注記する(fail-open。「貼付が空のときに全件未照合で
+'   埋めない」= B班テスト観点(5))。
+Public Sub GroundHook(ByVal caseId As String, ByVal s2Json As String, _
+                      ByVal s1Json As String, ByRef detailAcc As String)
+    Dim hay As String, note As String
+
+    mLastGroundNote = vbNullString
+    If Not modConfig.GetBool("ground_check", True) Then Exit Sub
+
+    hay = BuildHaystack(caseId, s1Json)
+    If LenB(Trim$(hay)) = 0 Then
+        P3AddNote detailAcc, "ground_skipped"
+        Exit Sub
+    End If
+
+    note = modGround.GroundNotes(s2Json, hay, _
+                                 modConfig.GetLong("ground_head_chars", modGround.GR_HEAD_DEFAULT))
+    mLastGroundNote = note
+    ' 0件でも必ず記録する(「検査した」と「検査していない」を区別するため)。
+    P3AddNote detailAcc, "ground_unmatched=" & CStr(modGround.NoteCount(note))
+End Sub
+
+' LastGroundNote - 直近の未照合 risk_no 一覧(";" 区切り)。
+Public Function LastGroundNote() As String
+    LastGroundNote = mLastGroundNote
+End Function
+
+' ResetGroundNote - 明示リセット口(modPipeline2.ResetDeepOutcome と同じ考え方)。
+Public Sub ResetGroundNote()
+    mLastGroundNote = vbNullString
+End Sub
+
+' BuildHaystack - 照合される「原文」。case_data の input_* 全欄(13章§2.2 の
+'   data_key のうち接頭辞 input_ のもの。値源は modCaseStore3.DataKeys 1箇所)と
+'   S1の出力JSONを連結する。S1を混ぜるのは、S2の引用が「S1が構造化した値」を
+'   写しているのが正常な経路だからである(B班報告 §1)。
+Public Function BuildHaystack(ByVal caseId As String, ByVal s1Json As String) As String
+    Dim it As Variant, keyText As String, sb As String
+
+    For Each it In Split(modCaseStore3.DataKeys(), ";")
+        keyText = Trim$(CStr(it))
+        If Left$(keyText, 6) = "input_" Then
+            sb = sb & modCaseStore.LoadData(caseId, keyText) & vbLf
+        End If
+    Next it
+    BuildHaystack = sb & s1Json
+End Function
+
+' SufficiencyNoteOf - S1の input_quality を run_log 用の1語へ(裁定書37 B-05)。
+'   "iq=low;miss=7" の形。overall は 19章§3 の3値、miss は coverage[] のうち
+'   status<>ok の観点数。**読めなければ "iq=?"**(黙って mid にしない)。
+'   HTML側の警告表示(班3)もこの1本を呼ぶので Public にする(14章§6)。
+Public Function SufficiencyNoteOf(ByVal s1Json As String) As String
+    Dim ov As String, st As String, it As Variant, n As Long
+
+    ov = LCase$(Trim$(modJsonLite.GetStr(s1Json, "overall")))
+    If ov <> "high" And ov <> "mid" And ov <> "low" Then
+        SufficiencyNoteOf = "iq=?"
+        Exit Function
+    End If
+
+    For Each it In modJsonLite.GetArrayItems(s1Json, "coverage")
+        st = LCase$(Trim$(modJsonLite.GetStr(CStr(it), "status")))
+        If LenB(st) > 0 And st <> "ok" Then n = n + 1
+    Next it
+    SufficiencyNoteOf = "iq=" & ov & ";miss=" & CStr(n)
+End Function
+
+' run_log detail の積み上げ(modPipeline.AddNote と同じ規約=";" 区切り)。
+Private Sub P3AddNote(ByRef acc As String, ByVal noteText As String)
+    If LenB(noteText) = 0 Then Exit Sub
+    If LenB(acc) > 0 Then acc = acc & ";"
+    acc = acc & noteText
+End Sub

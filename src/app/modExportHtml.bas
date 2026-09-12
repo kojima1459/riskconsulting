@@ -55,14 +55,35 @@ Private Const EX_SERIAL_MAX As Long = 9999
 ' ==========================================================
 ' GenerateHtmlReport - 14章§6の契約。""=成功 / 非空=失敗理由。
 '   outPath には成功時の確定パスを返す(失敗時は空のまま)。
+'   **担当者の確認を名乗らない既定の書き出し**(裁定書37 B-06)。確認済みで
+'   書き出す口は GenerateHtmlReportEx。既存の呼出側を壊さないため、本関数は
+'   reviewedBy="" で Ex へ委譲するだけにする(実装を2本に分けない)。
 ' ==========================================================
 Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As String) As String
+    GenerateHtmlReport = GenerateHtmlReportEx(caseId, outPath, vbNullString)
+End Function
+
+' ==========================================================
+' GenerateHtmlReportEx - 確認者つきの書き出し(裁定書37 B-06。18章§3.5)。
+'   reviewedBy: レポートを客先へ出す前に内容を確認・編集した担当者の表示名。
+'     **空なら「AI生成・担当者確認前」の既定文**が出る(16章NFR-S5・社内IT環境
+'     v1.1 §7.3「顧客提示は全件、利用者による確認が必須」に対し、担保の無い
+'     遵守宣言をしない)。非空なら meta.reviewed_by / reviewed_at が入り、
+'     免責1行目と表紙チップが「確認済」へ切り替わる。
+'   reviewedAt は**ここで打つ**(呼出側が時刻を作らない)。
+' ==========================================================
+Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As String, _
+                                     ByVal reviewedBy As String) As String
     On Error GoTo Failed
     outPath = vbNullString
 
+    Dim reviewer As String, reviewedAt As String
+    reviewer = Trim$(modUtilText.SanitizeInput(reviewedBy))
+    If LenB(reviewer) > 0 Then reviewedAt = modUtil.NowStamp()
+
     If Not modCaseStore.IsValidCaseId(caseId) Then
-        modLog.LogError "E0101", EX_SRC & ".GenerateHtmlReport", "invalid_case_id"
-        GenerateHtmlReport = "案件IDが不正です。"
+        modLog.LogError "E0101", EX_SRC & ".GenerateHtmlReportEx", "invalid_case_id"
+        GenerateHtmlReportEx = "案件IDが不正です。"
         Exit Function
     End If
 
@@ -70,7 +91,7 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     Dim roundNo As Long
     Dim qualityMode As String, s4Variant As String, tierText As String
     If Not modCaseRead.ReadCaseCtx(caseId, ctx, roundNo, qualityMode, s4Variant, tierText) Then
-        GenerateHtmlReport = "案件一覧からこの案件を読めませんでした。"
+        GenerateHtmlReportEx = "案件一覧からこの案件を読めませんでした。"
         Exit Function
     End If
 
@@ -82,8 +103,18 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     s3Text = modCaseStore.ResolveStepJson(caseId, 3)
     If LenB(Trim$(s1Text)) = 0 Then
         modLog.LogUsage "html_report_skipped", caseId, "s1_empty"
-        GenerateHtmlReport = "先にStep1を実行してください。"
+        GenerateHtmlReportEx = "先にStep1を実行してください。"
         Exit Function
+    End If
+
+    ' 裁定書37 B-03: 原文照合は**匿名化の復元より前**に行う(貼付原文もS2も
+    ' 保存時の表記のまま突き合わせる。復元後に照合すると社名の置換で全件が
+    ' 未照合になる)。config ground_check=FALSE なら測らない=空のまま。
+    Dim groundNote As String
+    If modConfig.GetBool("ground_check", True) Then
+        groundNote = modGround.GroundNotes(s2Text, _
+            modPipeline3.BuildHaystack(caseId, s1Text), _
+            modConfig.GetLong("ground_head_chars", modGround.GR_HEAD_DEFAULT))
     End If
 
     ' (2) 匿名化の復元(E-31)。**エスケープより前**に行う=復元後の実名が
@@ -104,7 +135,7 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     Dim piiText As String
     piiText = PiiNote(caseId, s1Text, s2Text, s3Text, warnText)
     If LenB(piiText) > 0 Then
-        modLog.LogError "E0103", EX_SRC & ".GenerateHtmlReport", piiText
+        modLog.LogError "E0103", EX_SRC & ".GenerateHtmlReportEx", piiText
         warnText = AddWarn(warnText, "個人情報らしき記述を検知しました。配布前に本文をご確認ください。")
     End If
 
@@ -117,14 +148,14 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     metaJson = BuildMetaJson(caseId, ctx.company, ctx.industry_code, ctx.industry_name, _
                              ctx.case_type, tierText, qualityMode, roundNo, s4Variant, _
                              modUtil.NowStamp(), modConfig.GetStr("app_version", EX_VER_DEFAULT), _
-                             themeName, warnText)
+                             themeName, warnText, reviewer, reviewedAt, groundNote)
 
     ' (4)(5) DATA組立とテンプレ組立。どちらの失敗も E0502(16章 E-48)。
     Dim docText As String
     docText = BuildReportHtml(metaJson, s1Text, s2Text, s3Text, themeName)
     If LenB(docText) = 0 Then
-        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "build_failed"
-        GenerateHtmlReport = "レポートの組み立てに失敗しました。"
+        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReportEx", "build_failed"
+        GenerateHtmlReportEx = "レポートの組み立てに失敗しました。"
         Exit Function
     End If
 
@@ -132,8 +163,8 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     Dim dirText As String
     dirText = ResolveOutDir(OutDirRaw())
     If LenB(dirText) = 0 Then
-        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "no_out_dir"
-        GenerateHtmlReport = "出力先フォルダを用意できませんでした。"
+        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReportEx", "no_out_dir"
+        GenerateHtmlReportEx = "出力先フォルダを用意できませんでした。"
         Exit Function
     End If
 
@@ -144,13 +175,13 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     Dim pathText As String
     pathText = UniqueOutPath(dirText, FileNameOf(ctx.company, caseId, dirText))
     If LenB(pathText) = 0 Then
-        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "no_free_filename"
-        GenerateHtmlReport = "出力ファイル名の空きを見つけられませんでした。"
+        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReportEx", "no_free_filename"
+        GenerateHtmlReportEx = "出力ファイル名の空きを見つけられませんでした。"
         Exit Function
     End If
     If Not WriteUtf8Bom(pathText, docText) Then
-        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "write_failed"
-        GenerateHtmlReport = "ファイルの書き出しに失敗しました。"
+        modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReportEx", "write_failed"
+        GenerateHtmlReportEx = "ファイルの書き出しに失敗しました。"
         Exit Function
     End If
 
@@ -164,12 +195,15 @@ Public Function GenerateHtmlReport(ByVal caseId As String, ByRef outPath As Stri
     Exit Function
 
 Failed:
-    modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReport", "unexpected", Err.Number
-    GenerateHtmlReport = "レポート生成中にエラーが発生しました。"
+    modLog.LogError EX_CODE_FAIL, EX_SRC & ".GenerateHtmlReportEx", "unexpected", Err.Number
+    GenerateHtmlReportEx = "レポート生成中にエラーが発生しました。"
 End Function
 
 ' ==========================================================
 ' BuildMetaJson - 18章§2の meta を組み立てる純関数。
+'   reviewedBy / reviewedAt は裁定書37 B-06 の確認フラグ(未確認は両方空文字)。
+'   groundNote は裁定書37 B-03 の未照合 risk_no(";" 区切り。空=全件照合できた
+'   か、検査していない)。
 '   warnText は EX_WARN_SEP 区切りの警告文(空なら warnings は空配列)。
 '   warnings は18章§4.1が静的HTMLの差込口を3箇所に限っているため、警告バナーの
 '   本文もDATA経由でJS側へ渡す(textContent で描くのでエスケープ経路が増えない)。
@@ -180,7 +214,9 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
                               ByVal qualityMode As String, ByVal roundNo As Long, _
                               ByVal s4Variant As String, ByVal generatedAt As String, _
                               ByVal appVersion As String, ByVal themeName As String, _
-                              ByVal warnText As String) As String
+                              ByVal warnText As String, ByVal reviewedBy As String, _
+                              ByVal reviewedAt As String, _
+                              ByVal groundNote As String) As String
     Dim s As String
     s = s & "{" & JStr("case_id", caseId) ' SAFE:html
     s = s & "," & JStr("company", company) ' SAFE:html
@@ -194,6 +230,12 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
     s = s & "," & JStr("generated_at", generatedAt) ' SAFE:html
     s = s & "," & JStr("app_version", appVersion) ' SAFE:html
     s = s & "," & JStr("theme", themeName) ' SAFE:html
+    ' 裁定書37 B-06(18章§2): 担当者の確認。未確認なら**両方とも空文字**にする
+    ' (キー自体は必ず置く。テンプレ側は reviewed_by の空/非空だけで分岐する)。
+    s = s & "," & JStr("reviewed_by", reviewedBy) ' SAFE:html
+    s = s & "," & JStr("reviewed_at", reviewedAt) ' SAFE:html
+    ' 裁定書37 B-03(18章§2): 原文と照合できなかった risk_no の一覧。
+    s = s & ",""ground_unmatched"":[" & modGround.NoteJsonArray(groundNote) & "]" ' SAFE:html
     s = s & ",""warnings"":[" & WarnArrayBody(warnText) & "]}" ' SAFE:html
     BuildMetaJson = s
 End Function
@@ -230,7 +272,11 @@ Public Function BuildReportHtml(ByVal metaJson As String, ByVal s1Json As String
     Dim coverFields As String
     coverFields = modJsonLite.GetStr(metaJson, "company") & EX_SEP ' SAFE:html
     coverFields = coverFields & modJsonLite.GetStr(metaJson, "case_id") & EX_SEP ' SAFE:html
-    coverFields = coverFields & modJsonLite.GetStr(metaJson, "generated_at") ' SAFE:html
+    coverFields = coverFields & modJsonLite.GetStr(metaJson, "generated_at") & EX_SEP ' SAFE:html
+    ' 裁定書37 B-06: <noscript>(JSが動かない環境)の免責も同じ3項分岐にするため、
+    ' 確認者と確認日時を静的HTML側へも渡す(差込は HtmlSafe を通る。18章§4.1)。
+    coverFields = coverFields & modJsonLite.GetStr(metaJson, "reviewed_by") & EX_SEP ' SAFE:html
+    coverFields = coverFields & modJsonLite.GetStr(metaJson, "reviewed_at") ' SAFE:html
 
     BuildReportHtml = modHtmlTemplate1.BuildDocument(themeName, dataJson, coverFields)
     Exit Function

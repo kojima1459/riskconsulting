@@ -181,6 +181,9 @@ PURE_ALLOWLIST = [
     #   (FinanceBlockText / IncidentsBlockText / FocusLineIdsAttr)だけで、
     #   S*UserText / *Of 系はシートを読むため実行に到達しない(技術メモ4)。
     "modPipeline3",
+    # W14(裁定書37 B-03)。modGround は Excel を1つも触らない純文字列モジュール
+    #   なので層(a)から直接叩ける(NormalizeForMatch / QuoteFound / GroundNotes)。
+    "modGround",
     # W7(T-57)。modPipeline の分割先。テストが叩くのは純関数 TrimPlan
     #   (15章§0.7 の6段の切詰め計画)だけで、LoadKbSlots はシートを読むため
     #   実行に到達しない(技術メモ4)。
@@ -290,6 +293,11 @@ PURE_ALLOWLIST = [
     # modTestsPure22: W12-A(裁定書34 §1.3)の純層3本。data_dir.txt の1行の
     #   親フォルダ(modUtil.PointerParentOf)。modTestsPure21.RunAll の末尾から呼ぶ。
     "modTestsPure22",
+    # modTestsPure24: W14(裁定書37 B-03/B-05/B-06。班2)の純層。原文照合
+    #   (modGround)・充足度の1語化(modPipeline3.SufficiencyNoteOf)・免責の
+    #   3項分岐(modHtmlTemplate5/1)を叩く。modTestRunner.RunAllPureTests から
+    #   modTestsPure* の連鎖とは別に呼ぶ(班1の modTestsPure23 と衝突させない)。
+    "modTestsPure24",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON

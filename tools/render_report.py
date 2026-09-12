@@ -99,6 +99,9 @@ RENDER_MODULES = [
     "modHtmlTemplate4", "modHtmlTemplate5", "modHtmlTemplate6",
     "modHtmlTemplate7", "modHtmlTemplate8",
     "modExportHtml",
+    # W14(裁定書37 B-03): BuildMetaJson が meta.ground_unmatched の組立で
+    #   modGround.NoteJsonArray を**実際に呼ぶ**ので必須(呼ばれるものは載せる)。
+    "modGround",
     # modMockLlm3 は W7(T-55)で新設した MK-S2-NEW / MK-S2-RNW の本体。
     #   modMockLlm.ResponseById が両IDでここへ委譲するので、載せ忘れると
     #   Basicライブラリに関数が無く soffice がダイアログで止まる
@@ -227,7 +230,8 @@ def basic_driver(out_url: str, theme: str, faithful: bool) -> str:
         "    metaJson = modExportHtml.BuildMetaJson( _\n"
         f'        "{SAMPLE_CASE_ID}", "{SAMPLE_COMPANY}", "{SAMPLE_INDUSTRY_CODE}", _\n'
         f'        "{SAMPLE_INDUSTRY_NAME}", "renewal", "t2_full", "deep", {round_no}, _\n'
-        f'        "proposal", "{SAMPLE_GENERATED_AT}", "{SAMPLE_APP_VERSION}", "{theme}", "")\n'
+        f'        "proposal", "{SAMPLE_GENERATED_AT}", "{SAMPLE_APP_VERSION}", "{theme}", _\n'
+        f'        "", "", "", "")\n'
         "    Dim docText As String\n"
         f'    docText = modExportHtml.BuildReportHtml(metaJson, s1, s2, s3, "{theme}")\n'
         f'    WriteUtf8 "{out_url}", docText\n'

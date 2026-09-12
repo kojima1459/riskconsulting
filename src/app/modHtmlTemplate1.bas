@@ -29,6 +29,9 @@ Option Explicit
 ' coverFields の書式(§4.1(b)の3値を1本で渡す取り決め)。vbTab区切りで [0]=会社名
 '   [1]=案件ID [2]=生成日時。vbTab が安全なのは modUtilText.SanitizeInput が
 '   制御文字を除去するため(案件データ側に残らない)。
+'   裁定書37 B-06 で [3]=確認者(meta.reviewed_by) [4]=確認日時(reviewed_at)を
+'   足した(<noscript> の免責を SEC-15 と同じ3項分岐にするため)。無い場合は
+'   FieldAt が空文字を返すので、旧来の3値だけを渡す呼出も壊れない。
 Private Const HT1_SEP As String = vbTab
 
 ' BuildDocument - HTML全文を組み立てる(18章§1.1の手順(5))。themeName=解決済み
@@ -119,7 +122,19 @@ Public Function BodyShellHtml(ByVal coverFields As String) As String
     s = s & "<div class=""wrap""><noscript><div class=""note"">" & vbLf
     s = s & "<p>このレポートの表示にはJavaScriptが必要です。"
     s = s & "ファイルをローカルに保存してブラウザで開いてください。</p>" & vbLf
-    s = s & "<p>本資料はAI支援により作成した骨子を人が確認・編集したものです。</p>" & vbLf
+    ' 裁定書37 B-06: §3.5 の1行目と**同じ3項分岐**を静的HTML側でも行う
+    ' (JSが動かない環境で「人が確認済み」と名乗らない)。差込は HtmlSafe を通る。
+    s = s & "<p>"
+    If LenB(FieldAt(coverFields, 3)) > 0 Then
+        s = s & "本資料はAI支援により作成した骨子を担当者が確認・編集したものです"
+        s = s & "（確認: " & modUtilText.HtmlSafe(FieldAt(coverFields, 3))
+        s = s & " / " & modUtilText.HtmlSafe(FieldAt(coverFields, 4)) & "）。"
+    Else
+        s = s & "本資料はAIが公開情報等から作成した営業担当者向けの分析資料です"
+        s = s & "（AI生成・担当者確認前）。お客さまへ提示する前に、担当者が内容を"
+        s = s & "確認・編集してください。"
+    End If
+    s = s & "</p>" & vbLf
     s = s & "</div></noscript></div>" & vbLf
 
     s = s & "<main id=""doc"" class=""wrap"">" & vbLf

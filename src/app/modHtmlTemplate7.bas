@@ -74,9 +74,11 @@ Public Function CommonCss() As String
     s = s & ".card-deep{border-left:3px solid var(--deep)}.card-matsu{border-left:3px solid var(--matsu)}" & vbLf
     s = s & ".hook{color:var(--brand);font-size:13px;margin:0 0 8px}" & vbLf
     s = s & ".tblwrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);margin:0 0 12px}" & vbLf
-    s = s & "table{border-collapse:collapse;width:100%;min-width:960px;font-size:11.5px}" & vbLf
-    s = s & "th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}" & vbLf
-    s = s & "th{background:var(--mist);color:var(--sub);font-weight:700;font-size:10.5px;white-space:nowrap;position:sticky;top:0;z-index:1}" & vbLf
+    ' 裁定書37 D#10: 表の文字を大きくする(画面 13px / th td 12px)。老眼の進んだ
+    ' 経営層・担当役員が読めない大きさで出さない。
+    s = s & "table{border-collapse:collapse;width:100%;min-width:960px;font-size:13px}" & vbLf
+    s = s & "th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:12px}" & vbLf
+    s = s & "th{background:var(--mist);color:var(--sub);font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:1}" & vbLf
     s = s & "tr{break-inside:avoid}td.nw,th.nw{white-space:nowrap}" & vbLf
     s = s & ".bdg{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:999px;color:#fff;white-space:nowrap;font-weight:700}" & vbLf
     s = s & ".bdg-cover{background:var(--tr-cover)}.bdg-partial{background:var(--tr-partial)}.bdg-hard{background:var(--tr-hard)}" & vbLf
@@ -100,12 +102,21 @@ Public Function CommonCss() As String
     ' リテラルで書く(§5.1・§6(1))。
     s = s & "@page{size:A4 portrait;margin:14mm 12mm;}" & vbLf
     s = s & "@media print{.no-print,.topbar{display:none}.print-only{display:block}" & vbLf
-    s = s & "body{background:#fff;font-size:12px;line-height:1.7}" & vbLf
+    ' 裁定書37 D#10: 印刷は本文 11pt / 表 9.5pt。table-layout:fixed と
+    ' word-wrap でA4縦の右端はみ出しを止める(横スクロールを前提にしない)。
+    s = s & "body{background:#fff;font-size:11pt;line-height:1.7}" & vbLf
     s = s & ".hero{padding:26px 0}.hero h1{font-size:26px}" & vbLf
     s = s & ".wrap,.hero-inner,.topbar-inner{max-width:none;padding-left:0;padding-right:0}" & vbLf
-    s = s & ".tblwrap{overflow:visible}table{font-size:10px;min-width:0}th{position:static}" & vbLf
+    s = s & ".tblwrap{overflow:visible}" & vbLf
+    s = s & "table{font-size:9.5pt;min-width:0;table-layout:fixed;width:100%}" & vbLf
+    s = s & "th,td{font-size:9.5pt;padding:6px 4px;word-wrap:break-word;overflow-wrap:break-word}" & vbLf
+    s = s & "th{position:static;white-space:normal}" & vbLf
     s = s & ".card,.disc{box-shadow:none}" & vbLf
     s = s & ".sec-exec{break-after:page}a{color:var(--ink);text-decoration:none}" & vbLf
+    ' 裁定書37 D#12: 孤立見出し(見出しだけがページ末尾に残る)を止め、
+    ' 意味のまとまりをページまたぎさせない。
+    s = s & ".section-head,.sec h2,.sec h3{break-after:avoid;page-break-after:avoid}" & vbLf
+    s = s & ".card,.story,.tblwrap,.rublock,.idea{break-inside:avoid;page-break-inside:avoid}" & vbLf
     s = s & ".card,.rublock,tr,.sec{break-inside:avoid}}" & vbLf
     s = s & "@media (max-width:900px){.dl{grid-template-columns:1fr}}" & vbLf
     s = s & "@media (max-width:640px){.hero h1{font-size:24px}.sec h2{font-size:19px}" & vbLf

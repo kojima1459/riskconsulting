@@ -184,6 +184,12 @@ MODULE_REGISTRY = {
     #                  modPipeline が30,000字契約で満杯のため分割した(T-57)。
     #                  シートに触れないので R4許可は与えない。
     "modPipeline3", "modPipeline4",
+    # W14(裁定書37 B-03)で新設。12章§2のモジュール一覧に追記済み。
+    #   modGround = evidence.quote の原文照合(NormalizeForMatch / QuoteFound /
+    #               GroundNotes)。app層の**純文字列**モジュールで、案件データも
+    #               config も読まない(値源の解決は modPipeline3.GroundHook)。
+    #               R4許可は与えない(Excelトークンに触れない)。
+    "modGround",
     "modExportHtml", "modExportPpt", "modExportHearing", "modAppTypes",
     "modPromptsCore", "modPromptsBlocks", "modPromptsOps", "modSchemas",
     "modHtmlTheme",
@@ -479,6 +485,9 @@ CONTRACT: dict[str, dict] = {
             "S1UserText", "S2UserText", "S3UserText",
             "FinanceBlockText", "IncidentsBlockText", "FocusLineIdsAttr",
             "IncidentsFor",
+            # 裁定書37 B-03/B-05。原文照合の呼び口と充足度の1語化。
+            "DefendNotes", "GroundHook", "LastGroundNote", "BuildHaystack",
+            "SufficiencyNoteOf",
         ],
     },
     # modPipeline4: 30,000字契約による modPipeline の分割先(17章 T-57・裁定書25
@@ -556,7 +565,17 @@ CONTRACT: dict[str, dict] = {
             "IsValidJudgeResult",
         ],
     },
-    "modExportHtml": {"closed": False, "required": ["GenerateHtmlReport"]},
+    "modExportHtml": {
+        "closed": False,
+        "required": ["GenerateHtmlReport", "GenerateHtmlReportEx"],
+    },
+    # modGround: 原文照合(裁定書37 B-03・14章§6)。3本とも層(a)の回帰網
+    #   (modTestsPure24)が叩くので required に載せる(Private へ戻すと検査が
+    #   黙って消える)。
+    "modGround": {
+        "closed": False,
+        "required": ["NormalizeForMatch", "QuoteFound", "GroundNotes"],
+    },
     "modExportHearing": {"closed": False, "required": ["BuildHearingSheet"]},
     # modExportPpt: 14章§6の GeneratePpt は **Phase 1.5**(§6の注記・§1の表)。
     # Phase 1 実装で required に入れると未実装ERRORになるため required は空にする

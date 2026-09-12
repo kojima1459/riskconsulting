@@ -59,6 +59,7 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
     "case_type": "renewal", "dossier_tier": "t2_full", "quality_mode": "deep",
     "round_no": 1, "s4_variant": "proposal",
     "generated_at": "2026/09/01 14:07:22", "app_version": "2.4.0", "theme": "standard",
+    "reviewed_by": "", "reviewed_at": "", "ground_unmatched": [],
     "warnings": []
   },
   "s1": { "company_name": "...", "business_summary": "...", "...": "Schema-S1 の全キー" },
@@ -68,6 +69,8 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 ```
 
 - `meta` の由来: `case_id` / `case_type` / `dossier_tier` / `company` / `industry_code` / `industry_name` / `round_no` / `s4_variant` は13章§2.1『案件一覧』の同名列。`quality_mode` はHOMEの `hm_quality_mode`（13章§2.10。未上書きなら config `quality_mode`）。`app_version` は config `app_version`、`theme` は config `html_theme` を `modHtmlTheme.ThemeCss` で解決したあとの実テーマ名（§5.2のフォールバック後の値）、`generated_at` は生成時刻 `yyyy/mm/dd hh:mm:ss`。
+- `meta.reviewed_by` / `meta.reviewed_at` は**担当者が内容を確認・編集したか**（v1.4・裁定書37 B-06）。未確認は**両方とも空文字**（キー自体は必ず置く）。値を入れるのは `modExportHtml.GenerateHtmlReportEx` の `reviewedBy` 引数が非空のときだけで、`reviewed_at` はそのとき生成側が打つ（`modUtil.NowStamp` の `yyyy/mm/dd hh:mm:ss`）。読むのは §3.5 の免責1行目と §3 SEC-01 の表紙チップ、および §4.1 の `<noscript>`。
+- `meta.ground_unmatched` は**引用の原文照合で見つけられなかったリスクの番号**の文字列配列（v1.4・裁定書37 B-03。0本以上。キー自体は必ず置き、無ければ空配列）。`s2.risks[]` は `risk_no` をそのまま、`s2.emerging_risks[]` は `risk_no` を持たないため配列の出現順に `"E1"` `"E2"` と採番した値が入る。値源は `modGround.GroundNotes`（貼付原文＝`case_data` の `input_*` 全欄＋`s1_json` と突き合わせる純関数）で、`evidence.source` が `inference` / `knowledge` のものと、貼付原文が空のときは**検査しない**（空配列になる。config `ground_check` / `ground_head_chars`＝13章§2.3）。読むのは §3 SEC-14 の「原文照合」列だけで、**SEC-04 の充足度バッジは動かさない**（別の事実なので混ぜない）。
 - `meta.warnings` は**生成をブロックしない警告**の文字列配列（0本以上。キー自体は必ず置き、無ければ空配列）。載せてよいのは§1.1の②③が定める「匿名化の復元ができませんでした」（16章 E-31）と `modPii` の検知（16章 E-05(6)。**検知種別と箇所だけで本文は載せない**＝NFR-S3）に限る。ページ側は本文の前に1枚のバナーとして出す（`hm_warning` と同じ内容を、レポート単体で配布したときにも読めるようにするためのもの。W3.1で追認）。**エラーコード・スタックトレース・入力原文をここへ入れない**（レポートは成果物であり障害報告書ではない＝16章NFR-S3）。
 - S3が未実行の案件では `"s3": null` とする（キー自体は必ず置く)。同様にS2未実行は `"s2": null`。`null` のときの各セクションの挙動は§3の「空のときの挙動」列が正。
 - **DATAに入れないもの**: 入力貼付テキストの原文（`input_hp` 等）・run_log・err_log・ナレッジ本文・APIキーに類する一切。レポートは成果物であり、入力の原本を持ち出す口にしない（16章NFR-S3）。ただし `s1.field_insights[]`（現場メモ由来の原文パススルー。10章FR-34）はS1の出力そのものなので含む。
@@ -158,10 +161,19 @@ v1.0変更概要: 仕様書v2.4の実装前監査裁定により新設。10章FR
 
 ### 3.5 SEC-15 免責フッタの固定文（この4行を必ず含める）
 
-1. `本資料はAI支援により作成した骨子を人が確認・編集したものです。`（16章NFR-S5の必須表記）
+1. `本資料はAIが公開情報等から作成した営業担当者向けの分析資料です（AI生成・担当者確認前）。お客さまへ提示する前に、担当者が内容を確認・編集してください。`（16章NFR-S5の必須表記）
 2. `記載のリスクは公開情報と当社担当者の見立てに基づく仮説であり、引受可否・保険料・幹事構成を確約するものではありません。`
 3. `保険料の試算は本資料の対象外です（要見積）。`（10章FR-43）
 4. `{meta.company} 御中 / 案件ID {meta.case_id} / 作成 {meta.generated_at} / リスク提案ナビ v{meta.app_version}`
+
+**1行目だけは3項分岐する**（v1.4・裁定書37 B-06）。`meta.reviewed_by` が**空**なら上の既定文、**非空**なら次の1文へ差し替える（2行目以降は不変）。
+
+> 本資料はAI支援により作成した骨子を担当者が確認・編集したものです（確認: {meta.reviewed_by} / {meta.reviewed_at}）。
+
+- 差し替えの理由: 社内IT環境v1.1 §7.3 は顧客提示物に利用者の確認を必須と定めるが、**製品側にその担保が無いまま「人が確認・編集した」と断言していた**（裁定書37 B-06/A-01/C-5）。確認を通していない書き出しでは遵守を名乗らない。
+- **`<noscript>` 側（§4.1）も同じ分岐を静的HTMLで行う**。文言が2箇所に複製される構造なので、片方だけ直る腐敗を層(a)のテスト（`modTestsPure24`）が止める。
+- 表紙 SEC-01 のチップ列には `確認前` / `確認済 {meta.reviewed_by}` を出す。
+- `reviewed_by` を立てる口は `modExportHtml.GenerateHtmlReportEx(caseId, outPath, reviewedBy)`。旧 `GenerateHtmlReport(caseId, outPath)` は `reviewedBy=""`（＝確認前）で委譲する。**編集の有無から自動判定しない**（「見たが直さなかった」を落とすため。裁定書37 C-5）。
 
 ### 3.6 上部ナビと目次（v1.2で改訂）
 
@@ -246,7 +258,7 @@ DATAはページ内のJavaScriptが `JSON.parse` で受け取り、**セクシ�
 
 - VBAが静的HTMLとして書き出すのは次の3つだけで、いずれも `modUtilText.HtmlSafe` を通す: (a) `<title>` (b) SEC-01 表紙の会社名・案件ID・生成日時 (c) `<noscript>` の案内文。
 - **JS側の描画は `document.createElement` と `textContent` への代入のみで行う。`innerHTML` / `insertAdjacentHTML` / `document.write` / `outerHTML` への代入を禁止する。** 属性は `setAttribute` で与える。これによりDATA由来の文字列がマークアップとして解釈される経路が構造的に存在しなくなる（17章 T-46 の出荷前検問で、テンプレ文字列中にこれらの語が出現しないことを grep 検査する）。
-- `<noscript>` には「このレポートの表示にはJavaScriptが必要です。ファイルをローカルに保存してブラウザで開いてください」と、SEC-15の免責文（§3.5の1行目）を静的HTMLで書く。スクリプトが動かない環境でもAI利用の明示だけは必ず読めるようにする。
+- `<noscript>` には「このレポートの表示にはJavaScriptが必要です。ファイルをローカルに保存してブラウザで開いてください」と、SEC-15の免責文（§3.5の1行目。**`meta.reviewed_by` による3項分岐も同じ**。v1.4・裁定書37 B-06）を静的HTMLで書く。スクリプトが動かない環境でもAI利用の明示だけは必ず読めるようにする。
 
 ### 4.2 セクション登録表の形式
 

@@ -307,6 +307,9 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "data_dir", vbNullString
     modConfig.RegisterDefault "html_out_dir", vbNullString
     modConfig.RegisterDefault "html_theme", "standard"
+    ' 裁定書37 B-03(13章§2.3): 引用の原文照合。既定は照合する・先頭20字。
+    modConfig.RegisterDefault "ground_check", "TRUE"
+    modConfig.RegisterDefault "ground_head_chars", "20"
     modConfig.RegisterDefault "mock_fault", vbNullString
     modConfig.RegisterDefault "keep_window_alive", "TRUE"
     modConfig.RegisterDefault "ribbon_addin_name", "リボンちゃん"

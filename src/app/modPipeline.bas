@@ -69,6 +69,7 @@ Private Const PL_PCT_PASTE As Long = 7
 Private Type TChkCtx
     stepNo As Long
     stepName As String
+    caseId As String
     caseType As String
     dossierTier As String
     menusText As String
@@ -168,6 +169,7 @@ Private Function ExecStep(ByVal caseId As String, ByRef ctx As TCaseCtx, _
 
     c.stepNo = stepNo
     c.stepName = StepNameOf(stepNo)
+    c.caseId = caseId
     c.caseType = ctx.case_type
     c.dossierTier = ctx.dossier_tier
 
@@ -432,6 +434,9 @@ Private Function OneCall(ByRef c As TChkCtx, ByVal playId As String, _
     End If
 
     errText = Defend(c, outRaw, outJson, detailAcc)
+    ' 裁定書37 B-03/B-05: 検証の**後ろ**で原文照合(S2)と充足度(S1)を detail へ
+    ' 1行で足す。**落とさない・修復リトライを起こさない**(実体は modPipeline3)。
+    modPipeline3.DefendNotes c.stepNo, c.caseId, outJson, c.s1Json, (LenB(errText) = 0), detailAcc
     If LenB(errText) > 0 Then AddNote detailAcc, "verr=" & FailCodeOf(errText)
     RecordRun ClassifyResult((LenB(errText) = 0), isRepair, (LenB(errText) = 0)), detailAcc
     OneCall = errText

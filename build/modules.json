@@ -233,6 +233,15 @@
       "wave": "T-57"
     },
     {
+      "name": "modGround",
+      "path": "src/app/modGround.bas",
+      "role": "app",
+      "type": "std",
+      "ship": true,
+      "wave": "W14",
+      "_note": "裁定書37 B-03。evidence.quote の原文照合(純文字列・R4)。呼ぶのは modPipeline3.GroundHook だけ。"
+    },
+    {
       "name": "modInboxStore",
       "path": "src/app/modInboxStore.bas",
       "role": "app",
@@ -817,6 +826,14 @@
       "type": "std",
       "wave": "T-63",
       "_note": "裁定書34 §1.3/§1.5(W12-A)。data_dir ポインタの親フォルダ(modUtil.PointerParentOf)の純層3本。modTestsPure21.RunAll の末尾から呼ぶ。"
+    },
+    {
+      "name": "modTestsPure24",
+      "path": "src/test/modTestsPure24.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W14",
+      "_note": "裁定書37 B-03/B-05/B-06(班2)。modGround の原文照合・modPipeline3.SufficiencyNoteOf・免責の3項分岐。modTestRunner.RunAllPureTests から結線する。"
     },
     {
       "name": "modTestsPureNavi",
