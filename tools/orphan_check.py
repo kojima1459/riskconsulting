@@ -14,8 +14,20 @@
         (OnAction/OnTime/Run の宛先文字列を含む。実装は「定義行」と
         「戻り値代入行」を除く全statementに対する \\bNAME\\b 走査で、
         コードと文字列リテラルの両方を一度にカバーする)
-    (b) build/ tools/ docs/ 配下のテキストファイル(手順書・ビルド入力の
+        **自モジュール内の「自分の名札」は使用に数えない**(W15 Round2
+        R2-16): `SRC & ".名前"` のような**ドットで始まる文字列リテラル**は
+        ログの発生元表示であって呼び出しではない。これを使用に数えていた
+        ため、「本番の呼出元が0件の新設関数が、自分のエラーログ行のおかげで
+        緑になる」という穴があった(実測で発見)。OnAction/OnTime の宛先は
+        `"モジュール名.名前"` という**完全な**文字列なので、この規則では
+        落ちない(同一モジュール内の宛先登録は従来どおり救済される)。
+    (b) build/ tools/ 配下のテキストファイル(手順書・ビルド入力の
         文字列から呼ばれる入口を救済する)
+        **docs/ は救済しない**(W15 Round2 R1-01): 仕様書に名前を書くことは
+        「使っている」ことではない。仕様を先に書く本PJの手順では、
+        docs/ を救済集合に入れると**仕様書に書いた瞬間に検出不能**になる
+        (fail-open)。docs/ にしか名前が無いものは `ERROR(docs-only)` として
+        一覧に出す(救済はするが緑にはしない、ではなく**赤にする**)。
     (c) 動的連結の救済(C_evidence A-1で確認した2パターン):
         - `"接頭辞" & 式` 型: 接頭辞文字列(モジュール修飾があれば末尾の
           ローカル名も)を「有効な接頭辞」として集め、その接頭辞で始まる
@@ -48,7 +60,10 @@ import vba_lint  # noqa: E402  (既存の解析ヘルパを再利用)
 DEFAULT_SRC_ROOT = REPO_ROOT / "src"
 
 # 参照集合(b)を走査する外部ディレクトリ。テキストとして読めるものだけ。
-EXTERNAL_DIRS = ("build", "tools", "docs")
+# docs/ は**救済しない**(W15 Round2 R1-01)。仕様書は「呼び出し」ではない。
+EXTERNAL_DIRS = ("build", "tools")
+# 救済はしないが、「仕様書にだけ名前がある」ことを一覧で言い当てるために読む。
+DOC_DIRS = ("docs",)
 EXTERNAL_EXTS = {".py", ".md", ".json", ".ps1", ".txt", ".bat", ".cfg",
                   ".yml", ".yaml", ".ini", ".csv"}
 
@@ -170,11 +185,32 @@ def collect_dynamic_prefixes(all_statements: list[str]) -> set[str]:
 
 
 # ---------------------------------------------------------------------------
-# 外部テキスト(build/tools/docs)の読み込み
+# 自モジュール内の「自分の名札」(W15 Round2 R2-16)
 # ---------------------------------------------------------------------------
-def load_external_text(repo_root: Path) -> str:
+STRING_LITERAL = re.compile(r'"[^"]*"')
+
+
+def strip_self_labels(stmt: str, name: str) -> str:
+    """自モジュール内の `SRC & ".名前"` を statement から落とす。
+
+    落とすのは「**ドットで始まり、その名前だけで終わる**文字列リテラル」
+    だけ(`".名前"`)。これはモジュール名定数と連結してログの発生元を作る
+    書き方であり、呼び出しではない。OnAction/OnTime/Run の宛先は
+    `"モジュール名.名前"` という完全な文字列なので、この規則には当たらず
+    従来どおり使用に数える(同一モジュール内で宛先を登録する画面モジュールを
+    赤くしないこと自体を自己テストで固定してある)。
+    """
+    pat = re.compile(r'^"\.%s"$' % re.escape(name), re.IGNORECASE)
+    return STRING_LITERAL.sub(
+        lambda m: '""' if pat.match(m.group(0)) else m.group(0), stmt)
+
+
+# ---------------------------------------------------------------------------
+# 外部テキスト(build/tools と docs)の読み込み
+# ---------------------------------------------------------------------------
+def load_external_text(repo_root: Path, dirs: tuple = EXTERNAL_DIRS) -> str:
     chunks = []
-    for d in EXTERNAL_DIRS:
+    for d in dirs:
         base = repo_root / d
         if not base.exists():
             continue
@@ -194,7 +230,10 @@ def load_external_text(repo_root: Path) -> str:
 # 本検査
 # ---------------------------------------------------------------------------
 def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
-    """戻り値: (ERROR件数, SKIP件数, 救済件数)"""
+    """戻り値: (ERROR件数, SKIP件数, 救済件数)
+
+    ERROR件数には「docs/ にしか名前が無いもの」(ERROR(docs-only))も含む。
+    """
     files = vba_lint.discover_module_files(src_root)
     if not files:
         print("[orphan_check] 対象ファイルがありません: %s" % src_root)
@@ -231,10 +270,12 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
     # 動的連結の救済接頭辞
     dyn_prefixes = collect_dynamic_prefixes(all_stmt_texts)
 
-    # 外部テキスト
-    ext_text = load_external_text(REPO_ROOT)
+    # 外部テキスト(救済する build/tools と、救済しない docs を分けて持つ)
+    ext_text = load_external_text(REPO_ROOT, EXTERNAL_DIRS)
+    doc_text = load_external_text(REPO_ROOT, DOC_DIRS)
 
     errors: list[Decl] = []
+    doc_only: list[Decl] = []
     skips: list[Decl] = []
     rescued: list[tuple[Decl, str]] = []
 
@@ -251,10 +292,13 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
         used = False
         for mod_name, stmts in module_stmts.items():
             for lineno, stmt in stmts:
-                if mod_name == module and lineno == d.lineno:
-                    continue  # 定義行自身
-                if mod_name == module and ret_pat.match(stmt.strip()):
-                    continue  # 戻り値代入行
+                if mod_name == module:
+                    if lineno == d.lineno:
+                        continue  # 定義行自身
+                    if ret_pat.match(stmt.strip()):
+                        continue  # 戻り値代入行
+                    # 自分の名札(`SRC & ".名前"`)は呼び出しではない(R2-16)
+                    stmt = strip_self_labels(stmt, name)
                 if pat.search(stmt):
                     used = True
                     break
@@ -264,7 +308,7 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
         if used:
             continue
 
-        # (b) build/ tools/ docs/ のテキスト
+        # (b) build/ tools/ のテキスト(docs/ は救済しない = R1-01)
         if pat.search(ext_text):
             continue
 
@@ -274,8 +318,14 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
             rescued.append((d, rescue_hit))
             continue
 
+        # docs/ にしか名前が無いもの。救済せず、理由を分けて赤にする(R1-01)。
+        if pat.search(doc_text):
+            doc_only.append(d)
+            continue
+
         errors.append(d)
 
+    doc_only.sort(key=lambda d: (d.module, d.lineno))
     errors.sort(key=lambda d: (d.module, d.lineno))
     skips.sort(key=lambda d: (d.module, d.lineno))
     rescued.sort(key=lambda t: (t[0].module, t[0].lineno))
@@ -291,16 +341,24 @@ def run_checks(src_root: Path, verbose: bool) -> tuple[int, int, int]:
             print("RESCUED %s:%d %s %s (動的連結の接頭辞: %r)" %
                   (d.module, d.lineno, kind, d.name, prefix))
 
+    for d in doc_only:
+        kind = "/".join(sorted(KIND_LABELS[k] for k in d.kinds))
+        rel = _module_relpath(files, d.module, src_root)
+        print("ERROR(docs-only) %s:%d %s %s (docs/ にしか名前がありません。"
+              "仕様書への記載は配線ではないので救済しません。配線するか削除するか "
+              "`' @unused:理由` を付けてください)" % (rel, d.lineno, kind, d.name))
+
     for d in errors:
         kind = "/".join(sorted(KIND_LABELS[k] for k in d.kinds))
         rel = _module_relpath(files, d.module, src_root)
-        print("ERROR %s:%d %s %s (呼び出し元・文字列リテラル・build/tools/docs "
+        print("ERROR %s:%d %s %s (呼び出し元・文字列リテラル・build/tools "
               "のいずれにも出現しません)" % (rel, d.lineno, kind, d.name))
 
-    print("孤児Public候補(機械検出): %d件 / 動的連結で救済: %d件 / "
-          "@unused でSKIP: %d件" % (len(errors) + len(rescued), len(rescued),
-                                   len(skips)))
-    return (len(errors), len(skips), len(rescued))
+    n_error = len(errors) + len(doc_only)
+    print("孤児Public候補(機械検出): %d件 (うち docs/ のみ %d件) / "
+          "動的連結で救済: %d件 / @unused でSKIP: %d件"
+          % (n_error + len(rescued), len(doc_only), len(rescued), len(skips)))
+    return (n_error, len(skips), len(rescued))
 
 
 def _module_relpath(files: list[Path], vb_name: str, src_root: Path) -> str:
@@ -349,6 +407,29 @@ def self_test() -> bool:
     cases.append(("HandlerName第1引数の救済", "PasteInto" in prefixes))
     cases.append(("動的連結 短すぎる接頭辞は救済しない(誤爆防止)",
                   collect_dynamic_prefixes(['"ab" & x']) == set()))
+
+    # 自分の名札(W15 Round2 R2-16)。名札だけの出現は使用に数えない。
+    label_stmt = 'modLog.LogError "E0101", MOD_SRC & ".Foo", "bad"'
+    cases.append(("自分の名札 `SRC & \".名前\"` は落ちる",
+                  strip_self_labels(label_stmt, "Foo") ==
+                  'modLog.LogError "E0101", MOD_SRC & "", "bad"'))
+    cases.append(("名札を落とすと \\bNAME\\b が残らない",
+                  re.search(r"\bFoo\b", strip_self_labels(label_stmt, "Foo"),
+                            re.IGNORECASE) is None))
+    onaction_stmt = 'sh.Buttons(1).OnAction = "modZzExample.Foo"'
+    cases.append(("同一モジュールのOnAction宛先は落ちない",
+                  strip_self_labels(onaction_stmt, "Foo") == onaction_stmt))
+    cases.append(("本物の呼び出しは落ちない",
+                  strip_self_labels("Call Foo(1)", "Foo") == "Call Foo(1)"))
+    cases.append(("別名の名札は落とさない",
+                  strip_self_labels('x = SRC & ".FooBar"', "Foo") ==
+                  'x = SRC & ".FooBar"'))
+
+    # docs/ を救済集合から外したこと(W15 Round2 R1-01)の固定。
+    cases.append(("救済する外部ディレクトリは build/ tools/ のみ",
+                  tuple(EXTERNAL_DIRS) == ("build", "tools")))
+    cases.append(("docs/ は救済集合ではない",
+                  "docs" not in EXTERNAL_DIRS and tuple(DOC_DIRS) == ("docs",)))
 
     # @unused
     lines = ["' 何か", "' @unused: Phase2 予約(裁定書38)",
