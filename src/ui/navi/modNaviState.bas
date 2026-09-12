@@ -100,21 +100,32 @@ Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As
 End Function
 Public Function BuildPrompts(ByVal company As String, ByVal basics As String, Optional ByVal industryName As String) As String
     Dim n As Long, template As String, srcText As String, result As String, titles As Variant
-    Dim industry As String
+    Dim industry As String, limitChars As Long, chars As Long
     titles = Array("1本目 会社の基本", "2本目 リスクの兆候", "3本目 調達・仕入れの構造", "業界と競合", "世の中の動きとの関係", "前回の更新からの変化", "拠点の災害リスク", "決算のハイライト")
     industry = industryName
     If Len(industry) = 0 Then industry = modJsonLite.GetStr(basics, "industry_name")
+    ' 裁定書37 B-09: 展開後の字数(chars)と上限超過(over)を各プロンプトへ足す。
+    ' 上限は config dr_input_max_chars(既定2,000)。判定は純関数 IsOverDrLimit に閉じる。
+    limitChars = modConfig.GetLong("dr_input_max_chars", 2000)
     result = "["
     For n = 1 To 8
         template = modUISheet.ReadNamed("gd_prompt_" & Format$(n, "00"))
         srcText = modUIResearch.FillTemplate(template, company, modJsonLite.GetStr(basics, "address"), _
             industry, modJsonLite.GetStr(basics, "sec_code"), modJsonLite.GetStr(basics, "sites"))
+        chars = Len(srcText)
         If n > 1 Then result = result & ","
         result = result & "{""no"":" & CStr(n) & ",""title"":" & modNaviJson.Q(CStr(titles(n - 1))) & _
             ",""template"":" & modNaviJson.Q(template) & ",""text"":" & modNaviJson.Q(srcText) & _
+            ",""chars"":" & CStr(chars) & ",""over"":" & modNaviJson.Flag(IsOverDrLimit(chars, limitChars)) & _
             ",""copied_at"":" & modNaviJson.Q(modJsonLite.GetStr(basics, "copied_" & CStr(n))) & "}"
     Next n
     BuildPrompts = result & "]"
+End Function
+
+' 裁定書37 B-09: 展開後の字数が dr_input_max_chars を超えたか(純関数・副作用なし)。
+' modTestsPureNavi.bas の NAVI-P33〜P35(1999/2000/2001の3点)が正。
+Public Function IsOverDrLimit(ByVal chars As Long, ByVal limitChars As Long) As Boolean
+    IsOverDrLimit = (chars > limitChars)
 End Function
 Public Function BuildStageList(ByVal caseId As String) As String
     Dim n As Long, result As String, state As String, stageName As String, runs As Collection

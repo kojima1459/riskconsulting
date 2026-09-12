@@ -72,6 +72,9 @@ Public Sub RegisterNaviDefaults()
     modConfig.RegisterDefault "ch_effort", "medium"
     modConfig.RegisterDefault "ch_verbosity", "low"
     modConfig.RegisterDefault "app_display_name", "リスク提案ナビ"
+    ' 裁定書37 B-09: 調査指示文(展開後)の目安上限字数。BuildPromptsが
+    ' chars/over を返す(sheets_main.json config に同値の1行あり)。
+    modConfig.RegisterDefault "dr_input_max_chars", "2000"
 End Sub
 
 ' ============================================================================

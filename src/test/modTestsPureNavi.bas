@@ -3,6 +3,7 @@ Option Explicit
 
 ' Spec 7.2/7.5/8.3/10. 24 assertions; baseline 780 -> tests_expected 804.
 ' 裁定書36で RibbonHead/InWindow を追加(+8 assertions -> tests_expected 812)。
+' 裁定書37 B-09で IsOverDrLimit(NAVI-P33〜P35)を追加(+3 assertions)。
 Public Sub RunAll()
     On Error GoTo Failed
     CheckN "NAVI-P01 empty object", modNaviJson.IsValidJson("{}")
@@ -47,6 +48,9 @@ Public Sub RunAll()
     CheckN "NAVI-P32 InWindow invalid date rejected", _
         Not modNaviStore.InWindow("not-a-date", "2026-01-01 09:59:00", "2026-01-01 10:01:00") And _
         Not modNaviStore.InWindow("2026-01-01 10:00:00", vbNullString, "2026-01-01 10:01:00")
+    CheckN "NAVI-P33 IsOverDrLimit under limit", Not modNaviState.IsOverDrLimit(1999, 2000)
+    CheckN "NAVI-P34 IsOverDrLimit at limit is not over", Not modNaviState.IsOverDrLimit(2000, 2000)
+    CheckN "NAVI-P35 IsOverDrLimit over limit", modNaviState.IsOverDrLimit(2001, 2000)
     Exit Sub
 Failed:
     modTestRunner.Check "NAVI pure unexpected error", False, CStr(Err.Number) & " " & Err.Description

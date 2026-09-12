@@ -97,7 +97,7 @@ Public Function Dispatch(ByVal action As String, ByVal data As String, ByRef cas
     Case "save_step_edit"
         response = PhaseTwoStepEdit(caseId, data)
     Case "export_report"
-        response = ActExportReport(caseId)
+        response = ActExportReport(caseId, modJsonLite.GetStr(data, "reviewedBy"))
     Case "export_hearing"
         response = ActExportHearing(caseId, data)
     Case "open_report"
@@ -432,6 +432,18 @@ Public Function ActRunPipeline(ByVal caseId As String, ByVal data As String) As 
         End If
         saveResult = modCompanyFile3.AutoSaveCase(caseId)
         If saveResult <> "saved" Then warning = "企業ファイルへの自動保存に失敗しました。保存先を確認してください。"
+        If n = 1 Then
+            ' 裁定書37 B-05(表示側)。S1成功直後に充足度を見て iq=low なら
+            ' 16章 E-02 の警告(逐語)を warning へ足し、続行する(モーダル無し)。
+            ' TODO(W14 merge): 班2の modPipeline3.SufficiencyNoteOf(s1Json) が
+            ' マージされたらコメントを外す("iq=low;miss=7" 形式が正)。
+            ' Dim suffNote As String
+            ' suffNote = modPipeline3.SufficiencyNoteOf(modCaseStore.ResolveStepJson(caseId, 1))
+            ' If Left$(suffNote, 6) = "iq=low" Then
+            '     If LenB(warning) > 0 Then warning = warning & vbLf
+            '     warning = warning & "一般論に近い出力になります。"
+            ' End If
+        End If
         DoEvents
     Next n
     If LenB(modPipeline2.LastDeepOutcome()) > 0 Then
@@ -448,7 +460,7 @@ Public Function ProgressJson(ByVal n As Long, ByVal total As Long, ByVal srcName
                    CStr(modGatewayRPN2.ResolveWaitSec(modConfig.GetLong("llm_wait_sec", 1200))) & "}"
 End Function
 
-Public Function ActExportReport(ByVal caseId As String) As String
+Public Function ActExportReport(ByVal caseId As String, ByVal reviewedBy As String) As String
     Dim path As String, reason As String, status As String
     If Not FlushOwnedSheets(caseId, 5, reason) Then
         ActExportReport = Failure(reason, "E0302")
@@ -458,7 +470,7 @@ Public Function ActExportReport(ByVal caseId As String) As String
         ActExportReport = Failure("先に企業プロファイル分析を実行してください。", "E0101")
         Exit Function
     End If
-    reason = modExportHtml.GenerateHtmlReport(caseId, path)
+    reason = ExportWithReview(caseId, reviewedBy, path)
     If LenB(reason) > 0 Or LenB(path) = 0 Then
         ActExportReport = Failure(reason, "E0603")
         Exit Function
@@ -466,6 +478,20 @@ Public Function ActExportReport(ByVal caseId As String) As String
     status = modCaseRead.CaseColumnOf(caseId, "status")
     If modCaseStore.CanTransition(status, "exported") Then modCaseStore.SetStatus caseId, "exported"
     ActExportReport = SavedResult(caseId, "レポートを出力しました。")
+End Function
+
+' 裁定書37 B-06(UI側)。reviewedBy が空なら従来どおり確認前の免責のまま出す
+' (GenerateHtmlReport)。非空なら班2の GenerateHtmlReportEx(caseId, reviewedBy)
+' で確認済みの免責へ切り替える契約(裁定書37 §2 班2欄)。呼び分けはこの1関数に
+' 閉じ、マージ時はここだけを差し替える。
+' TODO(W14 merge): 班2の modExportHtml.GenerateHtmlReportEx(caseId, reviewedBy, path)
+' がマージされたら下のコメントを外し、この関数全体を差し替える。
+Private Function ExportWithReview(ByVal caseId As String, ByVal reviewedBy As String, ByRef path As String) As String
+    ' If LenB(reviewedBy) > 0 Then
+    '     ExportWithReview = modExportHtml.GenerateHtmlReportEx(caseId, reviewedBy, path)
+    ' Else
+        ExportWithReview = modExportHtml.GenerateHtmlReport(caseId, path)
+    ' End If
 End Function
 
 Public Function ActExportHearing(ByVal caseId As String, ByVal data As String) As String
