@@ -144,11 +144,19 @@ Public Function GenerateHtmlReportEx(ByVal caseId As String, ByRef outPath As St
     Dim themeName As String
     themeName = ResolveTheme(modConfig.GetStr("html_theme", EX_THEME_DEFAULT), caseId)
 
+    ' 裁定書38 班A(V-S1-14 / V-S1-15): S1の出典と接頭辞の点検。**落とさない**。
+    ' 照合する原文は貼付原文だけ(BuildHaystack の第2引数に s1 を渡さない)。
+    ' 匿名化の復元より前の s1Text を使う(復元でURLは変わらないが、社名の置換で
+    ' 前後が動くため、run_log と同じ土俵で数えるには復元前が正しい)。
+    Dim s1WarnNote As String
+    s1WarnNote = modValidate3.WarnNoteOf(modValidate3.CheckS1Notes(s1Text, _
+                     modPipeline3.BuildHaystack(caseId, vbNullString)))
+
     Dim metaJson As String
     metaJson = BuildMetaJson(caseId, ctx.company, ctx.industry_code, ctx.industry_name, _
                              ctx.case_type, tierText, qualityMode, roundNo, s4Variant, _
                              modUtil.NowStamp(), modConfig.GetStr("app_version", EX_VER_DEFAULT), _
-                             themeName, warnText, reviewer, reviewedAt, groundNote)
+                             themeName, warnText, reviewer, reviewedAt, groundNote, s1WarnNote)
 
     ' (4)(5) DATA組立とテンプレ組立。どちらの失敗も E0502(16章 E-48)。
     Dim docText As String
@@ -202,6 +210,9 @@ End Function
 ' ==========================================================
 ' BuildMetaJson - 18章§2の meta を組み立てる純関数。
 '   reviewedBy / reviewedAt は裁定書37 B-06 の確認フラグ(未確認は両方空文字)。
+
+'   s1WarnNote は裁定書38 班A の s1_warn("V-S1-14:2;V-S1-15:1" 形式・";" 区切り。
+'   空=指摘なし)。値源は modValidate3.WarnNoteOf。
 '   groundNote は裁定書37 B-03 の未照合 risk_no(";" 区切り。空=全件照合できた
 '   か、検査していない)。
 '   warnText は EX_WARN_SEP 区切りの警告文(空なら warnings は空配列)。
@@ -216,7 +227,8 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
                               ByVal appVersion As String, ByVal themeName As String, _
                               ByVal warnText As String, ByVal reviewedBy As String, _
                               ByVal reviewedAt As String, _
-                              ByVal groundNote As String) As String
+                              ByVal groundNote As String, _
+                              Optional ByVal s1WarnNote As String = vbNullString) As String
     Dim s As String
     s = s & "{" & JStr("case_id", caseId) ' SAFE:html
     s = s & "," & JStr("company", company) ' SAFE:html
@@ -236,6 +248,8 @@ Public Function BuildMetaJson(ByVal caseId As String, ByVal company As String, _
     s = s & "," & JStr("reviewed_at", reviewedAt) ' SAFE:html
     ' 裁定書37 B-03(18章§2): 原文と照合できなかった risk_no の一覧。
     s = s & ",""ground_unmatched"":[" & modGround.NoteJsonArray(groundNote) & "]" ' SAFE:html
+    ' 裁定書38 班A(18章§2): S1の警告("V-S1-14:2" 等)。無ければ空配列。
+    s = s & ",""s1_warn"":[" & modGround.NoteJsonArray(s1WarnNote) & "]" ' SAFE:html
     s = s & ",""warnings"":[" & WarnArrayBody(warnText) & "]}" ' SAFE:html
     BuildMetaJson = s
 End Function

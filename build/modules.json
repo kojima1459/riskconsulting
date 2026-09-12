@@ -177,6 +177,13 @@
       "wave": "T-23"
     },
     {
+      "name": "modPromptsCore2",
+      "path": "src/app/modPromptsCore2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-23"
+    },
+    {
       "name": "modPromptsOps",
       "path": "src/app/modPromptsOps.bas",
       "role": "app",
@@ -200,6 +207,13 @@
     {
       "name": "modValidate2",
       "path": "src/app/modValidate2.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "T-22"
+    },
+    {
+      "name": "modValidate3",
+      "path": "src/app/modValidate3.bas",
       "role": "app",
       "type": "std",
       "wave": "T-22"
@@ -842,6 +856,14 @@
       "type": "std",
       "wave": "W14",
       "_note": "裁定書37 B-03/B-05/B-06(班2)。modGround の原文照合・modPipeline3.SufficiencyNoteOf・免責の3項分岐。modTestRunner.RunAllPureTests から結線する。"
+    },
+    {
+      "name": "modTestsPure25",
+      "path": "src/test/modTestsPure25.bas",
+      "role": "test",
+      "type": "std",
+      "wave": "W15",
+      "_note": "裁定書38 班A(B-04/B-11/B-12/B-14)。出典URLの実在照合(modValidate3 V-S1-14)・接頭辞の不整合(V-S1-15)・S1再実行の揺れ(modPipeline3.S1DiffCount)・mockとSEC-03/04/14の結線。modTestRunner.RunAllPureTests から結線する。"
     },
     {
       "name": "modTestsPureNavi",

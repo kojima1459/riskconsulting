@@ -279,6 +279,18 @@ Public Sub RunAllPureTests()
     End If
     On Error GoTo 0
 
+    ' W15(裁定書38 班A)の純層。modTestsPure* の数珠つなぎとは別に呼ぶ
+    ' (他班の新規テストモジュールと同じ行を奪い合わないため。裁定書38 §2)。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure25.RunAll
+    If Err.Number <> 0 Then
+        Check "modTestsPure25.RunAll", False, _
+              "呼び出しでエラー: " & Err.Description & " (Err=" & Err.Number & ")"
+        Err.Clear
+    End If
+    On Error GoTo 0
+
     ' ---- 実行本数の照合(0件実行の「全緑」を成立させない) ----
     If Not mExpectedSet Then
         AddFailure "NG: tests_expected が未設定です", _

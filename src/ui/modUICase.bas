@@ -157,6 +157,10 @@ Public Function EnumPairsCsv() As String
     s = s & "field_insight_tag,constraint,制約・NG" & vbLf
     s = s & "field_insight_tag,opportunity,商機" & vbLf
     s = s & "field_insight_tag,other,その他" & vbLf
+    s = s & "missing_kind,conflict,資料間の矛盾" & vbLf
+    s = s & "missing_kind,undisclosed,非開示" & vbLf
+    s = s & "missing_kind,not_found,未取得" & vbLf
+    s = s & "missing_kind,hearing_only,ヒアリングで確認" & vbLf
     s = s & "certainty,confirmed,確認済み" & vbLf
     s = s & "certainty,assumed,見立て" & vbLf
     s = s & "financials_source,yuho,有報" & vbLf
@@ -366,6 +370,7 @@ Private Function BindingTable() As String
     s = s & "input_quality_overall|b|s1_basic:input_quality_overall" & vbLf
     s = s & "location_type|b|s1_locations:type" & vbLf
     s = s & "field_insight_tag|b|s1_field_insights:tag" & vbLf
+    s = s & "missing_kind|b|s1_missing_info:kind" & vbLf
     s = s & "input_quality_aspect|b|s1_input_quality:aspect" & vbLf
     s = s & "input_quality_status|b|s1_input_quality:status" & vbLf
     s = s & "gap_type|b|s2_gaps:gap_type" & vbLf

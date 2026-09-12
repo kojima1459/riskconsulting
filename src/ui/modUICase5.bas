@@ -108,6 +108,8 @@ Private Function SerializeS1() As String
 
     modUICaseFmt.AddFrag s, "research_requests", _
             BlockArrJson("s1_research_requests", modUICaseFmt.ColsS1Research())
+    modUICaseFmt.AddFrag s, "sources", _
+            BlockArrJson("s1_sources", modUICaseFmt.ColsS1Sources())
     SerializeS1 = "{" & s & "}"
 End Function
 

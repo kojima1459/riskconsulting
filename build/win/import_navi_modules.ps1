@@ -17,7 +17,7 @@
      (2) 参照設定 Microsoft Internet Controls(SHDocVw。WithEvents で使う)
      (3) config の行(ui_mode / tests_expected ほか)
      (4) 案件一覧の26列目 archived_at
-     (5) case_data!data_key の入力規則(32値)
+     (5) case_data!data_key の入力規則(33値)
      (6) run_log!step の入力規則に ch を足す
      (7) ui\ の5本を出力と同じフォルダへ複写
    標準モジュールは第1段の bin に既に全部入っているので**入れ直さない**
@@ -87,7 +87,7 @@ foreach($line in (Get-Content -LiteralPath (Join-Path $repoRoot 'wintest\tests_e
 }
 if(-not $expectedText){throw 'wintest\tests_expected.txt の prod= を読めません。'}
 
-# --- 13章§2.2 data_key の32値(値源は src\ui\modBootNavi.bas の BN_DATA_KEYS) --
+# --- 13章§2.2 data_key の33値(値源は src\ui\modBootNavi.bas の BN_DATA_KEYS) --
 $dataKeysText=$null
 $bootNavi=[IO.File]::ReadAllText((Join-Path $repoRoot 'src\ui\modBootNavi.bas'),[Text.Encoding]::UTF8)
 $m=[Regex]::Match($bootNavi,'(?s)BN_DATA_KEYS\s+As\s+String\s*=\s*(.+?)\r?\n\r?\n')
@@ -162,7 +162,7 @@ try {
         $cases.Cells(1,26).NumberFormat='@';$cases.Cells(1,26).Value2='archived_at'
     }
 
-    # (5) case_data!data_key の入力規則(32値)。値源は modBootNavi の内蔵定数。
+    # (5) case_data!data_key の入力規則(33値)。値源は modBootNavi の内蔵定数。
     $caseData=$book.Worksheets.Item('case_data')
     $keyCol=0
     for($n=1;$n -le 20;$n++){if([string]$caseData.Cells(1,$n).Value2 -eq 'data_key'){$keyCol=$n;break}}

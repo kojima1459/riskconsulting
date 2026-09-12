@@ -67,7 +67,13 @@ Public Function ColsS1Insights() As String
 End Function
 
 Public Function ColsS1Missing() As String
-    ColsS1Missing = "seq:o;item:s;why_needed:s"
+    ColsS1Missing = "seq:o;item:s;why_needed:s;kind:e:missing_kind"
+End Function
+
+' 13章§2.12 s1_sources(裁定書38 班A・B-04)。aspect は14観点＋other のため
+'   日本語ラベルを持たない(19章§3に other が無い)=機械値のまま置く。
+Public Function ColsS1Sources() As String
+    ColsS1Sources = "seq:o;label:s;url:s;aspect:s"
 End Function
 
 Public Function ColsS1Quality() As String
@@ -151,7 +157,7 @@ Public Function AnchorsOf(ByVal stepNo As Long) As String
     Select Case stepNo
     Case 1
         AnchorsOf = "s1_basic;s1_locations;s1_current_coverage;s1_field_insights;" & _
-                    "s1_missing_info;s1_input_quality;s1_research_requests"
+                    "s1_missing_info;s1_input_quality;s1_research_requests;s1_sources"
     Case 2
         AnchorsOf = "s2_gaps;s2_risks;s2_open_questions;s2_emerging"
     Case 3

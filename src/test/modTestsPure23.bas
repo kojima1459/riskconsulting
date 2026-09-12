@@ -72,7 +72,7 @@ Private Sub T_W14B1_BlockGuardWiring()
     g = modPromptsBlocks.BlockGuard()
 
     ChkEndsGuard "Test_W14B1_01a_S1のsystem末尾がBlockGuard_裁定書37B-01", _
-        modPromptsOps.AsmGuarded(modPromptsCore.BuildS1System()), g
+        modPromptsOps.AsmGuarded(modPromptsCore2.BuildS1System()), g
 
     ChkEndsGuard "Test_W14B1_01b_S2のsystem末尾がBlockGuard_裁定書37B-01", _
         modPromptsOps.AsmGuarded(modPromptsCore.BuildS2System()), g

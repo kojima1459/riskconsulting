@@ -231,7 +231,10 @@ def basic_driver(out_url: str, theme: str, faithful: bool) -> str:
         f'        "{SAMPLE_CASE_ID}", "{SAMPLE_COMPANY}", "{SAMPLE_INDUSTRY_CODE}", _\n'
         f'        "{SAMPLE_INDUSTRY_NAME}", "renewal", "t2_full", "deep", {round_no}, _\n'
         f'        "proposal", "{SAMPLE_GENERATED_AT}", "{SAMPLE_APP_VERSION}", "{theme}", _\n'
-        f'        "", "", "", "")\n'
+        # 末尾は warnText / reviewedBy / reviewedAt / groundNote / s1WarnNote。
+        # s1_warn はサンプルでは空にする(実在しない警告をサンプルに焼かない。
+        # 出典表そのものは MK-S1-RNW の sources 3件で描かれる。裁定書38 班A)。
+        f'        "", "", "", "", "")\n'
         "    Dim docText As String\n"
         f'    docText = modExportHtml.BuildReportHtml(metaJson, s1, s2, s3, "{theme}")\n'
         f'    WriteUtf8 "{out_url}", docText\n'

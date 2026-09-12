@@ -69,7 +69,8 @@ End Function
 Private Function KeyCountAndPresence() As Boolean
     Dim keys As String
     keys = ";" & modCaseStore3.DataKeys() & ";"
-    KeyCountAndPresence = (UBound(Split(modCaseStore3.DataKeys(), ";")) = 31) And _
+    ' 13章§2.2 の data_key は 33値(v2.8・裁定書38 班A で s1_json_prev を追加)。
+    KeyCountAndPresence = (UBound(Split(modCaseStore3.DataKeys(), ";")) = 32) And _
         InStr(1, keys, ";chat_u;", 0) > 0 And InStr(1, keys, ";chat_a;", 0) > 0 And _
-        InStr(1, keys, ";nav_basics;", 0) > 0
+        InStr(1, keys, ";nav_basics;", 0) > 0 And InStr(1, keys, ";s1_json_prev;", 0) > 0
 End Function

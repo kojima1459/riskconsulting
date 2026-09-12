@@ -49,8 +49,8 @@ Private Const VE_KIND As String = "|upsell|cross_sell|scheme|"
 Private Const VE_CERTAINTY As String = "|confirmed|assumed|"
 Private Const VE_FIN_SOURCE As String = "|yuho|kessan_kokoku|tdb|view|memo|unknown|"
 
-' --- 15章 Schema-S1 の required 16キー(V-S1-01。v2.6 で financials 追加) ---
-Private Const VS1_REQUIRED As String = "company_name|business_summary|main_products|processes|locations|supply_chain|customers|workforce_notes|management_notes|strategy_outlook|current_coverage|financials|field_insights|missing_info|input_quality|research_requests"
+' --- 15章 Schema-S1 の required 17キー(V-S1-01。v2.7 で sources 追加) ---
+Private Const VS1_REQUIRED As String = "company_name|business_summary|main_products|processes|locations|supply_chain|customers|workforce_notes|management_notes|strategy_outlook|current_coverage|financials|field_insights|missing_info|input_quality|research_requests|sources"
 
 ' --- 件数・字数のしきい値(15章の各ルール表) ---
 Private Const VS1_ASPECT_N As Long = 14
@@ -96,7 +96,7 @@ Public Function CheckS1(ByVal json As String, ByVal caseType As String, _
 
     ctype = LCase$(Trim$(caseType))
 
-    ' --- V-S1-01: required 16キーのいずれかが欠落 ---
+    ' --- V-S1-01: required 17キーのいずれかが欠落 ---
     keyList = Split(VS1_REQUIRED, "|")
     For i = LBound(keyList) To UBound(keyList)
         If Not TopKeyExists(json, keyList(i)) Then

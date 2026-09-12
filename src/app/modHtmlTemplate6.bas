@@ -61,6 +61,9 @@ Public Function LabelJs() As String
     s = s & "var LIQ={ok:'十分',partial:'断片的',missing:'無い'};" & vbLf
     s = s & "var IQCLS={ok:'bdg-ok',partial:'bdg-iqpartial',missing:'bdg-missing'};" & vbLf
     s = s & "var LIQO={high:'高',mid:'中',low:'低'};" & vbLf
+    ' 19章§3 missing_info.kind(15章 SchemaS1 の missing_info[].kind。裁定書38 B-11)。
+    s = s & "var LMK={conflict:'資料間の矛盾',undisclosed:'非開示'," & vbLf
+    s = s & "not_found:'未取得',hearing_only:'ヒアリングで確認'};" & vbLf
     s = s & "var LFIT={risk_clue:'リスクの手がかり',relationship:'決裁・人間関係'," & vbLf
     s = s & "competitor:'競合・他社',constraint:'制約・NG',opportunity:'商機',other:'その他'};" & vbLf
     s = s & "var LCT={'new':'新規開拓',renewal:'更新'};" & vbLf

@@ -21,7 +21,7 @@ Option Explicit
 ' R1/R4(12章§4): ui層。Excel・シート・ThisWorkbook を触ってよい。
 ' ============================================================================
 
-' 19章§3レジストリ(data_key・全32値・13章§2.2と完全一致)の内蔵定数複製。
+' 19章§3レジストリ(data_key・全33値・13章§2.2と完全一致)の内蔵定数複製。
 ' modCaseStore3.DataKeys() と同値だが、起動時に app層へ依存せず復元できるよう
 ' 独立して保持する(値は19章§3/sheets_main.json enums.data_key と完全一致
 ' させること)。裁定書34 §1.2 で chat_u / chat_a / nav_basics の3値を足した。
@@ -29,7 +29,7 @@ Private Const BN_DATA_KEYS As String = _
     "input_hp;input_yuho;input_memo;input_contract;input_prev_renewal;" & _
     "input_dossier;input_field_notes;input_coverage_note;input_finance;" & _
     "input_hearing_answers;s1_json;s2_json;s3_json;s4_json;s2c_json;" & _
-    "s3c_json;s2r_json;s3r_json;s2_prev_json;s1_edited;s2_edited;" & _
+    "s3c_json;s2r_json;s3r_json;s2_prev_json;s1_json_prev;s1_edited;s2_edited;" & _
     "s3_edited;s4_edited;s1_json_failed;s2_json_failed;s3_json_failed;" & _
     "s4_json_failed;sparring_u;sparring_a;chat_u;chat_a;nav_basics"
 
@@ -128,7 +128,7 @@ End Function
 ' ============================================================================
 ' RestoreDataKeyHiddenRange - case_data!data_key の入力規則を隠しレンジ参照で
 '   有効化する(12章§2.1 の手順(4)。modBoot から移設・挙動は不変)。
-'   veryHiddenシート enum_hidden へ19章§3内蔵定数(全32値)を複製し、その範囲を
+'   veryHiddenシート enum_hidden へ19章§3内蔵定数(全33値)を複製し、その範囲を
 '   指す名前付きレンジを data_key 列の Formula1 に張る(セル参照は入力規則
 '   インライン255字制限の対象外。11章§5)。
 ' ============================================================================

@@ -78,7 +78,24 @@ End Function
 '   読むJSONパスは18章§3の表のまま(11章§3.8.1「統合は描画のまとまり」)。
 Public Function SecProfileJs() As String
     Dim s As String
+    ' 裁定書38 B-11: kind=conflict の missing_info は「充足度が足りない」とは
+    '   性質の違う信号なので、SEC-03 と SEC-04 の**最上段**に分けて出す
+    '   (充足度バッジには混ぜない。伝書鳩1-5「性質の違う信号を混ぜない」)。
+    '   関数宣言は巻き上げられるので、SEC-04 側から呼んでも順序の問題は無い。
+    s = s & "function CONFLICTS(s1){var mi=AR(s1.missing_info);var a=[];" & vbLf
+    s = s & "for(var i=0;i<mi.length;i++){if(S(mi[i].kind)==='conflict'){a.push(mi[i]);}}" & vbLf
+    s = s & "return a;}" & vbLf
+    s = s & "function CONFBOX(el,s1){var a=CONFLICTS(s1);if(!a.length){return;}" & vbLf
+    s = s & "var b=T(el,'div','card');" & vbLf
+    s = s & "T(T(b,'div',null),'span','tag verify','要確認');" & vbLf
+    s = s & "T(b,'h3',null,'資料間で値が食い違っています');" & vbLf
+    s = s & "T(b,'p','muted','貼り付けた資料の間で同じ項目に違う値がありました。"
+    s = s & "どちらかを採るのではなく、一次資料でご確認ください。');" & vbLf
+    s = s & "var rows=[];for(var j=0;j<a.length;j++){" & vbLf
+    s = s & "rows.push([S(a[j].item),S(a[j].why_needed)]);}" & vbLf
+    s = s & "TBL(b,['食い違っている項目','なぜ確認が必要か'],rows);}" & vbLf
     s = s & "function renderProfile(D,el){var s1=D.s1||{};" & vbLf
+    s = s & "CONFBOX(el,s1);" & vbLf
     s = s & "var sc=s1.supply_chain||{};var cu=s1.customers||{};" & vbLf
     s = s & "var so=s1.strategy_outlook||{};" & vbLf
     s = s & "var map=T(el,'div','company-map');" & vbLf
@@ -104,7 +121,8 @@ Public Function SecProfileJs() As String
     s = s & "for(var i=0;i<fi.length;i++){var p=T(rt,'p',null);" & vbLf
     s = s & "T(p,'span','tag infer',LB(LFIT,fi[i].tag));" & vbLf
     s = s & "T(p,'span',null,S(fi[i].note));}" & vbLf
-    s = s & "var mi=AR(s1.missing_info);" & vbLf
+    s = s & "var mi=[];var ma=AR(s1.missing_info);" & vbLf
+    s = s & "for(var m=0;m<ma.length;m++){if(S(ma[m].kind)!=='conflict'){mi.push(ma[m]);}}" & vbLf
     s = s & "for(var j=0;j<mi.length&&j<4;j++){var q=T(rt,'p',null);" & vbLf
     s = s & "T(q,'span','tag verify','要確認');" & vbLf
     s = s & "T(q,'span',null,S(mi[j].item));}" & vbLf
@@ -121,6 +139,7 @@ End Function
 Public Function SecSufficiencyJs() As String
     Dim s As String
     s = s & "function renderSufficiency(D,el){var s1=D.s1||{};" & vbLf
+    s = s & "CONFBOX(el,s1);" & vbLf
     s = s & "var iq=s1.input_quality||{};var cov=AR(iq.coverage);var map={};" & vbLf
     s = s & "for(var i=0;i<cov.length;i++){map[S(cov[i].aspect)]=S(cov[i].status);}" & vbLf
     s = s & "var box=T(el,'div','chips');" & vbLf
@@ -133,10 +152,12 @@ Public Function SecSufficiencyJs() As String
     '   単独段落では意味が立たない。表示側で「充足度: 」を前置する(18章§3)。
     s = s & "if(NB(iq.overall)){T(el,'p','muted','充足度: '+LB(LIQO,iq.overall));}" & vbLf
     s = s & "if(NB(iq.advice)){T(el,'p',null,S(iq.advice));}" & vbLf
-    s = s & "var mi=AR(s1.missing_info);if(!mi.length){return;}" & vbLf
+    s = s & "var mi=[];var ma=AR(s1.missing_info);" & vbLf
+    s = s & "for(var m=0;m<ma.length;m++){if(S(ma[m].kind)!=='conflict'){mi.push(ma[m]);}}" & vbLf
+    s = s & "if(!mi.length){return;}" & vbLf
     s = s & "T(el,'h3',null,'要確認事項(いま足りていない情報)');var rows=[];" & vbLf
     s = s & "for(var k=0;k<mi.length;k++){" & vbLf
-    s = s & "rows.push([S(mi[k].item),S(mi[k].why_needed)]);}" & vbLf
-    s = s & "TBL(el,['不足している情報','なぜ必要か'],rows);}" & vbLf
+    s = s & "rows.push([S(mi[k].item),S(mi[k].why_needed),LB(LMK,mi[k].kind)]);}" & vbLf
+    s = s & "TBL(el,['不足している情報','なぜ必要か','種別'],rows);}" & vbLf
     SecSufficiencyJs = s
 End Function
