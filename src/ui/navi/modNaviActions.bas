@@ -4,6 +4,7 @@ Option Explicit
 ' err_log の出所(16章§1)。関数名をリテラルで散らさないための値源。
 Private Const NA_SRC As String = "modNaviActions"
 
+
 ' F-16 phase 1: snapshots are taken only for sheets opened by this host.
 Private gSheetCase(1 To 4) As String
 Private gSheetSnapshot(1 To 4) As String
@@ -76,9 +77,9 @@ Public Function Dispatch(ByVal action As String, ByVal data As String, ByRef cas
     Case "clear_material"
         response = ActClearMaterial(caseId, data)
     Case "copy_prompt"
-        response = ActCopyPrompt(caseId, data)
+        response = modNaviActions2.ActCopyPrompt(caseId, data)
     Case "open_url"
-        response = ActOpenUrl(data)
+        response = modNaviActions2.ActOpenUrl(data)
     Case "run_pipeline"
         response = ActRunPipeline(caseId, data)
     Case "open_step_sheet"
@@ -180,17 +181,25 @@ Private Sub ReleaseAfterError()
 Done:
 End Sub
 
+' IsLongAction - 進捗表示とUIロックを掛ける長時間処理(11章§4.2)。
+'   裁定書39 R2-01: export_proposal は S5 の作成を内包するので待ちが起きる。
+'   入れないと「押しても何も起きない」画面になり、二度押しで二重実行になる。
 Public Function IsLongAction(ByVal action As String) As Boolean
     Select Case action
-    Case "run_pipeline", "chat", "sparring_send", "inbox_diagnose_all", "run_tests"
+    Case "run_pipeline", "chat", "sparring_send", "inbox_diagnose_all", "run_tests", _
+         "export_proposal"
         IsLongAction = True
     End Select
 End Function
 
+' NeedsCase - 案件が確定していないと実行できない action。
+'   裁定書39 R2-08: report_mail は**外す**。案件が開けない致命エラーのときこそ
+'   報告が要るのに、案件必須だとその場面で押せない(modReportMail は caseId が
+'   空でも err_log の末尾と保存先だけで報告文を組める)。
 Public Function NeedsCase(ByVal action As String) As Boolean
     Select Case action
     Case "open_case", "clear_material", "run_pipeline", "open_step_sheet", "save_step_edit", _
-         "export_report", "export_proposal", "open_report", "export_hearing", "chat", "clear_chat", "report_mail", _
+         "export_report", "export_proposal", "open_report", "export_hearing", "chat", "clear_chat", _
          "sparring_resume", "sparring_send", "sparring_to_inbox", "start_round2", _
          "company_save", "company_open", "feedback_add", "rename_case", "archive_case", "export_case"
         NeedsCase = True
@@ -514,28 +523,55 @@ Public Function ActExportReport(ByVal caseId As String, ByVal reviewedBy As Stri
     ActExportReport = SavedResult(caseId, "レポートを出力しました。")
 End Function
 
-' ActExportProposal - 顧客向け提案書(Wide 22枚)の出力(裁定書38 §1 班C 4)。
-'   レポートとの違いは**確認が必須**であること: reviewedBy が空なら
-'   modExportProposal 側が生成せず案内文を返す。UI側でも先に弾くが、
-'   判断の正は modExportProposal の1箇所である(画面を直しても抜けない)。
-'   案件の status は動かさない(提案書の出力は段の進行ではない。16章 E-48)。
+' ActExportProposal - 顧客向け提案書(Wide 22枚)の出力(裁定書38 班C 4・裁定書39 R2-01)。
+'   **ボタンは1本のまま**(11章§3.8.2c)。S5(お客さま向け提案書の文章)がまだ無ければ
+'   ここで modPipeline5.RunStep5 を実行してから出力する。2ボタンにすると営業に
+'   「2回押す」を覚えさせるうえ、W15 まで RunStep5 の呼び出し元が0件=提案書は本番で
+'   1度も出せなかった。S5 は AI 呼出を含むので IsLongAction に入れてある。
+'   確認が必須である判断の正は modExportProposal の1箇所(画面を直しても抜けない)。
+'   案件の status は動かさない(出力は段の進行ではない。16章 E-48)。
 Public Function ActExportProposal(ByVal caseId As String, ByVal reviewedBy As String) As String
-    Dim path As String, reason As String
+    Dim path As String, reason As String, plan As String
     If Not FlushOwnedSheets(caseId, 5, reason) Then
         ActExportProposal = Failure(reason, "E0302")
         Exit Function
     End If
-    If LenB(modCaseStore.LoadData(caseId, "s5_json")) = 0 And _
-       LenB(modCaseStore.LoadData(caseId, "s5_edited")) = 0 Then
-        ActExportProposal = Failure("先にお客さま向け提案書の作成を実行してください。", "E0101")
+    ' 確認が無いときは modExportProposal が生成しない(20章§8-3)。その判断を
+    ' **S5 を作る前に**引いておく(作ってから断るとAI呼出が1回むだになる)。
+    reason = modExportProposal.NeedsReviewMessage(Trim$(reviewedBy))
+    If LenB(reason) > 0 Then
+        ActExportProposal = Failure(reason, "E0101")
         Exit Function
+    End If
+    plan = modNaviState.ProposalPlanOf(modCaseStore.LoadData(caseId, "s5_json"), _
+                                       modCaseStore.LoadData(caseId, "s5_edited"), _
+                                       modCaseStore.ResolveStepJson(caseId, 1), _
+                                       modCaseStore.ResolveStepJson(caseId, 2), _
+                                       modCaseStore.ResolveStepJson(caseId, 3))
+    If plan = "upstream_missing" Then
+        ActExportProposal = Failure("先に[まとめて分析]を実行してください。", "E0101")
+        Exit Function
+    End If
+    If plan = "run_s5" Then
+        modNaviHost.ShowBusy "お客さま向け提案書の文章", ProgressJson(1, 1, "お客さま向け提案書の文章")
+        DoEvents
+        If Not modPipeline5.RunStep5(caseId) Then
+            ' 16章 E-71: 案件は壊さない(s5_json は汚さず status も動かさない)。
+            ' 骨子(4. 提案骨子)が健在なので商談には行ける、と案内する。
+            ActExportProposal = Failure("提案書を作れませんでした。" & _
+                "今回は提案骨子（4. 提案の骨子）をご利用ください。", "E0302")
+            Exit Function
+        End If
     End If
     reason = modExportProposal.GenerateProposalHtml(caseId, path, reviewedBy)
     If LenB(reason) > 0 Or LenB(path) = 0 Then
         ActExportProposal = Failure(reason, "E0603")
         Exit Function
     End If
-    ActExportProposal = SavedResult(caseId, "提案書を出力しました。内容をご確認のうえお渡しください。")
+    ' 裁定書39 R2-06: 保存先を state(区画④の出力一覧)とトーストの両方へ出す。
+    modNaviState.SetProposalPath caseId, path
+    ActExportProposal = SavedResult(caseId, "提案書を出力しました。" & _
+        "内容をご確認のうえお渡しください。保存先: " & path)
 End Function
 
 ' 裁定書37 B-06(UI側)。reviewedBy が空なら従来どおり確認前の免責のまま出す
@@ -569,10 +605,16 @@ Public Function ActExportHearing(ByVal caseId As String, ByVal data As String) A
     End If
 End Function
 
+' ActOpenReport - 出力一覧の[ブラウザで開く]/[フォルダを開く]。
+'   裁定書39 R2-06: 提案書の行もこの action を通るので、案件に登録された
+'   **レポートと提案書の2本**だけを開いてよい対象にする(画面から来たパスを
+'   そのまま開くと、任意のファイルを開く口になる。この照合が防波堤)。
 Public Function ActOpenReport(ByVal caseId As String, ByVal data As String) As String
-    Dim path As String, given As String, ok As Boolean
+    Dim path As String, given As String, ok As Boolean, proposal As String
     path = modCaseRead.CaseColumnOf(caseId, "report_path")
+    proposal = modNaviState.ProposalPathOf(caseId)
     given = modJsonLite.GetStr(data, "path")
+    If LenB(given) > 0 And LenB(proposal) > 0 And given = proposal Then path = proposal
     If LenB(path) = 0 Or (LenB(given) > 0 And given <> path) Then
         ActOpenReport = Failure("この案件に登録されたレポートがありません。", "E0101")
         Exit Function
@@ -584,47 +626,6 @@ Public Function ActOpenReport(ByVal caseId As String, ByVal data As String) As S
     If modJsonLite.GetStr(data, "kind") = "folder" Then path = modUtil.ParentDirOf(path, modUtil.PathSep())
     ok = modUIResearch.OpenUrl(path)
     ActOpenReport = ResultOf(ok, "レポートを開きました。", "レポートを開けませんでした。")
-End Function
-
-Public Function ActOpenUrl(ByVal data As String) As String
-    Dim kind As String, url As String
-    kind = modJsonLite.GetStr(data, "kind")
-    Select Case kind
-    Case "full", "quick", "menu"
-        url = modUIResearch.DrUrlOf(kind, modConfig.GetStr("dr_url_" & kind, ""))
-    Case "portal"
-        url = modConfig.GetStr("portal_url", "")
-    Case "help"
-        ActOpenUrl = ResultOf(modUISheet.ShowSheet("使い方"), "使い方を開きました。", "使い方を開けませんでした。")
-        Exit Function
-    Case Else
-        ActOpenUrl = Failure("このページは開けません。", "E0101")
-        Exit Function
-    End Select
-    ActOpenUrl = ResultOf(modUIResearch.OpenUrl(url), "ページを開きました。", "ページを開けませんでした。")
-End Function
-
-Public Function ActCopyPrompt(ByVal caseId As String, ByVal data As String) As String
-    Dim n As Long, stamp As String, json As String
-    n = modJsonLite.GetLong(data, "prompt_no", 0)
-    If n < 1 Or n > 8 Then
-        ActCopyPrompt = Failure("調査指示文の番号が不正です。", "E0101")
-        Exit Function
-    End If
-    stamp = modUtil.NowStamp()
-    json = "{""copied_" & CStr(n) & """:" & modNaviJson.Q(stamp) & "}"
-    If LenB(caseId) > 0 Then
-        json = modNaviStore.MergeBasics(modCaseStore.LoadData(caseId, "nav_basics"), json)
-        modCaseStore.SaveData caseId, "nav_basics", json
-        modCompanyFile3.AutoSaveCase caseId
-    Else
-        modNaviState.SetDraft modNaviJson.ReplaceTextField(modNaviState.DraftJson(), "copied_" & CStr(n), stamp)
-    End If
-    modLog.LogUsage "research_prompt_copied", caseId, "no=" & CStr(n)
-    If modConfig.GetBool("dr_open_after_copy", False) Then
-        modUIResearch.OpenUrl modUIResearch.DrUrlOf("full", modConfig.GetStr("dr_url_full", ""))
-    End If
-    ActCopyPrompt = Success("調査指示文をコピーしました。")
 End Function
 
 Public Function PhaseTwoStepEdit(ByVal caseId As String, ByVal data As String) As String

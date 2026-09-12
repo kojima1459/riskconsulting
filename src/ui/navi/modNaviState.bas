@@ -4,6 +4,11 @@ Option Explicit
 Private gDraft As String
 Private gSparringCase As String
 Private gSparringNote As String
+' 裁定書39 R2-06: 提案書の保存先。案件一覧にも data_key にも列が無いので
+'   (追加は13章§2.2 の改訂を伴う。班Rの担当外)、SparringNote と同じ形で
+'   画面のセッション内だけ覚える。値源は ActExportProposal の成功時1箇所。
+Private gProposalCase As String
+Private gProposalPath As String
 Public Sub SetDraft(ByVal json As String)
     If Not modNaviJson.IsValidJson(json) Then Err.Raise 5, "modNaviState", "invalid_draft"
     gDraft = json
@@ -37,6 +42,9 @@ Public Function BuildAppState(ByVal caseId As String) As String
     modUtil.BufAdd buf, count, """data_dir_last_resort"":" & modNaviJson.Flag(modUtil.DataDirIsLastResort(dataDir, ThisWorkbook.Path)) & ","
     modUtil.BufAdd buf, count, """kb_status"":" & modNaviJson.Q(note) & ",""kb_ready"":" & modNaviJson.Flag(kb) & ",""ui_locked"":" & modNaviJson.Flag(modUIProgress.IsUiLocked()) & ","
     modUtil.BufAdd buf, count, """max_wait_sec"":" & CStr(modConfig.GetLong("llm_wait_sec", 1200)) & ",""advanced"":" & modNaviJson.Flag(modConfig.GetBool("ui_advanced", False)) & ","
+    ' 裁定書39 R2-14: 貼付1本あたりの上限は config で変えられる。画面の
+    ' 「N字を超えています」を焼き付けないよう、実値を state へ載せる。
+    modUtil.BufAdd buf, count, """dr_input_max_chars"":" & CStr(modConfig.GetLong("dr_input_max_chars", 2000)) & ","
     modUtil.BufAdd buf, count, """feature_inbox"":" & modNaviJson.Flag(modConfig.GetBool("feature_inbox", True)) & ",""feature_judgelog"":" & modNaviJson.Flag(modConfig.GetBool("feature_judgelog", True)) & "},"
     modUtil.BufAdd buf, count, """identity"":{""display_name"":" & modNaviJson.Q(modConfig.GetStr("operator", modCaseStore2.OwnerName())) & ",""windows_user"":" & modNaviJson.Q(Environ$("USERNAME")) & "},"
     modUtil.BufAdd buf, count, """enums"":" & modNaviState2.BuildEnums() & ",""industries"":" & modNaviState2.BuildIndustries() & ","
@@ -67,7 +75,7 @@ Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As
     stepNo = modUINav.StepFor(kbReady, modUIProgress.IsUiLocked(), Len(company) > 0, anyArea, status)
     modUtil.BufInit buf, count
     modUtil.BufAdd buf, count, "{""case_id"":" & modNaviJson.Q(caseId) & ",""ctx"":" & ctx & ",""basics"":" & basics & ","
-    modUtil.BufAdd buf, count, """prompts"":" & BuildPrompts(company, basics, modJsonLite.GetStr(ctx, "industry_name"), caseId) & ",""materials"":" & materials & ","
+    modUtil.BufAdd buf, count, """prompts"":" & BuildPrompts(company, basics, modJsonLite.GetStr(ctx, "industry_name")) & ",""materials"":" & materials & ","
     modUtil.BufAdd buf, count, """step"":{""no"":" & CStr(stepNo) & ",""next_action"":" & modNaviJson.Q(modNaviHost.DisplayMessage(modUINav.StepActionOf(rule))) & _
         ",""text"":" & modNaviJson.Q(modNaviHost.DisplayMessage(modUINav.StepText(stepNo))) & "},"
     modUtil.BufAdd buf, count, """stages"":" & BuildStageList(caseId) & ","
@@ -95,44 +103,81 @@ Public Function BuildCaseState(ByVal caseId As String, Optional ByVal kbReady As
         End If
     End If
     modUtil.BufAdd buf, count, """sparring_note"":" & modNaviJson.Q(SparringNote(caseId)) & ","
-    modUtil.BufAdd buf, count, """outputs"":{""report_path"":" & modNaviJson.Q(report) & ",""report_html"":" & modNaviJson.Q(reportHtml) & _
-        ",""hearing_built_at"":" & modNaviJson.Q(modNaviState2.HearingBuiltAt(caseId)) & "}}"
+    modUtil.BufAdd buf, count, """outputs"":" & OutputsJson(report, reportHtml, ProposalPathOf(caseId), _
+        modNaviState2.HearingBuiltAt(caseId)) & "}"
     BuildCaseState = modUtil.BufText(buf, count)
 End Function
-' caseId(裁定書38 Z-49・任意): 案件が確定していれば、[コピー]の直前の下見として
-'   (a) modPii 走査 (b) 現契約サマリ・営業メモ欄(input_contract/input_memo/
-'   input_field_notes)と20字以上一致する断片の検出(SharesLongFragment)を行い、
-'   結果を "warning" へ積む(空="")。**コピー自体は止めない**(16章 E-69)。
+
+' OutputsJson - 区画④「出力」に出す成果物3件(レポート・提案書・ヒアリング)を
+'   1つの JSON へ組む純関数(11章§3.8.2c・裁定書39 R2-06)。提案書のパスを
+'   落とすと、出したファイルに利用者がたどり着けない(会社PCはエクスプローラ
+'   操作が限られる。docs/24・29)。ui/views.js の outputList がこの3件を読む。
+Public Function OutputsJson(ByVal reportPath As String, ByVal reportHtml As String, _
+                            ByVal proposalPath As String, ByVal hearingAt As String) As String
+    OutputsJson = "{""report_path"":" & modNaviJson.Q(reportPath) & _
+        ",""report_html"":" & modNaviJson.Q(reportHtml) & _
+        ",""proposal_path"":" & modNaviJson.Q(proposalPath) & _
+        ",""hearing_built_at"":" & modNaviJson.Q(hearingAt) & "}"
+End Function
+
+' ProposalPlanOf - [提案書（お客さま向け）を出す]を押したときの段取りを決める
+'   純関数(裁定書39 R2-01)。ボタンは1本のままにするため、S5(お客さま向け
+'   提案書の文章)が無いときは**その場で作ってから**出力する。
+'     "export"           : s5_json か s5_edited がある → そのまま出力する
+'     "run_s5"           : S5 は無いが S1+S2+S3 がそろっている → 先に S5 を作る
+'     "upstream_missing" : S1〜S3 のどれかが無い → [まとめて分析]が先
+'   S4(骨子)は提案書の必須入力ではない(15章§5.6 の user は S1/S2/S3 と実数)。
+Public Function ProposalPlanOf(ByVal s5Json As String, ByVal s5Edited As String, _
+                               ByVal s1Json As String, ByVal s2Json As String, _
+                               ByVal s3Json As String) As String
+    If LenB(Trim$(s5Json)) > 0 Or LenB(Trim$(s5Edited)) > 0 Then
+        ProposalPlanOf = "export"
+        Exit Function
+    End If
+    If LenB(Trim$(s1Json)) = 0 Or LenB(Trim$(s2Json)) = 0 Or LenB(Trim$(s3Json)) = 0 Then
+        ProposalPlanOf = "upstream_missing"
+        Exit Function
+    End If
+    ProposalPlanOf = "run_s5"
+End Function
+
+' SetProposalPath / ProposalPathOf - 提案書の保存先(裁定書39 R2-06)。
+'   案件一覧の列でも data_key でもないので、案件が変わったら消える
+'   (別案件の保存先を出さないため、caseId が一致するときだけ返す)。
+Public Sub SetProposalPath(ByVal caseId As String, ByVal pathText As String)
+    gProposalCase = caseId
+    gProposalPath = pathText
+End Sub
+Public Function ProposalPathOf(ByVal caseId As String) As String
+    If LenB(caseId) > 0 Then
+        If caseId = gProposalCase Then ProposalPathOf = gProposalPath
+    End If
+End Function
+' BuildPrompts - 区画①の調査指示文8本を state へ組む。
+'   裁定書38 Z-49 で各プロンプトへ "warning" を1本足した。**16章 E-69 の
+'   (b)「現契約サマリ・営業メモと20字以上一致する断片」の下見はここには無い**:
+'   裁定書39 R1-06 のとおり、BuildPrompts は画面更新のたびに呼ばれるのに対し、
+'   (b) は最大30万字 × 8本の走査なので、コピーの直前だけで足りる。
+'   実体は modNaviActions2.CopyWarningOf(copy_prompt の action)が持つ。
+'   ここに残すのは (a) modPii 走査だけ(対象は展開後のプロンプト本文=数百字)。
 Public Function BuildPrompts(ByVal company As String, ByVal basics As String, _
-                              Optional ByVal industryName As String, _
-                              Optional ByVal caseId As String = vbNullString) As String
+                              Optional ByVal industryName As String) As String
     Dim n As Long, template As String, srcText As String, result As String, titles As Variant
     Dim industry As String, limitChars As Long, chars As Long, warnText As String
-    Dim sourceText As String
     titles = Array("1本目 会社の基本", "2本目 リスクの兆候", "3本目 調達・仕入れの構造", "業界と競合", "世の中の動きとの関係", "前回の更新からの変化", "拠点の災害リスク", "決算のハイライト")
     industry = industryName
     If Len(industry) = 0 Then industry = modJsonLite.GetStr(basics, "industry_name")
-    If Len(caseId) > 0 Then
-        sourceText = modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
-                     modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
-                     modCaseStore.LoadData(caseId, "input_field_notes")
-    End If
     ' 裁定書37 B-09: 展開後の字数(chars)と上限超過(over)を各プロンプトへ足す。
     ' 上限は config dr_input_max_chars(既定2,000)。判定は純関数 IsOverDrLimit に閉じる。
     limitChars = modConfig.GetLong("dr_input_max_chars", 2000)
     result = "["
     For n = 1 To 8
-        template = modUISheet.ReadNamed("gd_prompt_" & Format$(n, "00"))
-        srcText = modUIResearch.FillTemplate(template, company, modJsonLite.GetStr(basics, "address"), _
-            industry, modJsonLite.GetStr(basics, "sec_code"), modJsonLite.GetStr(basics, "sites"))
+        template = modUISheet.ReadNamed(PromptNameOf(n))
+        srcText = FillPrompt(template, company, basics, industry)
         chars = Len(srcText)
         warnText = vbNullString
         If modPii.HasPii(srcText) Then
             warnText = "個人情報らしき記述が含まれています。"
-        ElseIf Len(sourceText) > 0 Then
-            If modPii.SharesLongFragment(srcText, sourceText, 20) Then
-                warnText = "現契約・営業メモと20字以上一致する記述が含まれています。"
-            End If
         End If
         If n > 1 Then result = result & ","
         result = result & "{""no"":" & CStr(n) & ",""title"":" & modNaviJson.Q(CStr(titles(n - 1))) & _
@@ -142,6 +187,29 @@ Public Function BuildPrompts(ByVal company As String, ByVal basics As String, _
             ",""copied_at"":" & modNaviJson.Q(modJsonLite.GetStr(basics, "copied_" & CStr(n))) & "}"
     Next n
     BuildPrompts = result & "]"
+End Function
+
+' PromptNameOf / FillPrompt - 指示文1本の「名前定義」と「差し込み」。
+'   BuildPrompts(8本まとめて)と PromptTextOf(1本だけ)の両方がここを通るので、
+'   差し込む項目の並びは1箇所にしかない。
+Private Function PromptNameOf(ByVal n As Long) As String
+    PromptNameOf = "gd_prompt_" & Format$(n, "00")
+End Function
+Private Function FillPrompt(ByVal template As String, ByVal company As String, _
+                            ByVal basics As String, ByVal industry As String) As String
+    FillPrompt = modUIResearch.FillTemplate(template, company, modJsonLite.GetStr(basics, "address"), _
+        industry, modJsonLite.GetStr(basics, "sec_code"), modJsonLite.GetStr(basics, "sites"))
+End Function
+
+' PromptTextOf - 指示文 n 本目の展開後の本文(裁定書39 R1-06)。
+'   [コピー]の action(modNaviActions2.ActCopyPrompt)が、コピーされる1本だけを
+'   下見するために使う。画面更新のために8本ぶん作り直すのは BuildPrompts。
+Public Function PromptTextOf(ByVal n As Long, ByVal company As String, _
+                             ByVal basics As String, ByVal industryName As String) As String
+    Dim industry As String
+    industry = industryName
+    If Len(industry) = 0 Then industry = modJsonLite.GetStr(basics, "industry_name")
+    PromptTextOf = FillPrompt(modUISheet.ReadNamed(PromptNameOf(n)), company, basics, industry)
 End Function
 
 ' 裁定書37 B-09: 展開後の字数が dr_input_max_chars を超えたか(純関数・副作用なし)。

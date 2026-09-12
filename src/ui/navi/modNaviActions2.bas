@@ -1,6 +1,15 @@
 Attribute VB_Name = "modNaviActions2"
 Option Explicit
 
+' 裁定書39 R1-06: modNaviActions が30,000字契約に達したため、区画①の
+'   [コピー](copy_prompt)と、その直前の下見をこちらへ分けた(12章§2)。
+'   入口は modNaviActions.Dispatch の Case "copy_prompt" の1本のまま。
+' [コピー]直前の下見(16章 E-69・裁定書39 R1-06)。
+'   NA_COPY_MIN_LEN : 一致とみなす断片の最短長(20字)。
+'   NA_COPY_SCAN_MAX: 下敷き(現契約・営業メモ・現場メモ)の走査上限。
+Private Const NA_COPY_MIN_LEN As Long = 20
+Private Const NA_COPY_SCAN_MAX As Long = 30000
+
 ' [NAVI] Specification 7.2. Advanced actions are separated for the 30000-character contract.
 Public Function DispatchMore(ByVal action As String, ByVal data As String, ByRef caseId As String) As String
     Dim ok As Boolean, note As String, result As String, n As Long, id As String
@@ -299,4 +308,89 @@ Public Function ActRunTests(ByVal data As String) As String
     Exit Function
 Failed:
     ActRunTests = modNaviActions.Failure("自己テストを実行できませんでした。", "E0603")
+End Function
+
+Public Function ActCopyPrompt(ByVal caseId As String, ByVal data As String) As String
+    Dim n As Long, stamp As String, json As String, warnText As String, basicsJson As String
+    n = modJsonLite.GetLong(data, "prompt_no", 0)
+    If n < 1 Or n > 8 Then
+        ActCopyPrompt = modNaviActions.Failure("調査指示文の番号が不正です。", "E0101")
+        Exit Function
+    End If
+    stamp = modUtil.NowStamp()
+    json = "{""copied_" & CStr(n) & """:" & modNaviJson.Q(stamp) & "}"
+    If LenB(caseId) > 0 Then
+        basicsJson = modCaseStore.LoadData(caseId, "nav_basics")
+        If Not modNaviJson.IsValidJson(basicsJson) Then basicsJson = "{}"
+        ' 裁定書39 R1-06 / 16章 E-69: 下見はコピーの直前=ここだけで行う。
+        ' 画面更新(BuildCaseState)では走らせない(8本×最大30万字になるため)。
+        warnText = CopyWarningOf(modNaviState.PromptTextOf(n, _
+                                     modCaseRead.CaseColumnOf(caseId, "company"), basicsJson, _
+                                     modCaseRead.CaseColumnOf(caseId, "industry_name")), _
+                                 CopySourceTextOf(caseId))
+        json = modNaviStore.MergeBasics(basicsJson, json)
+        modCaseStore.SaveData caseId, "nav_basics", json
+        modCompanyFile3.AutoSaveCase caseId
+    Else
+        modNaviState.SetDraft modNaviJson.ReplaceTextField(modNaviState.DraftJson(), "copied_" & CStr(n), stamp)
+    End If
+    modLog.LogUsage "research_prompt_copied", caseId, "no=" & CStr(n)
+    If modConfig.GetBool("dr_open_after_copy", False) Then
+        modUIResearch.OpenUrl modUIResearch.DrUrlOf("full", modConfig.GetStr("dr_url_full", ""))
+    End If
+    If LenB(warnText) > 0 Then
+        ActCopyPrompt = "{""ok"":true,""kind"":""warn"",""message"":" & _
+            modNaviJson.Q("調査指示文をコピーしました。" & warnText) & "}"
+    Else
+        ActCopyPrompt = modNaviActions.Success("調査指示文をコピーしました。")
+    End If
+End Function
+
+' CopyWarningOf - [コピー]の直前の下見(16章 E-69・裁定書39 R1-06)。
+'   (a) 個人情報らしき記述があるか (b) 現契約サマリ・営業メモ(sourceText)と
+'   NA_COPY_MIN_LEN 字以上一致する断片があるか、を見て警告文を返す
+'   (どちらも無ければ空文字)。**コピー自体は止めない**。
+'   判定は純関数なので modTestsPureNavi が直接叩ける。
+Public Function CopyWarningOf(ByVal bodyText As String, ByVal sourceText As String) As String
+    If modPii.HasPii(bodyText) Then
+        CopyWarningOf = "個人情報らしき記述が含まれています。"
+        Exit Function
+    End If
+    If LenB(sourceText) = 0 Then Exit Function
+    If modPii.SharesLongFragment(bodyText, sourceText, NA_COPY_MIN_LEN) Then
+        CopyWarningOf = "現契約・営業メモと20字以上一致する記述が含まれています。"
+    End If
+End Function
+
+' CopySourceTextOf - 下見の下敷き(現契約サマリ・営業メモ・現場メモ)。
+'   裁定書39 R1-06: 走査長に上限(先頭 NA_COPY_SCAN_MAX 字)を置く。
+'   SharesLongFragment は O(|本文|×|下敷き|) なので、上限が無いと
+'   3欄合計30万字の案件でコピーのたびに数十秒待たされる。
+Private Function CopySourceTextOf(ByVal caseId As String) As String
+    Dim srcText As String
+    If LenB(caseId) = 0 Then Exit Function
+    srcText = modCaseStore.LoadData(caseId, "input_contract") & vbLf & _
+              modCaseStore.LoadData(caseId, "input_memo") & vbLf & _
+              modCaseStore.LoadData(caseId, "input_field_notes")
+    If Len(srcText) > NA_COPY_SCAN_MAX Then srcText = Left$(srcText, NA_COPY_SCAN_MAX)
+    CopySourceTextOf = srcText
+End Function
+
+' 区画①[調査ページを開く]/[クイック調査を開く](12章§2 の分割。裁定書39 R1-06 と同時)。
+Public Function ActOpenUrl(ByVal data As String) As String
+    Dim kind As String, url As String
+    kind = modJsonLite.GetStr(data, "kind")
+    Select Case kind
+    Case "full", "quick", "menu"
+        url = modUIResearch.DrUrlOf(kind, modConfig.GetStr("dr_url_" & kind, ""))
+    Case "portal"
+        url = modConfig.GetStr("portal_url", "")
+    Case "help"
+        ActOpenUrl = modNaviActions.ResultOf(modUISheet.ShowSheet("使い方"), "使い方を開きました。", "使い方を開けませんでした。")
+        Exit Function
+    Case Else
+        ActOpenUrl = modNaviActions.Failure("このページは開けません。", "E0101")
+        Exit Function
+    End Select
+    ActOpenUrl = modNaviActions.ResultOf(modUIResearch.OpenUrl(url), "ページを開きました。", "ページを開けませんでした。")
 End Function

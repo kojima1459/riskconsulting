@@ -110,7 +110,10 @@ Public Function HostRequestJson(ByVal request As String) As String
 Failed:
     HostFailure "request", Err.Number
     gBusy = False
-    HostRequestJson = ErrorResponse("処理に失敗しました。err_logタブの最後の行を開発担当へ送ってください。", "E0603")
+    ' 裁定書39 R2-08: err_log タブを自分で開いて写させない。案件が開けない
+    ' 状態でも押せる[報告メールを作成]へ誘導する(report_mail は NeedsCase から
+    ' 外してあるので、案件未選択でもこの場面で押せる)。
+    HostRequestJson = ErrorResponse("処理に失敗しました。区画④の[報告メールを作成]を押してください。", "E0603")
 End Function
 Public Function ErrorResponse(ByVal message As String, ByVal code As String) As String
     ErrorResponse = "{""ok"":false,""kind"":""error"",""error_code"":" & modNaviJson.Q(code) & _
