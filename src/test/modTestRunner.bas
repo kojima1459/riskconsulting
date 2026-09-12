@@ -314,6 +314,18 @@ Public Sub RunAllPureTests()
     End If
     On Error GoTo 0
 
+    ' W15 最終是正(裁定書42 §1)の純層。対訳表の用言・表記ゆれ・末尾の重なりの
+    ' 実効出力。modTestsPure27 が30,000字上限に達したので別モジュールにした。
+    On Error Resume Next
+    Err.Clear
+    modTestsPure28.RunAll
+    If Err.Number <> 0 Then
+        Check "modTestsPure28.RunAll", False, _
+              "呼び出しでエラー: " & Err.Description & " (Err=" & Err.Number & ")"
+        Err.Clear
+    End If
+    On Error GoTo 0
+
     ' ---- 実行本数の照合(0件実行の「全緑」を成立させない) ----
     If Not mExpectedSet Then
         AddFailure "NG: tests_expected が未設定です", _

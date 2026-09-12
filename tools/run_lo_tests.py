@@ -337,6 +337,10 @@ PURE_ALLOWLIST = [
     #   対訳表(modValidate4.TabooPairs / SoftenTaboo / TabooHit)を叩く。
     #   modTestRunner.RunAllPureTests から modTestsPure* の連鎖とは別に呼ぶ。
     "modTestsPure27",
+    # modTestsPure28: W15 最終是正(裁定書42 §1)の純層。対訳表の用言(§6.3)・
+    #   表記ゆれ(§6.4)・末尾の重なり(§6.6)の実効出力を固定する。27 が
+    #   30,000字上限に達したための続きで、RunAllPureTests から別枠で呼ぶ。
+    "modTestsPure28",
     "modTestsPureHook",
     "modMockLlm", "modMockLlm2", "modMockLlm3",
     # W15(裁定書38 班C)。MK-S5(15章§5.6)の本体。

@@ -4,16 +4,13 @@ Option Explicit
 ' ============================================================================
 ' modValidate4 - 顧客向け提案書(S5)の後検証(15章§5.6 CheckS5 検証ルール表)
 ' ----------------------------------------------------------------------------
-' 12章§2 の30,000字契約による modValidate の分割先。modValidate(29,667字)と
-'   modValidate2(29,648字)はどちらも満杯であり、**modValidate3 は裁定書38 班A
-'   が S1 の証拠検証(V-S1-14/15)で使うため**、班C は次番の4を使う(番号は
-'   飛ばさない。同名の Public Function を2つ以上のモジュールに置かない)。
+' 12章§2 の30,000字契約による modValidate の分割先(1と2は満杯、3は班A が
+'   S1 の証拠検証で使うため4を使う)。
 '
 ' 持つもの:
 '   CheckS5        15章§5.6 の13件(V-S5-01からV-S5-13)。""=合格
 '   TabooPairs     対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)の
 '                  「社内語<TAB>顧客語[<TAB>印]」を vbLf で並べた**唯一の値源**
-'                  (印は general=一般語 / suru=サ変語幹。どちらも下の(2))
 '   SoftenTaboo    修復後も V-S5-12 だけが残るときの機械置換(docs/29 §5.3。
 '                  生成を止めない。置換件数を呼出側へ返す)
 '   TabooHit       本文に残っている禁止語(";"区切り。0件なら "")
@@ -21,25 +18,21 @@ Option Explicit
 '   TabooWarnLine  V-S5-12 の1行を組み立てる唯一の値源(不合格にも警告にも使う)
 '   MissingTopKeys JSONの最外オブジェクト直下に無いキー(";"区切り)
 '
-' 機械置換の3規約(裁定書39 R2-02。壊す班 R2 が顧客資料に「未保険のご加入」
-'   「保険のご加入ギャップ」「リスク保険で備える可能性」「本社を保険で備えるする」
-'   を実際に出したことへの是正):
-'   (1) **最長一致**。対訳表を社内語の長さの降順に並べ、本文を左から1回走査して
-'       その位置で最も長く一致する語だけを置き換える(宣言順の Replace をやめる)。
-'   (2) **印のある行は(その位置では)置換しない**。置換対象から外した語も
-'       V-S5-12 の警告(TabooHit)には必ず出す=見逃しはしない。印は2種類:
-'       ・general(一般語)…「移転」「保有」「抜け」は保険の社内語であると
-'         同時に日常語であり(本社を移転する/現金を保有する)、機械が潰すと
-'         日本語が壊れる。**常に**置換しない(裁定書39 R2-02)。
-'       ・suru(サ変語幹)…「付保」「保険化」「組成」「顕在化」のように
-'         「〜する」に続けて使う社内語。顧客語が名詞句なので「保険化する」を
-'         置換すると「保険での備え方の設計する」になる。**「〜する」の直前
-'         だけ**置換せず(SuruFollows)、名詞として使われている「保険化の検討」は
-'         従来どおり置換する(裁定書40 S-M2)。
+' 機械置換の4規約(裁定書39 R2-02 / 40 S-M2 / 42 §1。実際に顧客資料へ出た
+'   「本社を保険で備えるする」「整理ている」「保険のお引き受けけている」
+'   「会社役員賠償責任保険保険」への是正。**正は対訳表§6〜§6.6**):
+'   (1) **最長一致**。社内語の長さの降順に並べ、本文を左から1回走査して、その
+'       位置で最も長く一致する語だけを置き換える(宣言順の Replace をやめる)。
+'   (2) **印のある行はその位置では置換しない**(印は下の V4_GENERAL /
+'       V4_SURU / V4_VERB)。外した語も V-S5-12 の警告(TabooHit)には必ず出す。
+'       印で見送った位置では**より短い語も当てない**(SoftenOnce はその位置の
+'       走査を打ち切る)。これが無いと「引受けている」で verb の「引受け」を
+'       見送った直後に suru の「引受」が当たって壊れる。
 '   (3) **冪等**。置換で生まれた語が別の社内語に当たらなくなるまで通し
-'       (V4_SOFT_PASS_MAX 回まで)、結果をもう一度通しても1件も変わらない。
+'       (V4_SOFT_PASS_MAX 回まで)、結果をもう一度通しても1件も変わらない
 '       (「サブリミット -> 補償項目ごとの支払限度額」のように顧客語が別の
-'        社内語を含む対があるため、1回走査では冪等にならない。)
+'        社内語を含む対があるため、1回走査では冪等にならない)。
+'   (4) **顧客語の末尾と本文の重なりを吸収する**(TailOverlap。対訳表§6.6)。
 '
 ' R4準拠(12章§2): Excelトークン・Application.Run・案件データ参照を持たない
 '   純関数モジュール。CP932準拠(15章§0 原則7)。
@@ -47,16 +40,22 @@ Option Explicit
 
 Private Const V4_TAB As String = vbTab
 Private Const V4_SEP As String = ";"
-' 対訳表の第3列の印。この行は**機械置換しない**(一般語。裁定書39 R2-02)。
+' 第3列の印。general=一般語(「移転」「保有」「抜け」。日常語でもあり機械が
+'   潰すと壊れるので**常に**置換しない。対訳表§6)。
 Private Const V4_GENERAL As String = "general"
-' 同じく第3列の印。**サ変語幹**(「〜する」に続けて使う社内語)であり、
-'   顧客語が名詞句なので「〜する」の直前では置換しない(裁定書40 S-M2)。
-'   例: 「保険化する」を置換すると「保険での備え方の設計する」になる。
-'   名詞として使われている「保険化の検討」は従来どおり置換する。
+' suru=サ変語幹(「保険化する」→「保険での備え方の設計する」。**サ変語尾の
+'   直前だけ**置換しない。名詞の位置「保険化の検討」は置換する。対訳表§6.1)。
 Private Const V4_SURU As String = "suru"
-' サ変の活用の頭文字(する/します/した/して/しない/される/させる/せず)。
-'   この1文字が続く位置では V4_SURU の行を置換しない。
-Private Const V4_SURU_HEADS As String = "しすさせ"
+' verb=用言の連用形(「仕分け」「引受け」。「仕分けている」→「整理ている」。
+'   **活用語尾の直前だけ**置換しない。対訳表§6.3。裁定書42 §1)。
+Private Const V4_VERB As String = "verb"
+' 印ごとの「置換を見送る直後の語尾」("|"区切り。**前方一致**)。1文字ではなく
+'   語尾そのもので見る:「仕分けなど」「仕分けまで」は活用ではないので置換する。
+Private Const V4_SURU_TAILS As String = "し|す|さ|せ"
+Private Const V4_VERB_TAILS As String = _
+    "る|た|て|ない|なく|なかっ|なけれ|ます|まし|ませ|られ|させ|よう|れば|ろ|ず"
+' 末尾の重なりを吸収する最小の文字数(1文字の偶然の一致で本文を削らない)。
+Private Const V4_TAIL_MIN As Long = 2
 ' 冪等化の走査回数の上限(対訳表の連鎖は最長でも2段。無限ループの歯止め)。
 Private Const V4_SOFT_PASS_MAX As Long = 4
 ' V-S5-02: 見出しの上限。15章§5.6 system は「45文字程度・60文字を超えない」。
@@ -214,19 +213,11 @@ Private Sub ChkShare(ByRef r As String, ByVal jsonText As String)
 End Sub
 
 ' ============================================================================
-' TabooPairs - 対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)の
-'   「社内語<TAB>顧客語」を vbLf で並べた1本。**禁止語の唯一の値源**であり、
-'   15章§5.6 system の対訳行・本表・tools/render_proposal.py の3者を
-'   突き合わせる(値源を2箇所に持たない)。
-'   §4の「言い換えずに削る」3語には、機械置換の最後の砦で使う中立な代替語を
-'   与える(削除すると文が崩れるため。docs/29 §5.3)。
-'   行の書式は「社内語<TAB>顧客語<TAB>印」。**第3列の印**がある行(対訳表§6)は
-'   V-S5-12 の警告には出すが機械置換の対象から外れる。
-'     general = 一般語(常に置換しない。裁定書39 R2-02)
-'     suru    = サ変語幹(「〜する」の直前だけ置換しない。裁定書40 S-M2)
-'   第3列は当モジュールの中だけの印であり、対訳表Markdownの番号付き表
-'   (`| n | 社内語 | 顧客語 |`)は3列のまま=15章§5.6 との突き合わせ
-'   (tools/render_proposal.py の check_glossary)を壊さない。
+' TabooPairs - 対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)を
+'   「社内語<TAB>顧客語<TAB>印」で vbLf 区切りに並べた1本。**禁止語の唯一の
+'   値源**。§1〜§3 の番号付き46語 + §4.1 の代替語3語 + §6.4 の表記ゆれ2語
+'   = 51行。後の2つは**番号付きの表に置かない**=15章§5.6 の対訳行は46語の
+'   まま。対訳表との一致は tools/render_proposal.py の check_glossary_impl。
 ' ============================================================================
 Public Function TabooPairs() As String
     Dim s As String
@@ -246,6 +237,9 @@ Public Function TabooPairs() As String
     s = s & "料率" & V4_TAB & "保険料の水準" & vbLf
     s = s & "相関損失" & V4_TAB & "同時に起きる損害" & vbLf
     s = s & "引受" & V4_TAB & "保険のお引き受け" & V4_TAB & V4_SURU & vbLf
+    ' 表記ゆれ(対訳表§6.4)。無いと最長一致が「引受」で止まり、余った「け」が
+    '   顧客語のうしろに残る(「保険のお引き受けけている」)。
+    s = s & "引受け" & V4_TAB & "保険のお引き受け" & V4_TAB & V4_VERB & vbLf
     s = s & "過少保険" & V4_TAB & "補償額が損害に届かない状態" & vbLf
     s = s & "抜け" & V4_TAB & "補償されない部分" & V4_TAB & V4_GENERAL & vbLf
     s = s & "免責金額" & V4_TAB & "ご負担いただく金額" & vbLf
@@ -253,6 +247,7 @@ Public Function TabooPairs() As String
     s = s & "リスクユニバース" & V4_TAB & "リスクの全体像" & vbLf
     s = s & "ニューリスク" & V4_TAB & "新しく生まれているリスク" & vbLf
     s = s & "座組" & V4_TAB & "ご提案の構成" & vbLf
+    s = s & "座組み" & V4_TAB & "ご提案の構成" & vbLf
     s = s & "ヒアリング" & V4_TAB & "お伺いしたい事項" & V4_TAB & V4_SURU & vbLf
     s = s & "提案の核" & V4_TAB & "ご提案の前提" & vbLf
     s = s & "攻めの保険活用" & V4_TAB & "成長を後押しする保険の活用" & V4_TAB & V4_SURU & vbLf
@@ -278,7 +273,7 @@ Public Function TabooPairs() As String
     s = s & "PL保険" & V4_TAB & "生産物賠償責任保険" & vbLf
     s = s & "対話の順序" & V4_TAB & "ご説明の順序" & vbLf
     s = s & "クロスセル" & V4_TAB & "追加でご検討いただける備え" & V4_TAB & V4_SURU & vbLf
-    s = s & "仕分け" & V4_TAB & "整理"
+    s = s & "仕分け" & V4_TAB & "整理" & V4_TAB & V4_VERB
     TabooPairs = s
 End Function
 
@@ -286,8 +281,8 @@ End Function
 ' TabooHit - 本文に残っている禁止語を ";" 区切りで返す(0件なら "")。
 '   半角英字だけの語(PML/BI/OT 等)は、前後が英字のときに当たらないようにする
 '   (「IoT」「BIG」のような別語の一部を禁止語と数えないため)。
-'   一般語(第3列 general)も**ここには出す**。V-S5-12 は「書き換えていない語が
-'   ある」ことの通知であり、機械が置換するかどうかとは別の判断だからである。
+'   印のある行も**ここには出す**。V-S5-12 は「書き換えていない語がある」ことの
+'   通知であり、機械が置換するかどうかとは別の判断だからである。
 ' ============================================================================
 Public Function TabooHit(ByVal bodyText As String) As String
     TabooHit = HitList(bodyText, True)
@@ -295,10 +290,9 @@ End Function
 
 ' ============================================================================
 ' TabooHitStrict - 上記のうち**機械置換が責任を持つ語だけ**(第3列に印のある
-'   行=一般語 general とサ変語幹 suru を除く)。SoftenTaboo を通した後に
-'   これが非空なら、それは置換の取りこぼし=実装の欠陥である。
-'   呼出側(modExportProposal.TabooLeftNote)はこれで「警告で済む残り」と
-'   「直すべき取りこぼし」を分けて記録する。
+'   行 general/suru/verb を除く)。SoftenTaboo を通した後にこれが非空なら、
+'   それは置換の取りこぼし=実装の欠陥である。呼出側
+'   (modExportProposal.TabooLeftNote)が警告と取りこぼしを分けて記録する。
 ' ============================================================================
 Public Function TabooHitStrict(ByVal bodyText As String) As String
     TabooHitStrict = HitList(bodyText, False)
@@ -306,11 +300,9 @@ End Function
 
 ' ============================================================================
 ' TabooWarnLine - V-S5-12 の1行を組み立てる**唯一の値源**(15章§5.6 の
-'   エラー文テンプレ)。hitsText は TabooHit / TabooHitStrict の戻り値
-'   (";"区切り。空なら "" を返す)。
-'   CheckS5 は不合格の行としてこれを使い、顧客向け提案書の出力経路
-'   (modExportProposal)は**警告の注記**として同じ1行を usage_log へ残す
-'   (裁定書40 S-M1)。文言を2箇所に書かないためにここへ寄せている。
+'   エラー文テンプレ)。hitsText は TabooHit / TabooHitStrict の戻り値。
+'   CheckS5 は不合格の行として、提案書の出力経路(modExportProposal)は警告の
+'   注記として同じ1行を使う(裁定書40 S-M1。文言を2箇所に書かない)。
 ' ============================================================================
 Public Function TabooWarnLine(ByVal hitsText As String) As String
     If LenB(hitsText) = 0 Then Exit Function
@@ -320,13 +312,12 @@ End Function
 ' ============================================================================
 ' SoftenTaboo - 修復後も V-S5-12 だけが残るときの機械置換(docs/29 §5.3)。
 '   置換した**箇所数**を changed へ返す。**生成は止めない**が、置換したことは
-'   呼出側が run_log と警告へ残す(黙って直さない)。
-'   規約は本モジュール冒頭の(1)最長一致 (2)一般語は置換しない (3)冪等。
+'   呼出側が run_log と警告へ残す(黙って直さない)。規約は冒頭の(1)〜(4)。
 ' ============================================================================
 Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As String
     Dim srcArr() As String
     Dim dstArr() As String
-    Dim suruArr() As Boolean
+    Dim markArr() As String
     Dim heads As String
     Dim cnt As Long
     Dim pass As Long
@@ -340,7 +331,7 @@ Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As 
         Exit Function
     End If
 
-    cnt = SoftPairs(srcArr, dstArr, suruArr, heads)
+    cnt = SoftPairs(srcArr, dstArr, markArr, heads)
     If cnt = 0 Then
         SoftenTaboo = t
         Exit Function
@@ -348,7 +339,7 @@ Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As 
 
     For pass = 1 To V4_SOFT_PASS_MAX
         hits = 0
-        t = SoftenOnce(t, srcArr, dstArr, suruArr, cnt, heads, hits)
+        t = SoftenOnce(t, srcArr, dstArr, markArr, cnt, heads, hits)
         changed = changed + hits
         If hits = 0 Then Exit For
     Next pass
@@ -358,8 +349,7 @@ End Function
 ' ============================================================================
 ' MissingTopKeys - jsonText の**最外オブジェクト直下**に無いキーを ";" 区切りで
 '   返す(全部あれば "")。keyList は "|" 区切り。入れ子の同名キーを「あった」と
-'   数えない(themes[].headline を headline と読まない)ため、modJsonLite では
-'   なくここで深さを数えながら走査する。
+'   数えない(themes[].headline を headline と読まない)ので深さを数えて走る。
 ' ============================================================================
 Public Function MissingTopKeys(ByVal jsonText As String, ByVal keyList As String) As String
     Dim keys() As String
@@ -426,24 +416,24 @@ Private Function MarkOf(ByRef onePair() As String) As String
 End Function
 
 ' 対訳表の1行が**印つき**(機械置換が責任を持たない行)か。
-'   general = 一般語(常に置換しない。裁定書39 R2-02)
-'   suru    = サ変語幹(「〜する」の直前だけ置換しない。裁定書40 S-M2)
-'   どちらも V-S5-12 の警告(TabooHit)には出す=見逃しはしない。
+'   general = 一般語(常に置換しない。対訳表§6)
+'   suru    = サ変語幹(サ変語尾の直前だけ置換しない。対訳表§6.1)
+'   verb    = 用言の連用形(活用語尾の直前だけ置換しない。対訳表§6.3)
+'   いずれも V-S5-12 の警告(TabooHit)には出す=見逃しはしない。
 Private Function IsMarkedRow(ByRef onePair() As String) As Boolean
     Dim mk As String
     mk = MarkOf(onePair)
-    IsMarkedRow = (mk = V4_GENERAL) Or (mk = V4_SURU)
+    IsMarkedRow = (mk = V4_GENERAL) Or (mk = V4_SURU) Or (mk = V4_VERB)
 End Function
 
 ' ============================================================================
 ' SoftPairs - 機械置換に使う対を**社内語の長さの降順**(最長一致)で返す。
 '   戻り値=件数。heads には社内語の1文字目を重複なく詰める(走査の足切り用)。
-'   一般語(第3列 general)の行は入れない(裁定書39 R2-02)。
-'   サ変語幹(第3列 suru)の行は**入れるが印を suruArr へ立てる**。置換して
-'   よいかは位置によって決まる(「〜する」の直前だけ置換しない。裁定書40 S-M2)。
+'   general の行は入れない。suru / verb の行は**入れるが印を markArr へ写す**
+'   (置換してよいかは位置で決まる。MarkGuardFollows)。
 ' ============================================================================
 Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
-                           ByRef suruArr() As Boolean, ByRef heads As String) As Long
+                           ByRef markArr() As String, ByRef heads As String) As Long
     Dim rows() As String
     Dim onePair() As String
     Dim i As Long
@@ -451,14 +441,14 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
     Dim n As Long
     Dim keySrc As String
     Dim keyDst As String
-    Dim keySuru As Boolean
+    Dim keyMark As String
     Dim headCh As String
 
     heads = vbNullString
     rows = Split(TabooPairs(), vbLf)
     ReDim srcArr(0 To UBound(rows) - LBound(rows))
     ReDim dstArr(0 To UBound(rows) - LBound(rows))
-    ReDim suruArr(0 To UBound(rows) - LBound(rows))
+    ReDim markArr(0 To UBound(rows) - LBound(rows))
     n = 0
     For i = LBound(rows) To UBound(rows)
         onePair = Split(rows(i), V4_TAB)
@@ -466,7 +456,7 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
             If LenB(onePair(0)) > 0 And MarkOf(onePair) <> V4_GENERAL Then
                 srcArr(n) = onePair(0)
                 dstArr(n) = onePair(1)
-                suruArr(n) = (MarkOf(onePair) = V4_SURU)
+                markArr(n) = MarkOf(onePair)
                 n = n + 1
             End If
         End If
@@ -476,13 +466,13 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
     For i = 1 To n - 1
         keySrc = srcArr(i)
         keyDst = dstArr(i)
-        keySuru = suruArr(i)
+        keyMark = markArr(i)
         j = i - 1
         Do While j >= 0
             If Len(srcArr(j)) < Len(keySrc) Then
                 srcArr(j + 1) = srcArr(j)
                 dstArr(j + 1) = dstArr(j)
-                suruArr(j + 1) = suruArr(j)
+                markArr(j + 1) = markArr(j)
                 j = j - 1
             Else
                 Exit Do
@@ -490,7 +480,7 @@ Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
         Loop
         srcArr(j + 1) = keySrc
         dstArr(j + 1) = keyDst
-        suruArr(j + 1) = keySuru
+        markArr(j + 1) = keyMark
     Next i
 
     For i = 0 To n - 1
@@ -506,9 +496,11 @@ End Function
 '   ・置換結果は走査済みとして扱う(同じ走査で二重に食わない)。
 '   ・1文字目が heads に無い位置は即座に読み飛ばす(VBAの二重ループ対策)。
 '   ・出力の連結は「一致した所」でだけ行う(1文字ずつ連結すると長文で遅い)。
+'   ・印(suru/verb)で見送った位置は**その位置の走査を打ち切る**(規約2)。
+'   ・置換の直後が顧客語の末尾と重なるなら、その重なりを飛ばす(規約4)。
 ' ============================================================================
 Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, _
-                            ByRef dstArr() As String, ByRef suruArr() As Boolean, _
+                            ByRef dstArr() As String, ByRef markArr() As String, _
                             ByVal cnt As Long, _
                             ByVal heads As String, ByRef hits As Long) As String
     Dim outText As String
@@ -533,10 +525,12 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
                 If wLen <= n - i + 1 Then
                     If Mid$(bodyText, i, wLen) = srcArr(k) Then
                         If BoundaryOk(bodyText, i, srcArr(k)) Then
-                            If Not (suruArr(k) And SuruFollows(bodyText, i + wLen)) Then
-                                matched = k + 1
+                            ' 印で見送ったら、この位置はここで打ち切る(規約2)。
+                            If MarkGuardFollows(bodyText, i + wLen, markArr(k)) Then
                                 Exit For
                             End If
+                            matched = k + 1
+                            Exit For
                         End If
                     End If
                 End If
@@ -548,6 +542,9 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
             End If
             outText = outText & dstArr(matched - 1)
             i = i + Len(srcArr(matched - 1))
+            ' 規約4: 「D&O保険」の「保険」のように、直後が顧客語の末尾と
+            '   重なるなら本文側の重なりを読み飛ばす(二重を出さない)。
+            i = i + TailOverlap(bodyText, i, dstArr(matched - 1))
             segStart = i
             hits = hits + 1
         Else
@@ -558,13 +555,47 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
     SoftenOnce = outText
 End Function
 
-' pos の位置からサ変の活用(する/し/さ/せ)が続くか。サ変語幹(第3列 suru)の
-'   行は、この位置では置換しない(裁定書40 S-M2)。顧客語は名詞句なので
-'   「保険化する」を置換すると「保険での備え方の設計する」になって日本語が
-'   壊れる。置換しない代わりに V-S5-12 の警告には出る(TabooHit)。
-Private Function SuruFollows(ByVal hay As String, ByVal pos As Long) As Boolean
+' pos の位置から、印 mk の「置換を見送る語尾」が続くか(前方一致)。印が無い行
+'   (mk="")は常に False = いつでも置換してよい。見送った語は V-S5-12 の警告
+'   (TabooHit)には出るので見逃しにはならない。
+Private Function MarkGuardFollows(ByVal hay As String, ByVal pos As Long, _
+                                  ByVal mk As String) As Boolean
+    Dim tails() As String
+    Dim i As Long
+    Dim t As String
+
     If pos < 1 Or pos > Len(hay) Then Exit Function
-    SuruFollows = (InStr(1, V4_SURU_HEADS, Mid$(hay, pos, 1), vbBinaryCompare) > 0)
+    If mk = V4_SURU Then
+        tails = Split(V4_SURU_TAILS, "|")
+    ElseIf mk = V4_VERB Then
+        tails = Split(V4_VERB_TAILS, "|")
+    Else
+        Exit Function
+    End If
+    For i = LBound(tails) To UBound(tails)
+        t = tails(i)
+        If Mid$(hay, pos, Len(t)) = t Then
+            MarkGuardFollows = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' 規約4(対訳表§6.6): pos から始まる本文が、いま置いた顧客語 dstText の末尾と
+'   重なる文字数(最長・V4_TAIL_MIN 文字以上。重なりが無ければ 0)。「D&O」→
+'   「会社役員賠償責任保険」の直後が「保険…」なら 2 を返し、呼出側がその2文字を
+'   読み飛ばす=「会社役員賠償責任保険保険」を出さない。
+Private Function TailOverlap(ByVal hay As String, ByVal pos As Long, _
+                             ByVal dstText As String) As Long
+    Dim k As Long
+
+    If pos < 1 Or pos > Len(hay) Then Exit Function
+    For k = Len(dstText) To V4_TAIL_MIN Step -1
+        If Mid$(hay, pos, k) = Right$(dstText, k) Then
+            TailOverlap = k
+            Exit Function
+        End If
+    Next k
 End Function
 
 ' 置換してよい位置か。ASCII だけの語は前後が半角英字でないときだけ当てる
@@ -713,22 +744,20 @@ End Function
 
 ' ============================================================================
 ' ObjBlock - jsonText の中の "key": { ... } を波括弧の対応で切り出す純関数。
-'   modJsonLite は配列と値の取り出ししか持たず、入れ子オブジェクトの中だけを
-'   見る口が無い。headline / business のように**上位と同名のキーを持つ**
-'   入れ子では、切り出さずに GetStr すると上位の値を拾ってしまう。
-'   見つからないときは ""(呼出側は空の値として扱う=検証が発火する)。
+'   headline / business のように**上位と同名のキーを持つ**入れ子では、切り出さ
+'   ずに modJsonLite.GetStr を呼ぶと上位の値を拾ってしまう。見つからないときは
+'   ""(呼出側は空の値として扱う=検証が発火する)。
 ' ============================================================================
 Public Function ObjBlock(ByVal jsonText As String, ByVal keyName As String) As String
     ObjBlock = Block(jsonText, keyName, "{", "}")
 End Function
 
 ' ============================================================================
-' ArrBlock / ArrItems / ArrCount - 配列の取り出し。
-'   15章§5.6 の出力は `headline` の中に `ideas` / `four` / `steps` と**同名の
-'   文字列キー**を持ち、しかも `headline` は上位の配列より前に出る。
-'   modJsonLite.GetArrayItems は最初に現れたキーを拾うので、そのまま呼ぶと
-'   「見出しの一文」を配列と読んで**0件**と数えてしまう(W15 の純層テストが
-'   実際にこれを検出した)。そこで**値が [ で始まる出現**だけを採る。
+' ArrBlock / ArrItems / ArrCount - 配列の取り出し。15章§5.6 の出力は
+'   `headline` の中に `ideas` / `four` / `steps` と**同名の文字列キー**を持ち、
+'   しかも `headline` は上位の配列より前に出る。modJsonLite.GetArrayItems は
+'   最初に現れたキーを拾うので、そのまま呼ぶと「見出しの一文」を配列と読んで
+'   **0件**と数えてしまう。そこで**値が [ で始まる出現**だけを採る。
 ' ============================================================================
 Public Function ArrBlock(ByVal jsonText As String, ByVal keyName As String) As String
     ArrBlock = Block(jsonText, keyName, "[", "]")

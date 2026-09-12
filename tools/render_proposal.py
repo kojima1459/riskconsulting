@@ -95,8 +95,15 @@ FAITHFUL_EMPTY_KEYS = ["hard_risks", "ideas", "four", "theme_table",
 FAITHFUL_EMPTY_OBJS = ["headline"]
 
 
-def basic_driver(out_url: str, faithful: bool) -> str:
-    """LO Basic のドライバ(RenderMainモジュール)。素材の間引きはここだけで行う。"""
+def basic_driver(out_url: str, faithful: bool,
+                 gl_in_url: str = "", gl_out_url: str = "") -> str:
+    """LO Basic のドライバ(RenderMainモジュール)。素材の間引きはここだけで行う。
+
+    gl_in_url / gl_out_url を渡すと、同じ LO の実行の中で
+    **実物の modValidate4.SoftenTaboo** に1行ずつ入力を通し、
+    「入力<TAB>1回目の出力<TAB>2回目の出力」を書き出す(対訳表の実効出力の検問。
+    裁定書42 §1)。LO の起動は1回のままにしたいのでドライバへ相乗りさせる。
+    """
     shaping = ""
     if faithful:
         for key in FAITHFUL_EMPTY_KEYS:
@@ -178,6 +185,31 @@ def basic_driver(out_url: str, faithful: bool) -> str:
         "    Dim docText As String\n"
         "    docText = modExportProposal.BuildProposalHtml(metaJson, s2, s5)\n"
         f'    WriteUtf8 "{out_url}", docText\n'
+        + (f'    GlossarySweep "{gl_in_url}", "{gl_out_url}"\n'
+           if gl_in_url and gl_out_url else "")
+        + "End Sub\n"
+        "\n"
+        "' 対訳表の実効出力(裁定書42 §1)。入力を1行ずつ実物の SoftenTaboo へ通し、\n"
+        "'   2回通した結果も並べて書き出す(冪等の実測も同じ1回の実行で済ませる)。\n"
+        "Sub GlossarySweep(ByVal inUrl As String, ByVal outUrl As String)\n"
+        "    Dim oSFA As Object, oIn As Object, oTin As Object\n"
+        "    Dim lineText As String, acc As String, r1 As String, r2 As String\n"
+        "    Dim n1 As Long, n2 As Long\n"
+        '    Set oSFA = createUnoService("com.sun.star.ucb.SimpleFileAccess")\n'
+        "    Set oIn = oSFA.openFileRead(inUrl)\n"
+        '    Set oTin = createUnoService("com.sun.star.io.TextInputStream")\n'
+        "    oTin.setInputStream(oIn)\n"
+        '    oTin.setEncoding("UTF-8")\n'
+        "    Do While Not oTin.isEOF()\n"
+        "        lineText = oTin.readLine()\n"
+        "        If Len(lineText) > 0 Then\n"
+        "            r1 = modValidate4.SoftenTaboo(lineText, n1)\n"
+        "            r2 = modValidate4.SoftenTaboo(r1, n2)\n"
+        "            acc = acc & lineText & Chr(9) & r1 & Chr(9) & r2 & Chr(10)\n"
+        "        End If\n"
+        "    Loop\n"
+        "    oTin.closeInput()\n"
+        "    WriteUtf8 outUrl, acc\n"
         "End Sub\n"
     )
 
@@ -268,7 +300,8 @@ console.log(JSON.stringify({
 """
 
 
-def run_render(soffice: str, work_dir: Path, faithful: bool, verbose: bool) -> str | None:
+def run_render(soffice: str, work_dir: Path, faithful: bool, verbose: bool,
+               gl_inputs: list[str] | None = None) -> str | None:
     all_modules = dict(lo.discover_modules(REPO_ROOT / "src"))
     type_blocks = lo.collect_public_type_blocks(all_modules)
 
@@ -286,7 +319,13 @@ def run_render(soffice: str, work_dir: Path, faithful: bool, verbose: bool) -> s
 
     out_file = work_dir / "proposal.html"
     out_url = "file://" + out_file.as_posix()
-    modules["RenderMain"] = basic_driver(out_url, faithful)
+    gl_in_url = gl_out_url = ""
+    if gl_inputs:
+        gl_in = work_dir / "glossary_in.txt"
+        gl_in.write_text("\n".join(gl_inputs) + "\n", encoding="utf-8")
+        gl_in_url = "file://" + gl_in.as_posix()
+        gl_out_url = "file://" + (work_dir / GLOSSARY_OUT_NAME).as_posix()
+    modules["RenderMain"] = basic_driver(out_url, faithful, gl_in_url, gl_out_url)
 
     profile_dir = work_dir / "profile_proposal"
     template = lo.ensure_template_profile(soffice, verbose)
@@ -465,6 +504,270 @@ def check_glossary(problems_sink: list[str]) -> None:
                 f"(対訳表とプロンプトが二重管理になっています)")
 
 
+# ==============================================================================
+# 対訳表の**実効出力**の検問(裁定書42 §1・統合レビュー「ゲートの死角」#1)
+# ------------------------------------------------------------------------------
+# それまでの check_glossary は「対訳表 Markdown ⇔ 15章§5.6 の system 本文」の
+# 1辺しか見ておらず、**実際に顧客向け本文を書き換える modValidate4.TabooPairs()
+# とは一度も突き合わせていなかった**。統合レビューは「料率 -> 保険料の水準」を
+# 「料率 -> ZZZ壊れた顧客語」へ書き換えても全ゲートが緑のままであることを実証
+# している。ここで2本立てで閉じる:
+#   check_glossary_impl      対訳表(§1〜§3 + §4.1 + §6.4)と TabooPairs() の
+#                            社内語・顧客語・印を1行ずつ突き合わせる(静的)
+#   check_glossary_effective LibreOffice で**実物の SoftenTaboo** を回し、
+#                            全対 × 代表文脈の実効出力を、対訳表から組み立てた
+#                            参照実装の出力と1件ずつ比べる(冪等も同時に見る)
+# 値源(対訳表)と実装(VBA)を別々に辿るので、どちらか一方だけが変わると赤くなる。
+# ==============================================================================
+GLOSSARY_OUT_NAME = "glossary_out.tsv"
+
+# 代表文脈。素・助詞・サ変・活用語尾・末尾の重なりを1本ずつ持つ(対訳表§6.1 の
+# 検算枠 A/B/C/D をそのまま機械化したもの)。
+GL_SUFFIXES = [
+    "", "する", "した", "して", "している", "しており", "される", "させる",
+    "できる", "を行う", "の件", "です", "、", "て", "た", "ている", "ており",
+    "られる", "ました", "ます", "ない", "など", "まで", "の",
+    "保険", "リスク", "計画", "認証", "管理", "シート",
+]
+GL_FRAME = "本件の{0}をご説明します。"
+
+
+def _md_section(text: str, head: str, next_heads: list[str]) -> str:
+    """`head` で始まる節の本文(次の見出しの手前まで)。無ければ ""。"""
+    if head not in text:
+        return ""
+    body = text.split(head, 1)[1]
+    cut = len(body)
+    for nh in next_heads:
+        pos = body.find(nh)
+        if pos >= 0:
+            cut = min(cut, pos)
+    return body[:cut]
+
+
+def _md_rows(body: str) -> list[list[str]]:
+    """Markdown の表の行(区切り行と見出し行を除く)をセルの配列で返す。"""
+    out = []
+    for line in body.splitlines():
+        line = line.strip()
+        if not line.startswith("|") or not line.endswith("|"):
+            continue
+        cells = [c.strip() for c in line[1:-1].split("|")]
+        if not cells or set("".join(cells)) <= set("-: "):
+            continue
+        out.append(cells)
+    return out
+
+
+def glossary_from_md(text: str) -> tuple[list[tuple[str, str, str]], dict]:
+    """対訳表 Markdown から (社内語, 顧客語, 印) の一覧と、判定に使う規則を読む。
+
+    - §1〜§3 の番号付き表 46語(check_glossary が15章と突き合わせている辺)
+    - §4.1「削り損ねたときに機械が当てる代替語」3語
+    - §6.4「表記ゆれ」2語
+    印は §6(general) / §6.1(suru) / §6.3(verb) の表が値源。§6.4 の印の列は
+    その写しであり、食い違えば問題として報告する。
+    """
+    problems: list[str] = []
+    pairs: list[tuple[str, str]] = list(parse_glossary_terms(text))
+
+    sec41 = _md_section(text, "### 4.1 ", ["## 5."])
+    for cells in _md_rows(sec41):
+        if len(cells) >= 2 and cells[0] != "社内語":
+            pairs.append((cells[0], cells[1]))
+
+    sec64 = _md_section(text, "## 6.4 ", ["## 6.5"])
+    var_marks: dict[str, str] = {}
+    for cells in _md_rows(sec64):
+        if len(cells) >= 4 and cells[0] != "表記ゆれ":
+            pairs.append((cells[0], cells[2]))
+            var_marks[cells[0]] = "" if cells[3].startswith("（なし") else cells[3]
+
+    marks: dict[str, str] = {}
+    for head, nxt, name in (("## 6. ", "## 6.1", "general"),
+                            ("## 6.1 ", "## 6.2", "suru"),
+                            ("## 6.3 ", "## 6.4", "verb")):
+        body = _md_section(text, head, [nxt])
+        if not body:
+            problems.append(f"対訳表の {head.strip()} 節を読み取れませんでした")
+        for cells in _md_rows(body):
+            if len(cells) >= 2 and cells[0] not in ("社内語", "表記ゆれ"):
+                marks[cells[0]] = name
+    for word, mk in var_marks.items():
+        if marks.get(word, "") != mk:
+            problems.append(
+                f"対訳表§6.4 の「{word}」の印({mk or 'なし'})が"
+                f"§6/§6.1/§6.3 の宣言({marks.get(word, 'なし')})と違います")
+
+    rules = {"problems": problems}
+    body = _md_section(text, "## 6.1 ", ["## 6.2"])
+    mm = re.search(r"直後が\s*(.+?)\s*のときだけ", body)
+    rules["suru_tails"] = re.findall(r"`([^`]+)`", mm.group(1)) if mm else []
+    body = _md_section(text, "## 6.3 ", ["## 6.4"])
+    mm = re.search(r"V4_VERB_TAILS[^:：]*[:：]\s*(.+)", body)
+    rules["verb_tails"] = (
+        re.findall(r"`([^`]+)`", mm.group(1).split("。")[0]) if mm else [])
+    body = _md_section(text, "## 6.6 ", ["## 7."])
+    mm = re.search(r"重なりは\*\*(\d+)文字以上", body)
+    rules["tail_min"] = int(mm.group(1)) if mm else 0
+
+    return [(s, d, marks.get(s, "")) for s, d in pairs], rules
+
+
+VBA_TOKEN = re.compile(r'"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*)')
+VBA_MARKS = {"V4_SURU": "suru", "V4_GENERAL": "general", "V4_VERB": "verb"}
+
+
+def glossary_from_vba(src: str) -> list[tuple[str, str, str]]:
+    """modValidate4.bas の TabooPairs() が組み立てる行を読む。"""
+    if "Public Function TabooPairs()" not in src:
+        return []
+    body = src.split("Public Function TabooPairs()", 1)[1].split("End Function", 1)[0]
+    rows = []
+    for line in body.splitlines():
+        if "s = s &" not in line:
+            continue
+        texts, mark = [], ""
+        for lit, ident in VBA_TOKEN.findall(line.split("s = s &", 1)[1]):
+            if ident:
+                mark = VBA_MARKS.get(ident, mark)
+            else:
+                texts.append(lit)
+        if len(texts) >= 2:
+            rows.append((texts[0], texts[1], mark))
+    return rows
+
+
+def check_glossary_impl(problems_sink: list[str]) -> int:
+    """対訳表の宣言と modValidate4.TabooPairs() の実物を1行ずつ突き合わせる。"""
+    md_rows, rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
+    problems_sink.extend(rules["problems"])
+    vba_rows = glossary_from_vba(
+        (REPO_ROOT / "src" / "app" / "modValidate4.bas").read_text(encoding="utf-8"))
+    if not vba_rows:
+        problems_sink.append("modValidate4.bas の TabooPairs() を読み取れませんでした")
+        return 0
+    md_map = {s: (d, m) for s, d, m in md_rows}
+    vba_map = {s: (d, m) for s, d, m in vba_rows}
+    for word in sorted(set(md_map) | set(vba_map)):
+        if word not in vba_map:
+            problems_sink.append(
+                f"対訳表の「{word}」が modValidate4.TabooPairs() にありません"
+                "(宣言だけあって機械置換されない=顧客資料に社内語が残る)")
+        elif word not in md_map:
+            problems_sink.append(
+                f"modValidate4.TabooPairs() の「{word}」が対訳表にありません"
+                "(実装だけが知っている禁止語=誰も検算していない)")
+        elif md_map[word] != vba_map[word]:
+            problems_sink.append(
+                f"「{word}」の顧客語/印が対訳表と実装で違います"
+                f"(対訳表={md_map[word]} / TabooPairs={vba_map[word]})")
+    if not rules["suru_tails"] or not rules["verb_tails"] or not rules["tail_min"]:
+        problems_sink.append(
+            "対訳表§6.1/§6.3/§6.6 から置換規則(サ変語尾・活用語尾・"
+            "末尾の重なりの最小字数)を読み取れませんでした")
+    return len(md_map)
+
+
+# ---- 対訳表の宣言だけから組み立てる参照実装(VBA とは別経路で同じ答えを出す) ----
+def _is_ascii_word(word: str) -> bool:
+    return all(32 <= ord(c) <= 126 for c in word)
+
+
+def _boundary_ok(hay: str, pos: int, word: str) -> bool:
+    if not _is_ascii_word(word):
+        return True
+    if pos > 0 and hay[pos - 1].isascii() and hay[pos - 1].isalpha():
+        return False
+    end = pos + len(word)
+    return not (end < len(hay) and hay[end].isascii() and hay[end].isalpha())
+
+
+def _tail_overlap(hay: str, pos: int, dst: str, tail_min: int) -> int:
+    for k in range(len(dst), tail_min - 1, -1):
+        if hay[pos:pos + k] == dst[-k:]:
+            return k
+    return 0
+
+
+def soften_reference(text: str, rows: list[tuple[str, str, str]], rules: dict,
+                     passes: int = 4) -> str:
+    """対訳表§6〜§6.6 の規約どおりに置換する参照実装(modValidate4 とは別実装)。"""
+    use = sorted([r for r in rows if r[2] != "general"], key=lambda r: -len(r[0]))
+    heads = {r[0][0] for r in use}
+    tails = {"suru": rules["suru_tails"], "verb": rules["verb_tails"]}
+    for _ in range(passes):
+        out, i, hits, n = [], 0, 0, len(text)
+        while i < n:
+            hit = None
+            if text[i] in heads:
+                for src, dst, mark in use:
+                    if text[i:i + len(src)] != src:
+                        continue
+                    if not _boundary_ok(text, i, src):
+                        continue
+                    guard = tails.get(mark) or []
+                    if any(text.startswith(t, i + len(src)) for t in guard):
+                        break            # 印で見送った位置は打ち切る(規約2)
+                    hit = (src, dst)
+                    break
+            if hit is None:
+                out.append(text[i])
+                i += 1
+                continue
+            src, dst = hit
+            out.append(dst)
+            i += len(src)
+            i += _tail_overlap(text, i, dst, rules["tail_min"])
+            hits += 1
+        text = "".join(out)
+        if hits == 0:
+            break
+    return text
+
+
+def glossary_inputs(rows: list[tuple[str, str, str]]) -> list[str]:
+    """全対 × 代表文脈の入力文(LO へ渡す1行1件)。"""
+    seen, out = set(), []
+    for src, _dst, _mark in rows:
+        for suf in GL_SUFFIXES:
+            for body in (src + suf, GL_FRAME.format(src + suf)):
+                if body not in seen:
+                    seen.add(body)
+                    out.append(body)
+    return out
+
+
+def check_glossary_effective(problems_sink: list[str], sweep_path: Path) -> int:
+    """実物の SoftenTaboo の出力を、対訳表から組み立てた参照実装と比べる。"""
+    if not sweep_path.exists():
+        problems_sink.append(
+            "対訳表の実効出力(SoftenTaboo)を LibreOffice で採取できませんでした"
+            "(検査を飛ばして緑にはしません)")
+        return 0
+    rows, rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
+    checked, shown = 0, 0
+    for line in sweep_path.read_text(encoding="utf-8").splitlines():
+        cells = line.split("\t")
+        if len(cells) < 3:
+            continue
+        body, got1, got2 = cells[0], cells[1], cells[2]
+        checked += 1
+        want = soften_reference(body, rows, rules)
+        if got1 != want and shown < 12:
+            shown += 1
+            problems_sink.append(
+                f"対訳表の実効出力が宣言と違います: [{body}] → 実装[{got1}] / "
+                f"対訳表どおりなら[{want}]")
+        if got2 != got1 and shown < 12:
+            shown += 1
+            problems_sink.append(
+                f"SoftenTaboo が冪等ではありません: [{body}] → [{got1}] → [{got2}]")
+    if checked == 0:
+        problems_sink.append("対訳表の実効出力を1件も検査できませんでした")
+    return checked
+
+
 def spec15_s5_required() -> list[str]:
     """15章§5.6 Schema-S5 の**最外 required**(16キー)を仕様から読む。"""
     text = SPEC15.read_text(encoding="utf-8")
@@ -631,10 +934,14 @@ def main() -> int:
               "実行できません(検査を飛ばして緑にはしません)")
         return 2
 
+    # 裁定書42 §1: 対訳表の実効出力を同じ LO の実行で採る(全対 × 代表文脈)。
+    gl_rows, _gl_rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
+    gl_inputs = glossary_inputs(gl_rows)
+
     soffice = lo.find_soffice()
     work_dir = Path(tempfile.mkdtemp(prefix="rpn_proposal_"))
     try:
-        html = run_render(soffice, work_dir, args.faithful, args.verbose)
+        html = run_render(soffice, work_dir, args.faithful, args.verbose, gl_inputs)
         if html is None:
             return 2
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -646,6 +953,8 @@ def main() -> int:
         problems += check_data_literal(html)
         problems += check_literals(html, disclaimer, todo)
         check_glossary(problems)
+        n_pairs = check_glossary_impl(problems)
+        n_eff = check_glossary_effective(problems, work_dir / GLOSSARY_OUT_NAME)
         check_s5_required(problems)
         problems += check_dom(out_path, slides, todo, args.faithful, args.verbose)
         if problems:
@@ -653,9 +962,12 @@ def main() -> int:
             for p in problems:
                 print(f"  - {p}")
             return 1
+        # 要点行は**実際に回した検査だけ**を名乗る(件数を出す。裁定書42)。
         print(f"[render_proposal] OK: 全{len(slides)}枚の登録と描画後DOM"
               "(発表者ノートを壊しても22枚が描かれ印が立つことを含む)、"
-              "20章§5.1の19変数・§8の免責・対訳表との一致・"
+              "20章§5.1の19変数・§8の免責・"
+              f"対訳表{n_pairs}対と15章§5.6/TabooPairs の一致、"
+              f"SoftenTaboo の実効出力{n_eff}件(冪等を含む)、"
               "EP_S5_REQUIRED と15章§5.6 required の一致を確認しました。")
         return 0
     finally:
