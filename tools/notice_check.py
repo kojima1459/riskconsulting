@@ -80,6 +80,7 @@ REPO_ROOT = TOOLS_DIR.parent
 sys.path.insert(0, str(TOOLS_DIR))
 
 import render_report as rr  # noqa: E402  (HTMLの組立機構を流用。二重管理しない)
+import gate_count  # 要点行の契約(W15 §3 X3-3)
 
 SRC_ROOT = REPO_ROOT / "src"
 
@@ -247,7 +248,9 @@ def note_positions(cards: list[list[str]]) -> list[int]:
     return hit
 
 
-def check_dom_ground(verbose: bool) -> tuple[list[str], str]:
+def check_dom_ground(verbose: bool,
+                     checked: "gate_count.Checked | None" = None
+                     ) -> tuple[list[str], str]:
     """実DOMで SEC-09 の「原文未照合」を両方向に測る。"""
     node = shutil.which("node") or shutil.which("nodejs")
     if node is None:
@@ -316,6 +319,9 @@ def check_dom_ground(verbose: bool) -> tuple[list[str], str]:
     # --- 同じ型の横展開: SEC-14(risks[])の「原文照合」列も両方向で測る ---
     # 18章§3 SEC-14 は `gm[risk_no] ? '原文未照合' : ''` という同型の分岐で、
     # ここにも実DOMの回帰が無かった(裁定書40 Q-M2 の横展開)。
+    # P0〜P3 の4通りを**実際に**描いて測った(node が無ければここへ来ない)。
+    if checked is not None:
+        checked.record("実DOM SEC-09", 4)
     rows0 = p0["rows"]
     if not p0.get("hasSource") or not rows0:
         problems.append("SEC-14(sec-source)の主表が1行も描かれていません(検査が空振り)")
@@ -336,6 +342,8 @@ def check_dom_ground(verbose: bool) -> tuple[list[str], str]:
         problems.append(
             f"meta.ground_unmatched=[\"{first_no}\"] のとき SEC-14 で印が付く行が"
             f"No.{first_no} だけになっていません(実際={marked4})")
+    if checked is not None:
+        checked.record("実DOM SEC-14", len(rows0) + len(rows4))
     return (problems, summary)
 
 
@@ -381,8 +389,13 @@ def joined_body(text: str, proc_name: str) -> str | None:
     return re.sub(r"\s+_\s*\n\s*", " ", body)
 
 
+# 検査②で実際に踏んだ照合の本数(W15 §3 X3-3。要点行に出す)。
+_WIRE_N = [0]
+
+
 def want(problems: list[str], body: str | None, proc: str,
          needle: str, why: str) -> None:
+    _WIRE_N[0] += 1
     if body is None:
         problems.append(f"{proc} が見つかりません(改名・削除の疑い)")
         return
@@ -392,6 +405,7 @@ def want(problems: list[str], body: str | None, proc: str,
 
 def want_not(problems: list[str], body: str | None, proc: str,
              needle: str, why: str) -> None:
+    _WIRE_N[0] += 1
     if body is None:
         problems.append(f"{proc} が見つかりません(改名・削除の疑い)")
         return
@@ -399,8 +413,11 @@ def want_not(problems: list[str], body: str | None, proc: str,
         problems.append(f"{proc} に `{needle}` があります({why})")
 
 
-def check_banner_wire(verbose: bool) -> tuple[list[str], str]:
+def check_banner_wire(verbose: bool,
+                      checked: "gate_count.Checked | None" = None
+                      ) -> tuple[list[str], str]:
     problems: list[str] = []
+    _WIRE_N[0] = 0
     case2 = read_module("modUICase2.bas")
     home = read_module("modUIHome.bas")
     home2 = read_module("modUIHome2.bas")
@@ -512,7 +529,10 @@ def check_banner_wire(verbose: bool) -> tuple[list[str], str]:
         problems.append(
             f"afterRun=True を渡している呼び口が{true_calls}箇所あります"
             "(16章 E-02 の「実行後」= RunStepUi と HomeRunAll の2箇所だけ)")
-    summary = f"afterRun=True の呼び口 {true_calls}箇所(期待2)"
+    summary = (f"照合 {_WIRE_N[0]}点 / afterRun=True の呼び口 "
+               f"{true_calls}箇所(期待2)")
+    if checked is not None:
+        checked.record("E-02 配線", _WIRE_N[0] + 1)
     if verbose:
         print(f"[notice_check] {summary}")
     return (problems, summary)
@@ -528,17 +548,21 @@ def main() -> int:
 
     problems: list[str] = []
     blocked = False
-    dom_sum = wire_sum = "(未実行)"
+    parts: list[str] = []
+    checked = gate_count.Checked()
 
     if args.only in (None, "wire"):
-        wire_problems, wire_sum = check_banner_wire(args.verbose)
+        wire_problems, wire_sum = check_banner_wire(args.verbose, checked)
         problems += [f"検査②(配線): {p}" for p in wire_problems]
+        parts.append(f"検査②(E-02 配線) {wire_sum}")
 
     if args.only in (None, "dom"):
-        dom_problems, dom_sum = check_dom_ground(args.verbose)
+        dom_problems, dom_sum = check_dom_ground(args.verbose, checked)
         if dom_problems and not dom_sum:
             blocked = True
         problems += [f"検査①(実DOM): {p}" for p in dom_problems]
+        if dom_sum:
+            parts.append(f"検査①(実DOM SEC-09) {dom_sum}")
 
     if problems:
         print("[notice_check] NG:")
@@ -546,8 +570,19 @@ def main() -> int:
             print(f"  - {p}")
         return 2 if blocked else 1
 
-    print(f"[notice_check] OK: 検査①(実DOM SEC-09) {dom_sum} / "
-          f"検査②(E-02 配線) {wire_sum}")
+    # 「検査していないのに緑」を止める要点行(W15 §3 X3-3)。**回した検査だけ**
+    # が名前と件数を持つので、`--only` で片方を飛ばした回に「両方やった」とは
+    # 名乗れない(旧実装は飛ばした側を「(未実行)」と書いたまま OK 行を出していた)。
+    required = []
+    if args.only in (None, "wire"):
+        required.append("E-02 配線")
+    if args.only in (None, "dom"):
+        required += ["実DOM SEC-09", "実DOM SEC-14"]
+    if gate_count.report(checked, required=tuple(required),
+                         prefix="[notice_check] "):
+        return 1
+
+    print("[notice_check] OK: " + " / ".join(parts))
     return 0
 
 

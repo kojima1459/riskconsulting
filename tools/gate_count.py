@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""gate_count.py - 「検査していないのに緑」を止める共通の要点行(W15 §3 X3-3)
+
+================================================================================
+なぜ要るか(統合レビュー「ゲートの死角」):
+    `tools/gate.py` は **returncode だけ**で赤緑を決め、要点行(`pick_summary`)は
+    表示専用である。そのため各ツールが出す成功文言が **固定の作文**だと、
+    実際には飛ばした検査まで「確認しました」と名乗れてしまう。実測された例:
+
+      - `render_proposal.py` / `render_report.py` が node 不在で DOM 検査を
+        まるごと飛ばしたのに「描画後DOM…を確認しました」と出して exit 0
+      - `render_proposal.py` の対訳表検査が VBA の実装を一度も見ていないのに
+        「対訳表との一致を確認しました」と出す
+      - `notice_check.py --only dom` で検査②が「(未実行)」のまま OK 行が出る
+
+    どれも「人が読む文言」と「機械が見る事実」がつながっていないことが原因。
+
+この仕組み(3つだけ):
+    (1) **数える**: 各ツールは検査した項目を `Checked.record(名前, 件数)` で
+        積む。**実際に回した検査だけ**を積む(飛ばした検査は積まない)。
+    (2) **名乗る**: `report()` が要点行を1行だけ出す。
+            検査実施: 合計件 (名前=件, 名前=件, …)
+        ここに出る名前は「実際に回した検査」だけなので、飛ばせば名前が消え、
+        件数も落ちる。**固定の作文ができない**。
+    (3) **落ちる**: 合計0件、または必須の検査が0件なら `report()` は非0を
+        返し、ツールはそのまま exit する(returncode で赤になる=fail-closed)。
+        gate.py 側は要点行に `検査実施: [1-9]\\d*件` を登録すれば、
+        「要点行なし」=検査の証拠なし を目で見つけられる(登録行は司令塔)。
+
+もう1つの役目(登記の網羅):
+    `python3 tools/gate_count.py` は `tools/gate.py` の GATES を読み、
+    **すべてのゲートの実行ファイル**が
+      - 本契約に適合している(CONTRACT_TOOLS)か
+      - 未適用として**理由付きで登記**されている(PENDING_TOOLS)か
+    のどちらかであることを確かめる。どちらにも無いスクリプトが GATES に
+    現れたら赤(新しい検問が黙って契約の外へ出るのを止める)。登記だけ残って
+    GATES から消えたものも赤(掃除漏れを残さない)。
+
+使い方:
+    python3 tools/gate_count.py              # 登記の網羅 + 自己テスト
+    python3 tools/gate_count.py --selftest   # 自己テストだけ
+    exit code: 0 = OK / 1 = 契約違反 / 2 = 自己テスト失敗
+================================================================================
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+import re
+import sys
+from pathlib import Path
+
+TOOLS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = TOOLS_DIR.parent
+
+# 要点行の書式(gate.py の登録行はこの形を見る)。
+CHECKED_PREFIX = "検査実施: "
+CHECKED_LINE = re.compile(r"^検査実施: (\d+)件")
+# gate.py へ推奨する登録パターン(0件なら要点行として拾えない)。
+GATE_PATTERN = r"検査実施: [1-9]\d*件"
+
+# 本契約を適用済みのツール(W15 §3 X3-3 の第1弾)。
+CONTRACT_TOOLS = {
+    "orphan_check.py",
+    "doc_gate.py",
+    "render_report.py",
+    "notice_check.py",
+}
+
+# 未適用の登記。**理由を書かずにここへ足さない**。
+# 裁定書42 §3.4 は「班X1/X2 が触るファイルには手を出さない」と決めているので、
+# render_proposal.py はこの波では班X1/X2 への handoff として登記する。
+PENDING_TOOLS: dict[str, str] = {
+    "render_proposal.py": "W15 §3.4: 班X1/X2 の担当ファイル。要点行の件数化は handoff",
+    "vba_lint.py": "件数(ERROR 件数と対象モジュール数)を既に要点行に出している",
+    "run_lo_tests.py": "PASS/FAIL/SKIP の実数を要点行に出している",
+    "build_rpn.py": "ビルド。検査ではなく生成物を作る",
+    "sheet_check.py": "「全N項目一致」で実数を出している",
+    "ship_check.py": "PASS/FAIL の実数を出している",
+    "bin_roundtrip.py": "条件数を要点行に出している",
+    "lo_xlsm.py": "条件数を要点行に出している",
+    "prompt_diff.py": "「一致: N件」で実数を出している",
+    "dossier_check.py": "「全N本」で実数を出している",
+    "config_check.py": "5点一致。件数化は次波",
+    "action_check.py": "条件数を要点行に出している",
+    "validate_check.py": "「計N件」で実数を出している",
+    "enum_check.py": "件数化は次波",
+    "caption_check.py": "「全N本」で実数を出している",
+    "t48_check.py": "条件数を要点行に出している",
+    "ribbon_wire_check.py": "件数化は次波",
+    "ui_check.py": "条件数を要点行に出している",
+    "gate_count.py": "本ファイル自身(契約の登記を見る側)",
+}
+
+
+# ---------------------------------------------------------------------------
+# (1)(2)(3) 数える・名乗る・落ちる
+# ---------------------------------------------------------------------------
+class Checked:
+    """実際に回した検査だけを積む数え上げ。
+
+    `record` を呼ばなかった検査は要点行に**名前ごと出ない**。これが
+    「飛ばしたのに確認したと名乗る」を機械的に不可能にしている。
+    """
+
+    __slots__ = ("items",)
+
+    def __init__(self) -> None:
+        self.items: list[tuple[str, int]] = []
+
+    def record(self, name: str, count: int) -> int:
+        """検査1種を積む(count = 実際に見た項目数)。戻り値は count。"""
+        if count < 0:
+            raise ValueError("検査件数が負です: %s=%d" % (name, count))
+        self.items.append((name, int(count)))
+        return count
+
+    def total(self) -> int:
+        return sum(n for _name, n in self.items)
+
+    def count_of(self, name: str) -> int:
+        return sum(n for nm, n in self.items if nm == name)
+
+    def names(self) -> list[str]:
+        return [nm for nm, _n in self.items]
+
+    def line(self) -> str:
+        body = ", ".join("%s=%d" % (nm, n) for nm, n in self.items)
+        return "%s%d件 (%s)" % (CHECKED_PREFIX, self.total(), body or "なし")
+
+
+def report(checked: Checked, required: tuple = (), prefix: str = "") -> int:
+    """要点行を出し、検査が空なら非0を返す(fail-closed)。
+
+    required に挙げた名前が1件も回っていなければ、合計が0でなくても赤にする
+    (「片方の検査だけ回して全部やったように見せる」を止める)。
+    """
+    print(prefix + checked.line())
+    missing = [nm for nm in required if checked.count_of(nm) <= 0]
+    if checked.total() <= 0:
+        print(prefix + "結果: NG (検査を1件も実行していません。"
+                       "実行できない検査を緑にはしません)")
+        return 1
+    if missing:
+        print(prefix + "結果: NG (必須の検査を実行していません: %s)"
+              % ", ".join(missing))
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# 登記の網羅(gate.py の GATES を読む)
+# ---------------------------------------------------------------------------
+def gate_scripts(gate_src: str) -> list[tuple[str, str]]:
+    """gate.py のソースから (ゲート名, スクリプトのファイル名) を抜く。
+
+    GATES は `sys.executable` を含むので実行はせず、**構文木から**読む。
+    """
+    tree = ast.parse(gate_src)
+    out: list[tuple[str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "GATES"
+                   for t in node.targets):
+            continue
+        if not isinstance(node.value, (ast.List, ast.Tuple)):
+            continue
+        for elt in node.value.elts:
+            if not isinstance(elt, (ast.Tuple, ast.List)) or len(elt.elts) < 2:
+                continue
+            name_node, cmd_node = elt.elts[0], elt.elts[1]
+            if not isinstance(name_node, ast.Constant):
+                continue
+            if not isinstance(cmd_node, (ast.List, ast.Tuple)):
+                continue
+            script = ""
+            for a in cmd_node.elts:
+                if isinstance(a, ast.Constant) and isinstance(a.value, str) \
+                        and a.value.endswith(".py"):
+                    script = a.value.replace("\\", "/").rsplit("/", 1)[-1]
+                    break
+            if script:
+                out.append((str(name_node.value), script))
+    return out
+
+
+def tool_follows_contract(path: Path) -> bool:
+    """そのツールが本契約(数える・名乗る・落ちる)を実際に使っているか。"""
+    if not path.exists():
+        return False
+    src = path.read_text(encoding="utf-8", errors="ignore")
+    return ("gate_count" in src and "Checked(" in src
+            and "gate_count.report(" in src)
+
+
+def audit(verbose: bool) -> tuple[int, Checked]:
+    """戻り値: (違反件数, 数え上げ)"""
+    checked = Checked()
+    gate_py = TOOLS_DIR / "gate.py"
+    if not gate_py.exists():
+        print("ERROR tools/gate.py がありません")
+        return (1, checked)
+    entries = gate_scripts(gate_py.read_text(encoding="utf-8"))
+    scripts = sorted({s for _n, s in entries})
+    violations = 0
+
+    adopted = 0
+    for script in scripts:
+        if script in CONTRACT_TOOLS:
+            if tool_follows_contract(TOOLS_DIR / script):
+                adopted += 1
+                if verbose:
+                    print("  OK      %s (契約適用)" % script)
+            else:
+                print("ERROR %s は契約適用のはずですが、要点行の仕組み"
+                      "(gate_count.Checked / report)を使っていません" % script)
+                violations += 1
+        elif script in PENDING_TOOLS:
+            if verbose:
+                print("  PENDING %s (%s)" % (script, PENDING_TOOLS[script]))
+        else:
+            print("ERROR %s が GATES にありますが、契約にも未適用登記にも"
+                  "ありません(検査件数を名乗らない検問を黙って増やさない)"
+                  % script)
+            violations += 1
+    checked.record("ゲート登録", len(entries))
+    checked.record("実行ファイル", len(scripts))
+    checked.record("契約適用", adopted)
+
+    # 掃除漏れ(GATES から消えたのに登記だけ残っている)。
+    stale = sorted((set(PENDING_TOOLS) | CONTRACT_TOOLS) - set(scripts)
+                   - {"gate_count.py"})
+    for script in stale:
+        print("ERROR %s は GATES にありませんが登記だけ残っています"
+              "(登記を消してください)" % script)
+        violations += 1
+    checked.record("登記の掃除", len(PENDING_TOOLS) + len(CONTRACT_TOOLS))
+
+    # gate.py の登録行そのものの衛生: 同じゲート名の二重登録。
+    dup = sorted({n for n, _ in entries if [x for x, _ in entries].count(n) > 1})
+    for n in dup:
+        print("ERROR gate.py の GATES にゲート名 %r が二重に登録されています"
+              "(--only で二度走り、赤の数も二重に数えられます)" % n)
+        violations += 1
+    checked.record("ゲート名の重複", len(entries))
+    return (violations, checked)
+
+
+# ---------------------------------------------------------------------------
+# 自己テスト(骨抜き防止)
+# ---------------------------------------------------------------------------
+def self_test() -> bool:
+    cases = []
+
+    c = Checked()
+    c.record("あ", 3)
+    c.record("い", 2)
+    cases.append(("合計を数える", c.total() == 5))
+    cases.append(("要点行の書式", c.line() == "検査実施: 5件 (あ=3, い=2)"))
+    cases.append(("要点行は CHECKED_LINE で読める",
+                  CHECKED_LINE.match(c.line()) is not None
+                  and CHECKED_LINE.match(c.line()).group(1) == "5"))
+    cases.append(("回していない検査は名前ごと出ない", "う" not in c.line()))
+    cases.append(("gate.py 推奨パターンは非0件だけに当たる",
+                  re.search(GATE_PATTERN, c.line()) is not None))
+
+    empty = Checked()
+    cases.append(("0件の要点行は推奨パターンに当たらない",
+                  re.search(GATE_PATTERN, empty.line()) is None))
+
+    # 「落ちる」方向。report は標準出力を出すので握りつぶして戻り値だけ見る。
+    import contextlib
+    import io as _io
+
+    def rc(counter, required=()):
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            return report(counter, required)
+
+    cases.append(("検査0件は赤", rc(Checked()) == 1))
+    zero = Checked()
+    zero.record("あ", 0)
+    cases.append(("0件だけを積んでも赤", rc(zero) == 1))
+    cases.append(("必須の検査を回していなければ赤",
+                  rc(c, required=("う",)) == 1))
+    cases.append(("回していれば緑", rc(c, required=("あ", "い")) == 0))
+    cases.append(("必須が0件なら赤", rc(zero, required=("あ",)) == 1))
+
+    # GATES の読み取り(構文木)。
+    src = (
+        "import sys\n"
+        "GATES = [\n"
+        '    ("zza", [sys.executable, "tools/zz_a.py"], r"x"),\n'
+        '    ("zzb", [sys.executable, "tools/zz_b.py", "--mode", "x"], r"y"),\n'
+        "]\n"
+    )
+    got = gate_scripts(src)
+    cases.append(("GATES を構文木から読む",
+                  got == [("zza", "zz_a.py"), ("zzb", "zz_b.py")]))
+    cases.append(("GATES が無ければ空", gate_scripts("X = 1\n") == []))
+
+    bad = [name for name, ok in cases if not ok]
+    for name in bad:
+        print("  自己テスト NG: %s" % name)
+    print("  自己テスト: %d/%d" % (len(cases) - len(bad), len(cases)))
+    return not bad
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description="検問の要点行の契約(検査件数)と、その登記の網羅を見る")
+    ap.add_argument("--selftest", action="store_true", help="自己テストだけ")
+    ap.add_argument("-v", "--verbose", action="store_true")
+    args = ap.parse_args()
+
+    print("gate_count: 要点行の契約(W15 §3 X3-3)")
+    if args.selftest:
+        if not self_test():
+            print("結果: 自己テスト失敗(検出器が壊れています)")
+            return 2
+        print("結果: 自己テストOK")
+        return 0
+
+    violations, checked = audit(args.verbose)
+    if not self_test():
+        print("結果: 自己テスト失敗(検出器が壊れています)")
+        return 2
+    checked.record("自己テスト", 1)
+
+    rc = report(checked, required=("ゲート登録", "契約適用"))
+    if violations:
+        print("結果: NG (契約違反 %d件)" % violations)
+        return 1
+    if rc:
+        return 1
+    print("結果: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -92,6 +92,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_count  # noqa: E402  要点行の契約(W15 §3 X3-3)
+
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 sys.path.insert(0, str(TOOLS_DIR))
@@ -459,22 +462,29 @@ def run_render(soffice: str, work_dir: Path, theme: str, faithful: bool,
     return out_file.read_text(encoding="utf-8", errors="replace")
 
 
-def check_source(html: str) -> list[str]:
+def check_source(html: str, checked: "gate_count.Checked | None" = None) -> list[str]:
     problems = []
+    n = 0
     head = html[:400]
     if '<meta charset="utf-8"' not in head:
         problems.append('<head> の先頭付近に <meta charset="utf-8"> がありません(18章§5.3(3))')
+    n += 1  # charset
     for sec_id, slug, fn in SECTIONS:
+        n += 2
         if f"id:'{sec_id}',slug:'{slug}'" not in html:
             problems.append(f"登録表に {sec_id}(slug={slug})の行がありません(18章§4.2)")
         if f"function {fn}(" not in html:
             problems.append(f"描画関数 {fn} が見つかりません({sec_id})")
     for word in BANNED_JS:
+        n += 1
         if word in html:
             problems.append(f"禁止された書込口 {word} が出現します(18章§4.1)")
+    n += 1
     if "JSON.parse(" not in html:
         problems.append("DATAが JSON.parse 形式で埋まっていません(18章§5.3(1))")
     problems += check_theme_css(html)
+    if checked is not None:
+        checked.record("ソース", n)
     return problems
 
 
@@ -525,7 +535,8 @@ def parse_data_json(html: str) -> dict | None:
         return None
 
 
-def check_reviewed(html: str, reviewed_by: str) -> list[str]:
+def check_reviewed(html: str, reviewed_by: str,
+                   checked: "gate_count.Checked | None" = None) -> list[str]:
     """18章§3.5・裁定書37 B-06 の**確認済みの態**をソース側で確かめる(R2-17)。
 
     `--reviewed` を付けない既定の実行は「AI生成・担当者確認前」の態しか通らず、
@@ -537,6 +548,9 @@ def check_reviewed(html: str, reviewed_by: str) -> list[str]:
     を見る。表紙チップ(確認済/確認前)と SEC-15 はJSが描くので check_dom が見る。
     """
     problems = []
+    if checked is not None:
+        # 見るのは <noscript> の有無・meta の2欄・免責の態 の計4点。
+        checked.record("免責の態", 4)
     noscript = ""
     m = re.search(r"<noscript>(.*?)</noscript>", html, re.S)
     if m is not None:
@@ -588,7 +602,8 @@ def find_node() -> str | None:
 
 
 def check_dom(html_path: Path, verbose: bool, faithful: bool,
-              reviewed_by: str = "") -> list[str]:
+              reviewed_by: str = "",
+              checked: "gate_count.Checked | None" = None) -> list[str]:
     """node があれば最小DOMスタブでページのJSを実際に走らせて確認する。
 
     パスA(素材そのまま): 表示されるべきセクションが全部描かれているか。
@@ -627,6 +642,7 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool,
         print(f"[render_report] パスA のid: {sorted(ids_a)}")
         print(f"[render_report] パスB(round_no=1)のid: {sorted(ids_b)}")
     problems = []
+    n_dom = 0
     for sec_id, slug, _fn in SECTIONS:
         # SEC-18 は素材(mock MK-S3)が talk_script を持つかどうかで出方が変わる。
         # パスAで固定の期待値を置くと、mock 側の改訂でこの検問が意味を失うので、
@@ -634,6 +650,7 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool,
         if sec_id == "SEC-18":
             continue
         hidden_expected = faithful and sec_id == "SEC-16"
+        n_dom += 1
         present = ("sec-" + slug) in ids_a
         if hidden_expected and present:
             problems.append(f"初回ラウンドなのに sec-{slug} が描かれています({sec_id}・18章§3)")
@@ -718,6 +735,10 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool,
         problems.append(
             f"アンカーの本数が{len(got_nav)}本です(上部ナビ{len(want)}本+印刷用目次"
             f"{len(want)}本の計{len(want) * 2}本を期待。18章§3.6)")
+    # 実際に踏んだ点数。node が無ければここまで来ないので0のまま=赤(X3-3)。
+    # 固定の14点(パスB=3・パスC=3・パスD=4・表紙/免責=2・アンカー=2)。
+    if checked is not None:
+        checked.record("描画後DOM", n_dom + 14)
     return problems
 
 
@@ -833,9 +854,11 @@ def _literal_missing(html: str, frag: str) -> bool:
     return ("'" + frag + "'") not in html
 
 
-def check_spec18_literals(html: str) -> list[str]:
+def check_spec18_literals(html: str,
+                          checked: "gate_count.Checked | None" = None) -> list[str]:
     """18章の固定文・見出しが生成HTMLに逐語で入っているか。"""
     problems = []
+    n = 0
     spec = spec18_text()
 
     headings = parse_sec_headings(spec)
@@ -844,6 +867,7 @@ def check_spec18_literals(html: str) -> list[str]:
     for sec_id, slug, title in headings:
         if not title:
             continue
+        n += 1
         row = f"{{id:'{sec_id}',slug:'{slug}',title:'{title}'"
         if row not in html.replace("\n", ""):
             problems.append(
@@ -857,12 +881,14 @@ def check_spec18_literals(html: str) -> list[str]:
         # 4行目は {meta.xxx} を含むテンプレなので、プレースホルダで割った
         # リテラル片をすべて照合する。
         for frag in [f for f in re.split(r"\{[^}]+\}", line) if f.strip()]:
+            n += 1
             if _literal_missing(html, frag):
                 problems.append(
                     f"18章§3.5の免責固定文が逐語で入っていません: [{frag}]"
                     f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
 
     for line in parse_growth_note(spec):
+        n += 1
         if _literal_missing(html, line):
             problems.append(
                 f"18章§3.7 SEC-17 の免責固定文が逐語で入っていません: [{line}]"
@@ -872,6 +898,7 @@ def check_spec18_literals(html: str) -> list[str]:
     if len(talk) != 1:
         problems.append(f"18章§3.9 の固定文が1本読めません({len(talk)}本)")
     for line in talk:
+        n += 1
         if _literal_missing(html, line):
             problems.append(
                 f"18章§3.9 SEC-18 の固定文が逐語で入っていません: [{line}]"
@@ -881,6 +908,7 @@ def check_spec18_literals(html: str) -> list[str]:
     if len(notes08) != 2:
         problems.append(f"18章§3.8 の注記が2本読めません({len(notes08)}本)")
     for line in notes08:
+        n += 1
         if _literal_missing(html, line):
             problems.append(
                 f"18章§3.8 SEC-08 の注記が逐語で入っていません: [{line}]"
@@ -888,14 +916,18 @@ def check_spec18_literals(html: str) -> list[str]:
 
     for label, phrase in parse_fixed_phrases(spec):
         for frag in [f for f in re.split(r"\{[^}]+\}", phrase) if f.strip()]:
+            n += 1
             if _literal_missing(html, frag):
                 problems.append(
                     f"{label}の固定文が逐語で入っていません: [{frag}]"
                     f"(前後に語を足していないか。1本のJSリテラルとして書くこと)")
+    if checked is not None:
+        checked.record("18章逐語", n)
     return problems
 
 
-def check_data_literal(html: str) -> list[str]:
+def check_data_literal(html: str,
+                       checked: "gate_count.Checked | None" = None) -> list[str]:
     """18章§5.3(1) v1.1 の受入条件: DATAの文字列リテラル内に生の `<` が無いこと。
 
     `</` だけを逃がす旧規約では、LLM出力の1フィールドに `<!--<script>`
@@ -905,6 +937,8 @@ def check_data_literal(html: str) -> list[str]:
     `</script>` も `<!--` も `<script` も構造上現れない。
     """
     problems = []
+    if checked is not None:
+        checked.record("DATAリテラル", 1)
     pre = 'var DATA=JSON.parse("'
     a = html.find(pre)
     if a < 0:
@@ -1082,21 +1116,28 @@ def main() -> int:
         out_path.write_text(html, encoding="utf-8-sig", newline="")
         print(f"[render_report] 生成: {out_path} ({len(html)}字)")
 
-        problems = check_source(html)
-        problems += check_data_literal(html)
-        problems += check_spec18_literals(html)
-        problems += check_reviewed(html, args.reviewed)
-        problems += check_dom(out_path, args.verbose, args.faithful, args.reviewed)
+        checked = gate_count.Checked()
+        problems = check_source(html, checked)
+        problems += check_data_literal(html, checked)
+        problems += check_spec18_literals(html, checked)
+        problems += check_reviewed(html, args.reviewed, checked)
+        problems += check_dom(out_path, args.verbose, args.faithful,
+                              args.reviewed, checked)
         if problems:
             print("[render_report] NG:")
             for p in problems:
                 print(f"  - {p}")
             return 1
-        shown = len(SECTIONS) - (1 if args.faithful else 0)
+        # 「検査していないのに緑」を止める要点行(W15 §3 X3-3)。**回した検査
+        # だけ**が名前と件数を持つので、DOM検査を飛ばせば描画後DOM=0で赤になる。
+        if gate_count.report(checked,
+                             required=("ソース", "DATAリテラル", "18章逐語",
+                                       "免責の態", "描画後DOM"),
+                             prefix="[render_report] "):
+            return 1
         state = f"確認済み({args.reviewed})" if args.reviewed else "担当者確認前"
-        print(f"[render_report] OK: <meta charset=\"utf-8\"> と全{len(SECTIONS)}"
-              f"セクションの登録・描画後DOM{shown}本・免責の態={state} を"
-              f"確認しました。")
+        print(f"[render_report] OK: 上の要点行の項目を実測しました"
+              f"(免責の態={state})。")
         return 0
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
