@@ -131,6 +131,94 @@ HOMEのボタン名は**同じ文字列が4か所に別々に書かれている*
 - **fail-closed**: 対象ファイル不在・定数/表/関数のアンカー不在・抽出0件・
   実装側キャプションの重複は、いずれも**NG**にする(照合対象が無いので緑、を作らない)。
 
+### `orphan_check.py` - 孤児Public検査(裁定書38 班D。「作ったのに繋いでいない」を機械で数える)
+
+```bash
+python3 tools/orphan_check.py
+python3 tools/orphan_check.py --verbose   # 動的連結で救済した候補も列挙
+# exit code: 0 = 孤児(SKIP以外)0件 / 1 = 1件以上 / 2 = 自己テスト失敗
+```
+
+伝書鳩20260912 Part1-2「作ったのに繋いでいない」の機械検問。src/**/*.bas の全Public
+(Sub/Function/Property/Const/変数)について、①自モジュール外のコード+全モジュールの
+文字列リテラル(OnAction/OnTime/Runの宛先を救済。定義行と戻り値代入行は使用に数えない)
+②build/ tools/ docs/ のテキスト ③動的連結の救済(`"接頭辞" & 式` 型の接頭辞、
+`HandlerName("接頭辞", ...)` のような組立関数への第1引数)のいずれにも出現しない
+識別子を孤児として報告する。定義直前5行以内の `' @unused:理由` でSKIP。
+
+- **現時点で真の孤児8件が出るのが正**(C_evidence.md A-1と一致。班Bが処理するまでの
+  期待値)。33件の機械検出候補のうち25件は動的連結の偽陽性で、救済して初めて
+  8件に絞れる(モジュール名だけでの静的一致では絶対に届かない領域)。
+- **自己言及の罠**: このツール自身のdocstringに孤児候補の識別子を直書きすると、
+  tools/ を読む参照集合(②)がその識語を「参照されている」と誤認し、二度と検出
+  できなくなる(実測で発見。ソースコード中に既知の孤児名を書かないこと)。
+- **@unused近接の罠**: 宣言同士が近接していると、前の宣言への `@unused` 注記が
+  すぐ後ろの無関係な宣言まで届いてしまう(実測で発見。直前の宣言の本体
+  `End Function` 等のコード行に当たったら遡りを打ち切る実装で対処済み)。
+
+### `config_check.py` - configキーの5点一致検査(裁定書38 班D)
+
+```bash
+python3 tools/config_check.py
+python3 tools/config_check.py --verbose   # 動的接頭辞も列挙
+# exit code: 0 = OK / 1 = NG / 2 = 自己テスト失敗
+```
+
+config キーは (A) build/sheets_main.json の既定値表 (B) `modBoot`/`modBootNavi` の
+`RegisterDefault` (C) `modConfig.Get*`/`HasKey` での実際の読取 (D) 13章§2.3 (E) 19章§4
+の5箇所に分散する。定数名を介した間接読取(`Const X = "key"` → `GetXxx(X,`)と、
+1段ラッパー関数経由の読取(`CapCfg(n, "key", d)` が内部で `GetLong(cfgKey, d)` を
+呼ぶ形)、および動的連結の接頭辞(`"dr_url_" & kind`)を解決してから5点を比較する。
+`tests_expected` はビルドが直接焼く値でRegisterDefault対象外(13章§2.3が明記)、
+`ch_effort`/`ch_verbosity` は実行時のStep名で動的合成される読取のため読取検査だけ
+除外する(いずれも明示の例外としてソース中に理由付きで列挙)。
+
+### `doc_gate.py` - 文書検問(裁定書38 班D。伝書鳩20260912 Part1-3の移植)
+
+```bash
+python3 tools/doc_gate.py
+python3 tools/doc_gate.py --verbose   # 突合したエラーコード集合を列挙
+# exit code: 0 = OK / 1 = NG / 2 = 自己テスト失敗
+```
+
+対象は **docs/24・25・26・README.md のみ**(`docs/spec/`・`spec_*`・`audit_*`・
+裁定書・ファイル名に日付を持つ記録文書・`docs/受領/` は対象外。裁定書や変更概要は
+「旧値が書いてあるのが正しい」ため検査すると書き手が検査を無視するようになる)。
+
+4検査: (1) 「既定N」形式の既定値 vs sheets_main.json(1行に複数キーが並ぶ行は
+総当たりせずSKIP=1行複数キーの罠を避ける) (2) `[ボタン名]`・「◯◯タブ」表記が
+ui/・sheets_main.json・`src/ui/modUI*.bas` の文字列リテラルに存在するか(3) src が
+吐く `E0\d{3}` ⊆ 16章§1の表(一方向。docs/25は全コード網羅の文書ではないため
+逆方向は見ない) (4) 対象外判定そのものの自己確認。
+
+- **部分一致の罠(実測)**: 「action」を含むかで表のヘッダ行を判定すると、
+  末尾が「_action」で終わる正当な値の行ごと消えてしまう(action_check.py 側で
+  発見。本ツールのボタン名検査は逆に「存在するか」だけを見る一方向判定にして
+  ブロックリスト方式を避けている)。
+- **OS純正UIの罠(実測)**: docs/24(実機テスト手順書)はWindows/Excel本体の
+  操作(`[フィルター]`・`[名前を付けて保存]`・`[オプション]`・「全般」タブ等)も
+  同じ `[…]` 表記で書く。このアプリのボタンではないため明示のアロウリストで除外。
+- **履歴段落の罠(実測)**: README.md冒頭の「現況」段落や docs/24 の
+  「vX.Y変更概要」段落は、廃止済みの旧ボタン名をそのまま書くのが正しい
+  (裁定書の「旧値」と同じ理由)。段落単位でこの目印を検出して除外する。
+
+### `action_check.py` - action名の3点照合(裁定書38 班D。ui_checkの2点一致を拡張)
+
+```bash
+python3 tools/action_check.py
+python3 tools/action_check.py --verbose   # 突合したaction名集合を列挙
+# exit code: 0 = OK / 1 = NG / 2 = 自己テスト失敗
+```
+
+`ui_check.py` は「JS ⇔ modNaviHost.IsAllowed」の2点一致までしか見ない。本ツールは
+3点目として **11章 `## 0.0b` の action 一覧**を足す。(1) JS(app.js/views.js/
+index.html) ⇔ `modNaviActions.Dispatch`+`modNaviActions2.DispatchMore` の Case
+文字列は完全一致(片方だけの例外は `VBA_ONLY_ALLOWED` に理由つきで明記。ui_check.py
+と同じ1件 `save_step_edit`)。(2) 11章の表は「主な action」と自ら明記しており
+上級区画の約18本を個別列挙していないため、**11章⊆(JS∩Dispatch) の部分集合検査
+だけ**を行う(逆方向は誤検知の温床なので見ない)。11章に載っているのに実装から
+消えた action があれば、それは設計と実装の乖離としてERRORにする。
+
 ### `t48_check.py` - ブック内テスト実行(T-48)の合否判定4条件の検査(裁定書16 F1)
 
 ```bash
