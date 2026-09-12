@@ -10,12 +10,28 @@ Option Explicit
 '   飛ばさない。同名の Public Function を2つ以上のモジュールに置かない)。
 '
 ' 持つもの:
-'   CheckS5      15章§5.6 の13件(V-S5-01からV-S5-13)。""=合格
-'   TabooPairs   対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)の
-'                「社内語<TAB>顧客語」を vbLf で並べた**唯一の値源**
-'   SoftenTaboo  修復後も V-S5-12 だけが残るときの機械置換(docs/29 §5.3。
-'                生成を止めない。置換件数を呼出側へ返す)
-'   TabooHit     本文に残っている禁止語(";"区切り。0件なら "")
+'   CheckS5        15章§5.6 の13件(V-S5-01からV-S5-13)。""=合格
+'   TabooPairs     対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)の
+'                  「社内語<TAB>顧客語[<TAB>general]」を vbLf で並べた**唯一の値源**
+'   SoftenTaboo    修復後も V-S5-12 だけが残るときの機械置換(docs/29 §5.3。
+'                  生成を止めない。置換件数を呼出側へ返す)
+'   TabooHit       本文に残っている禁止語(";"区切り。0件なら "")
+'   TabooHitStrict 同上のうち**機械置換の担当語だけ**(一般語を除く)
+'   MissingTopKeys JSONの最外オブジェクト直下に無いキー(";"区切り)
+'
+' 機械置換の3規約(裁定書39 R2-02。壊す班 R2 が顧客資料に「未保険のご加入」
+'   「保険のご加入ギャップ」「リスク保険で備える可能性」「本社を保険で備えるする」
+'   を実際に出したことへの是正):
+'   (1) **最長一致**。対訳表を社内語の長さの降順に並べ、本文を左から1回走査して
+'       その位置で最も長く一致する語だけを置き換える(宣言順の Replace をやめる)。
+'   (2) **一般語は置換しない**。「移転」「保有」「抜け」は保険の社内語であると
+'       同時に日常語であり(本社を移転する/現金を保有する)、機械が潰すと日本語が
+'       壊れる。対訳表の**第3列に general の印**を持たせて置換対象から外し、
+'       V-S5-12 の警告(TabooHit)にだけ出す。
+'   (3) **冪等**。置換で生まれた語が別の社内語に当たらなくなるまで通し
+'       (V4_SOFT_PASS_MAX 回まで)、結果をもう一度通しても1件も変わらない。
+'       (「サブリミット -> 補償項目ごとの支払限度額」のように顧客語が別の
+'        社内語を含む対があるため、1回走査では冪等にならない。)
 '
 ' R4準拠(12章§2): Excelトークン・Application.Run・案件データ参照を持たない
 '   純関数モジュール。CP932準拠(15章§0 原則7)。
@@ -23,6 +39,10 @@ Option Explicit
 
 Private Const V4_TAB As String = vbTab
 Private Const V4_SEP As String = ";"
+' 対訳表の第3列の印。この行は**機械置換しない**(一般語。裁定書39 R2-02)。
+Private Const V4_GENERAL As String = "general"
+' 冪等化の走査回数の上限(対訳表の連鎖は最長でも2段。無限ループの歯止め)。
+Private Const V4_SOFT_PASS_MAX As Long = 4
 ' V-S5-02: 見出しの上限。15章§5.6 system は「45文字程度・60文字を超えない」。
 Private Const V4_HEADLINE_MAX As Long = 60
 ' V-S5-02 が見る headline の11キー(15章§5.6 Schema-S5 と同順)。
@@ -186,6 +206,11 @@ End Sub
 '   突き合わせる(値源を2箇所に持たない)。
 '   §4の「言い換えずに削る」3語には、機械置換の最後の砦で使う中立な代替語を
 '   与える(削除すると文が崩れるため。docs/29 §5.3)。
+'   行の書式は「社内語<TAB>顧客語」。**第3列に general** がある行(対訳表§6の
+'   一般語)は V-S5-12 の警告には出すが**機械置換しない**(裁定書39 R2-02)。
+'   第3列は当モジュールの中だけの印であり、対訳表Markdownの番号付き表
+'   (`| n | 社内語 | 顧客語 |`)は3列のまま=15章§5.6 との突き合わせ
+'   (tools/render_proposal.py の check_glossary)を壊さない。
 ' ============================================================================
 Public Function TabooPairs() As String
     Dim s As String
@@ -193,8 +218,8 @@ Public Function TabooPairs() As String
     s = s & "未付保" & V4_TAB & "保険に入っていない状態" & vbLf
     s = s & "付保ギャップ" & V4_TAB & "保険で手当てできていない部分" & vbLf
     s = s & "未充足" & V4_TAB & "保険の手当てが無い" & vbLf
-    s = s & "移転" & V4_TAB & "保険で備える" & vbLf
-    s = s & "保有" & V4_TAB & "自社で負担する" & vbLf
+    s = s & "移転" & V4_TAB & "保険で備える" & V4_TAB & V4_GENERAL & vbLf
+    s = s & "保有" & V4_TAB & "自社で負担する" & V4_TAB & V4_GENERAL & vbLf
     s = s & "トリガー" & V4_TAB & "保険金をお支払いする条件" & vbLf
     s = s & "サブリミット" & V4_TAB & "補償項目ごとの支払限度額" & vbLf
     s = s & "待機期間" & V4_TAB & "補償が始まるまでの期間" & vbLf
@@ -206,7 +231,7 @@ Public Function TabooPairs() As String
     s = s & "相関損失" & V4_TAB & "同時に起きる損害" & vbLf
     s = s & "引受" & V4_TAB & "保険のお引き受け" & vbLf
     s = s & "過少保険" & V4_TAB & "補償額が損害に届かない状態" & vbLf
-    s = s & "抜け" & V4_TAB & "補償されない部分" & vbLf
+    s = s & "抜け" & V4_TAB & "補償されない部分" & V4_TAB & V4_GENERAL & vbLf
     s = s & "免責金額" & V4_TAB & "ご負担いただく金額" & vbLf
     s = s & "支払限度額" & V4_TAB & "お支払いの上限額" & vbLf
     s = s & "リスクユニバース" & V4_TAB & "リスクの全体像" & vbLf
@@ -245,39 +270,35 @@ End Function
 ' TabooHit - 本文に残っている禁止語を ";" 区切りで返す(0件なら "")。
 '   半角英字だけの語(PML/BI/OT 等)は、前後が英字のときに当たらないようにする
 '   (「IoT」「BIG」のような別語の一部を禁止語と数えないため)。
+'   一般語(第3列 general)も**ここには出す**。V-S5-12 は「書き換えていない語が
+'   ある」ことの通知であり、機械が置換するかどうかとは別の判断だからである。
 ' ============================================================================
 Public Function TabooHit(ByVal bodyText As String) As String
-    Dim rows() As String
-    Dim i As Long
-    Dim word As String
-    Dim acc As String
+    TabooHit = HitList(bodyText, True)
+End Function
 
-    If LenB(bodyText) = 0 Then Exit Function
-    rows = Split(TabooPairs(), vbLf)
-    For i = LBound(rows) To UBound(rows)
-        ' Split() の戻り値へ直接添字を付けない(LibreOffice Basic が解さない)。
-        Dim onePair() As String
-        onePair = Split(rows(i), V4_TAB)
-        word = onePair(0)
-        If LenB(word) > 0 Then
-            If WordFound(bodyText, word) Then
-                If LenB(acc) > 0 Then acc = acc & V4_SEP
-                acc = acc & word
-            End If
-        End If
-    Next i
-    TabooHit = acc
+' ============================================================================
+' TabooHitStrict - 上記のうち**機械置換が責任を持つ語だけ**(一般語を除く)。
+'   SoftenTaboo を通した後にこれが空なら、残っているのは一般語だけであり、
+'   呼出側は「警告を残して続行する」判断ができる(裁定書39 R2-02)。
+' ============================================================================
+Public Function TabooHitStrict(ByVal bodyText As String) As String
+    TabooHitStrict = HitList(bodyText, False)
 End Function
 
 ' ============================================================================
 ' SoftenTaboo - 修復後も V-S5-12 だけが残るときの機械置換(docs/29 §5.3)。
-'   置換した語数を changed へ返す。**生成は止めない**が、置換したことは
+'   置換した**箇所数**を changed へ返す。**生成は止めない**が、置換したことは
 '   呼出側が run_log と警告へ残す(黙って直さない)。
+'   規約は本モジュール冒頭の(1)最長一致 (2)一般語は置換しない (3)冪等。
 ' ============================================================================
 Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As String
-    Dim rows() As String
-    Dim i As Long
-    Dim pair() As String
+    Dim srcArr() As String
+    Dim dstArr() As String
+    Dim heads As String
+    Dim cnt As Long
+    Dim pass As Long
+    Dim hits As Long
     Dim t As String
 
     changed = 0
@@ -286,17 +307,44 @@ Public Function SoftenTaboo(ByVal bodyText As String, ByRef changed As Long) As 
         SoftenTaboo = t
         Exit Function
     End If
-    rows = Split(TabooPairs(), vbLf)
-    For i = LBound(rows) To UBound(rows)
-        pair = Split(rows(i), V4_TAB)
-        If UBound(pair) >= 1 Then
-            If WordFound(t, pair(0)) Then
-                t = Replace(t, pair(0), pair(1))
-                changed = changed + 1
+
+    cnt = SoftPairs(srcArr, dstArr, heads)
+    If cnt = 0 Then
+        SoftenTaboo = t
+        Exit Function
+    End If
+
+    For pass = 1 To V4_SOFT_PASS_MAX
+        hits = 0
+        t = SoftenOnce(t, srcArr, dstArr, cnt, heads, hits)
+        changed = changed + hits
+        If hits = 0 Then Exit For
+    Next pass
+    SoftenTaboo = t
+End Function
+
+' ============================================================================
+' MissingTopKeys - jsonText の**最外オブジェクト直下**に無いキーを ";" 区切りで
+'   返す(全部あれば "")。keyList は "|" 区切り。入れ子の同名キーを「あった」と
+'   数えない(themes[].headline を headline と読まない)ため、modJsonLite では
+'   なくここで深さを数えながら走査する。
+' ============================================================================
+Public Function MissingTopKeys(ByVal jsonText As String, ByVal keyList As String) As String
+    Dim keys() As String
+    Dim i As Long
+    Dim acc As String
+
+    If LenB(Trim$(keyList)) = 0 Then Exit Function
+    keys = Split(keyList, "|")
+    For i = LBound(keys) To UBound(keys)
+        If LenB(keys(i)) > 0 Then
+            If Not TopKeyAt(jsonText, keys(i)) Then
+                If LenB(acc) > 0 Then acc = acc & V4_SEP
+                acc = acc & keys(i)
             End If
         End If
     Next i
-    SoftenTaboo = t
+    MissingTopKeys = acc
 End Function
 
 ' ============================================================================
@@ -311,6 +359,163 @@ Private Sub Ap(ByRef outText As String, ByVal lineText As String)
         outText = outText & vbLf & lineText
     End If
 End Sub
+
+' 禁止語の一覧。withGeneral=False なら一般語(第3列 general)を除く。
+Private Function HitList(ByVal bodyText As String, ByVal withGeneral As Boolean) As String
+    Dim rows() As String
+    Dim onePair() As String
+    Dim i As Long
+    Dim word As String
+    Dim acc As String
+
+    If LenB(bodyText) = 0 Then Exit Function
+    rows = Split(TabooPairs(), vbLf)
+    For i = LBound(rows) To UBound(rows)
+        ' Split() の戻り値へ直接添字を付けない(LibreOffice Basic が解さない)。
+        onePair = Split(rows(i), V4_TAB)
+        word = onePair(0)
+        If LenB(word) > 0 Then
+            If withGeneral Or Not IsGeneralRow(onePair) Then
+                If WordFound(bodyText, word) Then
+                    If LenB(acc) > 0 Then acc = acc & V4_SEP
+                    acc = acc & word
+                End If
+            End If
+        End If
+    Next i
+    HitList = acc
+End Function
+
+' 対訳表の1行が一般語(機械置換しない)か。第3列が general のときだけ True。
+Private Function IsGeneralRow(ByRef onePair() As String) As Boolean
+    If UBound(onePair) < 2 Then Exit Function
+    IsGeneralRow = (onePair(2) = V4_GENERAL)
+End Function
+
+' ============================================================================
+' SoftPairs - 機械置換に使う対を**社内語の長さの降順**(最長一致)で返す。
+'   戻り値=件数。heads には社内語の1文字目を重複なく詰める(走査の足切り用)。
+'   一般語の行は入れない(裁定書39 R2-02)。
+' ============================================================================
+Private Function SoftPairs(ByRef srcArr() As String, ByRef dstArr() As String, _
+                           ByRef heads As String) As Long
+    Dim rows() As String
+    Dim onePair() As String
+    Dim i As Long
+    Dim j As Long
+    Dim n As Long
+    Dim keySrc As String
+    Dim keyDst As String
+    Dim headCh As String
+
+    heads = vbNullString
+    rows = Split(TabooPairs(), vbLf)
+    ReDim srcArr(0 To UBound(rows) - LBound(rows))
+    ReDim dstArr(0 To UBound(rows) - LBound(rows))
+    n = 0
+    For i = LBound(rows) To UBound(rows)
+        onePair = Split(rows(i), V4_TAB)
+        If UBound(onePair) >= 1 Then
+            If LenB(onePair(0)) > 0 And Not IsGeneralRow(onePair) Then
+                srcArr(n) = onePair(0)
+                dstArr(n) = onePair(1)
+                n = n + 1
+            End If
+        End If
+    Next i
+
+    ' 長さの降順へ挿入整列(同じ長さなら対訳表の並びを保つ=安定)。
+    For i = 1 To n - 1
+        keySrc = srcArr(i)
+        keyDst = dstArr(i)
+        j = i - 1
+        Do While j >= 0
+            If Len(srcArr(j)) < Len(keySrc) Then
+                srcArr(j + 1) = srcArr(j)
+                dstArr(j + 1) = dstArr(j)
+                j = j - 1
+            Else
+                Exit Do
+            End If
+        Loop
+        srcArr(j + 1) = keySrc
+        dstArr(j + 1) = keyDst
+    Next i
+
+    For i = 0 To n - 1
+        headCh = Left$(srcArr(i), 1)
+        If InStr(1, heads, headCh, vbBinaryCompare) = 0 Then heads = heads & headCh
+    Next i
+    SoftPairs = n
+End Function
+
+' ============================================================================
+' SoftenOnce - 本文を左から1回だけ走査し、その位置で**最も長く一致する**社内語を
+'   顧客語へ置き換える。置換した箇所数を hits へ返す。
+'   ・置換結果は走査済みとして扱う(同じ走査で二重に食わない)。
+'   ・1文字目が heads に無い位置は即座に読み飛ばす(VBAの二重ループ対策)。
+'   ・出力の連結は「一致した所」でだけ行う(1文字ずつ連結すると長文で遅い)。
+' ============================================================================
+Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, _
+                            ByRef dstArr() As String, ByVal cnt As Long, _
+                            ByVal heads As String, ByRef hits As Long) As String
+    Dim outText As String
+    Dim n As Long
+    Dim i As Long
+    Dim k As Long
+    Dim segStart As Long
+    Dim matched As Long
+    Dim wLen As Long
+    Dim ch As String
+
+    hits = 0
+    n = Len(bodyText)
+    i = 1
+    segStart = 1
+    Do While i <= n
+        matched = 0
+        ch = Mid$(bodyText, i, 1)
+        If InStr(1, heads, ch, vbBinaryCompare) > 0 Then
+            For k = 0 To cnt - 1
+                wLen = Len(srcArr(k))
+                If wLen <= n - i + 1 Then
+                    If Mid$(bodyText, i, wLen) = srcArr(k) Then
+                        If BoundaryOk(bodyText, i, srcArr(k)) Then
+                            matched = k + 1
+                            Exit For
+                        End If
+                    End If
+                End If
+            Next k
+        End If
+        If matched > 0 Then
+            If i > segStart Then
+                outText = outText & Mid$(bodyText, segStart, i - segStart)
+            End If
+            outText = outText & dstArr(matched - 1)
+            i = i + Len(srcArr(matched - 1))
+            segStart = i
+            hits = hits + 1
+        Else
+            i = i + 1
+        End If
+    Loop
+    If segStart <= n Then outText = outText & Mid$(bodyText, segStart, n - segStart + 1)
+    SoftenOnce = outText
+End Function
+
+' 置換してよい位置か。ASCII だけの語は前後が半角英字でないときだけ当てる
+'   (「IoT」の中の OT を置換しない。全角を含む語は常に True)。
+Private Function BoundaryOk(ByVal hay As String, ByVal pos As Long, _
+                            ByVal word As String) As Boolean
+    If Not IsAsciiWord(word) Then
+        BoundaryOk = True
+        Exit Function
+    End If
+    If IsAlphaAt(hay, pos - 1) Then Exit Function
+    If IsAlphaAt(hay, pos + Len(word)) Then Exit Function
+    BoundaryOk = True
+End Function
 
 ' 禁止語の出現判定。ASCII だけの語は前後が英字でないときだけ当てる。
 Private Function WordFound(ByVal hay As String, ByVal word As String) As Boolean
@@ -365,6 +570,68 @@ Private Function IsPositiveInt(ByVal t As String) As Boolean
         If c < 48 Or c > 57 Then Exit Function
     Next i
     IsPositiveInt = True
+End Function
+
+' JSONの最外オブジェクト直下(深さ1)に当該キーがあるか(MissingTopKeys の実体)。
+'   入れ子の同名キーを「あった」と数えないため、深さを数えながら走る。
+Private Function TopKeyAt(ByVal jsonText As String, ByVal keyName As String) As Boolean
+    Dim n As Long
+    Dim i As Long
+    Dim depth As Long
+    Dim ch As String
+    Dim endPos As Long
+    Dim rawKey As String
+
+    n = Len(jsonText)
+    i = 1
+    Do While i <= n
+        ch = Mid$(jsonText, i, 1)
+        If ch = """" Then
+            endPos = StrEnd(jsonText, i)
+            If endPos = 0 Then Exit Function
+            rawKey = Mid$(jsonText, i + 1, endPos - i - 1)
+            i = endPos + 1
+            Do While i <= n
+                If InStr(" " & vbTab & vbCr & vbLf, Mid$(jsonText, i, 1)) = 0 Then Exit Do
+                i = i + 1
+            Loop
+            If i <= n Then
+                If Mid$(jsonText, i, 1) = ":" And depth = 1 And rawKey = keyName Then
+                    TopKeyAt = True
+                    Exit Function
+                End If
+            End If
+        ElseIf ch = "{" Or ch = "[" Then
+            depth = depth + 1
+            i = i + 1
+        ElseIf ch = "}" Or ch = "]" Then
+            depth = depth - 1
+            i = i + 1
+        Else
+            i = i + 1
+        End If
+    Loop
+End Function
+
+' startPos の " で始まる文字列リテラルを閉じる " の位置(閉じなければ 0)。
+Private Function StrEnd(ByVal jsonText As String, ByVal startPos As Long) As Long
+    Dim n As Long
+    Dim i As Long
+    Dim ch As String
+
+    n = Len(jsonText)
+    i = startPos + 1
+    Do While i <= n
+        ch = Mid$(jsonText, i, 1)
+        If ch = "\" Then
+            i = i + 2
+        ElseIf ch = """" Then
+            StrEnd = i
+            Exit Function
+        Else
+            i = i + 1
+        End If
+    Loop
 End Function
 
 ' S2の risks[].risk_no を ";1;2;3;" の形で返す(V-S5-03 の照合表)。

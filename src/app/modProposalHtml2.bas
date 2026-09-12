@@ -117,6 +117,14 @@ Public Function FormatCss() As String
     s = s & "body.notes aside.note{display:block;}" & vbLf
     s = s & "aside.note b{color:var(--brand-deep);}" & vbLf
 
+    ' 描画エラーの可視化(20章§11。裁定書39 R2-12)。描画関数が例外を投げた枚は
+    ' 本文が20章§4.1 の1行に置き換わるが、それだけでは「わざと保留した項目」と
+    ' 見分けが付かない。**?debug=1 を付けたときだけ**赤枠を出す(お客さまが
+    ' 普通に開いた画面は1ピクセルも変わらない)。20章§5.1 により :root の外に
+    ' 生の色指定を書けないため rgba() で書く。
+    s = s & "body.debug section.slide[data-render-error=""1""]{" & vbLf
+    s = s & "outline:5px solid rgba(198,0,0,0.9);outline-offset:-5px;}" & vbLf
+
     ' 印刷(20章§6): 1枚=1ページ。用紙はA4横。
     s = s & "@page{size:A4 landscape;margin:0;}" & vbLf
     s = s & "@media print{" & vbLf

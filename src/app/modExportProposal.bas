@@ -48,6 +48,12 @@ Private Const EP_CAT_LABELS As String = "戦略・市場;調達・供給;製造�
     "施設・自然災害・事業継続;人材・労務;デジタル・情報;法務・規制;財務・取引先;" & _
     "ブランド・社会"
 Private Const EP_SEMI As String = ";"
+' 15章§5.6 Schema-S5 の最外 required(16キー)。`s5_edited` を人が直した場合は
+'   スキーマ検査を通らないため、**出力の直前にここで必ず数える**
+'   (裁定書39 R2-12。欠けたまま描くと22枚が黙って保留文に化ける)。
+Private Const EP_S5_REQUIRED As String = "title|subtitle|themes|premise|structure|" & _
+    "business|categories_note|headline|hard_risks|ideas|four|theme_table|steps|" & _
+    "decisions|share_items|notes"
 
 ' ==========================================================
 ' GenerateProposalHtml - 14章§6の契約。""=成功 / 非空=失敗理由。
@@ -90,6 +96,18 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
         Exit Function
     End If
 
+    ' 必須キーの検査(裁定書39 R2-12)。欠けたまま描くと描画関数が例外を投げ、
+    ' その枚が20章§4.1 の1行に化けて「わざと保留した項目」に見える。
+    ' **黙って化けさせない**: ここで止めて E0502 を立てる。
+    Dim missKeys As String
+    missKeys = MissingProposalKeys(s5Text)
+    If LenB(missKeys) > 0 Then
+        modLog.LogError EP_CODE_FAIL, EP_SRC & ".GenerateProposalHtml", "s5_missing:" & missKeys
+        GenerateProposalHtml = "提案書の内容がそろっていません(" & missKeys & _
+            ")。お客さま向け提案書の作成をやり直してください。"
+        Exit Function
+    End If
+
     ' 匿名化の復元(16章 E-31)。**エスケープより前**に行う。
     s2Text = Replace(s2Text, EP_PH_COMPANY, ctx.company)
     s5Text = Replace(s5Text, EP_PH_COMPANY, ctx.company)
@@ -103,7 +121,8 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
                    modConfig.GetStr("app_version", EP_VER_DEFAULT), reviewer, modUtil.NowStamp())
 
     Dim docText As String
-    docText = BuildProposalHtml(metaJson, s2Text, s5Text)
+    Dim softened As Long
+    docText = BuildProposalHtmlEx(metaJson, s2Text, s5Text, softened)
     If LenB(docText) = 0 Then
         modLog.LogError EP_CODE_FAIL, EP_SRC & ".GenerateProposalHtml", "build_failed"
         GenerateProposalHtml = "提案書の組み立てに失敗しました。"
@@ -132,6 +151,9 @@ Public Function GenerateProposalHtml(ByVal caseId As String, ByRef outPath As St
     End If
 
     modLog.LogUsage "proposal_html", caseId, "chars=" & CStr(Len(docText))
+    ' 対訳表の機械置換を**必ず1行残す**(裁定書39 R2-11。docs/29 §5.3
+    ' 「黙って直さない」。0件のときも記録して「1件も直していない」を示す)。
+    modLog.LogUsage "proposal_taboo_softened", caseId, "n=" & CStr(softened)
     outPath = pathText
     Exit Function
 
@@ -145,9 +167,37 @@ End Function
 '   **唯一の判断点**(純関数)。確認者名が空なら案内文、非空なら ""。
 '   画面(区画④)でも先に弾くが、判断の正はここであり、画面を書き換えても
 '   抜けられないようにするための1関数である。層(a)から直接叩ける。
+'   空判定は Trim$ ではなく HasVisibleName(裁定書39 R2-04)。Windows の
+'   Trim$ は Chr(32) しか落とさないため、TAB / LF / CR / 全角空白だけの
+'   文字列が「確認済み」として通っていた。
 ' ==========================================================
 Public Function NeedsReviewMessage(ByVal reviewedBy As String) As String
-    If LenB(Trim$(reviewedBy)) = 0 Then NeedsReviewMessage = EP_NEED_REVIEW
+    If Not HasVisibleName(reviewedBy) Then NeedsReviewMessage = EP_NEED_REVIEW
+End Function
+
+' 空白類(半角空白・TAB・LF・CR・全角空白)を除いて1文字以上あるか。
+'   **班Q が modUtilText.HasVisibleText を新設したら、そちらへ寄せること**
+'   (裁定書39 R2-04。レポートと提案書で同じ1本を使う)。
+Private Function HasVisibleName(ByVal t As String) As Boolean
+    Dim i As Long
+    Dim c As Long
+
+    For i = 1 To Len(t)
+        c = AscW(Mid$(t, i, 1))
+        If c <> 32 And c <> 9 And c <> 10 And c <> 13 And c <> 12288 Then
+            HasVisibleName = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' ==========================================================
+' MissingProposalKeys - S5 の最外 required(EP_S5_REQUIRED)のうち無いキーを
+'   ";" 区切りで返す(全部あれば "")。純関数なので層(a)から直接叩ける。
+' ==========================================================
+Public Function MissingProposalKeys(ByVal s5Json As String) As String
+    MissingProposalKeys = modValidate4.MissingTopKeys( _
+        modJsonLite.ExtractJsonBlock(s5Json), EP_S5_REQUIRED)
 End Function
 
 ' ==========================================================
@@ -168,11 +218,23 @@ End Function
 ' ==========================================================
 Public Function BuildProposalHtml(ByVal metaJson As String, ByVal s2Json As String, _
                                   ByVal s5Json As String) As String
+    Dim softened As Long
+    BuildProposalHtml = BuildProposalHtmlEx(metaJson, s2Json, s5Json, softened)
+End Function
+
+' ==========================================================
+' BuildProposalHtmlEx - 上と同じだが、対訳表の機械置換の**箇所数**を
+'   softened へ返す(裁定書39 R2-11。呼出側が usage_log へ1行残すため)。
+' ==========================================================
+Public Function BuildProposalHtmlEx(ByVal metaJson As String, ByVal s2Json As String, _
+                                    ByVal s5Json As String, _
+                                    ByRef softened As Long) As String
     On Error GoTo Failed
+    softened = 0
     If LenB(Trim$(metaJson)) = 0 Then Exit Function
 
     Dim dataJson As String
-    dataJson = BuildProposalData(metaJson, s2Json, s5Json)
+    dataJson = BuildProposalDataEx(metaJson, s2Json, s5Json, softened)
     If LenB(dataJson) = 0 Then Exit Function
 
     Dim coverFields As String
@@ -182,10 +244,10 @@ Public Function BuildProposalHtml(ByVal metaJson As String, ByVal s2Json As Stri
     coverFields = coverFields & modJsonLite.GetStr(metaJson, "date") & EP_SEP
     coverFields = coverFields & modJsonLite.GetStr(metaJson, "reviewed_by")
 
-    BuildProposalHtml = modProposalHtml1.BuildProposalDocument(dataJson, coverFields)
+    BuildProposalHtmlEx = modProposalHtml1.BuildProposalDocument(dataJson, coverFields)
     Exit Function
 Failed:
-    BuildProposalHtml = vbNullString
+    BuildProposalHtmlEx = vbNullString
 End Function
 
 ' ==========================================================
@@ -217,7 +279,20 @@ End Function
 ' ==========================================================
 Public Function BuildProposalData(ByVal metaJson As String, ByVal s2Json As String, _
                                   ByVal s5Json As String) As String
+    Dim softened As Long
+    BuildProposalData = BuildProposalDataEx(metaJson, s2Json, s5Json, softened)
+End Function
+
+' ==========================================================
+' BuildProposalDataEx - 上と同じだが、S2 由来の自由文に掛けた対訳表の機械置換の
+'   **箇所数**を softened へ返す(裁定書39 R2-11)。置換したのに誰も数えて
+'   いなかったため、顧客文面が黙って書き換わっていた。
+' ==========================================================
+Public Function BuildProposalDataEx(ByVal metaJson As String, ByVal s2Json As String, _
+                                    ByVal s5Json As String, _
+                                    ByRef softened As Long) As String
     Dim p As String
+    softened = 0
     p = modJsonLite.ExtractJsonBlock(s5Json)
     If LenB(Trim$(p)) = 0 Then Exit Function
 
@@ -229,9 +304,9 @@ Public Function BuildProposalData(ByVal metaJson As String, ByVal s2Json As Stri
     s = "{""meta"":" & metaJson
     s = s & ",""stats"":" & StatsJson(items, n, p)
     s = s & ",""categories"":[" & CategoriesBody(items, n) & "]"
-    s = s & ",""risks"":[" & RisksBody(items, n) & "]"
+    s = s & ",""risks"":[" & RisksBody(items, n, softened) & "]"
     s = s & ",""p"":" & p & "}"
-    BuildProposalData = s
+    BuildProposalDataEx = s
 End Function
 
 ' ==========================================================
@@ -387,12 +462,13 @@ End Function
 
 ' 顧客向けに**選んだ列だけ**を書き出す(20章§3の表)。S2 由来の自由文は
 '   modValidate4.SoftenTaboo を通してから入れる(社内語をお客さまに見せない)。
-Private Function RisksBody(ByRef items() As String, ByVal n As Long) As String
+Private Function RisksBody(ByRef items() As String, ByVal n As Long, _
+                           ByRef changed As Long) As String
     Dim acc As String
     Dim i As Long
     Dim rj As String
-    Dim changed As Long
 
+    changed = 0
     For i = 0 To n - 1
         rj = items(i)
         If LenB(acc) > 0 Then acc = acc & ","
@@ -412,8 +488,13 @@ Private Function RisksBody(ByRef items() As String, ByVal n As Long) As String
 End Function
 
 ' 対訳表による機械置換(顧客向けの最後の砦。裁定書38 班C 2)。
-Private Function Soft(ByVal t As String, ByRef changed As Long) As String
-    Soft = modValidate4.SoftenTaboo(t, changed)
+'   SoftenTaboo は呼ぶたび第2引数を 0 に戻すので、**ここで足し込む**
+'   (裁定書39 R2-11。以前は最後の1回ぶんしか残らず、しかも誰も読まなかった)。
+Private Function Soft(ByVal t As String, ByRef total As Long) As String
+    Dim n As Long
+
+    Soft = modValidate4.SoftenTaboo(t, n)
+    total = total + n
 End Function
 
 Private Function CatLabelOf(ByVal keyText As String) As String

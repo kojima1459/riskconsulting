@@ -267,15 +267,24 @@ Private Function DriverJs() As String
     s = s & "var sec=E('section','slide');AT(sec,'id','sl-'+d.slug);" & vbLf
     s = s & "AT(sec,'data-master',d.master);AT(sec,'data-no',String(d.no));" & vbLf
     s = s & "var body=shell(d,sec);" & vbLf
-    s = s & "try{d.render(D,body,d);}catch(err){TODO(body);}" & vbLf
+    ' 描画に失敗した枚は、20章§4.1 の1行に置き換えたうえで**印を残す**
+    ' (裁定書39 R2-12。壊れたページが「わざと保留した項目」に見えないように
+    '  section へ data-render-error を付け、?debug=1 のときだけ赤枠にする。
+    '  お客さまが普通に開いた画面には何も足さない)。
+    s = s & "try{d.render(D,body,d);}catch(err){AT(sec,'data-render-error','1');" & vbLf
+    s = s & "TODO(body);}" & vbLf
     ' 本文マスターだけは空のとき1行を置く(表紙・扉・裏表紙は本文を持たない)。
     s = s & "if(body.childNodes.length===0&&d.master==='content'){TODO(body);}" & vbLf
     s = s & "if(d.master!=='cover'&&d.master!=='back'){" & vbLf
     s = s & "T(sec,'div','footer-rule');" & vbLf
     s = s & "T(sec,'div','page-number',String(d.no)+' / '+String(SLIDES.length));}" & vbLf
     s = s & "fr.appendChild(sec);deck.appendChild(fr);notes(deck,D,d.no);}" & vbLf
-    s = s & "if(String(location.search||'').indexOf('notes=1')>=0){" & vbLf
-    s = s & "document.body.className='notes';}" & vbLf
+    ' 画面の切替は2つだけ。?notes=1=発表者ノート / ?debug=1=描画エラーの赤枠
+    ' (社内での確認用。20章§11)。どちらも付けなければ何も起きない。
+    s = s & "var q=String(location.search||'');var cls='';" & vbLf
+    s = s & "if(q.indexOf('notes=1')>=0){cls='notes';}" & vbLf
+    s = s & "if(q.indexOf('debug=1')>=0){cls=cls?(cls+' debug'):'debug';}" & vbLf
+    s = s & "if(cls){document.body.className=cls;}" & vbLf
     s = s & "fit();" & vbLf
     s = s & "if(window.addEventListener){window.addEventListener('resize',fit,false);}}" & vbLf
     s = s & "run();" & vbLf
