@@ -396,3 +396,19 @@ LibreOffice へ純文字列モジュール一式(`modHtmlTheme` / `modHtmlTempla
      proposed のため後段のガードが先に効いて空振りする)。
 - `dist/` は `.gitignore` 済み(16章NFR-S2)。サンプルはコミットせず、必要なときに
   このコマンドで再生成する。
+
+### `bench_s1.py` - S1抽出品質ベンチの採点器(裁定書37・班F・**gate外・任意実行**)
+
+```bash
+python3 tools/bench_s1.py --mode selfcheck             # 採点器自身の回帰(AI不要)
+python3 tools/bench_s1.py --gold-check                 # goldの嘘を検算(AI不要)
+python3 tools/bench_s1.py --mode replay --in bench/out/live   # 実際のS1出力を採点
+```
+
+PO最大懸念(社内Deep Researchの再現性・ハルシネーション)を数値で測る装置。
+`bench/gold/<company>.json`(人が `bench/fixtures/` を読んで作る正解表)とS1出力
+JSONを突き合わせ、**一致率・回収率・捏造率・揺れ**の4指標(+出典URLがあれば
+出典実在率)を出す。表記揺れの正規化規則は `src/app/modGround.bas` の
+`NormalizeForMatch` の逐語移植(値源は1本)。定義・使い方・gold の作り方・
+会社PCでのlive運用手順は `bench/README.md` が正。**`tools/gate.py` の21ゲート
+には含まれない**(LLM実行を伴う指標をCIの合否にしないため。月次で見る)。
