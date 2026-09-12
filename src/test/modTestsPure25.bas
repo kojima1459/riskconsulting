@@ -19,7 +19,7 @@ Option Explicit
 '     07 financials.source<>unknown で4項目すべて「不明」なら警告
 '     08 source=unknown なら4項目すべて「不明」でも警告にならない
 '   G3 警告の畳み込み(modValidate3.WarnNoteOf)
-'     09 件数を "V-S1-14:2;V-S1-15:1" の形へ  10 指摘なしなら空文字
+'     09 件数を "V-S1-14:2,V-S1-15:1" の形へ  10 指摘なしなら空文字
 '   G4 S1再実行の揺れ(modPipeline3.S1DiffCount。B-14)
 '     11 同一=0  12 1項目違い=1  13 主要8項目すべて違う=8  14 片方が空=0
 '   G5 スキーマ・mock・描画の結線(B-04 / B-11)
@@ -170,7 +170,7 @@ Private Sub T_WarnNote()
                 "[V-S1-14] sources[1].url が貼付原文に見当たりません: b" & vbLf & _
                 "[V-S1-15] 接頭辞・出所の不整合があります: c"
     ChkS "Test_W15_09_警告をケースIDごとの件数へ畳む_裁定書38班A", _
-        modValidate3.WarnNoteOf(notesText), "V-S1-14:2;V-S1-15:1"
+        modValidate3.WarnNoteOf(notesText), "V-S1-14:2,V-S1-15:1"
 
     ChkS "Test_W15_10_指摘が無ければ注記を出さない_裁定書38班A", _
         modValidate3.WarnNoteOf(""), ""

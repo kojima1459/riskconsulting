@@ -27,8 +27,8 @@ Option Explicit
 ' CP932準拠(15章§0 原則7): 本文・注釈ともに CP932 内の文字だけで書く。
 ' ============================================================================
 
-' 注記の区切り(modPipeline.AddNote / modGround と同じ ";" 規約)。
-Private Const V3_SEP As String = ";"
+' 注記の区切りは "," (run_log detail の項目区切り ";" と衝突させない。司令塔検収 W15)。
+Private Const V3_SEP As String = ","
 
 ' 検査するケースIDの並び(WarnNoteOf の出力順。追番のみ・番号は再利用しない)。
 Private Const V3_CASE_IDS As String = "V-S1-14|V-S1-15"
