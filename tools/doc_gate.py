@@ -29,6 +29,12 @@
         伝書鳩1-3が挙げた「正しい長い名前を禁止語の部分一致で赤くする」を
         避けるため、判定は「存在するか」だけで、逆方向〔存在しない語を
         禁止するブロックリスト〕は持たない)
+        **ナビ画面(HTML画面=正)の区画ボタンの文脈では `src/ui/modUI*.bas`
+        (旧シート画面)を照合対象から外す**(W15 Round2 R2-10)。旧シート画面
+        には同じ位置に別名のボタン(例: 出力の区画)が今も実装として残って
+        いるため、手順書がHTML画面の区画を説明しながら旧シート画面の名前を
+        書いていても緑になっていた。**シート画面専用の手順**(docs/24 §5・§8、
+        docs/25 第1部〔予備: `ui_mode=sheet`〕)は従来どおり modUI* を見る。
     (3) src が吐くエラーコード `E0\\d{3}` ⊆ 16章§1の表 ⊆ docs/25 が
         本文中に書くエラーコード(一方向の部分集合。docs/25は全コードを
         網羅する文書ではないため、逆方向〔16章にあってdocs/25に無い〕は
@@ -161,14 +167,36 @@ HISTORICAL_PARAGRAPH_MARKER = "当時の記録"
 CHANGELOG_PARAGRAPH_RE = re.compile(r"^v[\d.]+\s*(?:変更概要|系)")
 
 
-def extract_ui_names(texts: dict) -> str:
-    """突合対象の全テキストを1本に連結する。"""
+def extract_ui_names(texts: dict, include_sheet_ui: bool = True) -> str:
+    """突合対象の全テキストを1本に連結する。
+
+    include_sheet_ui=False のときは `src/ui/modUI*.bas`(旧シート画面の描画)を
+    外す。ナビ画面(HTML画面=正)の区画ボタンの文脈で使う(R2-10)。
+    build/sheets_main.json は**外さない**: シート本体(欄名・使い方タブ)の
+    キャプション源であり、どちらの画面の手順でも参照されるため。
+    """
     chunks = list(texts.values())
     d = json.loads(SHEETS_JSON.read_text(encoding="utf-8"))
     chunks.append(json.dumps(d, ensure_ascii=False))
-    for path in sorted((REPO_ROOT / "src" / "ui").glob("modUI*.bas")):
-        chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+    if include_sheet_ui:
+        for path in sorted((REPO_ROOT / "src" / "ui").glob("modUI*.bas")):
+            chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
     return "\n".join(chunks)
+
+
+# ナビ画面(HTML画面=正)の説明をしている文書・区間。ここだけ modUI* を外す。
+# 値は「この行以降は対象外」を表す正規表現(None なら文書の最後まで対象)。
+#   docs/25 は第0部(HTML画面)だけが対象。第1部は `ui_mode=sheet` の予備画面の
+#   手順なので、旧シート画面のボタン名が書いてあるのが**正しい**。
+#   docs/24 は §5・§8 が旧シート画面の手順のままなので対象にしない
+#   (本波の担当は docs/25・26。docs/24 の整理は司令塔の裁定待ち)。
+NAVI_DOC_REGIONS = {
+    "docs/25_利用ガイド.md": re.compile(r"^# 第1部"),
+    "docs/26_はじめてガイド_調査からレポートまで.md": None,
+}
+
+KUKAKU_WORD = "区画"
+TABLE_SEPARATOR_ROW = re.compile(r"^\s*\|[\s\-:|]+\|\s*$")
 
 
 def _strip_historical_paragraphs(text: str) -> str:
@@ -189,17 +217,43 @@ def _strip_historical_paragraphs(text: str) -> str:
     return "\n\n".join(out)
 
 
-def check_bracket_names(text: str, haystack: str) -> list[str]:
+def check_bracket_names(text: str, haystack: str, navi_haystack: str | None = None,
+                        navi_end: "re.Pattern | None" = None) -> list[tuple[str, bool]]:
+    """戻り値: (見つからなかった名前, ナビ画面の区画の文脈か) のリスト。
+
+    navi_haystack を渡すと、**ナビ画面の区画の文脈**の行だけはそちら
+    (modUI* を外した集合)で照合する(R2-10)。文脈の判定は2形:
+      (a) その行に「区画」が出てくる
+      (b) 見出し行に「区画」を持つ表の中の行(docs/25 の区画一覧表)
+    navi_end にマッチする行が来たら、そこから先は通常の照合へ戻す
+    (docs/25 の第1部=シート画面の予備手順)。
+    """
     text = _strip_historical_paragraphs(text)
     missing = []
-    for m in BRACKET_NAME.finditer(text):
-        name = m.group(1).strip("*").strip()
-        if not name or name.isdigit():
-            continue
-        if name in NATIVE_OS_UI_ALLOWLIST:
-            continue
-        if name not in haystack:
-            missing.append(name)
+    in_navi = navi_haystack is not None
+    in_table = False
+    table_is_navi = False
+    for line in text.split("\n"):
+        if in_navi and navi_end is not None and navi_end.match(line):
+            in_navi = False
+        is_row = line.lstrip().startswith("|")
+        if is_row:
+            if not in_table:            # 表の1行目 = 見出し行だけが表全体の文脈を決める
+                table_is_navi = KUKAKU_WORD in line
+                in_table = True
+        else:
+            in_table = False
+            table_is_navi = False
+        navi_ctx = in_navi and (KUKAKU_WORD in line or (is_row and table_is_navi))
+        hay = navi_haystack if navi_ctx else haystack
+        for m in BRACKET_NAME.finditer(line):
+            name = m.group(1).strip("*").strip()
+            if not name or name.isdigit():
+                continue
+            if name in NATIVE_OS_UI_ALLOWLIST:
+                continue
+            if name not in hay:
+                missing.append((name, navi_ctx))
     return missing
 
 
@@ -283,19 +337,30 @@ def run_checks(verbose: bool) -> int:
             n1 += 1
     print("  (1) 既定値の食い違い             %d件" % n1)
 
-    haystack = extract_ui_names(docs_texts if False else {
+    ui_texts = {
         "index.html": (UI_DIR / "index.html").read_text(encoding="utf-8")
         if (UI_DIR / "index.html").exists() else "",
         "views.js": (UI_DIR / "views.js").read_text(encoding="utf-8")
         if (UI_DIR / "views.js").exists() else "",
         "app.js": (UI_DIR / "app.js").read_text(encoding="utf-8")
         if (UI_DIR / "app.js").exists() else "",
-    })
+    }
+    haystack = extract_ui_names(ui_texts)
+    navi_haystack = extract_ui_names(ui_texts, include_sheet_ui=False)
     n2 = 0
     for rel, text in docs_texts.items():
-        for name in check_bracket_names(text, haystack):
-            err('(2) %s: `[%s]` が画面(ui/・sheets_main.json・modUI*.bas)の'
-                "どこにも見つかりません" % (rel, name))
+        is_navi_doc = rel in NAVI_DOC_REGIONS
+        for name, navi_ctx in check_bracket_names(
+                text, haystack,
+                navi_haystack if is_navi_doc else None,
+                NAVI_DOC_REGIONS.get(rel)):
+            if navi_ctx:
+                err('(2) %s: 区画の説明にある `[%s]` が **ui/** に見つかりません'
+                    "(旧シート画面 modUI*.bas の名前のままの疑い。HTML画面の"
+                    "実物の逐語へ直してください)" % (rel, name))
+            else:
+                err('(2) %s: `[%s]` が画面(ui/・sheets_main.json・modUI*.bas)の'
+                    "どこにも見つかりません" % (rel, name))
             n2 += 1
         for name in check_tab_names(text, haystack):
             err('(2) %s: 「%s」タブ が画面のどこにも見つかりません' % (rel, name))
@@ -363,7 +428,7 @@ def self_test() -> bool:
                   check_bracket_names("[診断を開く]", "ボタン[診断を開く]です") == []))
     cases.append(("ボタン名 負例(存在しなければ赤)",
                   check_bracket_names("[存在しないボタン]", "他のテキスト") ==
-                  ["存在しないボタン"]))
+                  [("存在しないボタン", False)]))
     cases.append(("マークダウンリンクは対象外",
                   check_bracket_names("[16章](docs/spec/16.md)", "") == []))
     cases.append(("タブ名 正例", check_tab_names("「使い方」タブ", "使い方タブがある")
@@ -382,12 +447,48 @@ def self_test() -> bool:
     cases.append(("履歴段落でない箇所は通常どおり検査する",
                   check_bracket_names(
                       "現況（当時の記録＝履歴）\n\n[① 案件を作る]を押す。",
-                      "") == ["① 案件を作る"]))
+                      "") == [("① 案件を作る", False)]))
     cases.append(("vX.Y変更概要 段落は検査しない",
                   check_bracket_names(
                       "v4.0変更概要: 旧ボタン名（[① 調べる指示文を出す]〜）"
                       "を全面削除した。",
                       "") == []))
+
+    # W15 Round2 R2-10: 区画の文脈では旧シート画面の名前で緑にしない。
+    full = "旧シート画面の[レポートを出す]\nHTML画面の[レポート出力]"
+    navi = "HTML画面の[レポート出力]"
+    cases.append(("区画の文脈は modUI* の名前で緑にしない",
+                  check_bracket_names("区画4の [レポートを出す] を押す。", full, navi)
+                  == [("レポートを出す", True)]))
+    cases.append(("区画の文脈でも ui/ にあれば緑",
+                  check_bracket_names("区画4の [レポート出力] を押す。", full, navi)
+                  == []))
+    cases.append(("区画の文脈でない行は従来どおり(シート画面専用の手順)",
+                  check_bracket_names("`S4_骨子` の [レポートを出す] を押す。",
+                                      full, navi) == []))
+    cases.append(("見出しに区画を持つ表の行は区画の文脈",
+                  check_bracket_names(
+                      "| 区画 | 見出し | 中身 |\n|---|---|---|\n"
+                      "| 4 | 出力 | [レポートを出す] |", full, navi)
+                  == [("レポートを出す", True)]))
+    cases.append(("区画を持たない表の行は区画の文脈ではない",
+                  check_bracket_names(
+                      "| 名前 | 中身 |\n|---|---|\n| 出力 | [レポートを出す] |",
+                      full, navi) == []))
+    # 表の文脈を決めるのは**見出し行だけ**(途中の行の「区画」で表全体を
+    # 巻き込まない=誤検知を作らない)。
+    cases.append(("表の途中行の区画は次の行まで広げない",
+                  check_bracket_names(
+                      "| 名前 | 中身 |\n|---|---|\n| 区画4 | [レポート出力] |\n"
+                      "| 下書き | [レポートを出す] |", full, navi) == []))
+    cases.append(("navi_end 以降は従来どおり(docs/25 第1部)",
+                  check_bracket_names(
+                      "区画4の [レポート出力]\n\n# 第1部（予備: `ui_mode=sheet`）\n\n"
+                      "区画4の [レポートを出す] を押す。",
+                      full, navi, re.compile(r"^# 第1部")) == []))
+    cases.append(("navi_haystack を渡さなければ従来の挙動",
+                  check_bracket_names("区画4の [レポートを出す] を押す。", full)
+                  == []))
 
     # 対象外判定
     cases.append(("spec除外", is_excluded("docs/spec/13_データ設計.md")))

@@ -43,6 +43,7 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
     python3 tools/render_report.py                 # dist/サンプルレポート.html
     python3 tools/render_report.py --theme mono    # dist/サンプルレポート_mono.html
     python3 tools/render_report.py --faithful      # 素材合成なし(round 1)
+    python3 tools/render_report.py --reviewed 山田太郎  # 確認済みの態(R2-17)
     python3 tools/render_report.py --out <path>    # 出力先を明示する
     # exit code: 0 = 生成+検査OK / 1 = 生成できたが検査NG / 2 = 生成できず
 
@@ -66,6 +67,12 @@ render_report.py - 実物のサンプルHTMLレポートを出す(17章 T-33 / T
         Markdownからパースする(ツール側に写経しない)。
     (7) DOMスタブのパスB: `meta.round_no` を1に落とすと SEC-16 が本文からも
         目次からも消える(18章§3。この規定の回帰網はここだけ)。
+    (8) 免責の3項分岐(18章§3.5・裁定書37 B-06)の**両態**。既定(確認者名なし)
+        では表紙チップ「確認前」と `<noscript>`「（AI生成・担当者確認前）」、
+        `--reviewed <名前>` では表紙チップ「確認済 <名前>」・SEC-15・
+        `<noscript>` の確認済み文・`meta.reviewed_by` / `meta.reviewed_at`。
+        W15 Round2 R2-17 まで、サンプル生成は `reviewedBy=""` 固定で
+        **確認済みの2態が回帰網に1度も載っていなかった**。
 ================================================================================
 """
 
@@ -88,6 +95,7 @@ import run_lo_tests as lo  # noqa: E402  (実行機構の流用。二重管理�
 
 DEFAULT_OUT = REPO_ROOT / "dist" / "サンプルレポート.html"
 MONO_OUT = REPO_ROOT / "dist" / "サンプルレポート_mono.html"
+REVIEWED_OUT = REPO_ROOT / "dist" / "サンプルレポート_確認済.html"
 
 # LOへ注入するモジュール(存在するものだけ)。純組立関数が実際に辿るものと、
 # その入力になる mock だけに絞る。ここに無いモジュールへの参照はLO Basicでは
@@ -160,11 +168,20 @@ SAMPLE_INDUSTRY_CODE = "09"
 SAMPLE_INDUSTRY_NAME = "食料品製造業"
 SAMPLE_GENERATED_AT = "2026/09/01 14:07:22"
 SAMPLE_APP_VERSION = "2.4.0"
+# --reviewed のときに meta.reviewed_at へ入れる固定値(出力を決定的にするため)。
+SAMPLE_REVIEWED_AT = "2026/09/01 15:30:10"
 
 
-def basic_driver(out_url: str, theme: str, faithful: bool) -> str:
+def vba_str(value: str) -> str:
+    """VBA の文字列リテラルへ埋め込む(二重引用符を重ねる)。"""
+    return value.replace('"', '""')
+
+
+def basic_driver(out_url: str, theme: str, faithful: bool,
+                 reviewed_by: str = "") -> str:
     """LO Basic のドライバ(RenderMainモジュール)。素材合成はここだけで行う。"""
     round_no = "1" if faithful else "2"
+    reviewed_at = SAMPLE_REVIEWED_AT if reviewed_by else ""
     shaping = ""
     if not faithful:
         shaping = (
@@ -234,7 +251,10 @@ def basic_driver(out_url: str, theme: str, faithful: bool) -> str:
         # 末尾は warnText / reviewedBy / reviewedAt / groundNote / s1WarnNote。
         # s1_warn はサンプルでは空にする(実在しない警告をサンプルに焼かない。
         # 出典表そのものは MK-S1-RNW の sources 3件で描かれる。裁定書38 班A)。
-        f'        "", "", "", "", "")\n'
+        # reviewedBy/reviewedAt は --reviewed のときだけ入る(R2-17)。空のときが
+        # 「AI生成・担当者確認前」の態、入れたときが「確認済み」の態で、18章§3.5
+        # の3項分岐の**両方**を回帰網に載せるためのスイッチである。
+        f'        "", "{vba_str(reviewed_by)}", "{reviewed_at}", "", "")\n'
         "    Dim docText As String\n"
         f'    docText = modExportHtml.BuildReportHtml(metaJson, s1, s2, s3, "{theme}")\n'
         f'    WriteUtf8 "{out_url}", docText\n'
@@ -320,12 +340,14 @@ function runPass(mutate) {
 
   const ids = [];
   const hrefs = [];
+  const texts = [];
   (function walk(n) {
     if (n.attrs && n.attrs.id) { ids.push(n.attrs.id); }
     if (n.attrs && n.attrs.href) { hrefs.push(n.attrs.href); }
+    if (n._text) { texts.push(n._text); }
     for (const c of n.childNodes) { walk(c); }
   })(root);
-  return { ids: ids, hrefs: hrefs };
+  return { ids: ids, hrefs: hrefs, texts: texts };
 }
 
 const passA = runPass(null);
@@ -365,7 +387,7 @@ console.log(JSON.stringify({ A: passA, B: passB, C: passC, D: passD }));
 
 
 def run_render(soffice: str, work_dir: Path, theme: str, faithful: bool,
-               verbose: bool) -> str | None:
+               verbose: bool, reviewed_by: str = "") -> str | None:
     all_modules = dict(lo.discover_modules(REPO_ROOT / "src"))
     type_blocks = lo.collect_public_type_blocks(all_modules)
 
@@ -383,7 +405,7 @@ def run_render(soffice: str, work_dir: Path, theme: str, faithful: bool,
 
     out_file = work_dir / "report.html"
     out_url = "file://" + out_file.as_posix()
-    modules["RenderMain"] = basic_driver(out_url, theme, faithful)
+    modules["RenderMain"] = basic_driver(out_url, theme, faithful, reviewed_by)
 
     profile_dir = work_dir / "profile_render"
     template = lo.ensure_template_profile(soffice, verbose)
@@ -447,7 +469,85 @@ def check_theme_css(html: str) -> list[str]:
     return problems
 
 
-def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
+def parse_data_json(html: str) -> dict | None:
+    """`var DATA=JSON.parse("……")` の中身を辞書にして返す(読めなければ None)。
+
+    二重に包まれている(JSの文字列リテラル → その中身がJSON)ので、先に
+    リテラルとして解いてから JSON として読む。`\\u003C` エスケープ(18章§5.3(1))
+    もこの経路でそのまま解ける。
+    """
+    pre = 'var DATA=JSON.parse("'
+    a = html.find(pre)
+    if a < 0:
+        return None
+    a += len(pre)
+    b = html.find('");', a)
+    if b < 0:
+        return None
+    try:
+        return json.loads(json.loads('"' + html[a:b] + '"'))
+    except ValueError:
+        return None
+
+
+def check_reviewed(html: str, reviewed_by: str) -> list[str]:
+    """18章§3.5・裁定書37 B-06 の**確認済みの態**をソース側で確かめる(R2-17)。
+
+    `--reviewed` を付けない既定の実行は「AI生成・担当者確認前」の態しか通らず、
+    3項分岐のうち2態(SEC-15 と `<noscript>` の確認済み文)が**回帰網に1度も
+    載っていなかった**(W15 Round2 R2-17)。ここでは
+      (1) DATA に `reviewed_by` / `reviewed_at` が入る
+      (2) `<noscript>`(JSが動かない環境の免責)が確認済みの文へ切り替わり、
+          確認前の文が**残っていない**
+    を見る。表紙チップ(確認済/確認前)と SEC-15 はJSが描くので check_dom が見る。
+    """
+    problems = []
+    noscript = ""
+    m = re.search(r"<noscript>(.*?)</noscript>", html, re.S)
+    if m is not None:
+        noscript = m.group(1)
+    else:
+        problems.append("<noscript> ブロックがありません(18章§3.5)")
+
+    meta = (parse_data_json(html) or {}).get("meta", {})
+    got_by = meta.get("reviewed_by", None)
+    got_at = meta.get("reviewed_at", None)
+
+    if reviewed_by:
+        if got_by != reviewed_by:
+            problems.append(
+                f"meta.reviewed_by が [{got_by!r}] です(--reviewed で渡した"
+                f"[{reviewed_by}] が meta に入っていない)")
+        if got_at != SAMPLE_REVIEWED_AT:
+            problems.append(
+                f"meta.reviewed_at が [{got_at!r}] です"
+                f"(期待 [{SAMPLE_REVIEWED_AT}])")
+        want = ("本資料はAI支援により作成した骨子を担当者が確認・編集したものです"
+                "（確認: " + reviewed_by + " / " + SAMPLE_REVIEWED_AT + "）。")
+        if want not in noscript:
+            problems.append(
+                f"<noscript> の免責が確認済みの文になっていません(期待: [{want}])")
+        if "（AI生成・担当者確認前）" in noscript:
+            problems.append(
+                "確認者名を渡したのに <noscript> に「（AI生成・担当者確認前）」が"
+                "残っています(18章§3.5 の3項分岐が切り替わっていない)")
+    else:
+        if got_by != "":
+            problems.append('確認者名を渡していないのに meta.reviewed_by が'
+                            f"[{got_by!r}] です")
+        if "（AI生成・担当者確認前）" not in noscript:
+            problems.append(
+                "確認者名を渡していないのに <noscript> が「（AI生成・担当者確認前）」"
+                "になっていません(18章§3.5)")
+        if "本資料はAI支援により作成した骨子を担当者が確認・編集したものです" in noscript:
+            problems.append(
+                "確認者名が空なのに <noscript> が「担当者が確認・編集した」と"
+                "名乗っています(裁定書37 B-06)")
+    return problems
+
+
+def check_dom(html_path: Path, verbose: bool, faithful: bool,
+              reviewed_by: str = "") -> list[str]:
     """node があれば最小DOMスタブでページのJSを実際に走らせて確認する。
 
     パスA(素材そのまま): 表示されるべきセクションが全部描かれているか。
@@ -532,6 +632,28 @@ def check_dom(html_path: Path, verbose: bool, faithful: bool) -> list[str]:
             "(18章§3「非表示のセクションは目次からも同時に落とす」)")
     if "sec-story" not in ids_d:
         problems.append("パスD で sec-story まで消えています(DOM検査が空振り)")
+
+    # --- 裁定書37 B-06(パスA): 表紙チップと SEC-15 の確認済み/確認前(R2-17) ---
+    texts_a = got["A"].get("texts", [])
+    if reviewed_by:
+        want_chip = "確認済 " + reviewed_by
+        if want_chip not in texts_a:
+            problems.append(
+                f"表紙のチップが「{want_chip}」になっていません"
+                f"(裁定書37 B-06。--reviewed の確認済みの態)")
+        if "確認前" in texts_a:
+            problems.append("確認者名を渡したのに表紙に「確認前」のチップが出ています")
+        want_disc = ("本資料はAI支援により作成した骨子を担当者が確認・編集したものです"
+                     "（確認: " + reviewed_by + " / " + SAMPLE_REVIEWED_AT + "）。")
+        if want_disc not in texts_a:
+            problems.append(
+                f"SEC-15 の1行目が確認済みの文になっていません(期待: [{want_disc}])")
+    else:
+        if "確認前" not in texts_a:
+            problems.append(
+                "表紙のチップに「確認前」がありません(裁定書37 B-06。確認前の態)")
+        if any(t.startswith("確認済 ") for t in texts_a):
+            problems.append("確認者名が空なのに表紙に「確認済」のチップが出ています")
 
     # --- 11章§3.8.3(1)(2): 上部ナビのアンカー本数 = 表示対象数、id は slug と1対1 ---
     # 見出しを持たない SEC-01 cover はナビにも目次にも並べない(18章§3.6)ので、
@@ -768,6 +890,9 @@ def main() -> int:
     ap.add_argument("--out", default=None, help="出力先(既定 dist/サンプルレポート.html)")
     ap.add_argument("--faithful", action="store_true",
                     help="サンプル素材の合成を行わない(素のmock・round 1)")
+    ap.add_argument("--reviewed", default="", metavar="確認者名",
+                    help="確認者名を入れて「確認済み」の態で出す(18章§3.5の"
+                         "3項分岐のうち残り2態。既定 dist/サンプルレポート_確認済.html)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -775,13 +900,16 @@ def main() -> int:
         out_path = Path(args.out)
     elif args.theme != "standard":
         out_path = MONO_OUT
+    elif args.reviewed:
+        out_path = REVIEWED_OUT
     else:
         out_path = DEFAULT_OUT
 
     soffice = lo.find_soffice()
     work_dir = Path(tempfile.mkdtemp(prefix="rpn_render_"))
     try:
-        html = run_render(soffice, work_dir, args.theme, args.faithful, args.verbose)
+        html = run_render(soffice, work_dir, args.theme, args.faithful,
+                          args.verbose, args.reviewed)
         if html is None:
             return 2
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -793,15 +921,18 @@ def main() -> int:
         problems = check_source(html)
         problems += check_data_literal(html)
         problems += check_spec18_literals(html)
-        problems += check_dom(out_path, args.verbose, args.faithful)
+        problems += check_reviewed(html, args.reviewed)
+        problems += check_dom(out_path, args.verbose, args.faithful, args.reviewed)
         if problems:
             print("[render_report] NG:")
             for p in problems:
                 print(f"  - {p}")
             return 1
         shown = len(SECTIONS) - (1 if args.faithful else 0)
+        state = f"確認済み({args.reviewed})" if args.reviewed else "担当者確認前"
         print(f"[render_report] OK: <meta charset=\"utf-8\"> と全{len(SECTIONS)}"
-              f"セクションの登録・描画後DOM{shown}本を確認しました。")
+              f"セクションの登録・描画後DOM{shown}本・免責の態={state} を"
+              f"確認しました。")
         return 0
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
