@@ -570,7 +570,7 @@ CONTRACT: dict[str, dict] = {
             "CaseIdOfPfLine",
         ],
     },
-    # modSparring: PL-04 壁打ち(T-27。裁定書8 B-9 で14章§6へ宣言)。
+    # modSparring: PL-04 商談の予行演習(T-27。裁定書8 B-9 で14章§6へ宣言)。
     #   実行制御3本(ResumeSparring / SendSparring / SendToInbox)＋履歴の読み出し
     #   (HistoryOf)に加え、**純核3本を required に載せる**。純核を Private へ
     #   戻すと層(a)の回帰網が消えるため、契約違反として機械で検出する
@@ -1014,7 +1014,7 @@ CORE_PRODUCT_VOCAB = [
     "リスク提案ナビ",
     "ナレッジブック",
     "案件一覧", "案件入力", "case_data", "受信箱", "判断台帳", "フィードバック",
-    "ヒアリングシート", "壁打ち",
+    "ヒアリングシート", "商談の予行演習",
     "S1_企業プロファイル", "S2_リスク仮説", "S3_提案", "S4_骨子",
     "はじめにお読みください",
 ]

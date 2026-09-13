@@ -2,7 +2,7 @@ Attribute VB_Name = "modPromptsOps"
 Option Explicit
 
 ' ============================================================================
-' modPromptsOps - 批判・改訂・壁打ち・プリフライト・修復の組立
+' modPromptsOps - 批判・改訂・商談の予行演習・プリフライト・修復の組立
 ' ----------------------------------------------------------------------------
 ' 本文の正は 15章(§4.5 / §4.6 / §4.7 / §6 / §6.5 / §7)。**本ファイルは docs/spec/15_プロンプトとJSONスキーマ.md
 ' から機械生成した写しであり、ここを手で書き換えてはならない**。文言を変える
@@ -185,7 +185,7 @@ Public Function ReviseSuffix() As String
 End Function
 
 ' --------------------------------------------------------------------------
-' BuildSparringSystem - 15章§6.5 壁打ち(PL-04)のsystem。BLOCK_GUARDは付けない
+' BuildSparringSystem - 15章§6.5 商談の予行演習(PL-04)のsystem。BLOCK_GUARDは付けない
 ' --------------------------------------------------------------------------
 Public Function BuildSparringSystem() As String
     Dim s As String
@@ -519,7 +519,7 @@ Public Function AsmS3CriticUser(ByRef ctx As TCaseCtx, ByVal s1Summary As String
         "BLOCK_CTX|s1SummaryJson|s2Json|s3Json", vals)
 End Function
 
-' AsmSparringSystem - 15章§6.5 壁打ちsystem。mechs は Phase1では "(登録なし)"。
+' AsmSparringSystem - 15章§6.5 商談の予行演習system。mechs は Phase1では "(登録なし)"。
 Public Function AsmSparringSystem(ByVal dossierSummary As String, ByVal s1s2s3Json As String, _
                                   ByVal schemes As String, ByVal patterns As String, _
                                   ByVal mechs As String, ByVal rules As String) As String
@@ -554,7 +554,7 @@ End Function
 '   S2改訂/S3改訂)が唯一通す出口。sysText の末尾へ 15章§1.3 BlockGuard() を
 '   連結する。sysText が空ならガードも付けず空のまま返す(空systemを送る経路
 '   自体が既に異常であり、ここで隠さない)。**代入点で手書き連結しない**
-'   (伝書鳩Part2②の複製腐敗対策。呼出側は必ず本関数を通す)。壁打ち
+'   (伝書鳩Part2②の複製腐敗対策。呼出側は必ず本関数を通す)。商談の予行演習
 '   (BuildSparringSystem)には適用しない(15章§1.3が明記する唯一の例外)。
 Public Function AsmGuarded(ByVal sysText As String) As String
     If LenB(sysText) = 0 Then

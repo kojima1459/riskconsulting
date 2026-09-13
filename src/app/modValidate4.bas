@@ -224,7 +224,7 @@ Public Function TabooPairs() As String
     AdPair s, "移転", "保険で備える", V4_WARN
     AdPair s, "保有", "自社で負担する", V4_WARN
     AdPair s, "トリガー", "保険金をお支払いする条件", V4_REPLACE
-    AdPair s, "サブリミット", "補償項目ごとの支払限度額", V4_REPLACE
+    AdPair s, "サブリミット", "補償項目ごとのお支払いの上限額", V4_REPLACE
     AdPair s, "待機期間", "補償が始まるまでの期間", V4_REPLACE
     AdPair s, "保険化", "保険での備え方の設計", V4_REPLACE
     AdPair s, "特約開発", "補償内容の新しい設計", V4_REPLACE

@@ -67,7 +67,7 @@ Public Function LabelJs() As String
     s = s & "var LFIT={risk_clue:'リスクの手がかり',relationship:'決裁・人間関係'," & vbLf
     s = s & "competitor:'競合・他社',constraint:'制約・NG',opportunity:'商機',other:'その他'};" & vbLf
     s = s & "var LCT={'new':'新規開拓',renewal:'更新'};" & vbLf
-    s = s & "var LTIER={t1_quick:'かんたん調査',t2_full:'しっかり調査',t3_sparring:'壁打ち'};" & vbLf
+    s = s & "var LTIER={t1_quick:'かんたん調査',t2_full:'しっかり調査',t3_sparring:'商談の予行演習'};" & vbLf
     s = s & "var LQM={standard:'標準',deep:'入念'};" & vbLf
     s = s & "var ASPORDER=['profile','business','sites','history','news','hr'," & vbLf
     s = s & "'finance_risk','sales_memo','sns','competitors','market','finance'," & vbLf

@@ -101,6 +101,8 @@ PENDING_TOOLS: dict[str, str] = {
     "ribbon_wire_check.py": "件数化は次波",
     "ui_check.py": "条件数を要点行に出している",
     "gate_count.py": "本ファイル自身(契約の登記を見る側)",
+    "bench_s1.py": "採点器のベンチ。selfcheck は変異注入を1件ずつ、"
+                   "gold-check は「5社の gold を検算」と実数を出している",
 }
 
 # 件数にリテラル定数が残っているものの登記(裁定書43 §2 Y-7)。
@@ -211,18 +213,85 @@ def gate_scripts(gate_src: str) -> list[tuple[str, str]]:
 FIXTURE_FUNCS = ("self_test", "self_test_count", "regression_cases")
 
 
-def _literal_in_count(node: "ast.AST") -> bool:
+def _literal_in_count(node: "ast.AST",
+                      const_names: "frozenset[str] | None" = None) -> bool:
     """件数の式に**数値リテラルの値**が混ざっているか。
 
     添字(`_WIRE_N[0]` の 0)は件数ではなく置き場所なので数えない。
     `len(rows)` のような実測は当然数えない。`4` や `n + 14` は数える。
+
+    `const_names` は「その場で数えていない変数」の名前(`_const_names`)。
+    `n = 14` と書いてから `record("x", n)` と呼ぶ**変数経由の抜け道**を塞ぐ
+    (裁定書43 §2 Y-7 の司令塔手直し。以前は呼び出し行だけを見ていたので
+    素通りした)。
     """
     if isinstance(node, ast.Constant):
         return isinstance(node.value, (int, float)) \
             and not isinstance(node.value, bool)
+    if isinstance(node, ast.Name):
+        return bool(const_names) and node.id in const_names
     if isinstance(node, ast.Subscript):
-        return _literal_in_count(node.value)
-    return any(_literal_in_count(ch) for ch in ast.iter_child_nodes(node))
+        return _literal_in_count(node.value, const_names)
+    return any(_literal_in_count(ch, const_names)
+               for ch in ast.iter_child_nodes(node))
+
+
+def _is_const_expr(node: "ast.AST", known: "set[str]") -> bool:
+    """式が「その場で数えていない定数」か(数値リテラルと定数変数だけで出来て
+    いるか)。`len(...)`・添字・属性・内包表記が1つでも混ざれば False
+    (=実測が混ざっているので件数として認める)。"""
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, (int, float)) \
+            and not isinstance(node.value, bool)
+    if isinstance(node, ast.Name):
+        return node.id in known
+    if isinstance(node, (ast.BinOp, ast.UnaryOp)):
+        return all(_is_const_expr(ch, known)
+                   for ch in ast.iter_child_nodes(node)
+                   if isinstance(ch, ast.expr))
+    return False
+
+
+def _const_names(tree: "ast.AST") -> frozenset:
+    """「数値定数しか代入されない変数」の名前を集める。
+
+    同じ名前に1つでも実測(`len(rows)` 等)が代入されていれば定数ではない
+    (=拾わない)。増分 `n += 1` も実測なので定数から外す。名前はモジュール
+    全体で1つの集合にする(関数をまたいで同名を定数と実測に使い分ける書き方は
+    そもそも読めないので、fail-closed 側に倒さず**実測が勝つ**)。
+    """
+    assigned: dict = {}
+    for node in ast.walk(tree):
+        targets: list = []
+        value = None
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        elif isinstance(node, ast.AugAssign):
+            targets, value = [node.target], None
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            targets, value = [node.target], None
+        else:
+            continue
+        for tgt in targets:
+            if not isinstance(tgt, ast.Name):
+                continue
+            assigned.setdefault(tgt.id, []).append(value)
+    # 定数変数どうしの参照(`a = 2` / `b = a + 1`)を閉包で解く。
+    known: set = set()
+    for _round in range(8):
+        grew = False
+        for name, values in assigned.items():
+            if name in known:
+                continue
+            if values and all(v is not None and _is_const_expr(v, known)
+                              for v in values):
+                known.add(name)
+                grew = True
+        if not grew:
+            break
+    return frozenset(known)
 
 
 def literal_count_sites(src: str) -> list[tuple[int, str]]:
@@ -235,6 +304,7 @@ def literal_count_sites(src: str) -> list[tuple[int, str]]:
         tree = ast.parse(src)
     except SyntaxError:
         return [(0, "<構文エラーで読めません>")]
+    const = _const_names(tree)
     fixture_lines: set = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
@@ -253,7 +323,7 @@ def literal_count_sites(src: str) -> list[tuple[int, str]]:
         if node.lineno in fixture_lines:
             continue
         count = node.args[1]
-        if _literal_in_count(count):
+        if _literal_in_count(count, const):
             try:
                 shown = ast.unparse(count)
             except Exception:       # pragma: no cover (古い Python)
@@ -430,6 +500,26 @@ def self_test() -> bool:
     cases.append(("Y-7 添字でも足した定数は拾う",
                   [s for _l, s in literal_count_sites(
                       'c.record("a", _N[0] + 1)\n')] == ["_N[0] + 1"]))
+    # Y-7(司令塔手直し): 変数を1つ挟んだ抜け道も塞ぐ。
+    cases.append(("Y-7 変数経由の定数も拾う",
+                  literal_count_sites(
+                      'def a():\n    n = 14\n    c.record("x", n)\n') != []))
+    cases.append(("Y-7 定数どうしの計算も拾う",
+                  literal_count_sites(
+                      'def a():\n    n = 2\n    m = n + 1\n'
+                      '    c.record("x", m)\n') != []))
+    cases.append(("Y-7 実測を代入した変数は拾わない",
+                  literal_count_sites(
+                      'def a():\n    n = len(rows)\n'
+                      '    c.record("x", n)\n') == []))
+    cases.append(("Y-7 数え上げた変数は拾わない",
+                  literal_count_sites(
+                      'def a():\n    n = 0\n    n += 1\n'
+                      '    c.record("x", n)\n') == []))
+    cases.append(("Y-7 実測が1つでもあれば定数ではない",
+                  literal_count_sites(
+                      'def a():\n    n = 3\n    n = len(rows)\n'
+                      '    c.record("x", n)\n') == []))
     cases.append(("Y-7 自己テストの器は見ない",
                   literal_count_sites(
                       'def self_test():\n    c.record("a", 3)\n') == []))

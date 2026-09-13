@@ -2,12 +2,13 @@ Attribute VB_Name = "modUISparring"
 Option Explicit
 
 ' ============================================================================
-' modUISparring - 壁打ちシートの描画・発話入出力・「受信箱へ」送信(ui層・T-34)
+' modUISparring - 商談の予行演習シートの描画・発話入出力・「受信箱へ」送信(ui層・T-34)
+' (旧称: 壁打ち。利用者向け表示は Z-48 で「商談の予行演習」へ改名。内部識別子は不変)
 ' ----------------------------------------------------------------------------
-' 11章 壁打ちワイヤーと 13章§2.17 が正。実行制御(履歴管理・CallChat呼出・受信箱
+' 11章 商談の予行演習ワイヤーと 13章§2.17 が正。実行制御(履歴管理・CallChat呼出・受信箱
 ' 登録)は app層 modSparring が持ち、本モジュールは画面だけを受け持つ。
 '
-'   [壁打ちを開始/再開] -> modSparring.ResumeSparring(履歴件数と注入文言を返す)
+'   [予行演習を開始/再開] -> modSparring.ResumeSparring(履歴件数と注入文言を返す)
 '   [送信]              -> modSparring.SendSparring(PII走査は app層の責務)
 '   [受信箱へ]          -> modSparring.SendToInbox(戻り値の inbox_id を行へ書く)
 '
@@ -24,14 +25,14 @@ Option Explicit
 ' ============================================================================
 
 Private Const US2_SRC As String = "modUISparring"
-Private Const US2_SHEET As String = "壁打ち"
+Private Const US2_SHEET As String = "商談の予行演習"
 Private Const US2_BLOCK As String = "sparring_log"
 Private Const US2_SCAN_COLS As Long = 12
 Private Const US2_ROOM As Long = 400          ' 1ブロックだけのシートなので広く取る
 Private Const US2_MAX_ITEMS As Long = 800
 
 ' ============================================================================
-' 図形ボタン(11章 壁打ちワイヤー)
+' 図形ボタン(11章 商談の予行演習ワイヤー)
 ' ============================================================================
 Public Sub EnsureSparringButtons()
     On Error Resume Next
@@ -40,7 +41,7 @@ Public Sub EnsureSparringButtons()
     Set ws = modUISheet.SheetOf(US2_SHEET)
     If ws Is Nothing Then Exit Sub
 
-    modUISheet.EnsureButton ws, "btn_sp_resume", "壁打ちを開始/再開", _
+    modUISheet.EnsureButton ws, "btn_sp_resume", "予行演習を開始/再開", _
                             1, 8, 160#, "modUISparring.SparringResume"
     modUISheet.EnsureButton ws, "btn_sp_send", "送信", 2, 8, 72#, _
                             "modUISparring.SparringSend"
@@ -55,18 +56,18 @@ End Sub
 ' ----------------------------------------------------------------------------
 ' 唯一の呼出元は v3.2 で廃止した HOMEシートのハンドラ modUIHome2.HomeOpenSparring
 ' であり、それを落としたので本Subも一緒に落とした。現行の入口は
-'   使い方タブ⑦上級の[表示する](modUIGuide.ShowAdvanced1 -> 壁打ちシートを可視化)
-'   -> 壁打ちシートの[壁打ちを開始/再開](SparringResume)
+'   使い方タブ⑦上級の[表示する](modUIGuide.ShowAdvanced1 -> 商談の予行演習シートを可視化)
+'   -> 商談の予行演習シートの[予行演習を開始/再開](SparringResume)
 ' で、対象案件は CaseIdOnSheet() が sp_case_id -> hm_case_id の順で解決するため
 ' 動作は変わらない。
 ' ============================================================================
 
 ' ============================================================================
-' [壁打ちを開始/再開](11章)。dossier_tier の t3_sparring 昇格は 14章§6 の
+' [予行演習を開始/再開](11章)。dossier_tier の t3_sparring 昇格は 14章§6 の
 '   ResumeSparring が「書込口が無い」ため行わない契約(同節の未解決事項)。
 ' ============================================================================
 Public Sub SparringResume()
-    If Not modUIProgress.TryEnterUiLock("壁打ちの開始/再開") Then Exit Sub
+    If Not modUIProgress.TryEnterUiLock("商談の予行演習の開始/再開") Then Exit Sub
     On Error GoTo Done
 
     modUIProgress.ParkFocus
@@ -81,7 +82,7 @@ Private Sub StartOrResume(ByVal caseId As String)
     On Error Resume Next
 
     If Not modCaseStore.IsValidCaseId(caseId) Then
-        Notice "対象案件が選ばれていません（壁打ちシートの対象案件IDをご確認ください）。"
+        Notice "対象案件が選ばれていません（商談の予行演習シートの対象案件IDをご確認ください）。"
         Exit Sub
     End If
 
@@ -89,7 +90,7 @@ Private Sub StartOrResume(ByVal caseId As String)
     Dim turns As Long
     turns = modSparring.ResumeSparring(caseId, contextNote)
     If turns < 0 Then
-        Notice "案件一覧からこの案件を読めませんでした。壁打ちを開始できません。"
+        Notice "案件一覧からこの案件を読めませんでした。商談の予行演習を開始できません。"
         Exit Sub
     End If
 
@@ -101,7 +102,7 @@ End Sub
 ' [送信](11章)。PII走査・履歴保存・上限系の案内は modSparring が持つ。
 ' ============================================================================
 Public Sub SparringSend()
-    If Not modUIProgress.TryEnterUiLock("壁打ちの送信") Then Exit Sub
+    If Not modUIProgress.TryEnterUiLock("商談の予行演習の送信") Then Exit Sub
     On Error GoTo Done
 
     modUIProgress.ParkFocus
@@ -120,7 +121,7 @@ Public Sub SparringSend()
         GoTo Done
     End If
 
-    modUIProgress.SetStage "壁打ち（1往復）を実行中", modConfig.GetLong("llm_wait_sec", 1200)
+    modUIProgress.SetStage "商談の予行演習（1往復）を実行中", modConfig.GetLong("llm_wait_sec", 1200)
 
     Dim replyText As String
     Dim errCode As String
@@ -145,11 +146,11 @@ Private Function SendErrorText(ByVal errCode As String) As String
         SendErrorText = "本日のAI利用枠の上限に達した可能性があります。" & _
                         "往復数を減らして再開してください。"
     Case "E0101"
-        SendErrorText = "壁打ちを始める前提が足りません（案件の選択と発話をご確認ください）。"
+        SendErrorText = "商談の予行演習を始める前提が足りません（案件の選択と発話をご確認ください）。"
     Case "E0604"
         SendErrorText = "履歴を保存できませんでした。err_log をご確認ください。"
     Case Else
-        SendErrorText = "壁打ちの応答を受け取れませんでした（" & errCode & "）。"
+        SendErrorText = "商談の予行演習の応答を受け取れませんでした（" & errCode & "）。"
     End Select
 End Function
 
@@ -375,7 +376,7 @@ End Sub
 ' ============================================================================
 ' 小物
 ' ============================================================================
-' 壁打ちシートの対象案件ID。空ならHOMEの選択案件へ落とす。
+' 商談の予行演習シートの対象案件ID。空ならHOMEの選択案件へ落とす。
 Private Function CaseIdOnSheet() As String
     Dim v As String
     v = modUISheet.ReadNamed("sp_case_id")
@@ -394,5 +395,5 @@ End Function
 Private Sub Notice(ByVal messageText As String)
     On Error Resume Next
     modUISheet.WriteNamed "hm_warning", messageText
-    MsgBox messageText, vbInformation, "壁打ち"
+    MsgBox messageText, vbInformation, "商談の予行演習"
 End Sub

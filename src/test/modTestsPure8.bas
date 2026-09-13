@@ -36,7 +36,7 @@ Option Explicit
 '   InterestSummaryOf 宣言で**期待値のまま復帰**したが、FR-17 の下請け
 '   (InterestKeyOf / FmtInterestLine)と束ねるため modTestsPure9 へ移した。
 '   本ファイルの欠番は2件:
-'     - G75 壁打ち継続可否 4本: §6の CanContinueSparring は**送信前**の
+'     - G75 商談の予行演習継続可否 4本: §6の CanContinueSparring は**送信前**の
 '       fail-closed 判定で、原版が仮定した応答後の継続可否とは別の契約
 '     - G78 の executive_reactions 全件保持 1本: 15章§4.7 の注記と14章§6の
 '       宣言が食い違い、lands=true の反応は digest に載らない
@@ -689,7 +689,7 @@ End Sub
 '     (d) 【解消】pf_pred_types は modTestsPure9 の G83 が当てている。
 '     (e) TrimHistoryOf の maxTurns<=0(§6は「全件」と宣言。G74が全件渡し
 '         として使うにとどめた)。
-'     (f) 壁打ちの応答後の継続可否(E0201/E0202/E0204からE0206の扱い)。
+'     (f) 商談の予行演習の応答後の継続可否(E0201/E0202/E0204からE0206の扱い)。
 '         §6の CanContinueSparring は**送信前**判定なのでG75ごと落とした。
 '     (g) issues 0件だが additional_risks が非空のとき(§6は「S2Cは
 '         additional_risks が非空なら True」と宣言済み)。

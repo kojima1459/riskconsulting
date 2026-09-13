@@ -60,7 +60,10 @@ RENDER_MODULES = [
     "modProposalHtml1", "modProposalHtml2", "modProposalHtml3", "modProposalHtml4",
     "modExportProposal",
     # BuildProposalData が S2 由来の文字列へ対訳表の機械置換を掛けるので必須。
-    "modValidate4",
+    # modValidate3 は modValidate4.ReplaceOk が呼ぶ HeadOverlap の置き場所
+    #   (裁定書43。modValidate4 の容量都合で移した)。**この一覧は手で足すので
+    #   落ちる**ため、下の check_module_refs() が qualified 参照を機械で照合する。
+    "modValidate4", "modValidate3",
     "modMockLlm", "modMockLlm2", "modMockLlm3", "modMockLlm4",
 ]
 
@@ -324,6 +327,20 @@ def run_render(soffice: str, work_dir: Path, faithful: bool, verbose: bool,
     if missing:
         print(f"[render_proposal] FAIL: 未実装のモジュールがあります: {', '.join(missing)}")
         return None
+
+    # 一覧の**足りない分を機械で足す**(裁定書43 司令塔)。RENDER_MODULES は
+    #   手で並べた種であり、モジュールが新しい依存を持つと黙って欠ける。欠けた
+    #   まま走らせると LibreOffice Basic が実行時に「Variable not defined:
+    #   modXxx」を投げ、呼出側の `On Error` がそれを握りつぶして「組み立てに
+    #   失敗しました」だけが残る(実際に modValidate4 -> modValidate3 で1度
+    #   そうなった)。`modXxx.` の参照を推移的にたどって閉じる。
+    closed, extra = lo.close_module_refs(modules.keys(), all_modules)
+    for name in sorted(closed - set(modules)):
+        modules[name] = all_modules[name].read_text(encoding="utf-8",
+                                                    errors="replace")
+    if extra:
+        print("[%s] 参照から自動で足したモジュール(%d本): %s"
+              % ("render_proposal", len(extra), ", ".join(extra)))
 
     out_file = work_dir / "proposal.html"
     out_url = "file://" + out_file.as_posix()
@@ -1216,6 +1233,17 @@ def run_review_probe(soffice: str, work_dir: Path,
     if missing:
         print(f"[render_proposal] FAIL: 未実装のモジュールがあります: {', '.join(missing)}")
         return None
+
+    # 確認導線の経路も同じ理由で閉じる(裁定書43 司令塔)。**スタブを被せる前**に
+    #   閉じ、そのあとで REVIEW_STUBS を上書きするので、スタブは必ず勝つ。
+    closed, extra = lo.close_module_refs(modules.keys(), all_modules,
+                                         skip=set(REVIEW_STUBS))
+    for name in sorted(closed - set(modules)):
+        modules[name] = all_modules[name].read_text(encoding="utf-8",
+                                                    errors="replace")
+    if extra:
+        print("[render_proposal] 確認導線へ参照から自動で足したモジュール"
+              "(%d本): %s" % (len(extra), ", ".join(extra)))
     modules.update(REVIEW_STUBS)
 
     out_dir = work_dir / "review_out"

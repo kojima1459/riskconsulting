@@ -580,6 +580,13 @@ def _cut_line_comment(line: str, low_markers: tuple) -> str:
             i += 1
             continue
         if ch in "\"'":
+            # 閉じない引用符は**引用符ではない**(裁定書43 §2 Y-5 の司令塔手直し)。
+            #   `Write-Host Bob's  # ZzTName を呼びます` のようにアポストロフィが
+            #   1つだけ現れると、以前はそこから行末までを文字列とみなし、後ろの
+            #   行末コメントを落とせずマーカーが救済集合に残っていた(誤救済)。
+            if line.find(ch, i + 1) < 0:
+                i += 1
+                continue
             quote = ch
             i += 1
             continue
@@ -1158,6 +1165,16 @@ def self_test() -> bool:
                   "ZzTPs1Trailing" not in
                   strip_nonexecutable_text("build/win/z.ps1",
                                            "$a=1  # ZzTPs1Trailing を呼びます\n")))
+    # Y-5(司令塔手直し): 閉じないアポストロフィで行末コメント除去が壊れない。
+    cases.append(("Y-5 閉じないアポストロフィの後ろの行末コメントも落ちる",
+                  "ZzTApos" not in
+                  strip_nonexecutable_text("build/win/z.ps1",
+                                           "Write-Host Bob's  # ZzTApos を呼びます\n")))
+    # 逆に、**閉じている**引用符の中のマーカーは落とさない(誤検知の防止)。
+    cases.append(("Y-5 閉じた引用符の中の # はコメントではない",
+                  "ZzTQuoted" in
+                  strip_nonexecutable_text("build/win/z.ps1",
+                                           "$a = '# ZzTQuoted'\n")))
     cases.append(("Y-5 yml の行末コメントは落ちる",
                   "ZzTYmlTrailing" not in
                   strip_nonexecutable_text("build/z.yml", "a: 1  # ZzTYmlTrailing\n")))

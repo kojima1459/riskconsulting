@@ -13,7 +13,7 @@ Option Explicit
 '      こと(`Right$(s, Len(g)) = g`。`InStrRev` ではない=15章§1.3の実装注記の
 '      とおり)。呼び出しは modPipeline.bas/modPipeline2.bas/modPlayOps.bas の
 '      各代入点と同じ組み方(modPromptsOps.AsmGuarded / AsmS4System)に倣う。
-'   02 壁打ち(BuildSparringSystem)にはBlockGuardを付けないこと(15章§1.3の
+'   02 商談の予行演習(BuildSparringSystem)にはBlockGuardを付けないこと(15章§1.3の
 '      唯一の例外)。「終わらないこと」を見る。
 '   03 modPii.MatchUrlSpan(A-08/C-2)。出典URLを含む本文でHasPii=False。
 '      伝書鳩20260912 3-2 の実例4本(DR出力に必ず出るPDFリンク形)。
@@ -55,7 +55,7 @@ FA:
     GroupFail "W14B1 BlockGuard配線(裁定書37 B-01)"
     Resume WB
 FB:
-    GroupFail "W14B1 壁打ちは非配線(15章§1.3)"
+    GroupFail "W14B1 商談の予行演習は非配線(15章§1.3)"
     Resume WC
 FC:
     GroupFail "W14A08 URLスパン読み飛ばし(裁定書37 A-08/C-2)"
@@ -113,7 +113,7 @@ Private Sub T_W14B1_BlockGuardWiring()
 End Sub
 
 ' ============================================================================
-' W14B1-02 壁打ち(BuildSparringSystem)にはBlockGuardを付けない(15章§1.3)
+' W14B1-02 商談の予行演習(BuildSparringSystem)にはBlockGuardを付けない(15章§1.3)
 ' ============================================================================
 Private Sub T_W14B1_SparringNotGuarded()
     Dim g As String
@@ -122,9 +122,9 @@ Private Sub T_W14B1_SparringNotGuarded()
     s = modPromptsOps.BuildSparringSystem()
 
     modTestRunner.Check _
-        "Test_W14B1_02_壁打ちsystemはBlockGuardで終わらない_15章§1.3", _
+        "Test_W14B1_02_商談の予行演習systemはBlockGuardで終わらない_15章§1.3", _
         (Right$(s, Len(g)) <> g), _
-        "壁打ちにBlockGuardが付いてしまっている(15章§1.3の唯一の例外)"
+        "商談の予行演習にBlockGuardが付いてしまっている(15章§1.3の唯一の例外)"
 End Sub
 
 ' ============================================================================

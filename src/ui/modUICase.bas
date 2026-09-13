@@ -71,7 +71,7 @@ Public Function EnumPairsCsv() As String
     s = s & "case_type,renewal,更新" & vbLf
     s = s & "dossier_tier,t1_quick,かんたん調査" & vbLf
     s = s & "dossier_tier,t2_full,しっかり調査" & vbLf
-    s = s & "dossier_tier,t3_sparring,壁打ち" & vbLf
+    s = s & "dossier_tier,t3_sparring,商談の予行演習" & vbLf
     s = s & "channel,wholesale,ホール" & vbLf
     s = s & "channel,retail,リテール" & vbLf
     s = s & "kanji,lead,幹事" & vbLf
@@ -547,7 +547,7 @@ Private Function BindOne(ByVal rowText As String) As Boolean
     colNo = modUISheet.ColOf(hdr, firstCol, colName)
     If colNo <= 0 Then Exit Function
 
-    ' 裁定書11 Q5: フラット表(受信箱・判断台帳)は投函・壁打ち・watchが積み上がり
+    ' 裁定書11 Q5: フラット表(受信箱・判断台帳)は投函・商談の予行演習・watchが積み上がり
     ' 行数の上限が無い表なので、DVは行2から UC_DV_ROWS までではなく**2行目以降の列全体**
     ' へ張る(121行目以降で日本語ラベルの一覧が消え、手入力が EnumEn の完全一致で
     ' 弾かれる乖離を無くす)。ブロック型(b)は行数が枠で決まるので現状維持。

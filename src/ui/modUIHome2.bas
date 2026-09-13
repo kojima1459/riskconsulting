@@ -323,7 +323,7 @@ End Function
 '   新規案件   = 帯で案件未選択 -> modUINav.DrawNav が ci_case_id へ (新規) を
 '                書き、modUICase6.SaveNav が採番する(11章§3.1.4)
 '   貼る欄を開く = ナビが常時その画面(区画②)
-'   受信箱/フィードバック/判断台帳/壁打ち
+'   受信箱/フィードバック/判断台帳/商談の予行演習
 '              = 使い方タブ⑦上級の[表示する](modUIGuide.ShowAdvanced1～5)
 '   一括診断   = 受信箱の[未診断を一括診断](modUIInbox.InboxDiagnoseAll。
 '                modPlayOps.RunPreflightAll を呼ぶ実体は同じ)

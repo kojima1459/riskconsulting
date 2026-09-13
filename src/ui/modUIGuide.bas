@@ -61,7 +61,7 @@ Private Const UG_ROW_ADV_ACT As String = _
 ' 記録3枚(13章§2.9)。まとめて可視にし err_log へ移る。
 Private Const UG_LOG_SHEETS As String = "err_log" & vbLf & "run_log" & vbLf & "usage_log"
 ' 上級5枚(11章§3.6⑦)。押した1枚だけを可視にする。並び順は使い方タブと同じ。
-Private Const UG_ADV_SHEETS As String = "壁打ち" & vbLf & "受信箱" & vbLf & _
+Private Const UG_ADV_SHEETS As String = "商談の予行演習" & vbLf & "受信箱" & vbLf & _
     "フィードバック" & vbLf & "判断台帳" & vbLf & "案件一覧"
 
 ' Excel組み込み定数の数値(modUISheet と同じ流儀で名前を書かない)。

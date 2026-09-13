@@ -285,6 +285,12 @@ Public Function BuildProposalHtmlEx(ByVal metaJson As String, ByVal s2Json As St
     BuildProposalHtmlEx = modProposalHtml1.BuildProposalDocument(dataJson, coverFields)
     Exit Function
 Failed:
+    ' **握りつぶさない**(裁定書43 司令塔)。ここで番号と説明を残さないと、
+    '   呼出側は「提案書の組み立てに失敗しました。」しか出せず、原因が
+    '   1件も記録に残らない。実際に LibreOffice の
+    '   「Variable not defined: modValidate3」を丸1本の調査で突き止めた。
+    modLog.LogError EP_CODE_FAIL, EP_SRC & ".BuildProposalHtmlEx", _
+        "err=" & CStr(Err.Number) & " " & Err.Description
     BuildProposalHtmlEx = vbNullString
 End Function
 

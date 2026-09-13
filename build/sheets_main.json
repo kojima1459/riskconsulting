@@ -213,7 +213,7 @@
     "dossier_tier_ja": [
       "かんたん調査",
       "しっかり調査",
-      "壁打ち"
+      "商談の予行演習"
     ],
     "channel_ja": [
       "ホール",
@@ -2146,18 +2146,18 @@
       ]
     },
     {
-      "name": "壁打ち",
+      "name": "商談の予行演習",
       "role": "table",
       "state": "hidden",
       "spec_ref": "13章§2.17",
-      "header_title": "壁打ち(PL-04)",
+      "header_title": "商談の予行演習(PL-04)",
       "header_fields": [
         {
           "range": "sp_case_id",
           "label": "対象案件ID",
           "type": "String",
           "input": false,
-          "note": "壁打ちを始めると、この案件の「調査の深さ」は自動で「壁打ち」になります"
+          "note": "商談の予行演習を始めると、この案件の「調査の深さ」は自動で「商談の予行演習」になります"
         },
         {
           "range": "sp_context_note",
@@ -2762,7 +2762,7 @@
         {
           "name": "sparring_max_turns",
           "value": 12,
-          "note": "壁打ちでリボンへ渡す履歴の最大往復数(超過は古い順に切捨て。全履歴はcase_data保存)"
+          "note": "商談の予行演習でリボンへ渡す履歴の最大往復数(超過は古い順に切捨て。全履歴はcase_data保存)"
         },
         {
           "name": "quality_mode",

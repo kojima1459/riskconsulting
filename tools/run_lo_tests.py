@@ -1005,3 +1005,129 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ---------------------------------------------------------------------------
+# 注入した集合が**それだけで閉じている**かを見る(裁定書43 司令塔)。
+# ---------------------------------------------------------------------------
+# render_report.py / render_proposal.py は速さのために **手で並べた一覧**
+# (RENDER_MODULES)だけを LibreOffice へ注入する。そのためモジュールが新しい
+# 依存を持つと一覧から黙って落ち、LibreOffice Basic が実行時に
+# 「Variable not defined: modXxx」を投げる。呼出側の `On Error` がそれを
+# 握りつぶすと「組み立てに失敗しました」だけが残り、原因が記録に残らない
+# (実際に modValidate4 -> modValidate3.HeadOverlap で1度そうなった)。
+# **注入の前にここで落とす**。
+QUALIFIED_REF = re.compile(r"\b(mod[A-Za-z0-9_]+)\s*\.")
+
+
+def strip_vba_noise(src: str) -> str:
+    """VBA から行コメントと文字列リテラルを落とす(行数は変えない)。"""
+    out = []
+    for line in src.split("\n"):
+        line = re.sub(r'"[^"]*"', '""', line)
+        pos = line.find("'")
+        if pos >= 0:
+            line = line[:pos]
+        out.append(line)
+    return "\n".join(out)
+
+
+def check_module_refs(injected: dict, known: set, skip=("RenderMain",)) -> list:
+    """注入した各モジュールが呼ぶ `modXxx.` が注入集合に居るかを見る。
+
+    戻り値は不足の説明のリスト(空なら OK)。`known`(src/ にあるモジュール名)
+    に無い名前は別の検査の担当なので、ここでは黙って見送る。
+    """
+    problems = []
+    have = set(injected)
+    for name in sorted(injected):
+        if name in skip:
+            continue
+        body = strip_vba_noise(injected[name])
+        for ref in sorted(set(QUALIFIED_REF.findall(body))):
+            if ref == name or ref in have or ref not in known:
+                continue
+            problems.append(
+                "%s が %s. を呼んでいますが注入する一覧にありません" % (name, ref))
+    return problems
+
+
+def close_module_refs(seed, all_modules: dict, skip=()) -> tuple:
+    """種の一覧から `modXxx.` の参照を**推移的にたどって**注入集合を閉じる。
+
+    render_report / render_proposal は速さのため手で並べた一覧だけを注入して
+    いたが、モジュールが新しい依存を持つと一覧から黙って落ち、LibreOffice が
+    実行時に「Variable not defined: modXxx」を投げ、呼出側の `On Error` が
+    それを握りつぶしていた(裁定書43 司令塔。modValidate4 -> modValidate3)。
+    **手で並べるのをやめ、参照から機械で閉じる**。
+
+    戻り値 (集合, 追加された名前のリスト)。`all_modules` に無い名前は
+    別の検査(未実装の検出)の担当なので黙って見送る。
+    """
+    have = set(n for n in seed if n in all_modules)
+    added = []
+    queue = list(have)
+    while queue:
+        name = queue.pop()
+        if name in skip:
+            continue
+        body = strip_vba_noise(
+            all_modules[name].read_text(encoding="utf-8", errors="replace")
+            if hasattr(all_modules[name], "read_text") else all_modules[name])
+        for ref in sorted(set(QUALIFIED_REF.findall(body))):
+            if ref in have or ref not in all_modules:
+                continue
+            have.add(ref)
+            added.append(ref)
+            queue.append(ref)
+    return have, sorted(added)
+
+
+def selftest_module_refs() -> int:
+    """close_module_refs / strip_vba_noise の自己テスト(裁定書43 司令塔)。
+
+    `python3 tools/run_lo_tests.py --selftest-refs` で回す。参照の拾い方が
+    壊れると「注入の一覧が黙って足りない」に逆戻りするので、コメントと
+    文字列の除去まで含めて固定する。
+    """
+    cases = []
+    am = {"modA": 'x = modB.Foo(1)', "modB": 'y = modC.Bar()', "modC": "z = 1"}
+    have, added = close_module_refs(["modA"], am)
+    cases.append(("推移的にたどる", have == {"modA", "modB", "modC"}
+                  and added == ["modB", "modC"]))
+
+    am2 = {"modA": "' modB.Foo\n", "modB": "z = 1"}
+    have2, added2 = close_module_refs(["modA"], am2)
+    cases.append(("コメントの参照は数えない", added2 == []))
+
+    am3 = {"modA": 'x = "modB.Foo"\n', "modB": "z = 1"}
+    cases.append(("文字列の中の参照は数えない",
+                  close_module_refs(["modA"], am3)[1] == []))
+
+    am4 = {"modA": "x = modB.Foo()", "modB": "y = modA.Bar()"}
+    cases.append(("相互参照でも止まる",
+                  close_module_refs(["modA"], am4)[0] == {"modA", "modB"}))
+
+    am5 = {"modA": "x = modZZZ.Foo()"}
+    cases.append(("src に無い名前は見送る",
+                  close_module_refs(["modA"], am5)[1] == []))
+
+    am6 = {"modA": "x = modB.Foo()", "modB": "y = modC.Bar()", "modC": "z = 1"}
+    cases.append(("skip したモジュールの先は追わない",
+                  close_module_refs(["modA"], am6, skip={"modB"})[0]
+                  == {"modA", "modB"}))
+
+    cases.append(("行末コメントも落ちる",
+                  close_module_refs({"modA": "x = 1  ' modB.Foo",
+                                     "modB": "z = 1"}.keys() and ["modA"],
+                                    {"modA": "x = 1  ' modB.Foo",
+                                     "modB": "z = 1"})[1] == []))
+
+    ng = [n for n, ok in cases if not ok]
+    print("[run_lo_tests] 参照の閉包 自己テスト: %d/%d"
+          % (len(cases) - len(ng), len(cases)))
+    if ng:
+        for n in ng:
+            print("  NG: " + n)
+        return 2
+    return 0

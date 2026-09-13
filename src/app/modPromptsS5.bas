@@ -38,7 +38,7 @@ Public Function BuildS5System() As String
     s = s & "移転 -> 保険で備える" & vbLf
     s = s & "保有 -> 自社で負担する" & vbLf
     s = s & "トリガー -> 保険金をお支払いする条件" & vbLf
-    s = s & "サブリミット -> 補償項目ごとの支払限度額" & vbLf
+    s = s & "サブリミット -> 補償項目ごとのお支払いの上限額" & vbLf
     s = s & "待機期間 -> 補償が始まるまでの期間" & vbLf
     s = s & "保険化 -> 保険での備え方の設計" & vbLf
     s = s & "特約開発 -> 補償内容の新しい設計" & vbLf

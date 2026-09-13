@@ -117,7 +117,7 @@ End Function
 ' --------------------------------------------------------------------------
 ' BlockGuard - 15章§1.3 データ境界規律。S1/S2/S3/S4/PF/S2C/S3Cのsystem末尾へ
 '   (実装上の代入点は9。改訂パスS2/S3がsystemを再生成するため。全経路は
-'   modPromptsOps.AsmGuarded を通す。壁打ちには付けない)
+'   modPromptsOps.AsmGuarded を通す。商談の予行演習には付けない)
 ' --------------------------------------------------------------------------
 Public Function BlockGuard() As String
     Dim s As String

@@ -211,7 +211,7 @@ Public Function IncidentsFor(ByVal industryCode As String, Optional ByVal maxRow
                           CapCfg(maxRows, "kb_incident_rows", 5), "incidents")
 End Function
 
-' MechsText - 機構ライブラリ抜粋(壁打ちsystem)。Phase 1.5のため常に「(登録なし)」。
+' MechsText - 機構ライブラリ抜粋(商談の予行演習system)。Phase 1.5のため常に「(登録なし)」。
 Public Function MechsText(Optional ByVal maxRows As Long = 0) As String
     MechsText = Inject(KB_I_MECH, "mech_id", vbNullString, vbNullString, _
                        CapCfg(maxRows, "kb_mech_rows", 40), "mechs")
@@ -292,7 +292,7 @@ End Function
 
 ' 5種のうち pattern_id だけは呼出元が0件である(2026-09 時点の実測)。S1～S4の
 '   シートに pattern_id 欄が無く(modUICase2 の実在検査は menu/line/scheme/
-'   case_lib の4本)、pattern_id が現れる唯一の場所である壁打ち(PF)の
+'   case_lib の4本)、pattern_id が現れる唯一の場所である商談の予行演習(PF)の
 '   rework_suggestions[] は modSchemas の固定enum P1～P15 を modValidate2 の
 '   V-PF-06 が照合している。16章 E-07 が「実在検査5種」を掲げている以上、
 '   ナレッジブックの patterns シートを増やして V-PF-06 を KB ホワイトリストへ

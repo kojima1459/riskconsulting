@@ -441,6 +441,20 @@ def run_render(soffice: str, work_dir: Path, theme: str, faithful: bool,
         print(f"[render_report] FAIL: 未実装のモジュールがあります: {', '.join(missing)}")
         return None
 
+    # 一覧の**足りない分を機械で足す**(裁定書43 司令塔)。RENDER_MODULES は
+    #   手で並べた種であり、モジュールが新しい依存を持つと黙って欠ける。欠けた
+    #   まま走らせると LibreOffice Basic が実行時に「Variable not defined:
+    #   modXxx」を投げ、呼出側の `On Error` がそれを握りつぶして「組み立てに
+    #   失敗しました」だけが残る(実際に modValidate4 -> modValidate3 で1度
+    #   そうなった)。`modXxx.` の参照を推移的にたどって閉じる。
+    closed, extra = lo.close_module_refs(modules.keys(), all_modules)
+    for name in sorted(closed - set(modules)):
+        modules[name] = all_modules[name].read_text(encoding="utf-8",
+                                                    errors="replace")
+    if extra:
+        print("[%s] 参照から自動で足したモジュール(%d本): %s"
+              % ("render_report", len(extra), ", ".join(extra)))
+
     out_file = work_dir / "report.html"
     out_url = "file://" + out_file.as_posix()
     modules["RenderMain"] = basic_driver(out_url, theme, faithful, reviewed_by)

@@ -242,15 +242,11 @@ End Function
 '
 '   **列挙ではなく範囲で決める**(裁定書43 §0・§2 Y-2)。以前は10種の**列挙**
 '   だったため ZWNJ・ZWJ・WORD JOINER・SOFT HYPHEN・EN SPACE 等が素通りした。
-'   白名簿を長くしても同じ型が必ず残る。符号位置の**閉じた範囲の集合**で定義:
-'     U+0000-U+0020 制御文字と半角空白(TAB/LF/VT/FF/CR/SPACE)
-'     U+007F DEL / U+00A0 NBSP / U+00AD SOFT HYPHEN / U+180E MONGOLIAN VS
-'     U+2000-U+200F スペース各種・ZWSP(200B)・ZWNJ・ZWJ・LRM/RLM
-'     U+2028-U+202F 行/段落区切り・双方向制御・NARROW NBSP / U+3000 全角空白
-'     U+205F-U+2060 MEDIUM MATH SPACE・WORD JOINER / U+FEFF BOM(ZWNBSP)
-'   範囲の**外**は1文字でも来れば True(落としすぎない)。空文字列は False。
-'   回帰: modTestsPure24 の 35 が**範囲の境界の内外**を押さえるので、範囲を1つ
-'   削る/端を1つずらすと必ず赤くなる(1文字ずつは列挙しない)。33/34 と
+'   白名簿を長くしても同じ型が必ず残る。**範囲の一覧の正は下の
+'   IsInvisibleCodeUnit の Select Case**(制御文字 Cc・書式文字 Cf・空白 Zs を
+'   BMP の範囲で覆う)。範囲の**外**は1文字でも来れば True(落としすぎない)。
+'   空文字列は False。回帰: modTestsPure24 の 35 が**範囲の境界の内外**を
+'   押さえるので、範囲を1つ削る/端を1つずらすと必ず赤くなる。33/34 と
 '   tools/render_proposal.py がレポート・提案書の両経路を同じ表で実測する。
 ' ============================================================================
 Public Function HasVisibleText(ByVal s As String) As Boolean
@@ -270,15 +266,23 @@ Private Function IsInvisibleCodeUnit(ByVal cp As Long) As Boolean
     Select Case cp
     Case 0 To &H20&
         IsInvisibleCodeUnit = True
-    Case &H7F&, &HA0&, &HAD&, &H180E&
+    Case &H7F& To &H9F&
+        IsInvisibleCodeUnit = True
+    Case &HA0&, &HAD&, &H61C&, &H1680&
+        IsInvisibleCodeUnit = True
+    Case &H115F& To &H1160&
+        IsInvisibleCodeUnit = True
+    Case &H180B& To &H180E&
         IsInvisibleCodeUnit = True
     Case &H2000& To &H200F&
         IsInvisibleCodeUnit = True
     Case &H2028& To &H202F&
         IsInvisibleCodeUnit = True
-    Case &H205F& To &H2060&
+    Case &H205F& To &H206F&
         IsInvisibleCodeUnit = True
-    Case &H3000&, &HFEFF&
+    Case &H3000&, &H3164&, &HFEFF&
+        IsInvisibleCodeUnit = True
+    Case &HFFA0&, &HFFF9& To &HFFFB&
         IsInvisibleCodeUnit = True
     End Select
 End Function

@@ -120,6 +120,18 @@ GATES = [
     #   HTML画面が実際に描かれるかは Windows 実機でしか確認できない(Z-43)。
     ("ui",           [sys.executable, "tools/ui_check.py"],
      r"結果: OK 6条件"),
+    # 裁定書43 §2(司令塔の最終検問): 「作ったのに繋いでいない」検問を0にする。
+    #   gate_count.py は GATES の全実行ファイルが要点行の契約に入っているか、
+    #   件数がリテラル定数でないかを見る**検問の検問**なのに、GATES に載って
+    #   おらず一括実行では一度も回っていなかった(自分自身を数える 33 本目)。
+    ("gate-count",   [sys.executable, "tools/gate_count.py"],
+     r"検査実施: [1-9]\d*件"),
+    # 同上。S1 抽出品質ベンチの採点器(bench_s1.py)も一括実行から外れていた。
+    #   selfcheck=採点の算術と変異注入、gold-check=5社の gold の検算。
+    ("bench",        [sys.executable, "tools/bench_s1.py", "--mode", "selfcheck"],
+     r"\[selfcheck\] OK"),
+    ("bench-gold",   [sys.executable, "tools/bench_s1.py", "--gold-check"],
+     r"\[gold-check\] OK"),
 ]
 
 

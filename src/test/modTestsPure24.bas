@@ -553,17 +553,25 @@ End Function
 ' 範囲の**内側の端**(すべて見えない文字でなければならない)。U+0000 側は
 '   符号なしなので下限の外が存在しない=U+0001 を内側の端として持つ。
 Private Function InvisibleEdges() As Variant
-    InvisibleEdges = Array(&H1&, &H20&, &H7F&, &HA0&, &HAD&, &H180E&, _
-                           &H2000&, &H200F&, &H2028&, &H202F&, &H205F&, _
-                           &H2060&, &H3000&, &HFEFF&)
+    InvisibleEdges = Array(&H1&, &H20&, &H7F&, &H9F&, &HA0&, &HAD&, _
+                           &H61C&, &H1680&, &H115F&, &H1160&, &H180B&, _
+                           &H180E&, &H2000&, &H200F&, &H2028&, &H202F&, _
+                           &H205F&, &H2060&, &H206F&, &H3000&, &H3164&, _
+                           &HFEFF&, &HFFA0&, &HFFF9&, &HFFFB&)
 End Function
 
 ' 上の範囲の**1つ外**(すべて可視でなければならない=落としすぎの検出)。
+'   U+0080-U+009F(C1 制御)・U+2061-U+206F(不可視演算子・双方向分離子)・
+'   U+180B-U+180D(モンゴル自由字形選択子)は裁定書43 の司令塔手直しで
+'   **内側**へ移した(Cc/Cf の取りこぼし)。
 Private Function VisibleEdges() As Variant
-    VisibleEdges = Array(&H21&, &H7E&, &H80&, &H9F&, &HA1&, &HAC&, &HAE&, _
-                         &H180D&, &H180F&, &H1FFF&, &H2010&, &H2027&, _
-                         &H2030&, &H205E&, &H2061&, &H2FFF&, &H3001&, _
-                         &HFEFE&, &HFF00&)
+    VisibleEdges = Array(&H21&, &H7E&, &HA1&, &HAC&, &HAE&, &H61B&, _
+                         &H61D&, &H167F&, &H1681&, &H115E&, &H1161&, _
+                         &H180A&, &H180F&, &H1FFF&, &H2010&, &H2027&, _
+                         &H2030&, &H205E&, _
+                         &H2070&, &H2FFF&, &H3001&, &H3163&, &H3165&, _
+                         &HFEFE&, &HFF00&, &HFF9F&, &HFFA1&, &HFFF8&, _
+                         &HFFFC&)
 End Function
 
 Private Sub T_W15Final()

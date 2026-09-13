@@ -30,7 +30,7 @@ Private mOnceFired As Boolean
 '   MK-S2-RNW / MK-S3 / MK-S4 / MK-PF / MK-S2C-HIT / MK-S2C-CLEAN /
 '   MK-S3C-HIT / MK-S3C-CLEAN。各応答は自分のバリアント文脈(NEWはcase_type=new、
 '   RNWはrenewal。共通応答は両文脈)でmodValidateに合格する(受入条件1)。
-'   sp(壁打ち)はスキーマを持たないため自由文を返す(表外。IDを持たない)。
+'   sp(商談の予行演習)はスキーマを持たないため自由文を返す(表外。IDを持たない)。
 '
 ' 障害注入(15章§8.2の表が正。config mock_fault。既定は空=正常応答のみ)。11値と
 ' 適用stepは FaultBody の Select Case が実体で、broken_json=末尾の閉じ括弧欠落 /
@@ -82,7 +82,7 @@ End Function
 ' ------------------------------------------------------------------------------
 '   キーの正は15章§8.1の11 ID と15章§5.6 の MK-S5(計12 ID)。表に無いIDは "" を返す(呼び元の
 '   ClassifyResponse がE0202として扱う)。決定的=乱数・現在時刻・呼び出し回数に
-'   依存しない。壁打ち(sp)は表にIDを持たないため本関数の対象外。
+'   依存しない。商談の予行演習(sp)は表にIDを持たないため本関数の対象外。
 ' ==============================================================================
 Public Function ResponseById(ByVal mockId As String) As String
     Select Case UCase$(Trim$(mockId))
@@ -200,7 +200,7 @@ Private Function FaultBody(ByVal f As String, ByVal stepKey As String, _
 End Function
 
 ' BodyFor - stepKey とバリアントから正常応答本文を得る(15章§8.1)。表にIDを
-'   持たない壁打ち(sp)だけは直接返し、それ以外は mock ID へ写して ResponseById
+'   持たない商談の予行演習(sp)だけは直接返し、それ以外は mock ID へ写して ResponseById
 '   へ渡す(応答本文の分岐を1箇所=ResponseById に閉じる)。
 Private Function BodyFor(ByVal stepKey As String, ByVal variantName As String) As String
     If stepKey = "sp" Then
@@ -273,7 +273,7 @@ Private Function InjectGhostIdS3(ByVal body As String) As String
     InjectGhostIdS3 = Replace(body, """menu_ids"":[""M-0012""]", """menu_ids"":[""M-0012"",""M-9999""]", 1, 1)
 End Function
 
-' 壁打ち(sp)のmock応答。スキーマを持たない自由対話のため、決定的な短い
+' 商談の予行演習(sp)のmock応答。スキーマを持たない自由対話のため、決定的な短い
 ' 助言文を返す(15章§6.5)。
 Private Function SpTextMock() As String
     Dim s As String

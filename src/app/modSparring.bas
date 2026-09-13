@@ -2,11 +2,11 @@ Attribute VB_Name = "modSparring"
 Option Explicit
 
 ' ============================================================================
-' modSparring - PL-04 壁打ち(自由対話)の実行制御と履歴管理(app層・T-27)
+' modSparring - PL-04 商談の予行演習(自由対話)の実行制御と履歴管理(app層・T-27)
 ' ----------------------------------------------------------------------------
 ' 正: 15章§6.5(system本文・CallChat・履歴保存・「受信箱へ」)/14章§6(CallChat の
 '   帯域外成否・prevU/prevA は ";;;" 連結の**新しい順**)/14章§1(Stepレジストリ:
-'   step=sp・play=PL-04・呼び出し元は modSparring)/13章§2.17(壁打ちシートの
+'   step=sp・play=PL-04・呼び出し元は modSparring)/13章§2.17(商談の予行演習シートの
 '   sparring_log ブロック)・§2.2(sparring_u / sparring_a への保存)/
 '   16章 E-44(履歴上限)・E-05(3)(送信前の modPii 必須)・E-04(境界記号の偽装除去)。
 ' 責務: 発話1本の送信(system組立 -> 走査 -> CallChat -> 履歴保存)、再開時の
@@ -35,7 +35,7 @@ Option Explicit
 
 Private Const SP_SRC As String = "modSparring"
 
-' 13章§2.2 の data_key(壁打ち履歴の保存先)。
+' 13章§2.2 の data_key(商談の予行演習履歴の保存先)。
 Private Const SP_KEY_U As String = "sparring_u"
 Private Const SP_KEY_A As String = "sparring_a"
 
@@ -43,7 +43,7 @@ Private Const SP_KEY_A As String = "sparring_a"
 Private Const SP_ROLE_U As String = "user"
 Private Const SP_ROLE_A As String = "ai"
 
-' 13章§2.6 source_kind の enum のうち壁打ち発話が使う値(15章§6.5)。
+' 13章§2.6 source_kind の enum のうち商談の予行演習発話が使う値(15章§6.5)。
 Private Const SP_SOURCE_KIND As String = "field_voice"
 
 ' config 既定(13章§2.3 sparring_max_turns。NFR-M3)。
@@ -53,7 +53,7 @@ Private Const SP_MAX_TURNS_DFLT As Long = 12
 Private Const SP_THEME_CHARS As Long = 40
 Private Const SP_DIGEST_CHARS As Long = 400
 
-' 貼付欄のうち壁打ちの資料要約へ載せる2欄(13章§2.2)。全文はS1が既に吸っており、
+' 貼付欄のうち商談の予行演習の資料要約へ載せる2欄(13章§2.2)。全文はS1が既に吸っており、
 ' ここへ再掲すると E-03 の予算を二重に食う。
 Private Const SP_NOTE_KEYS As String = "input_field_notes|input_coverage_note"
 Private Const SP_NOTE_LABELS As String = "現場メモ|付保の見立て"
@@ -70,7 +70,7 @@ Private Const SP_NOTE_LABELS As String = "現場メモ|付保の見立て"
 '   (1) caseIdText が 13章§1 の案件ID書式(判定は modCaseStore.IsValidCaseId が
 '       唯一の実装。書式を2箇所に書かない)
 '   (2) 発話が空白・改行だけでない
-'   (3) hasPii=False。16章 E-05(3)は壁打ちの発話送信前の検知で**送信をブロック**
+'   (3) hasPii=False。16章 E-05(3)は商談の予行演習の発話送信前の検知で**送信をブロック**
 '       する。走査そのものは modPii が唯一の実装なので、ここは結果の真偽だけを
 '       受け取る(検知規則を2箇所に書かない)。
 Public Function CanContinueSparring(ByVal caseIdText As String, _
@@ -162,14 +162,14 @@ End Function
 ' 実行制御
 ' ============================================================================
 
-' ResumeSparring - 「壁打ちを開始/再開」(11章 壁打ちワイヤー・15章§6.5)。
+' ResumeSparring - 「商談の予行演習を開始/再開」(11章 商談の予行演習ワイヤー・15章§6.5)。
 '   戻り値=保存済みの発話数(0=履歴なし＝新規開始)。**-1=案件一覧を読めない**
 '   (fail-closed。ui は開始させない)。contextNote は 13章§2.17 の
 '   `sp_context_note` へ出す表示文字列(例「ドシエ+S1-S3+型/機構 注入済」)。
 '   dossier_tier の t3_sparring への自動昇格(13章§2.1・§2.17)は、裁定書9 A-1
 '   により modCaseStore.PromoteTier(14章§6・N2)を唯一の書込口として**実行する**。
 '   開始/再開のたびに呼ぶ(既に t3_sparring でも同値の書込で害はない)。昇格の
-'   失敗(案件行が無い等)は usage_log へ事実を残して続行し、壁打ちの開始その
+'   失敗(案件行が無い等)は usage_log へ事実を残して続行し、商談の予行演習の開始その
 '   ものは止めない。
 Public Function ResumeSparring(ByVal caseId As String, ByRef contextNote As String) As Long
     On Error GoTo Failed
@@ -188,14 +188,14 @@ Public Function ResumeSparring(ByVal caseId As String, ByRef contextNote As Stri
         Exit Function
     End If
     If Not modCaseRead.ReadCaseCtx(caseId, ctx, rNo, qMode, s4v, tierText) Then
-        modLog.LogUsage "case_ctx_unavailable", caseId, "案件一覧を読めないため壁打ち中止"
+        modLog.LogUsage "case_ctx_unavailable", caseId, "案件一覧を読めないため商談の予行演習中止"
         Exit Function
     End If
 
     contextNote = ContextNoteOf(caseId)
 
     ' 裁定書9 A-1: t3_sparring への自動昇格を実行する(書込口は N2 の PromoteTier
-    ' のみ)。失敗しても壁打ちの開始は止めない(fail-closed にしない設計どおり)。
+    ' のみ)。失敗しても商談の予行演習の開始は止めない(fail-closed にしない設計どおり)。
     If modCaseStore.PromoteTier(caseId, "t3_sparring") Then
         modLog.LogUsage "sparring_tier_promoted", caseId, _
                         "dossier_tier=" & tierText & " -> t3_sparring"
@@ -257,7 +257,7 @@ Public Function SendSparring(ByVal caseId As String, ByVal utterance As String, 
     safeText = Sanitized(utterance, detailAcc)
 
     ' 16章 E-05(3): 送信前の走査は modPii が唯一の実装。検知したら送信しない。
-    piiNote = modPii.ScanReport(safeText, "壁打ち/sp_input")
+    piiNote = modPii.ScanReport(safeText, "商談の予行演習/sp_input")
     If Not CanContinueSparring(caseId, safeText, (LenB(piiNote) > 0)) Then
         If LenB(piiNote) > 0 Then
             errCode = "E0103"
@@ -276,10 +276,10 @@ Public Function SendSparring(ByVal caseId As String, ByVal utterance As String, 
     End If
 
     ' 資料側(案件JSON・ナレッジ)の走査は【記録だけ】行う。E-05 が遮断を命じる
-    ' 実施点は (1)貼付欄 と (3)壁打ちの発話であり、貼付欄は入力時に遮断済みで
+    ' 実施点は (1)貼付欄 と (3)商談の予行演習の発話であり、貼付欄は入力時に遮断済みで
     ' ある。ここで資料側まで遮断すると遮断点がE-05の一覧から増え、かつ検証済み
-    ' の sN_json で壁打ちが恒久的に開けなくなる。黙殺はしない。
-    sysNote = modPii.ScanReport(sysText, "壁打ち/system")
+    ' の sN_json で商談の予行演習が恒久的に開けなくなる。黙殺はしない。
+    sysNote = modPii.ScanReport(sysText, "商談の予行演習/system")
     If LenB(sysNote) > 0 Then
         modLog.LogError "E0103", SP_SRC & ".SendSparring", sysNote
     End If
@@ -324,7 +324,7 @@ End Function
 
 ' SendToInbox - 選択した発話を受信箱へ登録する(15章§6.5「受信箱へ」)。
 '   source_kind=field_voice / theme=案件ID＋発話の要約。戻り値=inbox_id
-'   (失敗は "")。同一発話の二重送信の抑止は 13章§2.17 の `inbox_id` 列(壁打ち
+'   (失敗は "")。同一発話の二重送信の抑止は 13章§2.17 の `inbox_id` 列(商談の予行演習
 '   シート側)が鍵なので、ここでは持たない(答えを2箇所に置かない)。
 '   本文にPIIを検知したら登録しない(16章 E-05(2) 受信箱bodyは保存をブロック)。
 Public Function SendToInbox(ByVal caseId As String, ByVal roleKind As String, _
@@ -344,7 +344,7 @@ Public Function SendToInbox(ByVal caseId As String, ByVal roleKind As String, _
         Exit Function
     End If
 
-    piiNote = modPii.ScanReport(bodyText, "壁打ち/受信箱送信")
+    piiNote = modPii.ScanReport(bodyText, "商談の予行演習/受信箱送信")
     If LenB(piiNote) > 0 Then
         modLog.LogError "E0103", SP_SRC & ".SendToInbox", piiNote
         Exit Function
@@ -376,7 +376,7 @@ Private Function BuildSystemFor(ByVal caseId As String) As String
     Dim rulesText As String
 
     If Not modCaseRead.ReadCaseCtx(caseId, ctx, rNo, qMode, s4v, tierText) Then
-        modLog.LogUsage "case_ctx_unavailable", caseId, "案件一覧を読めないため壁打ち中止"
+        modLog.LogUsage "case_ctx_unavailable", caseId, "案件一覧を読めないため商談の予行演習中止"
         Exit Function
     End If
 
