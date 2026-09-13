@@ -918,7 +918,12 @@ def main() -> int:
     parser.add_argument("--keep-profile", action="store_true",
                         help="一時プロファイルを削除せず残す(デバッグ用)")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--selftest-refs", action="store_true",
+                        help="注入集合の閉包(close_module_refs)の自己テストだけ回す")
     args = parser.parse_args()
+
+    if args.selftest_refs:
+        return selftest_module_refs()
 
     src_root = Path(args.path).resolve()
     if not src_root.exists():
@@ -1003,8 +1008,6 @@ def main() -> int:
     return 0 if overall_ok else 1
 
 
-if __name__ == "__main__":
-    sys.exit(main())
 
 
 # ---------------------------------------------------------------------------
@@ -1131,3 +1134,6 @@ def selftest_module_refs() -> int:
             print("  NG: " + n)
         return 2
     return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

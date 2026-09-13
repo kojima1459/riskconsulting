@@ -132,6 +132,11 @@ GATES = [
      r"\[selfcheck\] OK"),
     ("bench-gold",   [sys.executable, "tools/bench_s1.py", "--gold-check"],
      r"\[gold-check\] OK"),
+    # 裁定書43 司令塔: render-p/render の注入集合を参照から機械で閉じる仕組み
+    #   (close_module_refs)の自己テスト。手で並べた一覧が黙って欠けて
+    #   「Variable not defined」を On Error が握りつぶす型の再発防止。
+    ("refs",         [sys.executable, "tools/run_lo_tests.py", "--selftest-refs"],
+     r"参照の閉包 自己テスト: (\d+)/\1$"),
 ]
 
 

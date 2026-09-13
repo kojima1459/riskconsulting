@@ -1,0 +1,463 @@
+<title>リスク提案ナビ 受入確認 W15</title>
+<style>
+:root{
+  --bg:#faf9f7; --card:#fff; --ink:#1f2328; --muted:#5a626e; --line:#e3e6ea;
+  --accent:#b91c1c; --ok:#166534; --warn:#92400e; --chip:#f1f3f5; --brand:#0f5c4a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181c; --card:#1e2128; --ink:#e8eaed; --muted:#a4acb9; --line:#333842;
+    --accent:#f87171; --ok:#86efac; --warn:#fcd34d; --chip:#272b33; --brand:#5eead4;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181c; --card:#1e2128; --ink:#e8eaed; --muted:#a4acb9; --line:#333842;
+  --accent:#f87171; --ok:#86efac; --warn:#fcd34d; --chip:#272b33; --brand:#5eead4;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:"Yu Gothic UI","Hiragino Sans",system-ui,sans-serif;
+  line-height:1.75;padding-block:28px;padding-left:18px;padding-right:18px;max-width:900px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 26px}
+h2{font-size:18px;margin:36px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+.pri{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;margin-right:8px;vertical-align:2px}
+.p0{background:var(--accent);color:#fff}
+.p1{background:var(--warn);color:#fff}
+.p2{background:var(--chip);color:var(--muted)}
+.p3{background:var(--chip);color:var(--muted);opacity:.8}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 14px}
+.item h3{font-size:15px;margin:0 0 10px}
+.new{display:inline-block;font-size:11px;font-weight:700;color:var(--card);background:var(--ok);
+  padding:1px 7px;border-radius:99px;margin-left:8px;vertical-align:2px}
+dl{margin:0}
+dt{font-size:12px;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:.04em}
+dd{margin:3px 0 0}
+.ok::before{content:"○ ";color:var(--ok);font-weight:700}
+.ng::before{content:"× ";color:var(--accent);font-weight:700}
+code{background:var(--chip);padding:1px 6px;border-radius:4px;font-size:13px;
+  font-family:"Consolas","SF Mono",monospace;word-break:break-all}
+.note{background:var(--chip);border-left:3px solid var(--accent);padding:12px 14px;border-radius:0 8px 8px 0;margin:14px 0;font-size:14px}
+.note.calm{border-left-color:var(--brand)}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+.tbl th,.tbl td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.tbl th{background:var(--chip);font-size:13px}
+.wrap{overflow-x:auto}
+.time{color:var(--muted);font-size:13px;font-weight:400;margin-left:8px}
+kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:12px}
+</style>
+
+<h1>リスク提案ナビ 受入確認（W15 完成版）</h1>
+<p class="sub">2026-09-13 ／ 会社PC（Windows・Office 32bit・社内AIリボン）で確かめていただく手順書です。<b>上から順に、赤いラベルから</b>お願いします。全部で <b>90〜120分</b>（AIの待ち時間込み）。時間が無い日は <b>P群と A群と C群</b>だけでも十分に価値があります。</p>
+
+<div class="note">
+<b>今回から、お願いは「でき上がった1つのファイルを開いて動くか見る」だけです。</b>これまでの PowerShell の「第2段ビルド」は不要になりました（フォームと参照設定の組み込みまで開発側の自動処理で完結します）。前回お渡しした第2段キットは破棄していただいて構いません。<br>
+<b>置き場所は <code>D:\リスク提案ナビ</code></b>（信頼できる場所が D: だけ、という社内の前提に合わせています）。zip の中身をそのまま展開してください。
+</div>
+
+<h2>全体像（どこを見て、なぜ大事か）</h2>
+
+<div class="wrap">
+<table class="tbl">
+<tr><th>群</th><th>何を確かめるか</th><th>なぜ大事か</th><th>目安</th></tr>
+<tr><td><b>P</b></td><td>開く・保存先・自動テスト</td><td>ここが緑にならないと、他のテストが全部できない。<b>実機でしか確かめられない唯一の箇所</b>（HTML画面の描画）</td><td>15分</td></tr>
+<tr><td><b>A</b></td><td>1社を最初から最後まで通す</td><td>製品の本流。ここが通れば「使える」と言える</td><td>30分＋AI待ち</td></tr>
+<tr><td><b>C</b></td><td>AIの抽出が資料どおりか（<b>最大の懸念点</b>）</td><td>資料に無いことを書いたら、レポートは全部台無しになる。人の目でしか最後は確かめられない</td><td>20分</td></tr>
+<tr><td><b>B</b></td><td>お客さま向け提案書</td><td>社外に出るもの。確認していないものは1枚も出ないこと</td><td>15分</td></tr>
+<tr><td><b>D</b></td><td>安全装置（個人情報・報告メール）</td><td>止めるべきものを止め、止めなくていいものを止めていないか</td><td>15分</td></tr>
+<tr><td><b>E</b></td><td>見た目と使い勝手</td><td>50代の営業所員が迷わないか</td><td>10分</td></tr>
+</table>
+</div>
+
+<h2><span class="pri p0">最優先</span>P群 開く・保存先・自動テスト<span class="time">約15分</span></h2>
+
+<div class="item">
+<h3>P-1 起動ボタンから開いて HTML 画面が出る</h3>
+<dl>
+<dt>手順</dt>
+<dd>① 展開したフォルダの <code>リスク提案ナビを起動.bat</code> をダブルクリック<br>② 黄色い帯が出たら [コンテンツの有効化]<br>③ 開いた画面を見る</dd>
+<dt>合格</dt>
+<dd class="ok"><b>帯＋4区画</b>の画面（HTML画面）が出て、上段に <code>準備完了です。</code> と表示される。左に「ナビ／案件チャット／商談の予行演習」の3タブがある</dd>
+<dt>不合格</dt>
+<dd class="ng">Excel のシート画面 <code>ナビ</code> で開く（予備画面）。→ そのシートのお知らせ欄に出ている文言を<b>一字一句そのまま</b>控えてください。<code>ui フォルダが見つからないため従来画面で起動しました</code> とそれ以外とで原因の切り分けが変わります</dd>
+<dd class="ng">「実行時エラー 5」のダイアログが出る。→ ブックを閉じ、ファイル名を <code>rpn.xlsm</code> のような<b>半角英数字だけ</b>に変えて開き直し、出る／出ないを教えてください</dd>
+<dt>補足</dt>
+<dd>HTML画面の描画（フォーム＋WebBrowser）は <b>Windows の実 Excel でしか確かめられません</b>。開発側の自動検問（35本）はここだけ届きません。この1項目が、今回いちばん価値のある確認です。</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>P-2 保存先ファイル <code>data_dir.txt</code> が書かれている</h3>
+<dl>
+<dt>手順</dt>
+<dd>エクスプローラーで <code>D:\リスク提案ナビ</code> を開き、<code>data_dir.txt</code> をメモ帳で開く</dd>
+<dt>合格</dt>
+<dd class="ok">OneDrive のデータフォルダが<b>1行だけ</b>書かれている（例 <code>C:\Users\<自分>\OneDrive - <会社>\リスク提案ナビ\データ</code>）。そのパスをエクスプローラーのアドレス欄に貼ると<b>実在する</b></dd>
+<dt>不合格</dt>
+<dd class="ng">ファイルが無い／中身が空／画面のお知らせに <code>保存先が確認できません。</code> が出ている</dd>
+<dt>送ってほしいもの</dt>
+<dd>その1行の中身そのまま（合格でも）</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>P-3 自動テストが FAIL 0 / SKIP 0</h3>
+<dl>
+<dt>手順</dt>
+<dd>画面左下の [<b>テストを実行</b>] を押して待つ（数分）</dd>
+<dt>合格</dt>
+<dd class="ok"><code>FAIL 0</code> かつ <code>SKIP 0</code>。純ロジックの本数は <b>1,065</b></dd>
+<dt>不合格</dt>
+<dd class="ng">FAIL が1本でもある／<code>SKIP(Mac)</code> が1本でも出る（会社PCでは0本が正。出たらその行をそのまま控えてください）</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>P-4 ナレッジブックを自動で見つける</h3>
+<dl>
+<dt>手順</dt>
+<dd>P-1 で開いた直後の画面のお知らせ欄を見る（<code>ナレッジブック.xlsx</code> は本体と同じフォルダに置いてある前提）</dd>
+<dt>合格</dt>
+<dd class="ok"><code>同じフォルダのナレッジブックを読み込みました</code> が出る。区画①の業種欄が一覧から選べる</dd>
+<dt>不合格</dt>
+<dd class="ng"><code>ナレッジブックが見つかりません。管理者にご連絡ください。</code> が出る</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>P-5 Windows の表示倍率を変えても崩れない</h3>
+<dl>
+<dt>手順</dt>
+<dd>Windows の設定→システム→ディスプレイ→「拡大縮小」を <b>100％ → 125％ → 150％</b> と変えて、そのつど開き直す</dd>
+<dt>合格</dt>
+<dd class="ok">どの倍率でも 4区画とボタンが<b>横スクロールなし</b>に見える。文字が欠けない</dd>
+<dt>不合格</dt>
+<dd class="ng">ボタンが切れる／区画が重なる／横スクロールが出る。→ <b>倍率と画面の縦横ピクセル</b>を添えてください</dd>
+<dt>補足</dt>
+<dd>前回の実測は <b>200％のみ</b>でした。100／125／150％は未確認です。</dd>
+</dl>
+</div>
+
+<h2><span class="pri p1">高</span>A群 1社を最初から最後まで通す<span class="time">約30分＋AI待ち</span></h2>
+
+<div class="note calm">
+<b>実在の1社</b>（公開情報が多い中堅の製造業か食品が向きます）で、区画①→②→③→④の順に進めてください。各項目は <b>その場で見る</b>ものだけを書いています。AIの結果の中身（資料どおりか）は C群で見ます。
+</div>
+
+<div class="item">
+<h3>A-1 会社情報を保存し、調査指示文をコピーするとブラウザが開く</h3>
+<dl>
+<dt>手順</dt>
+<dd>① [新規案件] → 会社名・業種を入れて [会社情報を保存]<br>② 区画①の調査指示文の [<b>コピー</b>] を押す</dd>
+<dt>合格</dt>
+<dd class="ok"><code>調査指示文をコピーしました。</code> が出て、社内のディープリサーチの調査ページが既定ブラウザで開く。開かない環境でも <code>ブラウザで https://app.hdtech.jp/… を開いて貼り付けてください</code> の案内が出る</dd>
+<dt>不合格</dt>
+<dd class="ng">何も出ない／クリップボードに入っていない（メモ帳に貼って確認）</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-2 拠点が多い会社では 2,000字の警告が出る</h3>
+<dl>
+<dt>手順</dt>
+<dd>拠点を10か所以上登録した案件で、拠点ハザードの調査指示文を見る</dd>
+<dt>合格</dt>
+<dd class="ok">赤字で <code>…字を超えています。拠点や観点を分けてコピーしてください。</code> が出る。[コピー] 自体は<b>押せる</b></dd>
+<dt>不合格</dt>
+<dd class="ng">警告が出ない／[コピー] が押せなくなる</dd>
+<dt>ついでに</dt>
+<dd>その長い指示文を社内の調査AIに貼ったとき、<b>上限で弾かれるかどうか</b>も控えてください（こちらの上限値が正しいかの実測になります）</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-3 調査結果を貼れる（[ここに貼る]）</h3>
+<dl>
+<dt>手順</dt>
+<dd>調査AIの結果をコピー → 区画②の資料欄の [<b>ここに貼る</b>] → [登録内容を保存]</dd>
+<dt>合格</dt>
+<dd class="ok">枠に先頭5行のプレビューが出る。表をコピーした場合も列がタブで戻っている。区画②の状態が「登録済み」に変わる</dd>
+<dt>不合格</dt>
+<dd class="ng"><code>貼り付けられませんでした。もう一度コピーしてから、[ここに貼る]を押してください。</code> が出る（→ 英語版Excel かどうか、RDP 越しかどうかを添えてください）／プレビューが白い</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-4 [まとめて分析] が 1→4 まで止まらずに進む</h3>
+<dl>
+<dt>手順</dt>
+<dd>区画③の [<b>まとめて分析</b>] を押し、右側の「1〜4」タブを順に見る（社内AIの応答待ちが1段ごとに数分）</dd>
+<dt>見るところ</dt>
+<dd>押した直後に進捗の案内が<b>先に</b>書かれるか／待っている間、画面いちばん下のステータスバーの文字が読めるか</dd>
+<dt>合格</dt>
+<dd class="ok">4段とも埋まり、右上に完了のカードが出て6秒ほどで消える。<code>データ\ログ\run_log.csv</code> に S1〜S4 の行が4行できる</dd>
+<dt>不合格</dt>
+<dd class="ng">途中で止まる → 画面のお知らせ欄の文言と、<code>データ\ログ\err_log.csv</code> の最後の行（<code>E02xx</code> 等のコード）をそのまま控えてください</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-5 資料が薄いときは黄色い警告帯が出る（止まらない）</h3>
+<dl>
+<dt>手順</dt>
+<dd>別の案件で、資料欄に<b>会社概要だけ（数百字）</b>を貼って [まとめて分析]</dd>
+<dt>合格</dt>
+<dd class="ok">1段目の直後に黄色の帯 <code>入力が薄いため、一般論に近い出力になります。</code> が出て、<b>そのまま 2段目以降へ進む</b>。<code>run_log.csv</code> の S1 行に <code>iq=low</code> が入る</dd>
+<dt>不合格</dt>
+<dd class="ng">帯が出ない／帯が出て止まってしまう</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-6 レポートが出る（未確認なら「担当者確認前」と名乗る）</h3>
+<dl>
+<dt>手順</dt>
+<dd>① 区画④で「内容を確認しました」に<b>チェックを入れずに</b> [<b>レポート出力</b>]<br>② 次に<b>チェックを入れ、確認者名を入力</b>して、もう一度 [レポート出力]</dd>
+<dt>合格</dt>
+<dd class="ok">①: 末尾の免責が <code>（AI生成・担当者確認前）</code> の文で、表紙のチップが「確認前」<br>②: 免責が <code>担当者が確認・編集したものです（確認: 氏名 / 日時）</code> に変わり、チップが「確認済 氏名」になる。<b>①のファイルは消えず、②は別名で増える</b></dd>
+<dt>不合格</dt>
+<dd class="ng">未確認なのに「確認済」と出る／確認者名を入れたのに反映されない</dd>
+<dt>補足</dt>
+<dd>レポート（社内向け）は未確認でも出ます。提案書（お客さま向け）は出ません（B-1）。この非対称は仕様です。</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-7 レポートの構成が見本どおり</h3>
+<dl>
+<dt>手順</dt>
+<dd>出した HTML を [ブラウザで開く] で開き、節の見出しを上から数える</dd>
+<dt>合格</dt>
+<dd class="ok">SEC-01〜SEC-17 の節がすべてあり、特に <b>SEC-17「攻めの保険活用」</b>が出ている。表が崩れず、印刷プレビューで節の途中で改ページされない</dd>
+<dt>不合格</dt>
+<dd class="ng">節が欠ける／英語のタグ名が生で見える／表がはみ出す</dd>
+</dl>
+</div>
+
+<h2><span class="pri p1">高</span>C群 AIの抽出が資料どおりか（最大の懸念点）<span class="time">約20分</span></h2>
+
+<div class="note">
+<b>ここは人の目でしか確かめられません。</b>開発側は「資料に無いことを書かない」ためのしくみを3重にしています（① 出典の引用を原文と照合して一致しなければ注記 ② 5社分の答え合わせベンチ ③ 資料に無い項目は「見当たらない」と書かせる指示）。しかし<b>実物のディープリサーチの出力</b>で測ったことは、まだありません。<b>×が出たら、その質問文と資料の該当箇所をそのまま</b>教えてください。しきい値と指示文を直す唯一の材料です。
+</div>
+
+<div class="item">
+<h3>C-1 1段目（企業情報）の数字と固有名詞が資料に実在する</h3>
+<dl>
+<dt>手順</dt>
+<dd>右側の「1」タブを開き、<b>会社名・所在地・従業員数・売上・主要拠点</b>の5点を、貼った資料の中で <kbd>Ctrl</kbd>+<kbd>F</kbd> で探す</dd>
+<dt>合格</dt>
+<dd class="ok">5点とも資料に<b>その値が実際に書いてある</b>。資料に無い項目は空欄か「見当たらない」になっている</dd>
+<dt>不合格</dt>
+<dd class="ng"><b>資料に無い数字や地名が入っている</b>（＝AIが補った）。1点でも×として、その項目名と値と、資料の該当箇所（無いなら「無い」）を教えてください</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>C-2 根拠の引用（出典）が原文にある</h3>
+<dl>
+<dt>手順</dt>
+<dd>「2」タブ（リスク仮説）で、各リスクの<b>根拠の引用文</b>を3つ選び、資料内で <kbd>Ctrl</kbd>+<kbd>F</kbd></dd>
+<dt>合格</dt>
+<dd class="ok">3つとも原文に<b>ほぼ同じ文</b>がある。一致しないものには <code>原文で確認できませんでした</code> の注記が付いている</dd>
+<dt>不合格</dt>
+<dd class="ng">注記が無いのに原文に見つからない（＝照合が素通りしている）</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>C-3 <code>content_filter</code> に弾かれないか（代表3本）<span class="new">今回新規</span></h3>
+<dl>
+<dt>手順</dt>
+<dd>現場メモ欄に次の語を含む短い文を入れ、<b>1本ずつ</b> [まとめて分析]：①「従業員の死亡事故（労災）」 ②「異物混入による健康被害（PL）」 ③「集団感染で操業停止（感染症BCP）」</dd>
+<dt>合格</dt>
+<dd class="ok">3本とも 2段目まで通る。→ 「<b>E0207 なし</b>」とだけお知らせください</dd>
+<dt>不合格</dt>
+<dd class="ng">止まる。<code>err_log.csv</code> の該当行（<code>E0207</code>）をそのまま送ってください。余裕があれば、<b>どの語を外すと通るか</b>を1回だけ試してください</dd>
+<dt>なぜ</dt>
+<dd>社内AIリボンの content_filter は暴力・自傷の語に反応することがあり、リスク分析はその語を避けて通れません。実リボンでしか分かりません。</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>C-4 案件JSONを書き出して開発へ渡す</h3>
+<dl>
+<dt>手順</dt>
+<dd>A群で通した案件で、区画③の [<b>エクスポート</b>] を押す</dd>
+<dt>合格</dt>
+<dd class="ok">案件JSONのファイルができる（保存先は画面に出ます）</dd>
+<dt>送ってほしいもの</dt>
+<dd>そのファイル（許可された経路で）。開発側の <b>S1抽出品質ベンチ</b>にかけ、実物の調査出力での抽出精度を初めて数字にします。<b>今回いちばん欲しいデータ</b>です</dd>
+</dl>
+</div>
+
+<h2><span class="pri p1">高</span>B群 お客さま向け提案書<span class="time">約15分</span></h2>
+
+<div class="item">
+<h3>B-1 確認していないと 1枚も出ない</h3>
+<dl>
+<dt>手順</dt>
+<dd>区画④で「内容を確認しました」の<b>チェックを外したまま</b>、または<b>確認者名を空のまま</b> [<b>提案書（お客さま向け）を出す</b>]</dd>
+<dt>合格</dt>
+<dd class="ok"><code>内容を確認してから出力してください。</code>（または <code>確認者名を入力してください。</code>）が出て、<b>ファイルが1つもできない</b></dd>
+<dt>不合格</dt>
+<dd class="ng">ファイルができてしまう（<b>見つけたらすぐ連絡してください</b>。未確認の顧客提示物が出る欠陥です）</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B-2 確認すると出る（10分ほどかかる）</h3>
+<dl>
+<dt>手順</dt>
+<dd>チェックと確認者名を入れて [提案書（お客さま向け）を出す]。提案書の文章づくりから出力まで一度に進む</dd>
+<dt>合格</dt>
+<dd class="ok"><code>提案書_<会社名>_<日付>_v<版>.html</code> ができる。もう一度押すと <b>v が1つ増えた別ファイル</b>になる（上書きしない）</dd>
+<dt>不合格</dt>
+<dd class="ng"><code>提案書の組み立てに失敗しました。</code> → <code>err_log.csv</code> の最後の行（<code>E0502</code> と <code>err=…</code>）をそのまま送ってください</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B-3 Microsoft Edge で開いて A4横・22枚・ノートが印刷されない</h3>
+<dl>
+<dt>手順</dt>
+<dd>できた HTML を<b>エクスプローラーからダブルクリック</b>して Edge で開き、<kbd>Ctrl</kbd>+<kbd>P</kbd> で印刷プレビュー</dd>
+<dt>合格</dt>
+<dd class="ok">① 用紙が <b>A4 横</b> ② <b>22枚ぴったり</b>（1枚が2ページに割れない） ③ 緑の帯とヒートマップの色が出る（背景色印刷が既定オフの端末では帯が白くなるが、題と番号が黒で読めればよい） ④ <b>発表者ノートが1つも印刷に出ない</b></dd>
+<dt>不合格</dt>
+<dd class="ng">④が出る（<b>重大</b>。お客さまに渡す資料に当社のトークが載る）／枚数が22でない</dd>
+<dt>注意</dt>
+<dd><b>Excel の画面の中の表示枠（IE11相当）では正しく出ません。</b>必ず Edge で開いてください。</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B-4 お客さまの目で読んで、壊れた日本語が無い</h3>
+<dl>
+<dt>手順</dt>
+<dd>22枚を<b>お客さまになったつもりで</b>通読する</dd>
+<dt>合格</dt>
+<dd class="ok">社内語（付保／座組／リスクユニバース／ニューリスク／サブリミット）が顧客語に置き換わっている。<b>「保険保険」「額額」「整理られる」のような重なり・崩れが1つも無い</b></dd>
+<dt>不合格</dt>
+<dd class="ng">崩れた日本語がある → その語と枚を控えてください（対訳表の欠陥）</dd>
+<dt>これは正常</dt>
+<dd>「ヒアリング」「与信」「顕在化」「クロスセル」「移転」「保有」「抜け」「未充足」「仕分け」「引受け」の <b>10語は残ることがあります</b>（置き換えると不自然になるので、わざと置き換えず警告だけにしています）。残っていても×ではありません。それ以外の社内語が残っていたら教えてください</dd>
+</dl>
+</div>
+
+<h2><span class="pri p2">中</span>D群 安全装置<span class="time">約15分</span></h2>
+
+<div class="item">
+<h3>D-1 契約番号だけなら警告で続き、人名が混じると止まる<span class="new">今回変更</span></h3>
+<dl>
+<dt>手順</dt>
+<dd>① 資料欄に「証券番号 1234-5678-9012」のような番号だけを含む文を貼る<br>② 次に、番号＋人名＋メールアドレスを含む文を貼る</dd>
+<dt>合格</dt>
+<dd class="ok">①: <code>契約番号らしき数字列(N件)を検知しました。</code> の警告が出るが<b>登録は続く</b><br>②: 登録が<b>止まり</b>、人名・メールの検知が示される</dd>
+<dt>不合格</dt>
+<dd class="ng">①で止まる（前の挙動）／②で通ってしまう</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>D-2 調査指示文の [コピー] 直前に個人情報の下見が出る<span class="new">今回新規</span></h3>
+<dl>
+<dt>手順</dt>
+<dd>現場メモに個人名とメールアドレスを書いてから、区画①の [コピー]</dd>
+<dt>合格</dt>
+<dd class="ok"><code>調査指示文をコピーしました。</code> のあとに警告が続き、該当箇所が示される。<b>コピー自体は止まらない</b></dd>
+<dt>不合格</dt>
+<dd class="ng">警告が出ない／コピーが止まる</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>D-3 [報告メールを作成] で Outlook の下書きが開く（送信はしない）<span class="new">今回新規</span></h3>
+<dl>
+<dt>手順</dt>
+<dd>区画④の [<b>報告メールを作成</b>] を押す（案件を選んでいなくても押せます）</dd>
+<dt>合格</dt>
+<dd class="ok">Outlook の<b>新規メール（下書き）</b>が開き、宛先・件名・本文（案件ID・保存先・err_log の末尾）が入っている。<b>勝手に送信されない</b></dd>
+<dt>不合格</dt>
+<dd class="ng">送信されてしまう（<b>重大</b>）／Defender や AV の警告が出る（→ 文言をそのまま）／<code>Outlookの下書きを開けなかったため…</code> が出てクリップボードにコピーされる（これは<b>フォールバック</b>です。Outlook が入っていない環境では正常）</dd>
+<dt>なぜ</dt>
+<dd><code>Outlook.Application</code> の生成が会社PCの AV にどう見えるかは、実測でしか分かりません。</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>D-4 翌朝、起動ボタンから開いて案件が残っている</h3>
+<dl>
+<dt>手順</dt>
+<dd>終業時にシャットダウン（<code>D:</code> は消えてよい）→ 翌朝、起動ボタンから開き直す</dd>
+<dt>合格</dt>
+<dd class="ok">案件一覧に前日の案件が残り、会社名・業種・状態・最終更新が同じ。二重行が無い。OneDrive の <code>リスク提案ナビ\データ\企業\</code> に <code><会社名>_<8桁>_企業カルテ.xlsx</code> がある</dd>
+<dt>不合格</dt>
+<dd class="ng">一覧が空 → P-2 の <code>data_dir.txt</code> の中身を一緒に</dd>
+</dl>
+</div>
+
+<h2><span class="pri p2">中</span>E群 見た目と使い勝手<span class="time">約10分</span></h2>
+
+<div class="item">
+<h3>E-1 文字サイズの切り替え</h3>
+<dl>
+<dt>手順</dt>
+<dd>[設定] で文字サイズを 小・中・大 に切り替える</dd>
+<dt>合格</dt>
+<dd class="ok">文字の大きさが変わり、横スクロールが出ず、ボタンの文字が欠けない</dd>
+<dt>不合格</dt>
+<dd class="ng">変わらない／大で崩れる</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>E-2 言葉が分かる（社内語が画面に残っていないか）<span class="new">今回変更</span></h3>
+<dl>
+<dt>手順</dt>
+<dd>3つのタブと4区画のボタン・見出しを、<b>初めて触る営業所員のつもりで</b>読む</dd>
+<dt>合格</dt>
+<dd class="ok">左の3つ目のタブが「<b>商談の予行演習</b>」（旧「壁打ち」）。丸数字ではなく「1〜4」。意味の分からない語が無い</dd>
+<dt>不合格</dt>
+<dd class="ng">「壁打ち」「座組」「PL-04」のような語が画面に残っている → 場所と語を</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>E-3 「思っていたのと違う」を集める</h3>
+<dl>
+<dt>手順</dt>
+<dd>ふだんの業務で実際に使ってみる（15分でも）</dd>
+<dt>見るところ</dt>
+<dd>迷った場所・言葉が分からなかった場所・押す前に不安になった場所</dd>
+<dt>補足</dt>
+<dd><b>仕様どおりでも、使いにくければ直す対象です。</b>「なんとなく分かりにくい」でも構いません。そのまま書いてください。</dd>
+</dl>
+</div>
+
+<h2>まだ決まっていないこと・実機でしか分からないこと（正直に）</h2>
+
+<div class="wrap">
+<table class="tbl">
+<tr><th>項目</th><th>状況</th></tr>
+<tr><td>HTML画面の描画（P-1）</td><td>LibreOffice でも社外PCでも再現できません。<b>この手順書でいちばん大事な1項目</b>です。</td></tr>
+<tr><td>Outlook 下書き（D-3）と AV</td><td>実装済み・自動テスト済みですが、会社PCの AV がどう見るかは実測待ちです。</td></tr>
+<tr><td><code>content_filter</code>（C-3）</td><td>実リボンでしか分かりません。3本とも通れば回避策は不要と判断します。</td></tr>
+<tr><td><b>現契約サマリの匿名化の既定</b></td><td>いまは <b>ON（匿名化する）</b>。社内AI環境 v1.1 で「解除可」になりましたが、OFF にすると持株ログに本文が残ります。<b>PJ の判断</b>をいただければ切り替えます（実装はどちらも1行）。</td></tr>
+<tr><td>実物の調査出力での抽出精度</td><td>ベンチは mock の5社だけです。C-4 の案件JSONをいただいて初めて数字になります。</td></tr>
+</table>
+</div>
+
+<h2>結果の書き方</h2>
+
+<div class="note">
+<b>項目番号と ○／× だけで十分です。</b>× のときは、画面に出た文字をそのまま書いていただけると原因が早く絞れます。<br><br>
+例：<br>
+<code>P-1 ○ / P-2 ○（C:\Users\…\データ）/ P-3 ○ / P-4 ○ / P-5 × 125%で区画④のボタンが切れる（1366×768）</code><br>
+<code>A-1 ○ / A-2 未 / A-3 ○ / A-4 × S3で止まった err_log: E0205 …</code><br>
+<code>C-1 × 従業員数「320名」が資料に無い（資料は「約300名」）</code><br>
+<code>C-3 E0207 なし</code><br><br>
+あわせて <b>err_log.csv（空でも「空でした」）・案件JSON・data_dir.txt の1行</b> の3点をお願いします。<b>×が多い日ほど価値が高い</b>ので、途中で止めずに最後まで通していただけると助かります。テストできなかった項目は「未」で構いません。
+</div>
+
+<p class="sub" style="margin-top:30px">
+この文書は 2026年9月13日時点の実装コード（<code>src</code>・<code>ui</code>）と配布ビルドの config の実測値にもとづいて書かれています。ボタン名・メッセージは実装の文字列そのままです。開発側の自動検問は 35本（純ロジックテスト 1,065本）がすべて緑の状態でお渡ししています。API キー・パスワードなどの値は、この文書には一切含まれていません。
+</p>
