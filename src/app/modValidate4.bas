@@ -212,72 +212,14 @@ End Sub
 
 ' TabooPairs - 対訳表(docs/design/提案書_wide/対訳表_社内語から顧客語.md)を
 '   「社内語<TAB>顧客語<TAB>mode」で vbLf 区切りに並べた1本。**禁止語の唯一の
-'   値源**。§1〜§3 の46語 + §4.1 の3語 + §6.4 の表記ゆれ2語 = 51行(後の2つは
-'   番号付きの表に置かない=15章§5.6 の対訳行は46語のまま)。mode は**全行に
-'   ある**。全列一致は tools/render_proposal.py の check_glossary_impl が見る。
+'   値源**。**裁定書46(班F)で modValidate5 へ実体を移した**(modValidate4 が
+'   29,976字で満杯のため。12章§2の30,000字契約)。公開API名は変えない
+'   (modTestsPure27/28・modExportProposal は従来どおり modValidate4.TabooPairs
+'   を呼ぶ)。全列一致は tools/render_proposal.py の check_glossary_impl が
+'   modValidate5.bas の字面を読んで見る。
 Public Function TabooPairs() As String
-    Dim s As String
-    AdPair s, "付保", "保険のご加入", V4_REPLACE
-    AdPair s, "未付保", "保険に入っていない状態", V4_REPLACE
-    AdPair s, "付保ギャップ", "保険で手当てできていない部分", V4_REPLACE
-    AdPair s, "未充足", "保険の手当てが無い", V4_WARN
-    AdPair s, "移転", "保険で備える", V4_WARN
-    AdPair s, "保有", "自社で負担する", V4_WARN
-    AdPair s, "トリガー", "保険金をお支払いする条件", V4_REPLACE
-    AdPair s, "サブリミット", "補償項目ごとのお支払いの上限額", V4_REPLACE
-    AdPair s, "待機期間", "補償が始まるまでの期間", V4_REPLACE
-    AdPair s, "保険化", "保険での備え方の設計", V4_REPLACE
-    AdPair s, "特約開発", "補償内容の新しい設計", V4_REPLACE
-    AdPair s, "組成", "仕組みづくり", V4_REPLACE
-    AdPair s, "募集スキーム", "ご加入の手続きの流れ", V4_REPLACE
-    AdPair s, "料率", "保険料の水準", V4_REPLACE
-    AdPair s, "相関損失", "同時に起きる損害", V4_REPLACE
-    AdPair s, "引受", "保険のお引き受け", V4_REPLACE
-    ' 表記ゆれ(対訳表§6.4)。用言の連用形なので warn(「引受けられる」)。
-    AdPair s, "引受け", "保険のお引き受け", V4_WARN
-    AdPair s, "過少保険", "補償額が損害に届かない状態", V4_REPLACE
-    AdPair s, "抜け", "補償されない部分", V4_WARN
-    AdPair s, "免責金額", "ご負担いただく金額", V4_REPLACE
-    AdPair s, "支払限度額", "お支払いの上限額", V4_REPLACE
-    AdPair s, "リスクユニバース", "リスクの全体像", V4_REPLACE
-    AdPair s, "ニューリスク", "新しく生まれているリスク", V4_REPLACE
-    AdPair s, "座組", "ご提案の構成", V4_REPLACE
-    AdPair s, "座組み", "ご提案の構成", V4_REPLACE
-    AdPair s, "ヒアリング", "お伺いしたい事項", V4_WARN
-    AdPair s, "提案の核", "ご提案の前提", V4_REPLACE
-    AdPair s, "攻めの保険活用", "成長を後押しする保険の活用", V4_REPLACE
-    AdPair s, "発散段階", "構想段階", V4_REPLACE
-    AdPair s, "実装難度", "実現までの難易度", V4_REPLACE
-    AdPair s, "顕在化", "実際に起きること", V4_WARN
-    AdPair s, "打ち手", "対策", V4_REPLACE
-    AdPair s, "商材", "保険商品", V4_REPLACE
-    AdPair s, "リスク移転可能性", "保険での備えやすさ", V4_REPLACE
-    AdPair s, "与信", "取引先の支払い能力", V4_WARN
-    AdPair s, "座組パターン", "ご提案の型", V4_REPLACE
-    AdPair s, "PML", "想定最大損害額", V4_REPLACE
-    AdPair s, "CBI", "取引先の被災による損害", V4_REPLACE
-    AdPair s, "BI", "事業が止まったことによる利益の減少", V4_REPLACE
-    AdPair s, "RTO", "復旧までの目標時間", V4_REPLACE
-    AdPair s, "BCP", "事業継続計画", V4_REPLACE
-    AdPair s, "OT", "工場の制御システム", V4_REPLACE
-    AdPair s, "MFA", "多要素認証", V4_REPLACE
-    AdPair s, "EDR", "端末の不審な動きを検知する仕組み", V4_REPLACE
-    AdPair s, "KRI", "リスクの予兆指標", V4_REPLACE
-    AdPair s, "SLA", "サービス水準の取り決め", V4_REPLACE
-    AdPair s, "D&O", "会社役員賠償責任保険", V4_REPLACE
-    AdPair s, "PL保険", "生産物賠償責任保険", V4_REPLACE
-    AdPair s, "対話の順序", "ご説明の順序", V4_REPLACE
-    AdPair s, "クロスセル", "追加でご検討いただける備え", V4_WARN
-    AdPair s, "仕分け", "整理", V4_WARN
-    TabooPairs = s
+    TabooPairs = modValidate5.TabooPairList()
 End Function
-
-' TabooPairs の1行を積む(社内語<TAB>顧客語<TAB>mode。行は vbLf 区切り)。
-Private Sub AdPair(ByRef acc As String, ByVal w As String, ByVal c As String, _
-                   ByVal md As String)
-    If LenB(acc) > 0 Then acc = acc & vbLf
-    acc = acc & w & V4_TAB & c & V4_TAB & md
-End Sub
 
 ' TabooHit - 本文に残っている禁止語を ";" 区切りで返す(0件なら "")。
 '   半角英字だけの語(PML/BI/OT 等)は前後が英字のときに当てない(「IoT」の中の

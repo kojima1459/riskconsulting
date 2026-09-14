@@ -16,6 +16,13 @@
     (d) 文字数上限
         (リスクライブラリ.typical_scenario<=300 / check_points<=200、
          事故事例.headline<=60 / cause<=150)
+    (e) メニュー一覧: target_categories の各値が enum `category` 内 /
+        menu_id 重複なし(裁定書46 F-8)
+    (f) メニュー種目対応: menu_id がメニュー一覧に、line_id が種目マスタに
+        実在 / 同じ対(menu_id, line_id)の重複なし(裁定書46 F-8。対応表は
+        多対多なので同じ menu_id・line_id 単体の重複は許すが、同一の対の
+        重複登録だけを見る)
+    (g) 種目マスタ: line_id 重複なし(裁定書46 F-8)
 
     enum の正は build/sheets_kb.json の `enums`(19章§3)。空欄は「値源が無い」
     ことの明示であり、enum検査の対象外とする(typical_freq/typical_impact/
@@ -182,6 +189,68 @@ def run_checks(data: dict, checked: "gate_count.Checked") -> list:
                     % (sheet_name, r[id_col], col, limit, len(val)))
     checked.record("文字数上限", n_d)
 
+    # --- (e) メニュー一覧: target_categories が enum内 / menu_id重複なし ----
+    menu_rows = _rows_by_col(
+        by["メニュー一覧"], ["menu_id", "target_categories"],
+    )
+    n_e = 0
+    for r in menu_rows:
+        n_e += 1
+        cats = [c for c in (r["target_categories"] or "").split(";") if c]
+        for c in cats:
+            n_e += 1
+            if c not in cat_set:
+                errors.append(
+                    "(e) メニュー一覧 %s: target_categories %r が enum外"
+                    % (r["menu_id"], c))
+    seen_menu: dict = {}
+    for r in menu_rows:
+        n_e += 1
+        seen_menu[r["menu_id"]] = seen_menu.get(r["menu_id"], 0) + 1
+    for k, n in seen_menu.items():
+        if n > 1:
+            errors.append("(e) メニュー一覧 menu_id %r が重複(%d件)" % (k, n))
+    checked.record("メニュー一覧照合", n_e)
+
+    # --- (f) メニュー種目対応: menu_id/line_id実在 / 対の重複なし ----------
+    menu_ids = {r["menu_id"] for r in menu_rows}
+    line_ids = {row[0] for row in by["種目マスタ"].get("seed_rows") or []}
+    map_rows = _rows_by_col(by["メニュー種目対応"], ["menu_id", "line_id"])
+    n_f = 0
+    for r in map_rows:
+        n_f += 1
+        if r["menu_id"] not in menu_ids:
+            errors.append(
+                "(f) メニュー種目対応: menu_id %r がメニュー一覧に無い"
+                % r["menu_id"])
+        n_f += 1
+        if r["line_id"] not in line_ids:
+            errors.append(
+                "(f) メニュー種目対応: line_id %r が種目マスタに無い"
+                % r["line_id"])
+    seen_pair: dict = {}
+    for r in map_rows:
+        n_f += 1
+        pair = (r["menu_id"], r["line_id"])
+        seen_pair[pair] = seen_pair.get(pair, 0) + 1
+    for (mid, lid), n in seen_pair.items():
+        if n > 1:
+            errors.append(
+                "(f) メニュー種目対応 (%s, %s) が重複(%d件)" % (mid, lid, n))
+    checked.record("メニュー種目対応照合", n_f)
+
+    # --- (g) 種目マスタ: line_id重複なし -------------------------------
+    line_rows_all = [row[0] for row in by["種目マスタ"].get("seed_rows") or []]
+    n_g = 0
+    seen_line: dict = {}
+    for lid in line_rows_all:
+        n_g += 1
+        seen_line[lid] = seen_line.get(lid, 0) + 1
+    for k, n in seen_line.items():
+        if n > 1:
+            errors.append("(g) 種目マスタ line_id %r が重複(%d件)" % (k, n))
+    checked.record("種目マスタ照合", n_g)
+
     return errors
 
 
@@ -237,6 +306,46 @@ def self_test() -> bool:
         s["seed_rows"][0][idx] = "あ" * 61
     results.append(_mutate_and_expect_fail(data, m_d, "headline上限超過"))
 
+    # (e) メニュー一覧の target_categories を enum外の値へ壊す
+    def m_e1(d):
+        s = _sheet(d, "メニュー一覧")
+        idx = _col_index(s, "target_categories")
+        s["seed_rows"][0][idx] = "no_such_category"
+    results.append(_mutate_and_expect_fail(data, m_e1, "target_categories enum外"))
+
+    # (e') メニュー一覧の menu_id を重複させる
+    def m_e2(d):
+        s = _sheet(d, "メニュー一覧")
+        idx = _col_index(s, "menu_id")
+        if len(s["seed_rows"]) < 2:
+            s["seed_rows"].append(list(s["seed_rows"][0]))
+        s["seed_rows"][1][idx] = s["seed_rows"][0][idx]
+    results.append(_mutate_and_expect_fail(data, m_e2, "menu_id重複"))
+
+    # (f) メニュー種目対応の menu_id を存在しないIDへ壊す
+    def m_f1(d):
+        s = _sheet(d, "メニュー種目対応")
+        idx = _col_index(s, "menu_id")
+        s["seed_rows"][0][idx] = "M-9999"
+    results.append(_mutate_and_expect_fail(data, m_f1, "メニュー種目対応menu_id不在"))
+
+    # (f') メニュー種目対応の対を重複させる
+    def m_f2(d):
+        s = _sheet(d, "メニュー種目対応")
+        if len(s["seed_rows"]) < 2:
+            s["seed_rows"].append(list(s["seed_rows"][0]))
+        s["seed_rows"][1] = list(s["seed_rows"][0])
+    results.append(_mutate_and_expect_fail(data, m_f2, "メニュー種目対応の対の重複"))
+
+    # (g) 種目マスタの line_id を重複させる
+    def m_g(d):
+        s = _sheet(d, "種目マスタ")
+        idx = _col_index(s, "line_id")
+        if len(s["seed_rows"]) < 2:
+            s["seed_rows"].append(list(s["seed_rows"][0]))
+        s["seed_rows"][1][idx] = s["seed_rows"][0][idx]
+    results.append(_mutate_and_expect_fail(data, m_g, "種目マスタline_id重複"))
+
     # 参考: 正規データ自体は0件の違反であること(誤検出がないこと)も見る。
     checked0 = gate_count.Checked()
     baseline_errors = run_checks(data, checked0)
@@ -274,7 +383,8 @@ def main() -> int:
 
     if gate_count.report(checked, required=(
             "業種マスタ", "industry_code実在", "enum照合",
-            "ID重複検査", "文字数上限")):
+            "ID重複検査", "文字数上限",
+            "メニュー一覧照合", "メニュー種目対応照合", "種目マスタ照合")):
         return 1
 
     if errors:

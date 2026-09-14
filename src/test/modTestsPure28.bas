@@ -14,7 +14,7 @@ Option Explicit
 '   のように**壊れた出力を正解として固定**していた(裁定書43 §1-6)。新しい設計では
 '   どちらも「直後が漢字なので置換しない」が正解である。
 '
-' 対象と根拠(**全20本**。本数は modTestRunner.Check の呼び出し数の実測であり、
+' 対象と根拠(**全24本**。本数は modTestRunner.Check の呼び出し数の実測であり、
 '   wintest/tests_expected.txt の prod と必ず同時に直すこと):
 '   G1 終端集合の文脈では置換する(対訳表§6)
 '      01 助詞(を)  02 記号(。)  03 文字列の末尾  04 全角空白
@@ -34,6 +34,10 @@ Option Explicit
 '      18 終端の文脈に残った replace の語は TabooHitStrict に出る
 '      19 warn と終端でない文脈の残りは TabooHitStrict に出ない(警告には出る)
 '      20 冪等(置換した文をもう一度通しても変わらない)
+'   G6 新規15対(裁定書46 班F・F-6。modValidate5.TabooPairList)
+'      21 てん補期間(終端の文脈で置換)  22 1事故免責金額(免責金額より最長一致で
+'      先に1回。ご負担いただく金額が混ざらない)  23 No DD, No cover(warn。
+'      置換せずTabooHitに出る)  24 ノンリコース型(リコース型に食われない)
 '
 ' 変異注入(出来レース禁止・裁定書38 §2・43 §1-5):
 '   (a) modValidate4 の終端集合から「を」を1字消すと 01 が落ちる
@@ -63,6 +67,7 @@ Public Sub RunAll()
     T28Warn
     T28Longest
     T28Table
+    T28NewLines46
 End Sub
 
 ' --- G1 終端集合の文脈では置換する(対訳表§6) ---
@@ -209,8 +214,8 @@ Private Sub T28Table()
             End If
         End If
     Next i
-    ok = (total = 51) And (Len(warnN) = 10)
-    modTestRunner.Check "W15Y1 対訳表は51行で warn は10行(全行に mode がある)", ok, _
+    ok = (total = 66) And (Len(warnN) = 16)
+    modTestRunner.Check "W15Y1 対訳表は66行で warn は16行(全行に mode がある)", ok, _
                         "total=" & total & " warn=" & Len(warnN) & " modes=" & modes
 
     ok = (modes = "[replace][warn]") Or (modes = "[warn][replace]")
@@ -237,4 +242,40 @@ Private Sub T28Table()
     ok = (a1 = a2) And (a1 = "保険のご加入の状況とPML額と仕分けの件")
     modTestRunner.Check "W15Y1 置換と見送りを混ぜても冪等", ok, _
                         "a1=" & a1 & " a2=" & a2
+End Sub
+
+' --- G6 新規15対(裁定書46 班F・F-6。modValidate5.TabooPairList) ---
+Private Sub T28NewLines46()
+    Dim n As Long
+    Dim after As String
+    Dim ok As Boolean
+    Dim hit As String
+
+    ' てん補期間(47番・replace)が終端集合の文脈(を)で置換される。
+    after = modValidate4.SoftenTaboo("てん補期間を確認する", n)
+    ok = (after = "保険金をお支払いする期間を確認する") And (n = 1)
+    modTestRunner.Check "W15Y1(F-6) てん補期間は終端の文脈で置換する", ok, _
+                        "after=" & after & " n=" & n
+
+    ' 1事故免責金額(54番)が既存の免責金額(19番)より最長一致で先に1回で置換され、
+    ' 「免責金額」の顧客語(ご負担いただく金額)が混ざらない。
+    after = modValidate4.SoftenTaboo("1事故免責金額は10万円とします。", n)
+    ok = (after = "個別の損害ごとにお客さま負担となる金額は10万円とします。") And (n = 1)
+    If ok Then ok = (InStr(1, after, "ご負担いただく金額", vbBinaryCompare) = 0)
+    modTestRunner.Check "W15Y1(F-6) 1事故免責金額は免責金額より最長一致で先に1回で置換", _
+                        ok, "after=" & after & " n=" & n
+
+    ' No DD, No cover(57番・warn)は一切置換せず、TabooHit には出る。
+    after = modValidate4.SoftenTaboo("No DD, No coverの原則です。", n)
+    hit = modValidate4.TabooHit("No DD, No coverの原則です。")
+    ok = (after = "No DD, No coverの原則です。") And (n = 0)
+    If ok Then ok = (InStr(1, hit, "No DD, No cover", vbBinaryCompare) > 0)
+    modTestRunner.Check "W15Y1(F-6) No DD, No coverは置換せずTabooHitに出る", ok, _
+                        "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    ' ノンリコース型(53番)がリコース型(52番)の対に食われず正しく置換される。
+    after = modValidate4.SoftenTaboo("ノンリコース型で契約する。", n)
+    ok = (after = "売主が補償責任を負わない型で契約する。") And (n = 1)
+    modTestRunner.Check "W15Y1(F-6) ノンリコース型はリコース型に食われず置換する", ok, _
+                        "after=" & after & " n=" & n
 End Sub
