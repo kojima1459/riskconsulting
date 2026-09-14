@@ -313,7 +313,7 @@ End Function
 Public Function ActPasteMaterial(ByRef caseId As String, ByVal data As String) As String
     Dim slot As String, body As String, reason As String, company As String, hits As Long
     Dim memo As String, others As String, coverage As String, ok As Boolean, oldBody As String
-    Dim piiKinds As String, piiWarn As String
+    Dim piiKinds As String, piiWarn As String, piiBlocked As Boolean
     slot = modJsonLite.GetStr(data, "slot")
     If Not ValidSlot(slot) Then
         ActPasteMaterial = Failure("登録先が不正です。", "E0101")
@@ -329,21 +329,20 @@ Public Function ActPasteMaterial(ByRef caseId As String, ByVal data As String) A
         ActPasteMaterial = Failure("1欄の登録上限は100,000文字です。分割して内容を整理してください。", "E0101")
         Exit Function
     End If
-    ' 裁定書38 Z-46(伝書鳩3-2): 検知種別が policy_no だけなら登録は止めず警告に
-    '   留める(DR出力は出典URLを必ず含み、URL断片を契約番号と誤検知しやすい)。
-    '   人名・メール・電話を1件でも含む混在は従来どおりブロックする。
+    ' 裁定書44 B-1: 既定warnは止めず断片入り警告。pii_paste_policy=blockで
+    '   従来どおり止める。policy_no単独は裁定書38 Z-46のまま警告のみ
+    '   (本体はmodNaviActions2.PiiPasteWarnText。modUICase7も同じ口を呼ぶ)。
     piiKinds = modPii.KindsOf(body)
     If LenB(piiKinds) > 0 Then
-        If piiKinds = "policy_no" Then
-            piiWarn = "契約番号らしき数字列(" & CStr(modPii.DetectionCount(body)) & _
-                      "箇所: " & modUtil.SafeLeft(body, 30) & "…)を検知しました。" & _
-                      "伏せ字にするか、そのままでよいか確認してください。"
-            modLog.LogUsage "pii_policy_warning", caseId, modPii.ScanReport(body, "貼付/" & slot)
-        Else
-            modLog.LogError "E0103", "modNaviActions.ActPasteMaterial", _
-                            modPii.ScanReport(body, "貼付/" & slot)
-            ActPasteMaterial = Failure("個人情報らしき記述を検知したため登録しませんでした。伏せ字にして登録してください。", "E0103")
+        piiWarn = modNaviActions2.PiiPasteWarnText(body, _
+            modConfig.GetStr("pii_paste_policy", "warn") = "block", piiBlocked)
+        If piiBlocked Then
+            modLog.LogError "E0103", NA_SRC & ".ActPasteMaterial", modPii.ScanReport(body, "貼付/" & slot)
+            ActPasteMaterial = Failure(piiWarn, "E0103")
             Exit Function
+        Else
+            modLog.LogUsage IIf(piiKinds = "policy_no", "pii_policy_warning", "pii_paste_warning"), _
+                            caseId, modPii.ScanReport(body, "貼付/" & slot)
         End If
     End If
     If Not EnsureCase(caseId, data, reason) Then

@@ -401,6 +401,124 @@ Public Function CopyWarningOf(ByVal bodyText As String, ByVal sourceText As Stri
     End If
 End Function
 
+' 裁定書44 B-1(16章 E-05・F-4): 貼付欄のPII方針。person/email/phone を
+'   1件でも含む混在は config pii_paste_policy に従い warn(既定。登録を続ける)
+'   /block(従来どおり止める)を切り替える。policy_no**だけ**の検知は
+'   このキーに関わらず常に警告のみ(裁定書38 Z-46・変更なし)。
+'   modPii だけを呼ぶ純関数なので modTestsPureNavi が直接叩ける
+'   (config読取・ログ・保存はActPasteMaterial/ImportDirectPastes側の責務)。
+' ----------------------------------------------------------------------------
+' PiiPasteWarnText - 検知結果から利用者向けの案内文を1本作る。
+'   isBlocked: True=登録を止める(呼び出し側はここでブロックしてE0103を記録)。
+'              False=登録は続ける(呼び出し側は警告として保存する)。
+'   検知なし("")のときは isBlocked=False・戻り値も "" (呼び出し側は何もしない)。
+Public Function PiiPasteWarnText(ByVal bodyText As String, ByVal blockPolicy As Boolean, _
+                                 ByRef isBlocked As Boolean) As String
+    isBlocked = False
+    Dim kinds As String
+    kinds = modPii.KindsOf(bodyText)
+    If LenB(kinds) = 0 Then Exit Function
+
+    If kinds = "policy_no" Then
+        ' 裁定書38 Z-46(既存挙動・変更なし)。文言も変えない。
+        PiiPasteWarnText = "契約番号らしき数字列(" & CStr(modPii.DetectionCount(bodyText)) & _
+            "箇所: " & modUtil.SafeLeft(bodyText, 30) & "…)を検知しました。" & _
+            "伏せ字にするか、そのままでよいか確認してください。"
+        Exit Function
+    End If
+
+    Dim breakdown As String
+    breakdown = PiiBreakdownJa(bodyText)
+    If blockPolicy Then
+        isBlocked = True
+        PiiPasteWarnText = "個人情報らしき記述を検知したため登録しませんでした（" & breakdown & _
+            "）。伏せ字にして登録してください。"
+    Else
+        PiiPasteWarnText = "個人情報らしき記述を検知しました（" & breakdown & _
+            "）。公開情報ならそのままで構いません。個人の連絡先なら伏せ字にしてから" & _
+            "登録し直してください。登録は完了しています。"
+    End If
+End Function
+
+' 裁定書44 B-1: policy_no以外(person/email/phone)を1件でも含み、かつ
+'   pii_paste_policy=blockのときだけ止める(既定warnは止めない。policy_no
+'   単独は裁定書38 Z-46のまま常に止めない)。ActPasteMaterialと
+'   modUICase7.ImportDirectPastesの両方が同じ口を呼ぶ(片方だけ直さない)。
+'   敵対的検証: "And blockPolicy"を外して常時Trueへ戻すとNAVI-U7-01/02の
+'   いずれかが赤くなる。Excelトークンを持たない純関数。
+Public Function BlocksGeneralPii(ByVal piiKinds As String, ByVal blockPolicy As Boolean) As Boolean
+    BlocksGeneralPii = (LenB(piiKinds) > 0 And piiKinds <> "policy_no" And blockPolicy)
+End Function
+
+' PiiBreakdownJa - "人名らしき語 2件: 山田太郎様、佐藤様／電話番号 1件: 053-4xx-…"
+'   の形を組む。modPii.SnippetsOf(先頭500件=PII_MAX_SPANS相当)から、種別ごとの
+'   **全体件数**と、検知順で全体3件までの断片を作る(件数は全体、断片は3件が
+'   予算。裁定書44 B-1「先頭3件の断片」)。
+Private Function PiiBreakdownJa(ByVal bodyText As String) As String
+    Const NA_PII_SHOW_ITEMS As Long = 3
+    Const NA_PII_SNIP_LEN As Long = 12
+    Const NA_PII_SCAN_MAX As Long = 500
+
+    Dim allEntries As String
+    allEntries = modPii.SnippetsOf(bodyText, NA_PII_SCAN_MAX, NA_PII_SNIP_LEN)
+    If LenB(allEntries) = 0 Then Exit Function
+
+    Dim rows() As String
+    rows = Split(allEntries, ";")
+
+    Dim kindsOrder(0 To 10) As String, counts(0 To 10) As Long, samples(0 To 10) As String
+    Dim nKinds As Long, shownTotal As Long
+    Dim i As Long, k As Long, idx As Long, tabPos As Long
+    Dim kindText As String, snippet As String
+
+    For i = LBound(rows) To UBound(rows)
+        tabPos = InStr(1, rows(i), vbTab, vbBinaryCompare)
+        If tabPos > 0 Then
+            kindText = Left$(rows(i), tabPos - 1)
+            snippet = Mid$(rows(i), tabPos + 1)
+            idx = -1
+            For k = 0 To nKinds - 1
+                If kindsOrder(k) = kindText Then
+                    idx = k
+                    Exit For
+                End If
+            Next k
+            If idx = -1 And nKinds <= UBound(kindsOrder) Then
+                idx = nKinds
+                kindsOrder(idx) = kindText
+                nKinds = nKinds + 1
+            End If
+            If idx >= 0 Then
+                counts(idx) = counts(idx) + 1
+                If shownTotal < NA_PII_SHOW_ITEMS Then
+                    If LenB(samples(idx)) > 0 Then samples(idx) = samples(idx) & "、"
+                    samples(idx) = samples(idx) & snippet
+                    shownTotal = shownTotal + 1
+                End If
+            End If
+        End If
+    Next i
+
+    Dim acc As String
+    For k = 0 To nKinds - 1
+        If LenB(acc) > 0 Then acc = acc & "／"
+        acc = acc & PiiKindJa(kindsOrder(k)) & " " & CStr(counts(k)) & "件"
+        If LenB(samples(k)) > 0 Then acc = acc & ": " & samples(k)
+    Next k
+    PiiBreakdownJa = acc
+End Function
+
+' 検知種別(機械値)の日本語化(16章E-05注記どおりUI層の責務)。
+Private Function PiiKindJa(ByVal kindText As String) As String
+    Select Case kindText
+        Case "person": PiiKindJa = "人名らしき語"
+        Case "email": PiiKindJa = "メールアドレス"
+        Case "phone": PiiKindJa = "電話番号"
+        Case "policy_no": PiiKindJa = "契約番号らしき数字列"
+        Case Else: PiiKindJa = kindText
+    End Select
+End Function
+
 ' CopySourceTextOf - 下見の下敷き(現契約サマリ・営業メモ・現場メモ)。
 '   裁定書39 R1-06: 走査長に上限(先頭 NA_COPY_SCAN_MAX 字)を置く。
 '   SharesLongFragment は O(|本文|×|下敷き|) なので、上限が無いと

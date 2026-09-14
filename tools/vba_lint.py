@@ -658,7 +658,10 @@ CONTRACT: dict[str, dict] = {
     "modPii": {
         "closed": False,
         "required": ["HasPii", "DetectionCount", "KindsOf", "ScanReport", "MaskText",
-                     "SharesLongFragment"],
+                     "SharesLongFragment",
+                     # SnippetsOf: 裁定書44 B-1新設。貼付警告文の断片を返す口
+                     # (ScanReportと違い実文字列を返す。NFR-S3の対象外)。
+                     "SnippetsOf"],
     },
     # modCompanyFile: 企業ドシエファイルの書出・取込(13章§2.8)。公開4本は裁定書7
     #   B-5 が14章§6へ宣言。下位I/Oの modCompanyFile2 は§6の公開契約面に載せない

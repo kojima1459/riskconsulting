@@ -39,6 +39,13 @@ Private Const U7_MSG_PII As String = _
 ' 裁定書38 Z-46: 検知種別が policy_no だけのときは登録は止めず警告のみ出す。
 Private Const U7_MSG_POLICY As String = _
     "に契約番号らしき数字列が見つかりました。伏せ字にするか、そのままでよいか確認してください。"
+' 裁定書44 B-1(16章E-05・F-4): person/email/phoneの混在も、config
+'   pii_paste_policy(既定warn)のときは登録を止めずこちらを出す(HTML側の
+'   modNaviActions.ActPasteMaterialと同じ方針。片方だけ直さない)。
+Private Const U7_MSG_PII_WARN As String = _
+    "に個人情報らしき記述(人名・メール・電話番号など)が見つかりました。" & _
+    "公開情報ならそのままで構いません。個人の連絡先なら伏せ字にしてから保存し直して" & _
+    "ください。保存は完了しています。"
 
 ' [中身を見る]の表示シート(裁定書27 W9-B3。詳細は本モジュール末尾の節を参照)。
 Private Const U7_BODY_SHEET As String = "中身"
@@ -65,6 +72,9 @@ Public Function ImportDirectPastes(ByVal caseId As String) As String
     Dim mergedLabels As String
     Dim piiLabels As String
     Dim policyLabels As String
+    Dim generalWarnLabels As String
+    Dim blockPolicy As Boolean
+    blockPolicy = (modConfig.GetStr("pii_paste_policy", "warn") = "block")
 
     Dim keys() As String
     keys = Split(modUICase6.AreaKeys(), vbLf)
@@ -96,16 +106,24 @@ Public Function ImportDirectPastes(ByVal caseId As String) As String
                     body = modNavText.NormalizeEol(modNavText.StripDrFooter(body))
                     Dim piiKinds As String
                     piiKinds = modPii.KindsOf(body)
-                    If LenB(piiKinds) > 0 And piiKinds <> "policy_no" Then
+                    ' 裁定書44 B-1: 判定本体は modNaviActions2.BlocksGeneralPii
+                    ' (HTML側と共有。片方だけ直さない。純テストは
+                    ' modTestsPureNaviのNAVI-U7-01〜03が直接叩く)。
+                    If modNaviActions2.BlocksGeneralPii(piiKinds, blockPolicy) Then
                         piiLabels = AddLabel(piiLabels, labelText)
                         modLog.LogError "E0103", U7_SRC & ".ImportDirectPastes", _
                                         modPii.ScanReport(body, U7_SHEET & ":" & labelText)
                     Else
-                        ' 裁定書38 Z-46: policy_no だけの検知は登録したうえで
-                        ' 警告(labelを別枠に積む。人名/メール/電話が無ければ通す)。
+                        ' 裁定書38 Z-46/裁定書44 B-1: policy_noだけ、または
+                        ' pii_paste_policy=warn(既定)のperson/email/phone混在は
+                        ' 登録したうえで警告(labelを別枠に積む)。
                         If piiKinds = "policy_no" Then
                             policyLabels = AddLabel(policyLabels, labelText)
                             modLog.LogUsage "pii_policy_warning", caseId, _
+                                            modPii.ScanReport(body, U7_SHEET & ":" & labelText)
+                        ElseIf LenB(piiKinds) > 0 Then
+                            generalWarnLabels = AddLabel(generalWarnLabels, labelText)
+                            modLog.LogUsage "pii_paste_warning", caseId, _
                                             modPii.ScanReport(body, U7_SHEET & ":" & labelText)
                         End If
                         If modUICase6.StoreArea(caseId, dataKey, _
@@ -118,21 +136,24 @@ Public Function ImportDirectPastes(ByVal caseId As String) As String
         End If
     Next i
 
-    ImportDirectPastes = BlockedText(overflowLabels, mergedLabels, piiLabels, policyLabels)
+    ImportDirectPastes = BlockedText(overflowLabels, mergedLabels, piiLabels, policyLabels, generalWarnLabels)
 End Function
 
 ' 理由ごとの逐語文を1本につなぐ(空の理由は文を作らない)。
-'   policyLabels(裁定書38 Z-46)は他の3つと違い**ブロックしていない**(登録済み
-'   の欄への警告)。既存3引数の呼び出し元(あれば)は互換のため Optional。
+'   policyLabels(裁定書38 Z-46)とgeneralWarnLabels(裁定書44 B-1)は他の2つと
+'   違い**ブロックしていない**(登録済みの欄への警告)。既存の呼び出し元(あれば)
+'   は互換のため両方 Optional。
 Public Function BlockedText(ByVal overflowLabels As String, _
                             ByVal mergedLabels As String, _
                             ByVal piiLabels As String, _
-                            Optional ByVal policyLabels As String = vbNullString) As String
+                            Optional ByVal policyLabels As String = vbNullString, _
+                            Optional ByVal generalWarnLabels As String = vbNullString) As String
     Dim acc As String
     If LenB(overflowLabels) > 0 Then acc = Add1(acc, overflowLabels & U7_MSG_OVERFLOW)
     If LenB(mergedLabels) > 0 Then acc = Add1(acc, mergedLabels & U7_MSG_MERGED)
     If LenB(piiLabels) > 0 Then acc = Add1(acc, piiLabels & U7_MSG_PII)
     If LenB(policyLabels) > 0 Then acc = Add1(acc, policyLabels & U7_MSG_POLICY)
+    If LenB(generalWarnLabels) > 0 Then acc = Add1(acc, generalWarnLabels & U7_MSG_PII_WARN)
     BlockedText = acc
 End Function
 

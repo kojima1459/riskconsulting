@@ -201,6 +201,50 @@ Public Function ScanReport(ByVal sText As String, ByVal whereNote As String) As 
 End Function
 
 ' ============================================================================
+' SnippetsOf - 貼付警告文の断片を返す口(裁定書44 B-1)。
+' ----------------------------------------------------------------------------
+'   ScanReport(NFR-S3: 本文を一切含めない)とは別物。こちらは利用者向けの
+'   警告文に**実際に検知した文字列**を出すためだけの専用口であり、UI層
+'   (modNaviActions2.PiiPasteWarnText 等)が「人名らしき語2件: 山田太郎様、
+'   佐藤様」のような案内を組み立てるのに使う。
+'   戻り値: 検知順に「種別(機械値)」<TAB>「断片」を ";" でつないだもの
+'   (種別の日本語化はUI層の責務。KindsOfと同じ方針・16章E-05注記)。断片は
+'   maxLen字を超えたらLeft$で切り、末尾に"…"を付ける。maxItems件で打ち切る
+'   (全体の検知件数は既存の DetectionCount / KindsOf で別途取れる)。
+'   検知なし・引数不正(maxItems<=0)は "" を返す。
+' ============================================================================
+Public Function SnippetsOf(ByVal sText As String, ByVal maxItems As Long, ByVal maxLen As Long) As String
+    If maxItems <= 0 Then Exit Function
+
+    Dim spansText As String
+    spansText = ScanSpans(sText)
+    If LenB(spansText) = 0 Then Exit Function
+
+    Dim rows() As String
+    rows = Split(spansText, vbLf)
+
+    Dim acc As String
+    Dim i As Long, shown As Long
+    For i = LBound(rows) To UBound(rows)
+        If shown >= maxItems Then Exit For
+        Dim kindText As String, posStart As Long, spanLen As Long, snippet As String
+        kindText = FieldAt(rows(i), 1)
+        posStart = ToLong(FieldAt(rows(i), 2))
+        spanLen = ToLong(FieldAt(rows(i), 3))
+        If posStart >= 1 And spanLen >= 1 And posStart + spanLen - 1 <= Len(sText) Then
+            snippet = Mid$(sText, posStart, spanLen)
+            If maxLen > 0 And Len(snippet) > maxLen Then
+                snippet = Left$(snippet, maxLen) & "…"
+            End If
+            If LenB(acc) > 0 Then acc = acc & ";"
+            acc = acc & kindText & vbTab & snippet
+            shown = shown + 1
+        End If
+    Next i
+    SnippetsOf = acc
+End Function
+
+' ============================================================================
 ' MaskText - 検知箇所を {{PERSON}} へ置換した文面を返す(16章 E-05(5))。
 ' ----------------------------------------------------------------------------
 '   フィードバックの customer_quote だけは逐語引用がFR-11の要件のためブロック

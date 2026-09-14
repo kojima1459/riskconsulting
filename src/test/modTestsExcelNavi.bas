@@ -11,14 +11,14 @@ Public Function RunExcelTestsNavi() As Long
     Dim ready As Boolean
     Dim passed As Boolean
     ready = FixtureIsFree()
-    For n = 1 To 7
+    For n = 1 To 8
         passed = False
         If ready Then passed = CheckFixture(n)
         modTestRunner.Check "NAVI-B" & CStr(n) & " " & TestTitle(n), passed, _
             "専用テストID=" & FIXTURE & " (既存データがある場合は変更せずFAIL)"
     Next n
     If ready Then CleanupFixture
-    RunExcelTestsNavi = 7
+    RunExcelTestsNavi = 8
 End Function
 
 Private Function TestTitle(ByVal n As Long) As String
@@ -30,6 +30,7 @@ Private Function TestTitle(ByVal n As Long) As String
         Case 5: TestTitle = "leading equals is stored as text"
         Case 6: TestTitle = "ui preference persists and restores"
         Case 7: TestTitle = "app_display_name reaches the initialize response"
+        Case 8: TestTitle = "ActPasteMaterial honors pii_paste_policy(warn continues/block stops. 裁定書44 B-1)"
     End Select
 End Function
 
@@ -80,6 +81,9 @@ Private Function CheckFixture(ByVal n As Long) As Boolean
             Exit Function
         Case 7
             CheckFixture = CheckDisplayNameInState()
+            Exit Function
+        Case 8
+            CheckFixture = CheckPiiPastePolicyWiring()
             Exit Function
     End Select
     If Not modCaseStore.SaveData(FIXTURE, dataKey, srcValue) Then Exit Function
@@ -154,6 +158,41 @@ Restore0:
 Failed:
     RestoreDisplayName before
     CheckDisplayNameInState = False
+End Function
+
+' 裁定書44 B-1: modNaviActions.ActPasteMaterial の配線(pii_paste_policyの
+'   読取〜ブロック可否)を実Excelで確かめる(config読取・EnsureCase・ログはR4の
+'   純関数では叩けない)。FIXTUREは「案件一覧」に登録していないIDなので、
+'   EnsureCaseは常にFalse=Failure("", "E0101")で止まる。これはPIIチェックの
+'   **あと**なので、E0103で止まる(=block)かE0101まで進む(=warn継続)かで
+'   configの効きを見分けられる(案件は作らないのでCleanupFixture不要)。
+Private Function CheckPiiPastePolicyWiring() As Boolean
+    Dim piiText As String, dataJson As String, before As String
+    Dim cidWarn As String, cidBlock As String, respWarn As String, respBlock As String
+    Dim warnOk As Boolean, blockOk As Boolean
+    On Error GoTo Failed
+    piiText = "田中様と佐藤様に09012345678までご連絡ください。"
+    dataJson = "{""slot"":""hp"",""text"":" & modNaviJson.Q(piiText) & "}"
+    before = modConfig.GetStr("pii_paste_policy", "warn")
+
+    If Not modConfig.SetValue("pii_paste_policy", "warn") Then GoTo Restore1
+    cidWarn = FIXTURE
+    respWarn = modNaviActions.ActPasteMaterial(cidWarn, dataJson)
+    warnOk = (InStr(1, respWarn, "E0103", vbBinaryCompare) = 0)
+
+    If Not modConfig.SetValue("pii_paste_policy", "block") Then GoTo Restore1
+    cidBlock = FIXTURE
+    respBlock = modNaviActions.ActPasteMaterial(cidBlock, dataJson)
+    blockOk = (InStr(1, respBlock, "E0103", vbBinaryCompare) > 0) And _
+              (InStr(1, respBlock, "人名らしき語", vbBinaryCompare) > 0)
+
+    CheckPiiPastePolicyWiring = warnOk And blockOk
+Restore1:
+    modConfig.SetValue "pii_paste_policy", before
+    Exit Function
+Failed:
+    modConfig.SetValue "pii_paste_policy", before
+    CheckPiiPastePolicyWiring = False
 End Function
 
 Private Sub RestoreDisplayName(ByVal srcValue As String)
