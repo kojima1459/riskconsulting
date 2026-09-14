@@ -1507,6 +1507,17 @@ def read_dossier_prompts(root):
         raise BuildError(
             f"指示文が2,000字を超えています: {over}"
             "(社内ディープリサーチの入力上限。docs/08 1x の実測)")
+    # 裁定書44 A-3: modUICase7.ClipCopyText は `"` とタブを含む本文を拒否する
+    # 規約(Excelのテキスト形式がその2文字を含むセルを引用符で包み直し、黙って
+    # 中身を変えてしまうため)。調査指示文(展開前テンプレート)にこの2文字が
+    # 紛れ込むと、[コピー]がVBA側で常にfalseへ落ちて画面の手動コピーへ毎回
+    # 落ちる(気づきにくい劣化)。ビルド時に固定する。
+    bad = [k for k in wanted if '"' in found[k] or "\t" in found[k]]
+    if bad:
+        raise BuildError(
+            f"調査指示文に \" またはタブが含まれています: {bad}"
+            "(modUICase7.ClipCopyTextがコピーを拒否し、常に手動コピーへ"
+            "落ちます。docs/08の該当テンプレートを「」等へ寄せてください)")
     return {k: found[k] for k in wanted}
 
 
@@ -2703,6 +2714,11 @@ FINAL_DV_SHEET = "case_data"
 FINAL_DV_COLUMN = "data_key"
 FINAL_DV_ENUM = "data_key"
 FINAL_DV_LAST_ROW = 51
+# 裁定書44 A-1: 隠しレンジ方式(11章§5)。名前は実行時 modBootNavi の
+# BN_ENUM_SHEET / BN_NAME_DATA_KEY と完全に同じにする(実行時に
+# EnsureEnumHiddenSheet が同名シートを見つけて再利用し、二重化しないため)。
+FINAL_ENUM_SHEET = "enum_hidden"
+FINAL_NAME_DATA_KEY = "enum_data_key"
 
 
 def _check_form_source_limits(frm_text: str) -> None:
@@ -2722,12 +2738,26 @@ def _check_form_source_limits(frm_text: str) -> None:
 
 
 def _add_data_key_validation(wb, sheets_data) -> str:
-    """case_data!data_key へ入力規則(リスト)を足す。ps1 の (5) に相当。
+    """case_data!data_key へ入力規則(リスト)を足す(裁定書44 A-1)。
 
-    第1段は Excel のインライン入力規則の255字上限を理由にこの列を省いている
-    (build/sheets_main.json の dv_skipped)。ps1 は実Excel の COM で入れていた。
-    ここでは openpyxl で同じものを書く。**255字超のインラインリストを実Excel が
-    どう扱うかは実機でしか確かめられない**(LibreOffice は受け付ける)。
+    F-1: 旧実装はインライン list(`"a,b,c,..."`)を formula1 へ直書きしていたが、
+    data_key は全33値で382字あり、Excel の formula1 上限255字を超える。
+    LibreOffice は受け付けるため検問を素通りし、実機のExcelが起動時に
+    「削除された機能」として当該入力規則を落としていた。
+
+    実行時の modBootNavi.RestoreDataKeyHiddenRange / EnsureEnumHiddenSheet /
+    ApplyDataKeyValidation と**同じ方式**(11章§5の隠しレンジ方式)をビルド時に
+    先回りして焼き込む: very hidden シート `enum_hidden`(BN_ENUM_SHEETと同名)へ
+    値を縦に複製し、その範囲を指す定義名 `enum_data_key`(BN_NAME_DATA_KEYと同名)
+    を張り、data_key 列の formula1 に `=enum_data_key` を指定する。セル参照は
+    インライン255字制限の対象外(MS-OOXMLの formula1 の255字上限はテキスト
+    表現の長さに掛かる制約で、名前参照の1行はどれだけ長い集合を指しても
+    数文字で済む)。
+
+    名前を実行時と完全に一致させてあるので、初回起動時に
+    modBootNavi.EnsureEnumHiddenSheet が既存の `enum_hidden` を見つけて
+    再利用し、シートや定義名が二重化することはない(Worksheets(名前) を
+    先に探す実装のため)。
     """
     values = sheets_data["enums"][FINAL_DV_ENUM]
     ws = wb[FINAL_DV_SHEET]
@@ -2738,14 +2768,28 @@ def _add_data_key_validation(wb, sheets_data) -> str:
             break
     if col is None:
         raise BuildError(f"{FINAL_DV_SHEET} に {FINAL_DV_COLUMN} 列がありません")
-    formula = '"' + ",".join(values) + '"'
+
+    if FINAL_ENUM_SHEET in wb.sheetnames:
+        enum_ws = wb[FINAL_ENUM_SHEET]
+    else:
+        enum_ws = wb.create_sheet(FINAL_ENUM_SHEET)
+    enum_ws.sheet_state = "veryHidden"
+    for i, v in enumerate(values, start=1):
+        enum_ws.cell(row=i, column=1, value=v)
+    n = len(values)
+    enum_ref = f"{quote_sheetname(FINAL_ENUM_SHEET)}!$A$1:$A${n}"
+    if FINAL_NAME_DATA_KEY in wb.defined_names:
+        del wb.defined_names[FINAL_NAME_DATA_KEY]
+    wb.defined_names.add(DefinedName(FINAL_NAME_DATA_KEY, attr_text=enum_ref))
+
     target = (f"{get_column_letter(col)}2:"
               f"{get_column_letter(col)}{FINAL_DV_LAST_ROW}")
-    dv = DataValidation(type="list", formula1=formula, allow_blank=True,
-                        showErrorMessage=True)
+    dv = DataValidation(type="list", formula1="=" + FINAL_NAME_DATA_KEY,
+                        allow_blank=True, showErrorMessage=True)
     ws.add_data_validation(dv)
     dv.add(target)
-    return f"{FINAL_DV_SHEET}!{target} ({len(values)}値・{len(formula)}字)"
+    return (f"{FINAL_DV_SHEET}!{target} (=" + FINAL_NAME_DATA_KEY +
+            f" 参照・{FINAL_ENUM_SHEET}!A1:A{n}・{len(values)}値)")
 
 
 def build_final(src_book: str, out_book: str, root: str, sheets_data,
@@ -2891,16 +2935,50 @@ def verify_final(book: str, present_modules, root: str, sheets_data) -> list:
     for h in forbidden_strings_in_bin(vba_bin, prod=True):
         errors.append(f"配布禁止の文字列があります: {h}")
 
-    # (h) 入力規則
+    # (h) 入力規則(裁定書44 A-1: 隠しレンジ方式)。formula1 を `"` で割る旧比較は
+    #     しない(255字超で本来割れない・検問を弱める)。`=enum_data_key` を
+    #     defined_names から解決し、参照先セルの実測値集合と enums を比べる。
     wb = openpyxl.load_workbook(book, keep_vba=True)
     keys = set(sheets_data["enums"][FINAL_DV_ENUM])
+    name_hit = False
     found = False
     for dv in wb[FINAL_DV_SHEET].data_validations.dataValidation:
-        vals = set((dv.formula1 or "").strip('"').split(","))
-        if vals == keys:
+        formula = (dv.formula1 or "").strip()
+        if formula.lstrip("=") != FINAL_NAME_DATA_KEY:
+            continue
+        name_hit = True
+        dn = wb.defined_names.get(FINAL_NAME_DATA_KEY)
+        if dn is None:
+            errors.append(f"定義名 {FINAL_NAME_DATA_KEY} がブックにありません")
+            continue
+        dests = list(dn.destinations)
+        if len(dests) != 1:
+            errors.append(f"定義名 {FINAL_NAME_DATA_KEY} の参照先が単一範囲ではありません: {dests}")
+            continue
+        sheet_name, coord = dests[0]
+        if sheet_name not in wb.sheetnames:
+            errors.append(f"定義名 {FINAL_NAME_DATA_KEY} の参照先シート {sheet_name} がありません")
+            continue
+        if wb[sheet_name].sheet_state != "veryHidden":
+            errors.append(f"{sheet_name} が veryHidden ではありません(実際={wb[sheet_name].sheet_state})")
+        got_vals = set()
+        for row in wb[sheet_name][coord.replace("$", "")]:
+            for cell in row:
+                if cell.value not in (None, ""):
+                    got_vals.add(str(cell.value))
+        if got_vals == keys:
             found = True
-    if not found:
-        errors.append(f"{FINAL_DV_SHEET}!{FINAL_DV_COLUMN} の入力規則({len(keys)}値)がありません")
+        else:
+            missing = keys - got_vals
+            extra = got_vals - keys
+            errors.append(
+                f"{FINAL_NAME_DATA_KEY} の値集合が enums.{FINAL_DV_ENUM} と不一致"
+                f"(不足={sorted(missing)} 余分={sorted(extra)})")
+    if not name_hit:
+        errors.append(f"{FINAL_DV_SHEET}!{FINAL_DV_COLUMN} の入力規則が"
+                      f"定義名 {FINAL_NAME_DATA_KEY} を参照していません")
+    elif not found and not errors:
+        errors.append(f"{FINAL_DV_SHEET}!{FINAL_DV_COLUMN} の入力規則({len(keys)}値)が一致しません")
     return errors
 
 
@@ -3160,9 +3238,17 @@ def main():
           f"ブロック縦積みのシート: {len(ctx.block_headers)}枚")
     if ctx.dv_skipped:
         print(f"  入力規則を省略した列({len(ctx.dv_skipped)}件・"
-              f"Excelのリスト上限{DV_INLINE_LIMIT}字超。最終形はW3の隠しレンジ方式):")
+              f"Excelのリスト上限{DV_INLINE_LIMIT}字超):")
         for sh, tgt, key, ln in ctx.dv_skipped:
             print(f"    {sh}!{tgt} enums.{key} ({ln}字)")
+        # 裁定書44 A-1: 255字超は黙って省略せずビルドを止める(case_data!data_key は
+        # build_final._add_data_key_validation の隠しレンジ方式で扱うため、この
+        # 分岐は本来もう発火しない。発火したら「未知の255字超enumが紛れ込んだ」
+        # という異常事態であり、告知(上のprint)は残しつつ exit を非0にする。
+        sys.exit(
+            "ERROR: 入力規則を省略した列があります(255字超のインラインlistは"
+            "Excelが受け付けません)。隠しレンジ方式(11章§5)で書くか、"
+            "sheets_main.json の enum を見直してください。")
     if baked:
         print("  vba_src: (baked のため作りません)")
     else:

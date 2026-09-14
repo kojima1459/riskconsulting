@@ -9,14 +9,7 @@
   },
   "text_number_format": "@",
   "_text_number_format_note": "16章 E-46/NFR-S7の二重化。type=String の列・入力セルはExcelのテキスト書式へ固定し、先頭 = + - @ が格納型数式として評価されるのを配布テンプレート段階で封じる(実行時の SetCellSafe と二重化)。type=Long の列には掛けない(数値が文字列化するため)。",
-  "input_rule_omissions": [
-    {
-      "sheet": "case_data",
-      "target": "data_key",
-      "enum": "data_key",
-      "reason": "data_key の静的リストが Excel インライン入力規則の255字上限を超える(実測343字)ため、W0ビルドは入力規則の付与を省略する。最終形は11章§5の隠しレンジ方式(W3 T-31/T-32)。省略が解消(ブックに入力規則が付与)されたら本台帳から本エントリを外すこと(tools/sheet_check.py [7] が実測と一致検査するため、外し忘れると落ちる)。"
-    }
-  ],
+  "input_rule_omissions": [],
   "_input_rule_omissions_note": "17章 T-46/裁定書4 項目17: ビルドが入力規則(データの入力規則)を255字上限で省略した列の宣言台帳。tools/sheet_check.py [7] が成果物ブックの実測(dv指定列のうち入力規則が実際に付いていないもの)とこの宣言を突き合わせ、一致しなければ落とす。将来W3で省略が解消したら本配列を空にしないと落ちる=対応漏れが機械検出される。",
   "enums": {
     "_note": "入力規則(データの入力規則リスト)の値集合。**正は19章§3**。13章§2.13-§2.17 で「日本語表示」「日本語enum」と明記された列には *_ja(日本語ラベル)を、機械値のまま持つ列には機械値の一覧を割り当てる。11章§5の最終形は『起動時にナレッジブック/19章レジストリからコピーした隠しレンジ』を源泉にする方式だが、その実装はW3(T-31/T-32)であり、W0では静的リストを焼く。Excelのインライン入力規則リストは255字上限があるため、超える集合(data_key 28値等)はビルド時に省略され、その事実が標準出力へ出る。",
@@ -2635,8 +2628,7 @@
           "name": "data_key",
           "type": "String",
           "width": 24,
-          "dv": "data_key",
-          "header_note": "enum 全33値(19章§3と完全一致)"
+          "header_note": "enum 全33値(19章§3と完全一致)。入力規則は build_final._add_data_key_validation が隠しレンジ方式(enum_hidden!enum_data_key)で付与する(裁定書44 A-1)。stage1(このcolumns宣言)は255字超のため dv を持たない"
         },
         {
           "name": "seq",
@@ -2943,6 +2935,11 @@
           "name": "dr_input_max_chars",
           "value": 2000,
           "note": "調査指示文(展開後)の目安上限字数。裁定書37 B-09。BuildPromptsがchars/overを付け、超過時は画面が赤字で警告する([コピー]は押せるままにする)"
+        },
+        {
+          "name": "ui_window_native",
+          "value": true,
+          "note": "UserFormのネイティブ窓化(最小化・最大化・境界ドラッグ可)を有効にするか。裁定書44 A-6。FALSEでmodNaviWindow.EnableNativeWindowを呼ばない"
         },
         {
           "name": "portal_url",

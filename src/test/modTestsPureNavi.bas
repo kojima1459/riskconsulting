@@ -8,6 +8,8 @@ Option Explicit
 ' 裁定書40 R-M2/R-m1/R-m3 で NAVI-P50〜P61(+12 assertions)。
 ' 裁定書40 R-M2 の通し固定で NAVI-P68〜P70(+3 assertions)。
 ' 裁定書40 の横展開(同型)で NAVI-P62〜P67(+6 assertions)。
+' 裁定書44 A-8c で NAVI-P74(+1 assertion。copy_buf/paste_buf の器の取り違え固定)。
+' 裁定書44 A-6 で NAVI-P75(+1 assertion。ui_window_native の既定値TRUEの回帰)。
 Public Sub RunAll()
     On Error GoTo Failed
     CheckN "NAVI-P01 empty object", modNaviJson.IsValidJson("{}")
@@ -174,6 +176,22 @@ Public Sub RunAll()
     CheckN "NAVI-P67 a short source is not cut", _
         modNaviActions2.CapSourceText("abc") = "abc" And _
         Len(modNaviActions2.CapSourceText(String$(30000, "x"))) = 30000
+    ' 裁定書44 A-2(F-2): run_tests は IsLongAction から外れている。入れたままだと
+    ' HTMLからの[テストを実行]自身が "HTML:run_tests" でUiLockを握り、ロックを
+    ' 要する層(b)テストが自分自身のロックにぶつかってSKIPする(F-2の再発防止)。
+    CheckN "NAVI-P73 run_tests is not a long action", _
+        Not modNaviActions.IsLongAction("run_tests")
+    ' 裁定書44 A-8c: コピー元専用の copy_buf と、貼り付け読み取り専用の
+    ' paste_buf が同じ定数へ巻き戻っていないか(往復が空になったNGの再発防止。
+    ' 実体を持たない窓なのでExcelを開かず層(a)で固定できる)。
+    CheckN "NAVI-P74 copy_buf and paste_buf are different sheets", _
+        modUICase7.CopyBufSheetName() <> modUICase7.PasteBufSheetName() And _
+        modUICase7.CopyBufSheetName() = "copy_buf" And _
+        modUICase7.PasteBufSheetName() = "paste_buf"
+    ' 裁定書44 A-6: ui_window_native の既定はTRUE(config既定の回帰)。
+    modBootNavi.RegisterNaviDefaults
+    CheckN "NAVI-P75 ui_window_native defaults to TRUE", _
+        modConfig.GetBool("ui_window_native", False)
     Exit Sub
 Failed:
     modTestRunner.Check "NAVI pure unexpected error", False, CStr(Err.Number) & " " & Err.Description

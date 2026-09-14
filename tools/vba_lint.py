@@ -145,6 +145,10 @@ MODULE_REGISTRY = {
     "modBootNavi",
     "modNaviHost", "modNaviJson", "modNaviState", "modNaviState2",
     "modNaviStore", "modNaviChat", "modNaviActions", "modNaviActions2",
+    # W16(裁定書44 A-6)で新設。12章§2のモジュール一覧に追記済み。
+    #   modNaviWindow = UserFormのネイティブ窓化。user32の表示系4本だけを
+    #                   Declareする唯一のモジュール(FORBIDDEN_API_DECLARE_ALLOW)。
+    "modNaviWindow",
     # (W9.3 で clsAppEvents を撤去。ブックイベントは ThisWorkbook 文書モジュール
     #  が受ける。クラスの焼き方の不一致は 17章 Z-24 で解決済みだが、配布物は
     #  **可動部品を減らす**ためクラスを持たない。理由と経緯は 17章 Z-24 と
@@ -359,7 +363,10 @@ CONTRACT: dict[str, dict] = {
     "modUICase7": {
         "closed": False,
         "required": ["ImportDirectPastes", "MergedOrShapeAt", "BlockedText",
-                     "ShapeHitCount", "JoinExisting"],
+                     "ShapeHitCount", "JoinExisting",
+                     # 裁定書44 A-8c: copy_buf(書く)/paste_buf(読む)の器を
+                     # 分けた。取り違えを純テストで固定するための窓。
+                     "CopyBufSheetName", "PasteBufSheetName"],
     },
     "modUIGeom": {
         "closed": False,
@@ -811,9 +818,11 @@ CONTRACT: dict[str, dict] = {
     #   30,000字契約分割先で、§6は元モジュール名でしか登記していない)。
     "modGatewayRPN2": {"closed": False, "required": []},
     # modLog: 14章§6本文(353-359行)。TruncDetail / ShouldRotate は逐語。
+    # SetSelfTestMode は裁定書44 A-5(F-8)で追加(自己テスト中の記録をcsv側だけ
+    # *_selftest.csv へ逃がす。14章§6の逐語ではないが登記のため required に足す)。
     "modLog": {
         "closed": False,
-        "required": ["TruncDetail", "ShouldRotate"],
+        "required": ["TruncDetail", "ShouldRotate", "SetSelfTestMode"],
     },
     # modMockLlm: 14章§6本文(1427-1443行)。4本は逐語のPublic宣言。
     "modMockLlm": {
@@ -842,6 +851,11 @@ CONTRACT: dict[str, dict] = {
     },
     # modNaviJson: 14章§6に口の宣言なし。
     "modNaviJson": {"closed": False, "required": []},
+    # modNaviWindow: 裁定書44 A-6新設。公開口は1本だけ(閉じた表)。
+    "modNaviWindow": {
+        "closed": True,
+        "required": ["EnableNativeWindow"],
+    },
     # modNaviState: 14章§6 W12-A表(1538行)。4本は逐語。
     "modNaviState": {
         "closed": False,
@@ -1623,7 +1637,15 @@ ONACTION_WIRING_PATTERN = re.compile(
     r"\bEnsureButton\b.*?\"(mod[A-Za-z]\w*\.[A-Za-z_]\w*)\"", re.IGNORECASE)
 ONACTION_GUARD_LOOKAHEAD = 4
 # 保護を求めないハンドラの名簿("modX.Y" 形式)。増やすときは必ず理由を1行書くこと。
-ONACTION_GUARD_ALLOWLIST: set[str] = set()
+ONACTION_GUARD_ALLOWLIST: set[str] = {
+    # modNaviHost.OpenNaviTool: 裁定書44 A-4(F-5)で`ご案内`シートの図形
+    # [ナビ画面を開く]からも配線した(既存の Application.OnTime 文字列
+    # ディスパッチ経路に加わっただけで、この関数自体は変更していない)。
+    # 本体が「gForm Is Nothing のときだけ New する」形で既に再入安全
+    # (二重クリックしても既存の gForm を再利用するだけで、UiLockが守る
+    # 「処理中の状態を壊す」種類の副作用が無い)。
+    "modNaviHost.OpenNaviTool",
+}
 ONACTION_GUARD_CALLS = (
     re.compile(r"modUIProgress\s*\.\s*TryEnterUiLock", re.IGNORECASE),
 )
@@ -2581,6 +2603,113 @@ def check_dim_type_drop_and_integer(info: ModuleInfo) -> None:
                 break
 
 
+# ==============================================================================
+# Join()へ数値/日付/真偽型の配列を渡す(裁定書44 追加裁定A-8b・実機第6報)
+# ------------------------------------------------------------------------------
+# 実VBAの Join() は String/Variant の配列しか受け付けず、Dim x() As Long の
+# ような厳密型配列を渡すと **Err 5(プロシージャの呼び出し、または引数が
+# 不正です)** になる。LibreOffice Basic は型に寛容でこの差異を素通りするため、
+# lo-compile/lo-pure ではNGにならず、実機Excelでのみ発覚する(W9.4のUDT ByVal・
+# 裁定書23の`\`と同列の「LibreOfficeが見逃すVBA規則」3件目)。
+# 対象: 同一モジュール内で Dim/ReDim/Static により
+#   `x() As Long` / `x(1 To n) As Long` / `ReDim x(...) As Long` の形で宣言
+# された配列を Join() の第1引数にそのまま渡す呼び出し。String/Variant配列は
+# 対象外(そのまま通る)。他モジュールの配列・式・関数戻り値は判定不能のため
+# 見送る(誤検知ゼロ優先。裁定書19 H9系の方針と同じ)。
+# ==============================================================================
+JOIN_TYPED_ARRAY_BAD_TYPES = {
+    "long", "integer", "double", "boolean", "date", "single", "byte", "currency",
+}
+ARRAY_DECL_TYPE_PATTERN = re.compile(
+    r"\b(?:Dim|ReDim|Static)\s+([A-Za-z_]\w*)\s*\([^()]*\)\s*As\s+([A-Za-z_]\w*)",
+    re.IGNORECASE)
+JOIN_CALL_ARG_PATTERN = re.compile(
+    r"\bJoin\s*\(\s*([A-Za-z_]\w*)\s*(?:,|\))", re.IGNORECASE)
+
+
+JOIN_PROC_START_PATTERN = re.compile(
+    r"^\s*(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
+    r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\b", re.IGNORECASE)
+JOIN_PROC_END_PATTERN = re.compile(r"^\s*End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
+
+
+def check_join_typed_array(info: ModuleInfo) -> None:
+    """同名変数が別の手続きで別配列型として再利用される事故(VBAのDimは手続き
+    ローカル)を誤検知しないよう、**手続き境界で宣言表をリセット**しながら
+    1パスで見る(モジュールレベル配列は対象外。誤検知ゼロ優先)。"""
+    decls: dict = {}
+    for lineno, stmt in info.statements:
+        if JOIN_PROC_START_PATTERN.match(stmt) or JOIN_PROC_END_PATTERN.match(stmt):
+            decls = {}
+        for m in ARRAY_DECL_TYPE_PATTERN.finditer(stmt):
+            decls[m.group(1).lower()] = m.group(2).lower()
+        for m in JOIN_CALL_ARG_PATTERN.finditer(stmt):
+            arg_type = decls.get(m.group(1).lower())
+            if arg_type in JOIN_TYPED_ARRAY_BAD_TYPES:
+                info.add(
+                    "ERROR", lineno,
+                    f"Join()に{arg_type}型配列を渡しています(実機VBAはErr 5"
+                    f"「プロシージャの呼び出し、または引数が不正です」。"
+                    f"LibreOfficeは素通りするため実機でのみ発覚する。"
+                    f"CStr連結のループ関数(例: JoinLongs)へ差し替えること): "
+                    f"「{stmt.strip()[:80]}」",
+                )
+
+
+def _self_test_join_typed_array() -> bool:
+    """check_join_typed_array の自己テスト(骨抜き防止)。
+    vba_lint.py には既存の自己テスト枠組みが無いため、ここに3本だけ持つ。
+    赤: Long配列 / 緑: String配列 / 緑: Variant配列。"""
+    def _run(stmts):
+        info = ModuleInfo(path=Path("x.bas"), relpath=Path("x.bas"), raw_text="",
+                          vb_name="modSelfTest", filename_stem="x")
+        info.statements = stmts
+        check_join_typed_array(info)
+        return info.findings
+
+    cases = []
+    long_findings = _run([
+        (1, "Dim order() As Long"),
+        (2, 'x = Join(order, ",")'),
+    ])
+    cases.append(("Long配列のJoinはERROR", any(f.level == "ERROR" for f in long_findings)))
+
+    str_findings = _run([
+        (1, "Dim parts() As String"),
+        (2, 'x = Join(parts, ",")'),
+    ])
+    cases.append(("String配列のJoinはOK(0件)", len(str_findings) == 0))
+
+    variant_findings = _run([
+        (1, "Dim items() As Variant"),
+        (2, 'x = Join(items, ",")'),
+    ])
+    cases.append(("Variant配列のJoinはOK(0件)", len(variant_findings) == 0))
+
+    # 実測で踏んだ誤検知(modUtilText.bas): 別の手続きで同名 buf が Byte型
+    # 配列として再宣言されていても、Join を呼ぶ側の手続き内では String 型
+    # なので誤検知してはならない(Dimは手続きローカル。手続き境界での
+    # 宣言表リセットが効いているかを確認する)。
+    cross_proc_findings = _run([
+        (1, "Public Function A() As String"),
+        (2, "Dim buf() As String"),
+        (3, 'A = Join(buf, "")'),
+        (4, "End Function"),
+        (5, "Private Sub B()"),
+        (6, "Dim buf() As Byte"),
+        (7, "End Sub"),
+    ])
+    cases.append(("別手続きの同名Byte配列に誤検知しない(0件)",
+                  len(cross_proc_findings) == 0))
+
+    ok = all(c[1] for c in cases)
+    if not ok:
+        for name, passed in cases:
+            if not passed:
+                print(f"  [vba_lint 自己テストNG] check_join_typed_array: {name}")
+    return ok
+
+
 PROC_DEF_PATTERN = re.compile(
     r"^\s*(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
     r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+(\w+)",
@@ -3123,6 +3252,57 @@ def _selftest_path_rules() -> list[str]:
 #     に配布物の基準を課すと、開発用の経路を維持できなくなる。
 FORBIDDEN_API_ALLOW_MODULES = {"modGatewayDirect"}
 FORBIDDEN_API_ALLOW_LAYER_DIRS = ("test",)
+
+# ------------------------------------------------------------------------------
+# Declare の閉じた例外表(裁定書44 A-6)。
+# ------------------------------------------------------------------------------
+# 根拠: `Declare` の撤去(裁定書27 W9-B7)は**予防措置**であり、2026-09-02に
+#   社内AV(AMSI)が実際に検知したのは「隠しシートの文字列をVBAプロジェクトへ
+#   注入するループ」であって(docs/28_開発担当専用_検証PCの設定.md §0に逐語で
+#   記録)、Declare 自体ではない(src/ui/modBoot.bas の ApplyGhostingGuard の
+#   訂正コメント参照)。姉妹PJ MyBookshelf は `Declare PtrSafe Sub
+#   DisableProcessWindowsGhosting Lib "user32" ()` を2026-08-20から会社PCで
+#   運用し、2026-09-12にDefender警告なしを実機確認済み(リポジトリ外の事実。
+#   司令塔確認済み)。利用者(小島さん・PJの意思決定者)が2026-09-14に
+#   「案1で」と明示決定したため、**表示系4本だけ**を modNaviWindow に限って
+#   再許可する。
+#
+# 「モジュール名 -> 許す (Lib名, 関数名) の閉じた集合」。ここに無い組合せ
+#   (別関数・別Lib・別モジュール)は、モジュール名が一致していても
+#   ERROR のままになる(全体免除の FORBIDDEN_API_ALLOW_MODULES とは違う:
+#   あちらはモジュールを丸ごと免除するが、こちらは Declare の1行1行を
+#   個別に照合する)。
+FORBIDDEN_API_DECLARE_ALLOW: dict[str, set[tuple[str, str]]] = {
+    "modNaviWindow": {
+        ("user32", "FindWindowA"),
+        ("user32", "GetWindowLongA"),
+        ("user32", "SetWindowLongA"),
+        ("user32", "DrawMenuBar"),
+    },
+}
+
+# `Declare [PtrSafe] Sub|Function <関数名> Lib "<Lib名>"` から (Lib名, 関数名)
+# を取り出す(大小文字は問わずマッチし、値はソースの綴りのまま比較する)。
+DECLARE_LIB_FUNC_RE = re.compile(
+    r"\bDeclare\s+(?:PtrSafe\s+)?(?:Sub|Function)\s+(\w+)\s+Lib\s+\"([^\"]+)\"",
+    re.IGNORECASE)
+
+
+def _declare_is_allowed(module_name: str, code: str) -> bool:
+    allowed = FORBIDDEN_API_DECLARE_ALLOW.get(module_name)
+    if not allowed:
+        return False
+    m = DECLARE_LIB_FUNC_RE.search(code)
+    if not m:
+        return False
+    func_name, lib_name = m.group(1), m.group(2)
+    return (lib_name, func_name) in allowed
+
+
+_DECLARE_PTRSAFE_PATTERN = re.compile(r"\bDeclare\s+PtrSafe\b", re.IGNORECASE)
+_DECLARE_SUBFUNC_PATTERN = re.compile(r"\bDeclare\s+(?:Sub|Function)\b", re.IGNORECASE)
+_DECLARE_PATTERNS = (_DECLARE_PTRSAFE_PATTERN, _DECLARE_SUBFUNC_PATTERN)
+
 FORBIDDEN_API_PATTERNS = (
     (re.compile(r"\bVBComponents\b", re.IGNORECASE),
      "VBComponents(VBAプロジェクトへの書込。自己インストーラの形)"),
@@ -3144,9 +3324,9 @@ FORBIDDEN_API_PATTERNS = (
      'GetObject("New:{CLSID}")(参照設定なしのCOM生成)'),
     (re.compile(r"[Nn][Ee][Ww]\s*:\s*\{"),
      "new:{CLSID}(参照設定なしのCOM生成)"),
-    (re.compile(r"\bDeclare\s+PtrSafe\b", re.IGNORECASE),
+    (_DECLARE_PTRSAFE_PATTERN,
      "Declare PtrSafe(Win32 APIの宣言)"),
-    (re.compile(r"\bDeclare\s+(?:Sub|Function)\b", re.IGNORECASE),
+    (_DECLARE_SUBFUNC_PATTERN,
      "Declare Sub/Function(Win32 APIの宣言)"),
     (re.compile(r"\bHyperlinks\s*\.\s*Add\b", re.IGNORECASE),
      "Hyperlinks.Add(11章§8.6 禁忌1: 図形のOnActionを殺す)"),
@@ -3161,15 +3341,21 @@ def _forbidden_api_exempt(info: ModuleInfo) -> bool:
 
 
 def check_forbidden_api_tokens(info: ModuleInfo) -> None:
-    """裁定書27 W9-B7(a): 社内AVが重く見るAPIの形を配布ソースから禁止する。"""
+    """裁定書27 W9-B7(a): 社内AVが重く見るAPIの形を配布ソースから禁止する。
+    裁定書44 A-6: Declare 系の2パターンだけは FORBIDDEN_API_DECLARE_ALLOW の
+    閉じた例外(モジュール名 -> 許す(Lib, 関数名)の集合)に当たれば見逃す。
+    """
     if _forbidden_api_exempt(info):
         return
+    module_name = module_name_for_display(info)
     for lineno, raw in merge_continuations(info.raw_text.split("\n")):
         code = strip_comment(raw)
         if not code.strip():
             continue
         for pat, why in FORBIDDEN_API_PATTERNS:
             if pat.search(code):
+                if pat in _DECLARE_PATTERNS and _declare_is_allowed(module_name, code):
+                    continue
                 info.add(
                     "ERROR", lineno,
                     f"裁定書27 W9-B7(a) 禁止API: {why}。"
@@ -3269,6 +3455,42 @@ def _selftest_forbidden_api_tokens() -> list[str]:
     check_forbidden_api_tokens(exempt)
     if exempt.findings:
         problems.append("禁止API検査: modGatewayDirect の許可リストが効いていません")
+    # 裁定書44 A-6: FORBIDDEN_API_DECLARE_ALLOW の3本(許可外関数→赤/
+    #   許可モジュール以外→赤/許可4本→緑)。骨抜き防止(例外表を丸ごとの
+    #   免除に戻す・モジュール名の判定を外す、のどちらでも赤くなる形)。
+    declare_other_fn = _probe_module(
+        ['    Private Declare PtrSafe Function Sleep Lib "user32" (ByVal dw As Long) As Long'])
+    declare_other_fn.vb_name = "modNaviWindow"
+    check_forbidden_api_tokens(declare_other_fn)
+    if not declare_other_fn.findings:
+        problems.append(
+            "禁止API検査(裁定書44 A-6): modNaviWindow でも許可4本に無い"
+            "user32関数(Sleep)のDeclareが検知されませんでした")
+    declare_wrong_module = _probe_module(
+        ['    Private Declare PtrSafe Function FindWindowA Lib "user32" '
+         '(ByVal c As String, ByVal w As String) As LongPtr'])
+    declare_wrong_module.vb_name = "modUtil"
+    check_forbidden_api_tokens(declare_wrong_module)
+    if not declare_wrong_module.findings:
+        problems.append(
+            "禁止API検査(裁定書44 A-6): modNaviWindow以外(modUtil)でのFindWindowA"
+            "のDeclareが検知されませんでした(例外表はモジュール名を見ていない)")
+    declare_allowed_4 = _probe_module([
+        '    Private Declare PtrSafe Function FindWindowA Lib "user32" '
+        '(ByVal c As String, ByVal w As String) As LongPtr',
+        '    Private Declare PtrSafe Function GetWindowLongA Lib "user32" '
+        '(ByVal h As LongPtr, ByVal n As Long) As Long',
+        '    Private Declare PtrSafe Function SetWindowLongA Lib "user32" '
+        '(ByVal h As LongPtr, ByVal n As Long, ByVal v As Long) As Long',
+        '    Private Declare PtrSafe Function DrawMenuBar Lib "user32" '
+        '(ByVal h As LongPtr) As Long',
+    ])
+    declare_allowed_4.vb_name = "modNaviWindow"
+    check_forbidden_api_tokens(declare_allowed_4)
+    if declare_allowed_4.findings:
+        problems.append(
+            "禁止API検査(裁定書44 A-6): modNaviWindowの許可4本が誤検知されました: "
+            f"{declare_allowed_4.findings!r}")
     return problems
 
 
@@ -3725,6 +3947,9 @@ def discover_module_files(src_root: Path) -> list[Path]:
 
 
 def run_lint(src_root: Path) -> int:
+    if not _self_test_join_typed_array():
+        print("[vba_lint] 自己テスト失敗(check_join_typed_arrayの検出器が壊れています)")
+        return 2
     if not src_root.exists():
         print(f"[vba_lint] 対象ディレクトリが存在しません: {src_root}")
         return 1
@@ -3738,6 +3963,7 @@ def run_lint(src_root: Path) -> int:
         check_cp932_safe(info)
         check_line_cp932_bytes(info)
         check_dim_type_drop_and_integer(info)
+        check_join_typed_array(info)
         check_name_shadowing(info)
         check_declaration_position(info)
         check_handler_exit(info)

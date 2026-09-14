@@ -354,8 +354,16 @@ End Sub
 ' ----------------------------------------------------------------------------
 ' ApplyGhostingGuard - 画面ゴースト化への備え(16章 E-50(b)。裁定書27 W9-B4)
 '   撤去したもの: user32 の `DisableProcessWindowsGhosting`(`Declare PtrSafe`)。
-'     Win32 APIの宣言は社内AVのAMSIがマクロ型マルウェアの特徴として重く見る形
-'     であり、配布物から消す(2026-09-02 実測。裁定書27 事実)。
+'     **事実の訂正(裁定書44 A-6)**: 2026-09-02 に社内AV(AMSI)が実際に検知した
+'     のは「隠しシートの文字列をVBAプロジェクトへ注入するループ」であり
+'     (docs/28_開発担当専用_検証PCの設定.md §0 に逐語で記録)、`Declare` の
+'     宣言そのものではない。旧コメントはこの2つを取り違えていた。撤去は
+'     あくまで**予防措置**(裁定書27 W9-B7)であり、事後にAMSI検知の実例が
+'     Declareそのものにあったわけではない。2026-09-14 裁定書44 A-6で、
+'     利用者決定と姉妹PJ(MyBookshelf)の実機実績(2026-09-12 Defender警告
+'     なし確認済み)を根拠に、表示系4本(FindWindowA/GetWindowLongA/
+'     SetWindowLongA/DrawMenuBar)のみ `modNaviWindow` に限って再許可した
+'     (tools/vba_lint.py の FORBIDDEN_API_DECLARE_ALLOW)。
 '   代替: **事前描画カード + DoEvents**。E-50(a) の確定表示(modUIProgress.SetStage
 '     が呼出の**前**に書き切るカード)が主役であり、ここでは起動時に一度
 '     `DoEvents` を通してメッセージキューを空にし、以後の待機に入る前の画面を

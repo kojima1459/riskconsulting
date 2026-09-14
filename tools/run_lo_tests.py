@@ -221,6 +221,14 @@ PURE_ALLOWLIST = [
     #   modUINav      : StepRuleOf / StepFor / StepActionOf / StepText /
     #                   StepAnchor(M4。優先順位10行の判定核)
     "modUIResearch", "modUICase6", "modUINav",
+    # 裁定書44 A-8c。ui層だがテストが叩くのは copy_buf/paste_buf の
+    # シート名定数を返すだけの純関数2本(技術メモ4。モジュールの他の関数は
+    # クリップボード・シートに触れるが実行に到達しない):
+    #   modUICase7 : CopyBufSheetName / PasteBufSheetName
+    #   modUISheet : modUICase7 が呼ぶだけ(EnsureHiddenSheet 等の実体は
+    #                実行に到達しないが、モジュールが宣言だけでも解決できる
+    #                必要があるため同時に注入する)
+    "modUICase7", "modUISheet",
     # W6.2(裁定書23追補2)。ui層だがテストが叩くのは MaxWaitText(秒→分の切り上げ)
     # だけ。Excel・シート・モジュール変数のどれにも触れない純関数である
     # (技術メモ4。SetStage 等の他の関数はシートに触るが実行に到達しない)。

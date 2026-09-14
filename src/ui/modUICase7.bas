@@ -46,8 +46,10 @@ Private Const U7_BODY_CHUNK As Long = 32000
 Private Const U7_BODY_ROW0 As Long = 3
 Private Const U7_BODY_MAX_ROWS As Long = 2000
 
-' クリップボードの受け皿(裁定書27 W9-B1。詳細は本モジュール末尾の節を参照)。
+' クリップボードの受け皿(裁定書27 W9-B1・裁定書44 A-8c。詳細は本モジュール
+'   末尾の節を参照)。読む側(paste_buf)と書く側(copy_buf)は**別の器**にする。
 Private Const U7_BUF_SHEET As String = "paste_buf"
+Private Const U7_COPY_BUF_SHEET As String = "copy_buf"
 Private Const U7_FMT_JA As String = "Unicode テキスト"
 Private Const U7_FMT_EN As String = "Unicode Text"
 Private Const U7_SHEET_VISIBLE As Long = -1        ' xlSheetVisible
@@ -256,9 +258,23 @@ End Sub
 '         名前が違うので "Unicode テキスト" -> "Unicode Text" の順に試す。
 '         貼り付いたセルは modNavText.JoinPasteCells で1本のテキストへ戻し、
 '         受け皿シートは消す。
-'   書く: 同じ受け皿シートへ1行1セルで書き、その範囲を `Copy` する。
-'         **範囲Copyはクリップボードへの参照**なので、受け皿シートは消さずに
-'         veryHidden のまま残す(消すと貼り付け先で空になる)。
+'   書く: **別のveryHidden受け皿 `copy_buf`**(裁定書44 A-8c)へ1行1セルで書き、
+'         その範囲を `Copy` する。**範囲Copyはクリップボードへの参照**なので、
+'         受け皿シートは消さずに veryHidden のまま残す(消すと貼り付け先で
+'         空になる)。次にコピーするときだけ、書く**直前**に Clear する
+'         (コピー**直後**には触らない)。
+'
+' なぜ読む側と書く側を分けたか(裁定書44 A-8c。実機NG: T47-W9-01/T47B-W61-15):
+'   もとは読み書きとも `paste_buf` 1枚を共用していた。Excel の Copy は
+'   遅延レンダリング(貼り付け側が実際に読むまでコピー元セルの中身を確定
+'   しない)なので、コピーした直後に**同じセル**を貼り付け側の下ごしらえで
+'   Clear すると、確定前のクリップボードの中身ごと消える。ClipPasteText は
+'   読む前に必ず `ws.Cells.Clear` するので、直前に ClipCopyText で書いた
+'   `paste_buf` をそのまま読もうとすると自分で消したあとを読むことになり、
+'   往復が必ず空になっていた(LibreOfficeは遅延レンダリングを実装していない
+'   ので層(a)では再現しない・実機だけの壊れ方)。書く器を copy_buf へ分けた
+'   ことで、ClipPasteText の Clear は paste_buf だけに閉じ、直前の
+'   ClipCopyText が copy_buf へ持たせたクリップボード参照に触らなくなる。
 '
 ' 受け皿シートは実行時生成の作業シートであり、13章§2.9 の `enum_hidden` と
 '   同じ扱い(仕様上のシートではないので照合対象外・配布ビルドに焼かない)。
@@ -390,8 +406,12 @@ Private Sub DropPasteBuf(ByVal ws As Object, ByVal prevSheet As Object, _
 End Sub
 
 ' ClipCopyText - テキストをクリップボードへ入れる(11章§3.2 の[コピー])。
-'   1行1セルで受け皿へ書き、その範囲を Copy する。**受け皿は消さない**
-'   (範囲Copyはクリップボードへの参照であり、消すと貼り付け先が空になる)。
+'   1行1セルで**書く専用の受け皿 copy_buf**(裁定書44 A-8c)へ書き、その範囲を
+'   Copy する。**Copy した直後の copy_buf は消さない**(範囲Copyはクリップ
+'   ボードへの参照であり、消すと貼り付け先が空になる。Excelの遅延レンダリング
+'   のため、コピー元セルを消すとクリップボードの中身ごと消えるのが実機で
+'   起きたNGの原因だった)。ここでの `ws.Cells.Clear` は**次にコピーする直前**
+'   の下ごしらえであり、前回コピーぶんの後始末ではない。
 '   `"` とタブを含む行があるときは False を返して呼び出し側の
 '   「セルを選ぶので Ctrl+C してください」へ落とす: Excelのテキスト形式は
 '   その2文字を含むセルを引用符で包み直すため、黙って中身を変えてしまう。
@@ -412,7 +432,7 @@ Public Function ClipCopyText(ByVal payloadText As String) As Boolean
     If n <= 0 Or n > U7_BUF_MAX_ROWS Then Exit Function
 
     Dim ws As Object
-    Set ws = modUISheet.EnsureHiddenSheet(U7_BUF_SHEET)
+    Set ws = modUISheet.EnsureHiddenSheet(U7_COPY_BUF_SHEET)
     If ws Is Nothing Then Exit Function
     ws.Cells.Clear
 
@@ -427,6 +447,18 @@ Public Function ClipCopyText(ByVal payloadText As String) As Boolean
     Exit Function
 Failed:
     ClipCopyText = False
+End Function
+
+' CopyBufSheetName / PasteBufSheetName - 裁定書44 A-8c: 書く器と読む器が
+'   同じ名前(定数の取り違え)に戻っていないかを純テストが固定するための窓。
+'   実体(EnsureHiddenSheet を叩くかどうか)は持たない=どちらもExcelを開かず
+'   呼べる(層(a))。
+Public Function CopyBufSheetName() As String
+    CopyBufSheetName = U7_COPY_BUF_SHEET
+End Function
+
+Public Function PasteBufSheetName() As String
+    PasteBufSheetName = U7_BUF_SHEET
 End Function
 
 ' ============================================================================

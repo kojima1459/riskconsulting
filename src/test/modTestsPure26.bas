@@ -117,7 +117,7 @@ Private Sub T_NgramRank()
     ChkN "Test_W15B_04_RankRowsは全件を返す_裁定書38B-10", n, 3
     ChkB "Test_W15B_05_RankRowsは関連度降順(完全一致が1位)_裁定書38B-10", _
         (n = 3 And order(1) = 3 And order(2) = 2 And order(3) = 1), _
-        "実際の順=" & Join(order, ",")
+        "実際の順=" & JoinLongs(order, ",")
 End Sub
 
 ' ============================================================================
@@ -292,7 +292,7 @@ Private Sub T_RankIndexAndCap()
     n = modKnowledgeRank.RankRows("abcdefgh", rowTexts, order)
     ChkB "Test_R1-03_17_索引版でも順位は素朴版と同じ_裁定書39R1-03", _
         (n = 4 And order(1) = 3 And order(2) = 2 And order(3) = 4 And order(4) = 1), _
-        "実際の順=" & Join(order, ",")
+        "実際の順=" & JoinLongs(order, ",")
 
     ' 18/20 案件側の上限(kb_rank_case_chars 相当)で打ち切られること。
     '    caseText の後半(BBBBBBBB)を切ると C2 の重なりが0になり補充されない。
@@ -382,7 +382,7 @@ Private Sub T_RankIndexAndCap()
     ChkB "Test_P-M3_28_索引を使い回しても点数と順位が変わらない_裁定書40P-M3", _
         (okOrder And scSum > 0 And scX(4) > scX(2)), _
         "点数=" & CStr(scX(1)) & "," & CStr(scX(2)) & "," & CStr(scX(3)) & "," & _
-        CStr(scX(4)) & "," & CStr(scX(5)) & " 順=" & Join(order, ",")
+        CStr(scX(4)) & "," & CStr(scX(5)) & " 順=" & JoinLongs(order, ",")
 
     ' 29 候補行数の上限(config kb_rank_max_rows 相当の第13引数)。上限1なら
     '    シート順で先頭の候補(C2)だけが順位付けの対象になり、C3 は採られない。
@@ -561,3 +561,22 @@ Private Sub T_TotalHitsAndEmpty()
                                   totalHits, "abcdefgh", "body")
     ChkN "Test_P-m2_24_lastRowが負でも実行時エラーにならない_裁定書40P-m2", n, 0
 End Sub
+
+' JoinLongs - Long配列をカンマ等で連結する(裁定書44 追加裁定A-8a)。
+'   実VBAの Join() は Variant/String の配列しか受け付けず、Long() 配列を渡すと
+'   Err 5(プロシージャの呼び出し、または引数が不正です)になる。LibreOffice
+'   Basic は型に寛容でこの差異を素通りするため、実機で初めて発覚した
+'   (W15B-G1/G5 が Err 5 で落ち、以降の8本が未実行になり本数不一致も連鎖した)。
+'   空配列(LBound>UBound)は空文字を返す。
+Private Function JoinLongs(ByRef arr() As Long, ByVal sep As String) As String
+    Dim i As Long, outText As String
+    On Error GoTo Empty0
+    For i = LBound(arr) To UBound(arr)
+        If i > LBound(arr) Then outText = outText & sep
+        outText = outText & CStr(arr(i))
+    Next i
+    JoinLongs = outText
+    Exit Function
+Empty0:
+    JoinLongs = vbNullString
+End Function

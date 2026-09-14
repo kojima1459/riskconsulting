@@ -551,11 +551,59 @@ def check_banner_wire(verbose: bool,
     return (problems, summary)
 
 
+# ---------------------------------------------------------------------------
+# 検査③: 配線(静的) - 裁定書44 A-7。自己テストの結果本文(17章 T-48)
+# ----------------------------------------------------------------------------
+# ui/app.js が読むキー `test_report` と、modNaviActions2.ActRunTests が応答へ
+# 積むキーが同じ綴りであること、かつ応答の本文が modTestsRunnerUi の集計を
+# そのまま使っていること(この関数の中で作り直していないこと)を固定する。
+# JSはVBAから実行できないので層(a)は原理的に届かない(検査①②と同じ理由)。
+# ---------------------------------------------------------------------------
+def check_test_report_wire(verbose: bool,
+                           checked: "gate_count.Checked | None" = None
+                           ) -> tuple[list[str], str]:
+    problems: list[str] = []
+    n = [0]
+
+    def w(text: str | None, needle: str, where: str, why: str) -> None:
+        n[0] += 1
+        if text is None:
+            problems.append(f"{where} が見つかりません(改名・削除の疑い)")
+            return
+        if needle not in text:
+            problems.append(f"{where} に `{needle}` がありません({why})")
+
+    app_js_path = REPO_ROOT / "ui" / "app.js"
+    app_js = app_js_path.read_text(encoding="utf-8", errors="replace") \
+        if app_js_path.exists() else None
+    w(app_js, "&&r.test_report){showTestReport(r);}", "ui/app.js",
+      "run_tests の応答 test_report を受けてモーダルを開く配線があること"
+      "(裁定書44 A-7。receive() のこの1行が無いと、test_reportという"
+      "文字列だけがどこかに残っていても本文はモーダルに出ない)")
+
+    actions2 = read_module("modNaviActions2.bas")
+    body = joined_body(actions2, "ActRunTests")
+    w(body, '""test_report"":', "modNaviActions2.ActRunTests",
+      "応答JSONへ test_report キーを積んでいること(JSが読むキーと同じ綴り。"
+      "VBA文字列リテラル内の `\"` は `\"\"` と二重に書く)")
+    w(body, "modTestsRunnerUi.LastReportText()", "modNaviActions2.ActRunTests",
+      "本文は modTestsRunnerUi.LastReportText() をそのまま使う"
+      "(ここで作り直すと合否の判定が2箇所に増える)")
+
+    summary = f"照合 {n[0]}点"
+    if checked is not None:
+        checked.record("test_report 配線", n[0])
+    if verbose:
+        print(f"[notice_check] {summary}")
+    return (problems, summary)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="SEC-09の原文未照合(実DOM)と16章E-02の警告帯(配線)の回帰検問")
-    ap.add_argument("--only", choices=["dom", "wire"], default=None,
-                    help="片方だけ走らせる(既定は両方)")
+        description="SEC-09の原文未照合(実DOM)・16章E-02の警告帯(配線)・"
+                    "17章T-48自己テスト結果本文(配線)の回帰検問")
+    ap.add_argument("--only", choices=["dom", "wire", "testreport"], default=None,
+                    help="1つだけ走らせる(既定は全部)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -577,6 +625,11 @@ def main() -> int:
         if dom_sum:
             parts.append(f"検査①(実DOM SEC-09) {dom_sum}")
 
+    if args.only in (None, "testreport"):
+        tr_problems, tr_sum = check_test_report_wire(args.verbose, checked)
+        problems += [f"検査③(test_report配線): {p}" for p in tr_problems]
+        parts.append(f"検査③(test_report 配線) {tr_sum}")
+
     if problems:
         print("[notice_check] NG:")
         for p in problems:
@@ -584,13 +637,15 @@ def main() -> int:
         return 2 if blocked else 1
 
     # 「検査していないのに緑」を止める要点行(W15 §3 X3-3)。**回した検査だけ**
-    # が名前と件数を持つので、`--only` で片方を飛ばした回に「両方やった」とは
+    # が名前と件数を持つので、`--only` で他を飛ばした回に「全部やった」とは
     # 名乗れない(旧実装は飛ばした側を「(未実行)」と書いたまま OK 行を出していた)。
     required = []
     if args.only in (None, "wire"):
         required.append("E-02 配線")
     if args.only in (None, "dom"):
         required += ["実DOM SEC-09", "実DOM SEC-14"]
+    if args.only in (None, "testreport"):
+        required.append("test_report 配線")
     if gate_count.report(checked, required=tuple(required),
                          prefix="[notice_check] "):
         return 1

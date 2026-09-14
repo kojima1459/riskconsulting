@@ -29,12 +29,16 @@ Private Sub UserForm_Initialize()
     Me.Caption = modBootNavi.AppDisplayName()
     CycleSize
 End Sub
+' 裁定書44 A-4(F-5): 4段目「小（半分）」を追加(mSize=3。幅*0.5・高さ*0.6)。
+'   最小化ボタンが無い代わりに、画面を小さく縮めて背後のExcelを見たい要望への
+'   折衷案(11章)。最小640x400は既存どおり下で丸める。
 Public Sub CycleSize()
-    mSize = (mSize + 1) Mod 3
+    mSize = (mSize + 1) Mod 4
     Select Case mSize
     Case 0: Me.Width = 740: Me.Height = 520
     Case 1: Me.Width = Application.Width * 0.92: Me.Height = Application.Height * 0.88
     Case 2: Me.Width = Application.Width * 0.98: Me.Height = Application.Height * 0.95
+    Case 3: Me.Width = Application.Width * 0.5: Me.Height = Application.Height * 0.6
     End Select
     If Me.Width < 640 Then Me.Width = 640
     If Me.Height < 400 Then Me.Height = 400
@@ -66,6 +70,11 @@ Done:
 End Sub
 Private Sub LayoutBrowser()
     If mBrowserHost Is Nothing Then Exit Sub
+    ' 裁定書44 A-6: ネイティブ窓化で最小化ができるようになった分、最小化中の
+    '   Resize は Width/Height が極端に小さい値(または負値)で来る。そのまま
+    '   ブラウザの幅・高さへ流すと壊れた表示になるので、何もせず抜ける
+    '   (最小化から戻ったときの Resize でレイアウトし直す)。
+    If Me.Width < 200 Then Exit Sub
     mBrowserHost.Left = 0: mBrowserHost.Top = 0
     mBrowserHost.Width = Me.InsideWidth: mBrowserHost.Height = Me.InsideHeight
 End Sub

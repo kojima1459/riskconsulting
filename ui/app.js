@@ -46,6 +46,9 @@
   /* R2-09(裁定書39): 先にコピーを済ませ、そのトーストは silent で抑える。順番が逆だと
      「Outlookの下書きを開けなかったため…」が「コピーしました。」に上書きされて読めない。 */
   if(!r.ok&&r.report_text){copyText(r.report_text,null,true);}
+  /* A-7(裁定書44): 自己テストの結果本文は ok/NG どちらでもモーダルへ出す
+     (シート画面の gd_test_result 20行に相当する、HTML画面側の見え口)。 */
+  if(request&&request.action==='run_tests'&&r.test_report){showTestReport(r);}
   if(r.message){toast(r.message+(!r.ok?(' '+NOTES.INPUT_KEPT):''),r.kind||(!r.ok?'error':''));}if(!r.ok&&el('modalBackdrop').style.display==='block'){text('modalFeedback',(r.message||'入力内容を確認してください。')+' '+NOTES.INPUT_KEPT);el('modalFeedback').hidden=false;}
   if(r.ok&&!r.cancelled&&callback){callback(r);}if(request&&request.action==='initialize'&&!id()&&state.cases&&state.cases.length){send('open_case',{case_id:state.cases[0].case_id});}
  }
@@ -87,7 +90,22 @@
   if(fn){showModal(title,body,submit,fn);}
  }
  function copyText(value,done,silent){try{if(window.clipboardData&&window.clipboardData.setData('Text',value)){if(!silent){toast('コピーしました。');}if(done){done();}return;}}catch(ignore){}showModal('コピー','<p>次の文章を選択してCtrl+Cでコピーしてください。</p>'+field('copy','全文',value,'textarea'),'コピー済み',function(){closeModal(true);if(done){done();}});el('m_copy').select();}
- function copyPrompt(i){if(dirty){withBasics(function(){copyPrompt(i);});return;}var p=(state.current.prompts||[])[i];if(!p){return;}copyText(p.text||p.template||'',function(){send('copy_prompt',data({prompt_no:p.no||Number(i)+1}));});}
+ /* A-7(裁定書44): run_tests の応答本文をモーダルへ表示する(見出し「自己テストの結果」・
+    1行目に message・NG:で始まる行を先頭へ並べ替え・等幅スクロール可・[結果をコピー])。
+    IE11向けにES5のみ(let/アロー関数/テンプレート文字列を使わない)。 */
+ function orderTestReport(reportText){var lines=String(reportText||'').split(/\r\n|\r|\n/),ngLines=[],otherLines=[],i;for(i=0;i<lines.length;i++){if(/^NG: /.test(lines[i])){ngLines.push(lines[i]);}else{otherLines.push(lines[i]);}}return ngLines.concat(otherLines).join('\n');}
+ function showTestReport(r){var bodyText=orderTestReport(r.test_report),fieldHtml=field('test_report','結果本文',bodyText,'textarea').replace('<textarea ','<textarea class="mono-report" readonly rows="20" wrap="off" ');showModal('自己テストの結果','<p>'+e(r.message||'')+'</p>'+fieldHtml,'結果をコピー',function(){copyText(bodyText);});}
+ /* 裁定書44 A-3(F-3): [コピー]はVBA(Excel自身)がコピーする。先にcopy_promptを
+    送り、応答のcopied:falseのときだけ旧来のwindow.clipboardData経路(copyText)
+    へ落ちる(片方だけ直さない)。 */
+ /* A-8d(裁定書44): [コピー]の四段構え。
+    第1経路 VBA ClipCopyText(応答 copied)-> 第2経路 IE11 の execCommand('copy')
+    (隠しtextareaへ値を入れてselect()してから試す)-> 第3経路 既存の
+    window.clipboardData.setData(copyTextの中)-> 最後に手動コピーのモーダル
+    (同じくcopyTextの中。select()済みでCtrl+Cの案内)。片方だけ直さない
+    (HTML経路もシート予備経路も同じ modUICase7.ClipCopyText を通る)。 */
+ function execCommandCopy(value){var ta,ok=false;try{ta=document.createElement('textarea');ta.value=value;ta.setAttribute('readonly','readonly');ta.style.position='fixed';ta.style.top='0';ta.style.left='-9999px';document.body.appendChild(ta);ta.focus();ta.select();try{ta.setSelectionRange(0,value.length);}catch(ignoreRange){}ok=!!(document.execCommand&&document.execCommand('copy'));}catch(ignoreExec){ok=false;}try{if(ta&&ta.parentNode){ta.parentNode.removeChild(ta);}}catch(ignoreRemove){}return ok;}
+ function copyPrompt(i){if(dirty){withBasics(function(){copyPrompt(i);});return;}var p=(state.current.prompts||[])[i];if(!p){return;}var body=p.text||p.template||'';send('copy_prompt',data({prompt_no:p.no||Number(i)+1,text:body}),function(r){if(!r.copied&&!execCommandCopy(body)){copyText(body,null,true);}});}
  function withBasics(fn){if(dirty){send('save_basics',basics(),fn);}else{fn();}}
  function run(from){withBasics(function(){send('run_pipeline',data({from_step:Number(from)||1}));});}
  function exportReport(){var reviewed=el('reportReviewed')&&el('reportReviewed').checked,reviewedBy=trim(el('reportReviewedBy')?el('reportReviewedBy').value:'');if(reviewed&&!reviewedBy){toast('確認者名を入力してください。','warn');return;}withBasics(function(){send('export_report',data({reviewedBy:reviewed?reviewedBy:''}));});}

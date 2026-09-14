@@ -206,6 +206,8 @@ body.state-round2 .area-row.hidden-round { display:flex; }
 .slide .sbody { flex:1; padding:9px 12px; font-size:0.9231rem; line-height:1.7; } .slide .sbody b { display:block; margin-bottom:3px; } .slide .sbody ul { margin:2px 0 4px; padding-left:18px; } .slide .sbody .notes { color:#6c8177; font-size:0.8462rem; }
 .q-item { display:flex; padding:7px 0; border-bottom:1px dashed #e1ebe5; font-size:0.9231rem; } .q-item .qn { width:30px; color:#01675b; font-weight:700; } .q-item .qt { flex:1; } .q-item .qt span { display:block; color:#6c8177; font-size:0.8462rem; margin-top:2px; }
 .material-box { border:1px solid #dbe7e0; border-radius:6px; padding:12px 14px; background:#fbfdfc; font-size:0.9231rem; line-height:1.8; white-space:pre-wrap; word-wrap:break-word; max-height:360px; overflow:auto; }
+/* A-7(裁定書44): 自己テストの結果本文モーダル(等幅・スクロール可)。 */
+.mono-report { font-family:Consolas,"MS Gothic","MS ゴシック",monospace; font-size:0.8462rem; line-height:1.6; white-space:pre; overflow:auto; min-height:320px; resize:vertical; background:#fbfdfc; }
 .material-head { display:flex; align-items:center; margin:12px 0 6px; } .material-head b { flex:1; } .material-head button { margin-left:6px; }
 .report-frame { border:1px solid #dbe7e0; border-radius:6px; background:#f5f6f8; padding:16px; color:#667085; font-size:0.9231rem; line-height:1.8; }
 .report-frame .rf-hero { background:#fff; border-radius:6px; padding:16px 18px; border-left:6px solid #a5312f; margin-bottom:10px; } .rf-hero b { display:block; font-size:1.2308rem; color:#1d2433; } .rf-hero small { color:#667085; }

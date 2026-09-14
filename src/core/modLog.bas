@@ -61,6 +61,14 @@ Private Const LOG_MAX_ROWS_DEFAULT As Long = 2000
 ' 裁定書28: data_dir の下のログ置き場(csv の複製先)。
 Private Const LOG_CSV_FOLDER As String = "ログ"
 
+' 裁定書44 A-5(F-8): 自己テスト実行中フラグ。ONの間、err_log/usage_log の
+'   csv複製の書き先ファイル名だけを "*_selftest.csv" へ切り替える(シートの
+'   タブ名・列は変えない)。層(b)テストは意図的に異常系を踏むため、実行の
+'   たびに err_log.csv に E01xx〜E06xx が並び、利用者の実報告と紛れて
+'   切り分けを難しくしていた(F-8)。
+Private gSelfTestMode As Boolean
+Private Const LOG_SELFTEST_SUFFIX As String = "_selftest"
+
 ' EditRatio(17章 Z-51)の文字計数表。文字コードを添字にした計数表と、その
 '   要素が「今回の呼び出しで書かれたか」を示す世代印。呼び出しごとに
 '   65,536要素を 0 で埋め直す費用を避けるためだけの作業領域で、呼び出しを
@@ -240,6 +248,30 @@ Public Function EditRatioNote(ByVal stepNo As Long, ByVal ratio As Long) As Stri
 End Function
 
 ' ============================================================================
+' SetSelfTestMode - 自己テスト実行中の記録を別ファイルへ逃がす(裁定書44 A-5)。
+'   modTestsRunnerUi.RunAllTestsHeadless(と シート側の実行口)が実行の冒頭で
+'   ON、終了時(正常・異常とも)に OFF へ戻す。ON⇔OFFの間で失敗しても、
+'   呼び出し側が終端で必ずOFFへ戻す(自己テスト実行中フラグをつけっぱなしに
+'   しない)。
+' ============================================================================
+Public Sub SetSelfTestMode(ByVal enabled As Boolean)
+    gSelfTestMode = enabled
+End Sub
+
+' csv複製の書き先ファイル名(拡張子抜き)。ONかつ err_log/usage_log のときだけ
+'   "_selftest" を足す。run_log は対象外(層(b)テストは run_log を汚さない)。
+Private Function CsvKindOf(ByVal kind As String) As String
+    If gSelfTestMode Then
+        Select Case kind
+        Case LOG_SHEET_ERR, LOG_SHEET_USAGE
+            CsvKindOf = kind & LOG_SELFTEST_SUFFIX
+            Exit Function
+        End Select
+    End If
+    CsvKindOf = kind
+End Function
+
+' ============================================================================
 ' LogError - err_log へ1行記録する(16章の全エラーコード共通の口)。
 ' ----------------------------------------------------------------------------
 '   errCode   : E01xx-E07xx(正は16章§1の code 列)
@@ -416,7 +448,7 @@ Private Sub AppendCsv(ByVal kind As String, ByVal lineText As String)
     If Not modUtil.EnsureFolder(logDir) Then Exit Sub
 
     Dim pathText As String
-    pathText = logDir & modUtil.PathSep() & kind & ".csv"
+    pathText = logDir & modUtil.PathSep() & CsvKindOf(kind) & ".csv"
 
     Dim body As String
     body = lineText & vbCrLf

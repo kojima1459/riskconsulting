@@ -159,7 +159,7 @@ Public Function Dispatch(ByVal action As String, ByVal data As String, ByRef cas
          "judge_list", "judge_add", "judge_result", "logs", "reload_kb", "run_tests", _
          "rename_case", "archive_case", "export_case", "import_case", "save_settings"
         response = modNaviActions2.DispatchMore(action, data, caseId)
-    Case "resize", "close"
+    Case "resize", "close", "hide"
         ' Host owns form lifetime and performs these after successful dispatch.
         response = Success("")
     Case Else
@@ -186,7 +186,7 @@ End Sub
 '   入れないと「押しても何も起きない」画面になり、二度押しで二重実行になる。
 Public Function IsLongAction(ByVal action As String) As Boolean
     Select Case action
-    Case "run_pipeline", "chat", "sparring_send", "inbox_diagnose_all", "run_tests", _
+    Case "run_pipeline", "chat", "sparring_send", "inbox_diagnose_all", _
          "export_proposal"
         IsLongAction = True
     End Select

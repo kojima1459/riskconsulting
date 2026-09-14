@@ -65,6 +65,9 @@ Public Sub RunAllTestsFromBook()
         Exit Sub
     End If
 
+    ' 裁定書44 A-5(F-8): 自己テスト実行中は err_log/usage_log の csv複製を
+    ' *_selftest.csv へ逃がす。冒頭でON、正常・異常のどちらの終端でも必ずOFF。
+    modLog.SetSelfTestMode True
     modTestRunner.SetExpectedCount expected
     modTestRunner.RunAllPureTests
 
@@ -80,11 +83,13 @@ Public Sub RunAllTestsFromBook()
     summary = SummaryText(expected, pureExecuted, excelExecuted)
 
     ClearTestNotices
+    modLog.SetSelfTestMode False
     WriteResult summary, modTestRunner.ReportText()
     MsgBox summary, vbInformation, TR_TITLE
     Exit Sub
 
 Failed:
+    modLog.SetSelfTestMode False
     NoticeAbort Err.Number
 End Sub
 
@@ -121,6 +126,8 @@ Public Function RunAllTestsHeadless() As String
         Exit Function
     End If
 
+    ' 裁定書44 A-5(F-8): RunAllTestsFromBookと同じ理由でON/OFFする。
+    modLog.SetSelfTestMode True
     modTestRunner.SetExpectedCount hExpected
     modTestRunner.RunAllPureTests
 
@@ -136,12 +143,14 @@ Public Function RunAllTestsHeadless() As String
     hSummary = SummaryText(hExpected, hPure, hExcel)
 
     ClearTestNotices
+    modLog.SetSelfTestMode False
     mLastReport = modTestRunner.ReportText()
     WriteResult hSummary, mLastReport
     RunAllTestsHeadless = hSummary
     Exit Function
 
 Failed:
+    modLog.SetSelfTestMode False
     mLastReport = vbNullString
     RunAllTestsHeadless = "NG(テストの実行中に問題が起きました。" & CStr(Err.Number) & ")"
 End Function

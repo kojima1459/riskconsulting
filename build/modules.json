@@ -584,6 +584,14 @@
       "_note": "裁定書34 §1.1(W12-A)。髙橋さん版 v0.3 の HTML画面を当方規約へ寄せて取り込んだ。HTML画面の要求1回ぶんの寿命を持つ唯一のモジュール。action の許可リスト(IsAllowed。16章 E-67)・多重実行の拒否・ui/ の3ファイルを1枚のHTMLへ差し込む(HostReadPage)。"
     },
     {
+      "name": "modNaviWindow",
+      "path": "src/ui/navi/modNaviWindow.bas",
+      "role": "ui",
+      "type": "std",
+      "wave": "T-44A6",
+      "_note": "裁定書44 A-6(利用者決定2026-09-14・姉妹PJ MyBookshelf 実機実績)。UserForm のネイティブ窓化(最小化・最大化・境界ドラッグ可)。user32 の表示系4本(FindWindowA/GetWindowLongA/SetWindowLongA/DrawMenuBar)だけを Declare する唯一のモジュール(tools/vba_lint.py の FORBIDDEN_API_DECLARE_ALLOW で名指しの例外)。失敗しても画面表示は続ける(EnableNativeWindow は On Error GoTo Failed で包み、失敗時は modLog.LogUsage を残すだけ)。"
+    },
+    {
       "name": "modNaviState",
       "path": "src/ui/navi/modNaviState.bas",
       "role": "ui",

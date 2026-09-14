@@ -10,6 +10,12 @@ Option Explicit
 Private Const NA_COPY_MIN_LEN As Long = 20
 Private Const NA_COPY_SCAN_MAX As Long = 30000
 
+' [コピー]の逐語案内(裁定書44 A-3・docs/08 §1y)。貼り付け先と「調査の広がり」の
+'   選択まで言い切る(社内の調査ページの操作を1回で終えられるように)。
+Private Const NA2_COPY_GUIDE As String = _
+    "社内の調査ページで「レポート調査」→「指示文」欄に貼り付け、" & _
+    "「調査の広がり」は「集中（1観点）」を選んでください。"
+
 ' [NAVI] Specification 7.2. Advanced actions are separated for the 30000-character contract.
 Public Function DispatchMore(ByVal action As String, ByVal data As String, ByRef caseId As String) As String
     Dim ok As Boolean, note As String, result As String, n As Long, id As String
@@ -291,12 +297,23 @@ End Function
 '   合否の4条件・集計・gd_test_result への書込は modTestsRunnerUi 側が持つ
 '   (判定を2箇所に置かない)。髙橋さん版はここで modTestRunner / modTestsExcel を
 '   直に呼び、期待本数と4条件の判定をこの関数の中で作り直していた。
+' 裁定書44 A-2(F-2): run_tests は IsLongAction から外れ、UiLockを握らなくなった
+'   (modNaviActions.IsLongAction)。その代わり、この関数自身の再入(HTML画面から
+'   連打)を Static running で防ぐ。UiLockと違い**この関数の実行中だけ**を
+'   ブロックするので、層(b)の「貼ったものの保存」等が自分自身のロックとぶつかって
+'   SKIPされる事故(F-2)が起きない。
 Public Function ActRunTests(ByVal data As String) As String
+    Static running As Boolean
     Dim summary As String, report As String, ok As Boolean
+    If running Then
+        ActRunTests = "{""ok"":false,""busy"":true,""message"":""処理中です""}"
+        Exit Function
+    End If
     If Not modJsonLite.GetBoolJ(data, "confirmed", False) Then
         ActRunTests = modNaviActions.Confirm("自己テストを実行します。数分かかり、検査の行がログへ残ります。")
         Exit Function
     End If
+    running = True
     modNaviHost.ShowBusy "自己テストを実行しています", modNaviActions.ProgressJson(1, 1, "自己テスト")
     DoEvents
     On Error GoTo Failed
@@ -305,13 +322,23 @@ Public Function ActRunTests(ByVal data As String) As String
     ok = (InStr(1, summary, "全PASS", vbBinaryCompare) = 1)
     ActRunTests = "{""ok"":" & modNaviJson.Flag(ok) & ",""message"":" & modNaviJson.Q(summary) & _
                   ",""test_report"":" & modNaviJson.Q(report) & "}"
+    running = False
     Exit Function
 Failed:
+    running = False
     ActRunTests = modNaviActions.Failure("自己テストを実行できませんでした。", "E0603")
 End Function
 
+' ActCopyPrompt - 区画①[コピー](裁定書44 A-3・F-3)。
+'   旧実装は HTML の window.clipboardData に頼っていたが、WebBrowser 制御内では
+'   成功を返してもクリップボードへ入らない環境がある(EDR/クリップボード制限)。
+'   ここでは **Excel 自身のコピー**(modUICase7.ClipCopyText。シート予備画面の
+'   [コピー]と同じ実装)を使う。応答の "copied" が false のときだけ、画面側
+'   (ui/app.js::copyPrompt)が旧来の window.clipboardData → 手動コピーの
+'   モーダルへ落ちる(片方だけ直さない・二段構え)。
 Public Function ActCopyPrompt(ByVal caseId As String, ByVal data As String) As String
     Dim n As Long, stamp As String, json As String, warnText As String, basicsJson As String
+    Dim bodyText As String, copied As Boolean, openedUrl As String, message As String
     n = modJsonLite.GetLong(data, "prompt_no", 0)
     If n < 1 Or n > 8 Then
         ActCopyPrompt = modNaviActions.Failure("調査指示文の番号が不正です。", "E0101")
@@ -319,31 +346,43 @@ Public Function ActCopyPrompt(ByVal caseId As String, ByVal data As String) As S
     End If
     stamp = modUtil.NowStamp()
     json = "{""copied_" & CStr(n) & """:" & modNaviJson.Q(stamp) & "}"
+    ' data.text は画面(状態から組み立て済みの本文)。空のときはサーバ側が正を
+    ' 持つ PromptTextOf で作り直す(画面のJSを書き換えて空文字を送っても、
+    ' 個人情報の下見(CopyWarningOf)を素通りできない)。
+    bodyText = modJsonLite.GetStr(data, "text")
     If LenB(caseId) > 0 Then
         basicsJson = modCaseStore.LoadData(caseId, "nav_basics")
         If Not modNaviJson.IsValidJson(basicsJson) Then basicsJson = "{}"
+        If LenB(bodyText) = 0 Then
+            bodyText = modNaviState.PromptTextOf(n, modCaseRead.CaseColumnOf(caseId, "company"), _
+                                                 basicsJson, modCaseRead.CaseColumnOf(caseId, "industry_name"))
+        End If
         ' 裁定書39 R1-06 / 16章 E-69: 下見はコピーの直前=ここだけで行う。
         ' 画面更新(BuildCaseState)では走らせない(8本×最大30万字になるため)。
-        warnText = CopyWarningOf(modNaviState.PromptTextOf(n, _
-                                     modCaseRead.CaseColumnOf(caseId, "company"), basicsJson, _
-                                     modCaseRead.CaseColumnOf(caseId, "industry_name")), _
-                                 CopySourceTextOf(caseId))
+        warnText = CopyWarningOf(bodyText, CopySourceTextOf(caseId))
         json = modNaviStore.MergeBasics(basicsJson, json)
         modCaseStore.SaveData caseId, "nav_basics", json
         modCompanyFile3.AutoSaveCase caseId
     Else
+        If LenB(bodyText) = 0 Then
+            bodyText = modNaviState.PromptTextOf(n, modJsonLite.GetStr(modNaviState.DraftJson(), "company"), _
+                                                 modNaviState.DraftJson(), _
+                                                 modJsonLite.GetStr(modNaviState.DraftJson(), "industry_name"))
+        End If
         modNaviState.SetDraft modNaviJson.ReplaceTextField(modNaviState.DraftJson(), "copied_" & CStr(n), stamp)
     End If
-    modLog.LogUsage "research_prompt_copied", caseId, "no=" & CStr(n)
+    copied = modUICase7.ClipCopyText(bodyText)
+    modLog.LogUsage "research_prompt_copied", caseId, "no=" & CStr(n) & ";copied=" & CStr(copied)
     If modConfig.GetBool("dr_open_after_copy", False) Then
-        modUIResearch.OpenUrl modUIResearch.DrUrlOf("full", modConfig.GetStr("dr_url_full", ""))
+        openedUrl = modUIResearch.DrUrlOf("full", modConfig.GetStr("dr_url_full", ""))
+        modUIResearch.OpenUrl openedUrl
     End If
-    If LenB(warnText) > 0 Then
-        ActCopyPrompt = "{""ok"":true,""kind"":""warn"",""message"":" & _
-            modNaviJson.Q("調査指示文をコピーしました。" & warnText) & "}"
-    Else
-        ActCopyPrompt = modNaviActions.Success("調査指示文をコピーしました。")
-    End If
+    message = "調査指示文をコピーしました。" & NA2_COPY_GUIDE
+    If LenB(warnText) > 0 Then message = message & warnText
+    ActCopyPrompt = "{""ok"":true,""copied"":" & modNaviJson.Flag(copied) & _
+        ",""opened_url"":" & modNaviJson.Q(openedUrl) & _
+        IIf(LenB(warnText) > 0, ",""kind"":""warn""", "") & _
+        ",""message"":" & modNaviJson.Q(message) & "}"
 End Function
 
 ' CopyWarningOf - [コピー]の直前の下見(16章 E-69・裁定書39 R1-06)。

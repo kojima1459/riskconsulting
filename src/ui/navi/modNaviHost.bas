@@ -13,12 +13,28 @@ Public Sub OpenNaviTool()
     If gForm Is Nothing Then Set gForm = New frmNaviHtml
     gCloseAllowed = False
     gForm.Show 0
+    ' 裁定書44 A-6: Show の直後(直前は ThunderDFrame ウィンドウが無くhWndが
+    '   取れない)。config ui_window_native=FALSE なら中で何もしない。
+    '   失敗しても画面表示は続ける(呼び出し側は成否を見ない)。
+    modNaviWindow.EnableNativeWindow gForm
     gForm.EnsureBrowser
     Exit Sub
 Failed:
     HostFailure "open", Err.Number
     DropForm
     Application.StatusBar = "HTML画面を開けませんでした。従来のナビ画面を使用してください。"
+End Sub
+' HideNaviTool - [隠す](裁定書44 A-4・F-5)。gForm.Hideのみで**破棄しない**
+'   (Unload/DropFormはしない)。次に modNaviHost.OpenNaviTool が呼ばれたとき
+'   (Excel側`ご案内`シートの[ナビ画面を開く])、既存のgFormをそのままShow 0
+'   するので、案件の状態や未送信の入力は保たれる。
+Public Sub HideNaviTool()
+    On Error GoTo Failed
+    If gForm Is Nothing Then Exit Sub
+    gForm.Hide
+    Exit Sub
+Failed:
+    HostFailure "hide", Err.Number
 End Sub
 Public Function HostIsBusy() As Boolean
     HostIsBusy = gBusy Or modUIProgress.IsUiLocked()
@@ -37,7 +53,7 @@ Public Function IsAllowed(ByVal action As String) As Boolean
         IsAllowed = True
     Case "judge_list", "judge_add", "judge_result", "logs", "reload_kb", "run_tests"
         IsAllowed = True
-    Case "rename_case", "archive_case", "export_case", "import_case", "save_settings", "resize", "close"
+    Case "rename_case", "archive_case", "export_case", "import_case", "save_settings", "resize", "close", "hide"
         IsAllowed = True
     End Select
 End Function
@@ -89,6 +105,11 @@ Public Function HostRequestJson(ByVal request As String) As String
         response = "{""ok"":true,""message"":" & modNaviJson.Q("準備完了です。") & "}"
     Case "resize"
         If Not gForm Is Nothing Then gForm.CycleSize
+        response = "{""ok"":true}"
+    Case "hide"
+        ' 裁定書44 A-4(F-5): [隠す]。gForm.Hideのみ(破棄しない)。再表示は
+        ' Excel側の`ご案内`シートの図形[ナビ画面を開く](modNaviHost.OpenNaviTool)。
+        HideNaviTool
         response = "{""ok"":true}"
     Case "close"
         response = modNaviActions.Dispatch(action, data, gCurrent)

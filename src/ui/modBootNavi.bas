@@ -54,6 +54,16 @@ Private Const BN_UI_INDEX As String = "index.html"
 Private Const BN_MSG_NO_UI As String = _
     "ui フォルダが見つからないため従来画面で起動しました。"
 
+' `ご案内`シート(裁定書44 A-4)。EnsureGuideSheet が使う。
+Private Const BN_GUIDE_SHEET As String = "ご案内"
+Private Const BN_GUIDE_BTN As String = "btn_guide_open"
+Private Const BN_SHEET_VISIBLE As Long = -1   ' xlSheetVisible
+Private Const BN_GUIDE_TEXT As String = _
+    "この Excel は触りません。" & vbLf & _
+    "作業は HTML 画面（別ウィンドウ）で行います。" & vbLf & _
+    "HTML 画面を [隠す] で隠した、または閉じてしまったときは、" & _
+    "下のボタンを押してください。"
+
 ' ============================================================================
 ' RegisterNaviDefaults - HTML画面まわりの config 既定値(13章§2.3・裁定書34)。
 ' ----------------------------------------------------------------------------
@@ -75,6 +85,10 @@ Public Sub RegisterNaviDefaults()
     ' 裁定書37 B-09: 調査指示文(展開後)の目安上限字数。BuildPromptsが
     ' chars/over を返す(sheets_main.json config に同値の1行あり)。
     modConfig.RegisterDefault "dr_input_max_chars", "2000"
+    ' 裁定書44 A-6: UserForm のネイティブ窓化(最小化・最大化・境界ドラッグ可)を
+    ' 有効にするか。既定TRUE。FALSEなら modNaviWindow.EnableNativeWindow を
+    ' 呼ばない(失敗時の代替は無く単に呼ばないだけ。16章 E-70)。
+    modConfig.RegisterDefault "ui_window_native", "TRUE"
 End Sub
 
 ' ============================================================================
@@ -108,6 +122,10 @@ Public Sub LaunchIfHtml()
         modUISheet.WriteNamed "hm_warning", BN_MSG_NO_UI
         Exit Sub
     End If
+
+    ' 裁定書44 A-4(F-5/F-7): HTML画面を[隠す]・誤って閉じたときに戻れる唯一の
+    ' 可視シートを用意する。他シートの可視状態は変えない(veryHiddenのまま)。
+    EnsureGuideSheet
 
     Application.OnTime Now, "OpenNaviTool"
     Exit Sub
@@ -171,6 +189,36 @@ Private Function EnsureEnumHiddenSheet() As Object
     Set EnsureEnumHiddenSheet = ws
     On Error GoTo 0
 End Function
+
+' ============================================================================
+' EnsureGuideSheet - `ご案内`シート(裁定書44 A-4・F-5/F-7)。
+'   HTML画面は最小化ボタンが無く(Declare禁止・W9でAPI全撤去済み)、[隠す]した
+'   ときや誤って閉じたときに戻る手段が要る。**ただ1枚だけ見えるシート**へ
+'   案内文と図形ボタン[ナビ画面を開く](modNaviHost.OpenNaviTool)を置く。
+'   enum_hiddenと同じく実行時生成の作業シート(仕様上のシートではないため
+'   build/sheets_main.json には載せない・sheet_check.py の照合対象外)。
+'   既存シートは Worksheets(名前) を先に探すので、毎回の起動で二重化しない。
+' ============================================================================
+Public Sub EnsureGuideSheet()
+    On Error Resume Next
+    Dim ws As Object
+    Set ws = ThisWorkbook.Worksheets(BN_GUIDE_SHEET)
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add( _
+            After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        If Not ws Is Nothing Then ws.Name = BN_GUIDE_SHEET
+    End If
+    If ws Is Nothing Then Exit Sub
+
+    modUtilText.SetCellSafe ws.Cells(2, 2), BN_GUIDE_TEXT, "modBootNavi/guide"
+    ws.Cells(2, 2).Font.Size = 14
+    ws.Cells(2, 2).WrapText = True
+    ws.Columns(2).ColumnWidth = 90
+    modUISheet.EnsureButton ws, BN_GUIDE_BTN, "ナビ画面を開く", 6, 2, 160#, _
+                            "modNaviHost.OpenNaviTool"
+    ws.Visible = BN_SHEET_VISIBLE
+    On Error GoTo 0
+End Sub
 
 Private Sub ApplyDataKeyValidation()
     On Error Resume Next
