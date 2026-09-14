@@ -38,7 +38,7 @@ MyBookshelfプロジェクトの皆様
 |---|---|---|---|
 | 1 | lint | `tools/vba_lint.py` | あり（Private化の変異、行長1,000B超、Macのパス連結、1モジュール30,000字超を検出） |
 | 2 | lo-compile | `run_lo_tests.py --mode compile` | あり（マージで落ちた `If` の閉じ、UDTのByVal渡しを検出） |
-| 3 | lo-pure | `run_lo_tests.py --mode pure` | あり（`InWindow` の境界変異を検出。純テスト **1,082本**（2026-09-14 時点）の本数照合つき＝テストを黙って減らせない） |
+| 3 | lo-pure | `run_lo_tests.py --mode pure` | あり（`InWindow` の境界変異を検出。純テスト **1,086本**（2026-09-14 時点）の本数照合つき＝テストを黙って減らせない） |
 | 4 | lo-pure-dev | 同上 `--pure-set dev-only` | 実績の記録なし（dev専用17本） |
 | 5 | build-dev | `build_rpn.py --dev` | 実績の記録なし |
 | 6 | build-prod | `build_rpn.py --prod` | あり（配布物のコメントに `WScript.Shell` の文字列が入り自己検証でFAIL＝AV表面積の混入を阻止） |

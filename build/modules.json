@@ -958,6 +958,14 @@
       "_note": "裁定書38 班C。CheckS5(15章§5.6 の13件)・対訳表(TabooPairs)・機械置換(SoftenTaboo)。modValidate/2 は満杯、modValidate3 は班A が使う。"
     },
     {
+      "name": "modValidate5",
+      "path": "src/app/modValidate5.bas",
+      "role": "app",
+      "type": "std",
+      "wave": "W17",
+      "_note": "裁定書46 班F。対訳表の実体(TabooPairList。modValidate4.TabooPairs はここへ委譲)。modValidate4 が満杯のため分けた。"
+    },
+    {
       "name": "modPipeline5",
       "path": "src/app/modPipeline5.bas",
       "role": "app",

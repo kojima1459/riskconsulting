@@ -139,7 +139,48 @@ def _b64_looks_like_secret(s: str) -> bool:
             and all(IDENTIFIER_SEGMENT_RE.match(x) for x in segs)
             and _shannon_entropy(s) < IDENTIFIER_LIST_MAX_ENTROPY):
         return False
+    if _upper_digit_share(s) < ROMAJI_MAX_UPPER_DIGIT_SHARE:
+        return False
     return True
+
+
+# (4) ローマ字ファイル名のガード(裁定書46・2026-09-14)。ナレッジ資料の出典が
+#   `Jkurejittojigyoushashienhoken...202111` のような**ローマ字化した
+#   ファイル名**(実物は44字)で、40字以上・数字と大小文字を含み、"/" で切れない
+#   ため(1)〜(3)を素通りして16件が赤になった。Base64 の乱数鍵は英大文字26+数字10
+#   =36/64=56% が大文字か数字で、40字以上でその割合が 18% を下回る確率は二項分布
+#   で 1e-7 未満(3,000,000 本の乱数鍵で実測 0 本・最小 18.2%。下の selftest_b64
+#   で毎回検算)。一方ローマ字の列は大文字・数字が少ない(実在16件の最大は 15.9%
+#   =上の例。数字6桁の日付を含む)。既存(1)の取りこぼし率 0.019% より3桁小さい。
+ROMAJI_MAX_UPPER_DIGIT_SHARE = 0.18
+
+
+def _upper_digit_share(s: str) -> float:
+    """英大文字と数字が占める割合(0〜1)。"""
+    if not s:
+        return 0.0
+    return sum(1 for c in s if c.isupper() or c.isdigit()) / len(s)
+
+
+def selftest_b64(n: int = 20000) -> list[str]:
+    """(4)の検算: 乱数鍵 n 本が全部 Base64様として拾われ、ローマ字の列が拾われない。"""
+    import base64
+    import os
+    import random
+    problems: list[str] = []
+    missed = 0
+    for _ in range(n):
+        raw = base64.b64encode(os.urandom(random.randint(30, 69))).decode().rstrip("=")
+        # (4)だけの取りこぼしを測る((1)の3種必須は既知の率 0.019% で別勘定)。
+        if _upper_digit_share(raw) < ROMAJI_MAX_UPPER_DIGIT_SHARE:
+            missed += 1
+    if missed:
+        problems.append(f"selftest_b64: 乱数鍵 {n} 本のうち {missed} 本が(4)で素通りした")
+    romaji = "RiskMap/43taiyoukouhatsudenyanesetchigata"
+    m = PAT_B64.search(romaji)
+    if m and _b64_looks_like_secret(m.group(0)):
+        problems.append("selftest_b64: ローマ字のファイル名を鍵として拾った")
+    return problems
 
 
 def _executable_lines(path: Path) -> list[tuple[int, str]]:
@@ -265,7 +306,8 @@ def check_item2(dist_dir: Path) -> tuple[bool, list[str]]:
     print("T-46 ② キー走査(16章 NFR-S2 の走査仕様4項目)")
     print("=" * 78)
 
-    hits: list[str] = []
+    hits: list[str] = list(selftest_b64())
+    print(f"  自己テスト(乱数鍵の検出/ローマ字の素通し): {'OK' if not hits else 'NG'}")
     files = tracked_files()
     tracked_count = len(files)
     # 作業ツリーの未trackedファイル(src/build/tools/wintest 配下)も対象に加える。
