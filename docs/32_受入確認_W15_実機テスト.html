@@ -49,6 +49,10 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <h1>リスク提案ナビ 受入確認（W15 完成版）</h1>
 <p class="sub">2026-09-13 ／ 会社PC（Windows・Office 32bit・社内AIリボン）で確かめていただく手順書です。<b>上から順に、赤いラベルから</b>お願いします。全部で <b>90〜120分</b>（AIの待ち時間込み）。時間が無い日は <b>P群と A群と C群</b>だけでも十分に価値があります。</p>
 
+<div class="note calm">
+<b>作業は HTML 画面だけで行う。</b>Excel のシートは開いたままでよいが触らない。Excel を最小化すると HTML 画面も一緒に隠れる。閉じてしまったら Excel の <code>ご案内</code> シートの [ナビ画面を開く]。
+</div>
+
 <div class="note">
 <b>今回から、お願いは「でき上がった1つのファイルを開いて動くか見る」だけです。</b>これまでの PowerShell の「第2段ビルド」は不要になりました（フォームと参照設定の組み込みまで開発側の自動処理で完結します）。前回お渡しした第2段キットは破棄していただいて構いません。<br>
 <b>置き場所は <code>D:\リスク提案ナビ</code></b>（信頼できる場所が D: だけ、という社内の前提に合わせています）。zip の中身をそのまま展開してください。
@@ -93,7 +97,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <dt>合格</dt>
 <dd class="ok">OneDrive のデータフォルダが<b>1行だけ</b>書かれている（例 <code>C:\Users\<自分>\OneDrive - <会社>\リスク提案ナビ\データ</code>）。そのパスをエクスプローラーのアドレス欄に貼ると<b>実在する</b></dd>
 <dt>不合格</dt>
-<dd class="ng">ファイルが無い／中身が空／画面のお知らせに <code>保存先が確認できません。</code> が出ている</dd>
+<dd class="ng">ファイルが無い／中身が空／画面の状態行に <code>保存先が確認できません。</code> が出ている</dd>
 <dt>送ってほしいもの</dt>
 <dd>その1行の中身そのまま（合格でも）</dd>
 </dl>
@@ -105,9 +109,11 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <dt>手順</dt>
 <dd>画面左下の [<b>テストを実行</b>] を押して待つ（数分）</dd>
 <dt>合格</dt>
-<dd class="ok"><code>FAIL 0</code> かつ <code>SKIP 0</code>。純ロジックの本数は <b>1,065</b></dd>
+<dd class="ok"><code>FAIL 0</code> かつ <code>SKIP 0</code>。純ロジックの本数は <b>1,079</b></dd>
 <dt>不合格</dt>
 <dd class="ng">FAIL が1本でもある／<code>SKIP(Mac)</code> が1本でも出る（会社PCでは0本が正。出たらその行をそのまま控えてください）</dd>
+<dt>これは正常</dt>
+<dd>自動テストの記録は<code>データ\ログ\err_log_selftest.csv</code>に入る（<code>err_log.csv</code>には残らない）。テストが異常系をわざと踏む記録なので<code>E01xx</code>〜<code>E06xx</code>が並んでいても製品の欠陥ではない</dd>
 </dl>
 </div>
 
@@ -115,7 +121,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <h3>P-4 ナレッジブックを自動で見つける</h3>
 <dl>
 <dt>手順</dt>
-<dd>P-1 で開いた直後の画面のお知らせ欄を見る（<code>ナレッジブック.xlsx</code> は本体と同じフォルダに置いてある前提）</dd>
+<dd>P-1 で開いた直後の画面の「ナレッジの状態」表示を見る（<code>ナレッジブック.xlsx</code> は本体と同じフォルダに置いてある前提）</dd>
 <dt>合格</dt>
 <dd class="ok"><code>同じフォルダのナレッジブックを読み込みました</code> が出る。区画①の業種欄が一覧から選べる</dd>
 <dt>不合格</dt>
@@ -152,6 +158,8 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <dd class="ok"><code>調査指示文をコピーしました。</code> が出て、社内のディープリサーチの調査ページが既定ブラウザで開く。開かない環境でも <code>ブラウザで https://app.hdtech.jp/… を開いて貼り付けてください</code> の案内が出る</dd>
 <dt>不合格</dt>
 <dd class="ng">何も出ない／クリップボードに入っていない（メモ帳に貼って確認）</dd>
+<dt>社内ディープリサーチでの使い方</dt>
+<dd>開いたページで「<b>レポート調査</b>」を選び、コピーした文を「<b>指示文</b>」欄に貼り付ける。「<b>調査の広がり</b>」は<b>集中（1観点）</b>を選ぶこと（「総合」はエッセイ化して事実が薄まる。docs/08 §1y）。「クイック調査」は使わない</dd>
 </dl>
 </div>
 
@@ -191,7 +199,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <dt>合格</dt>
 <dd class="ok">4段とも埋まり、右上に完了のカードが出て6秒ほどで消える。<code>データ\ログ\run_log.csv</code> に S1〜S4 の行が4行できる</dd>
 <dt>不合格</dt>
-<dd class="ng">途中で止まる → 画面のお知らせ欄の文言と、<code>データ\ログ\err_log.csv</code> の最後の行（<code>E02xx</code> 等のコード）をそのまま控えてください</dd>
+<dd class="ng">途中で止まる → 画面の状態行の文言と、<code>データ\ログ\err_log.csv</code> の最後の行（<code>E02xx</code> 等のコード）をそのまま控えてください</dd>
 </dl>
 </div>
 
@@ -346,14 +354,18 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <h2><span class="pri p2">中</span>D群 安全装置<span class="time">約15分</span></h2>
 
 <div class="item">
-<h3>D-1 契約番号だけなら警告で続き、人名が混じると止まる<span class="new">今回変更</span></h3>
+<h3>D-1 契約番号・人名・電話番号などを検知しても、既定では警告だけで登録は止まらない<span class="new">今回変更</span></h3>
 <dl>
+<dt>なぜ変えたか</dt>
+<dd>前回はDR出力に必ず入る代表者名・代表電話・問い合わせメール（公開の法人情報）まで個人情報として止めてしまい、先へ進めなくなっていた（実機FB第2弾 F-4）。config <code>pii_paste_policy</code>の既定を<b>warn</b>にし、公開情報ならそのまま、個人の連絡先だけ伏せ字にしてもらう運用へ変えた</dd>
 <dt>手順</dt>
-<dd>① 資料欄に「証券番号 1234-5678-9012」のような番号だけを含む文を貼る<br>② 次に、番号＋人名＋メールアドレスを含む文を貼る</dd>
+<dd>① 資料欄に「証券番号 1234-5678-9012」のような番号だけを含む文を貼る<br>② 次に、番号＋人名（例: 山田太郎様）＋電話番号を含む文を貼る</dd>
 <dt>合格</dt>
-<dd class="ok">①: <code>契約番号らしき数字列(N件)を検知しました。</code> の警告が出るが<b>登録は続く</b><br>②: 登録が<b>止まり</b>、人名・メールの検知が示される</dd>
+<dd class="ok">①②とも<b>登録は続く</b>。②では<code>個人情報らしき記述を検知しました（人名らしき語 1件: 山田太郎様／…）。公開情報ならそのままで構いません。個人の連絡先なら伏せ字にしてから登録し直してください。登録は完了しています。</code>のように<b>検知した種別・件数・断片（例文の一部）</b>が案内に出る</dd>
 <dt>不合格</dt>
-<dd class="ng">①で止まる（前の挙動）／②で通ってしまう</dd>
+<dd class="ng">①②のどちらかで登録が止まる／案内に断片（誰の・何が検知されたか）が1つも出ない</dd>
+<dt>設定でブロックへ戻したいとき</dt>
+<dd><code>config</code>シートの <code>pii_paste_policy</code> を <code>block</code> にすると、②は従来どおり登録が止まる（この案内にも同じ断片が出る）</dd>
 </dl>
 </div>
 
@@ -398,7 +410,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <h2><span class="pri p2">中</span>E群 見た目と使い勝手<span class="time">約10分</span></h2>
 
 <div class="item">
-<h3>E-1 文字サイズの切り替え</h3>
+<h3>E-1 文字サイズの切り替え／[隠す]で消して[ナビ画面を開く]で戻る<span class="new">今回変更</span></h3>
 <dl>
 <dt>手順</dt>
 <dd>[設定] で文字サイズを 小・中・大 に切り替える</dd>
@@ -406,6 +418,12 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 <dd class="ok">文字の大きさが変わり、横スクロールが出ず、ボタンの文字が欠けない</dd>
 <dt>不合格</dt>
 <dd class="ng">変わらない／大で崩れる</dd>
+<dt>手順（[隠す]）</dt>
+<dd>上段の[隠す]を押す</dd>
+<dt>合格（[隠す]）</dt>
+<dd class="ok">HTML画面が消え、Excelだけが見える。Excelのシート見出しには <code>ご案内</code> だけが見えており、大きく書かれた [<b>ナビ画面を開く</b>] を押すとHTML画面が元どおり戻る</dd>
+<dt>不合格（[隠す]）</dt>
+<dd class="ng">[隠す]を押してもHTML画面が消えない／隠したあとHTML画面へ戻る方法が無い</dd>
 </dl>
 </div>
 
@@ -459,5 +477,5 @@ kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;
 </div>
 
 <p class="sub" style="margin-top:30px">
-この文書は 2026年9月13日時点の実装コード（<code>src</code>・<code>ui</code>）と配布ビルドの config の実測値にもとづいて書かれています。ボタン名・メッセージは実装の文字列そのままです。開発側の自動検問は 35本（純ロジックテスト 1,065本）がすべて緑の状態でお渡ししています。API キー・パスワードなどの値は、この文書には一切含まれていません。
+この文書は 2026年9月13日時点の実装コード（<code>src</code>・<code>ui</code>）と配布ビルドの config の実測値にもとづいて書かれています。ボタン名・メッセージは実装の文字列そのままです。開発側の自動検問は 35本（純ロジックテスト 1,079本）がすべて緑の状態でお渡ししています。API キー・パスワードなどの値は、この文書には一切含まれていません。
 </p>

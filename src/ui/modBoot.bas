@@ -319,6 +319,9 @@ Private Sub RegisterConfigDefaults()
     modConfig.RegisterDefault "limit_check", "TRUE"
     modConfig.RegisterDefault "log_max_rows", "2000"
     modConfig.RegisterDefault "anonymize_default", "TRUE"
+    ' 裁定書44 B-1(16章 E-05): 貼付欄のPII検知は既定warn(登録は止めない)。
+    '   block にすると従来どおり止める。policy_no単独はこのキーに関わらず警告のみ。
+    modConfig.RegisterDefault "pii_paste_policy", "warn"
     ' 裁定書38 §1 班E(Z-45・W12-d): 報告メールの宛先/CC。既定は空(宛先欄を
     ' 空のまま表示。modReportMail.SendReportMail が読む)。
     modConfig.RegisterDefault "report_mail_to", vbNullString

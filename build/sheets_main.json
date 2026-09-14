@@ -2890,6 +2890,11 @@
           "note": "案件入力の匿名化ボタン既定(16章 E-31/OQ-6)"
         },
         {
+          "name": "pii_paste_policy",
+          "value": "warn",
+          "note": "案件入力の貼付欄でperson/email/phoneを検知したときの扱い。enum: warn(既定。登録は止めず警告のみ)/block(従来どおり登録を止める)。policy_no単独の検知はこのキーに関わらず常に警告のみ(裁定書38 Z-46。裁定書44 B-1)"
+        },
+        {
           "name": "feature_inbox",
           "value": true,
           "note": "機能フラグ(プレイ単位で無効化可能に)"

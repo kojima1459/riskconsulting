@@ -8,6 +8,10 @@ Option Explicit
 ' 裁定書40 R-M2/R-m1/R-m3 で NAVI-P50〜P61(+12 assertions)。
 ' 裁定書40 R-M2 の通し固定で NAVI-P68〜P70(+3 assertions)。
 ' 裁定書40 の横展開(同型)で NAVI-P62〜P67(+6 assertions)。
+' 裁定書44 B-1で NAVI-P73〜P82(+10 assertions)。PiiPasteWarnText(貼付PII方針
+'   warn/block・policy_no単独は変更なし)とmodPii.SnippetsOf(断片の切詰め)。
+'   同B-1でNAVI-U7-01〜04(+4 assertions)。modNaviActions2.BlocksGeneralPii
+'   (HTML/シート予備側で共有。片方だけ直さない)。
 Public Sub RunAll()
     On Error GoTo Failed
     CheckN "NAVI-P01 empty object", modNaviJson.IsValidJson("{}")
@@ -174,6 +178,49 @@ Public Sub RunAll()
     CheckN "NAVI-P67 a short source is not cut", _
         modNaviActions2.CapSourceText("abc") = "abc" And _
         Len(modNaviActions2.CapSourceText(String$(30000, "x"))) = 30000
+
+    ' 裁定書44 B-1: PiiPasteWarnText(貼付のPII方針。既定warnは止めない)。
+    Dim piiSample As String, piiMsg As String, piiBlk As Boolean
+    piiSample = "田中様と佐藤様に09012345678までご連絡ください。"
+    CheckN "NAVI-P73 no PII returns empty and not blocked", _
+        modNaviActions2.PiiPasteWarnText("会社概要のご説明です。", False, piiBlk) = "" And Not piiBlk
+    piiMsg = modNaviActions2.PiiPasteWarnText(piiSample, False, piiBlk)
+    CheckN "NAVI-P74 warn(default) does not block mixed person+phone", Not piiBlk
+    CheckN "NAVI-P75 warn message names kinds/counts/snippets", _
+        InStr(1, piiMsg, "人名らしき語 2件: 田中様、佐藤様", vbBinaryCompare) > 0 And _
+        InStr(1, piiMsg, "電話番号 1件: 09012345678", vbBinaryCompare) > 0 And _
+        InStr(1, piiMsg, "登録は完了しています。", vbBinaryCompare) > 0
+    piiMsg = modNaviActions2.PiiPasteWarnText(piiSample, True, piiBlk)
+    CheckN "NAVI-P76 block policy blocks mixed person+phone", piiBlk
+    CheckN "NAVI-P77 block message also carries the breakdown", _
+        piiBlk And InStr(1, piiMsg, "人名らしき語 2件", vbBinaryCompare) > 0 And _
+        InStr(1, piiMsg, "登録しませんでした", vbBinaryCompare) > 0
+    Dim policyMsgWarn As String, policyMsgBlock As String
+    policyMsgWarn = modNaviActions2.PiiPasteWarnText("証券番号 AB-1234567 の件。", False, piiBlk)
+    CheckN "NAVI-P78 policy_no alone never blocks even if False", Not piiBlk
+    policyMsgBlock = modNaviActions2.PiiPasteWarnText("証券番号 AB-1234567 の件。", True, piiBlk)
+    CheckN "NAVI-P79 policy_no alone never blocks even if blockPolicy=True(Z-46 unchanged)", _
+        Not piiBlk And policyMsgWarn = policyMsgBlock
+
+    ' 裁定書44 B-1: modPii.SnippetsOf(先頭件数と字数での切詰め)。
+    CheckN "NAVI-P80 SnippetsOf empty text yields empty", modPii.SnippetsOf("", 3, 12) = ""
+    CheckN "NAVI-P81 SnippetsOf caps items", _
+        UBound(Split(modPii.SnippetsOf(piiSample, 2, 12), ";")) + 1 = 2
+    CheckN "NAVI-P82 SnippetsOf truncates a long fragment with an ellipsis", _
+        InStr(1, modPii.SnippetsOf("メールはinfo-desk-support@example-company.co.jp宛です。", 1, 6), _
+              vbTab & "info-d" & ChrW(&H2026&), vbBinaryCompare) > 0
+
+    ' 裁定書44 B-1: modNaviActions2.BlocksGeneralPii(HTML側とシート予備側
+    '   modUICase7.ImportDirectPastesが共有。片方だけ直さない)。敵対的検証:
+    '   "And blockPolicy" を外すと下のNAVI-U7-01/02のいずれかが赤くなる。
+    CheckN "NAVI-U7-01 warn(blockPolicy=False) does not block person/email/phone", _
+        Not modNaviActions2.BlocksGeneralPii("person", False)
+    CheckN "NAVI-U7-02 block(blockPolicy=True) blocks person/email/phone", _
+        modNaviActions2.BlocksGeneralPii("person;phone", True)
+    CheckN "NAVI-U7-03 policy_no alone never blocks even if blockPolicy=True", _
+        Not modNaviActions2.BlocksGeneralPii("policy_no", True)
+    CheckN "NAVI-U7-04 no detection never blocks", _
+        Not modNaviActions2.BlocksGeneralPii("", True)
     Exit Sub
 Failed:
     modTestRunner.Check "NAVI pure unexpected error", False, CStr(Err.Number) & " " & Err.Description
