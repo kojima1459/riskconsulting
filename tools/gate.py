@@ -58,6 +58,11 @@ GATES = [
      r"OK: 全\d+項目一致"),
     ("sheet-kb",     [sys.executable, "tools/sheet_check.py", "--kb"],
      r"OK: 全\d+項目一致"),
+    # 実装班D(D-5): ナレッジブック実データ(業種マスタ・リスクライブラリ・
+    #   事故事例・判断基準)の純テスト。industry_code実在・enum・ID重複・
+    #   文字数上限の4条件をgate_count契約(Checked.record)で数える。
+    ("kb",           [sys.executable, "tools/kb_check.py"],
+     r"検査実施: [1-9]\d*件"),
     # 裁定書34 §1.1/§0.3(W12-A): --final を付けると、第2段のスクリプト
     #   (build/win/import_navi_modules.ps1)の存在と必須文字列も見る。第2段の
     #   産物(dist/final/)は CI には無いので SKIP になり、赤にはならない。
