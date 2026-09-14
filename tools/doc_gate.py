@@ -194,7 +194,7 @@ def extract_ui_names(texts: dict, include_sheet_ui: bool = True,
     """突合対象の全テキストを1本に連結する。
 
     既定(両方True)は「画面のどこかにある名前か」を見る従来の集合
-    = ui/ + build/sheets_main.json + src/ui/modUI*.bas。
+    = ui/ + build/sheets_main.json + src/ui/modUI*.bas + modBootNavi.bas(`ご案内`)。
 
     **ナビ画面の区画ボタンの文脈では `ui/` だけを見る**(W15 Round2 T-M2)。
     include_sheet_ui=False で旧シート画面の描画(`src/ui/modUI*.bas`)を、
@@ -210,7 +210,14 @@ def extract_ui_names(texts: dict, include_sheet_ui: bool = True,
         d = json.loads(SHEETS_JSON.read_text(encoding="utf-8"))
         chunks.append(json.dumps(d, ensure_ascii=False))
     if include_sheet_ui:
-        for path in sorted((REPO_ROOT / "src" / "ui").glob("modUI*.bas")):
+        paths = sorted((REPO_ROOT / "src" / "ui").glob("modUI*.bas"))
+        # 裁定書44 A-4: HTMLモードで唯一可視の `ご案内` シート(図形[ナビ画面を
+        #   開く])は modBootNavi.EnsureGuideSheet が描く。modUI* の外にある
+        #   シート画面の描画はこれ1本だけなので名指しで足す。
+        guide = REPO_ROOT / "src" / "ui" / "modBootNavi.bas"
+        if guide.is_file():
+            paths.append(guide)
+        for path in paths:
             chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
     return "\n".join(chunks)
 
