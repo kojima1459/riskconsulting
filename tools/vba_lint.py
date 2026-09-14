@@ -241,7 +241,9 @@ MODULE_REGISTRY = {
     #   modPipeline5 = S5 の実行(1呼び出し+修復1回)
     #   modProposalHtml1..4 = 顧客向け提案書 Wide 22枚のテンプレ(20章)
     #   modExportProposal   = 提案書の DATA 組立・書出(reviewedBy 必須)
-    "modPromptsS5", "modValidate4", "modPipeline5",
+    # 裁定書46(班F・F-6)で新設。modValidate4 が30,000字契約で満杯のため
+    #   対訳表(TabooPairs の実体=TabooPairList)を分割した。12章§2に追記済み。
+    "modPromptsS5", "modValidate4", "modValidate5", "modPipeline5",
     "modProposalHtml1", "modProposalHtml2", "modProposalHtml3",
     "modProposalHtml4", "modExportProposal",
     # W11-c(裁定書33 C-4)で新設。12章§2のモジュール一覧に追記済み。

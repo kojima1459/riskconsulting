@@ -61,9 +61,11 @@ RENDER_MODULES = [
     "modExportProposal",
     # BuildProposalData が S2 由来の文字列へ対訳表の機械置換を掛けるので必須。
     # modValidate3 は modValidate4.ReplaceOk が呼ぶ HeadOverlap の置き場所
-    #   (裁定書43。modValidate4 の容量都合で移した)。**この一覧は手で足すので
+    #   (裁定書43。modValidate4 の容量都合で移した)。modValidate5 は
+    #   modValidate4.TabooPairs が委譲する TabooPairList の置き場所
+    #   (裁定書46 班F・F-6。同じく容量都合で移した)。**この一覧は手で足すので
     #   落ちる**ため、下の check_module_refs() が qualified 参照を機械で照合する。
-    "modValidate4", "modValidate3",
+    "modValidate4", "modValidate3", "modValidate5",
     "modMockLlm", "modMockLlm2", "modMockLlm3", "modMockLlm4",
 ]
 
@@ -225,6 +227,11 @@ def basic_driver(out_url: str, faithful: bool,
     )
 
 
+# 描画+GlossarySweep(全対×全文脈)の上限秒。対訳表が51対→66対(裁定書46)に
+#   増えた時点で 180 秒ちょうどで切れた(入力 9,180→11,880 行。線形に伸びる)。
+#   切れると「HTMLが生成されませんでした」で赤になり黙って通ることはない。
+RENDER_TIMEOUT_SEC = 420
+
 DOM_STUB_JS = r"""
 'use strict';
 // 20章§1 が許す操作(createElement / textContent / setAttribute / appendChild /
@@ -360,7 +367,7 @@ def run_render(soffice: str, work_dir: Path, faithful: bool, verbose: bool,
 
     uri = ("vnd.sun.star.script:RpnProposal.RenderMain.Main"
            "?language=Basic&location=application")
-    rc, out, err = lo.run_uri(soffice, profile_dir, uri, 180)
+    rc, out, err = lo.run_uri(soffice, profile_dir, uri, RENDER_TIMEOUT_SEC)
     if not out_file.exists():
         print(f"[render_proposal] FAIL: HTMLが生成されませんでした(soffice exit={rc})")
         if verbose:
@@ -664,7 +671,9 @@ def glossary_from_md(text: str) -> tuple[list[tuple[str, str, str]], dict]:
 
 
 VBA_TOKEN = re.compile(r'"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_]*)')
-VBA_MODES = {"V4_REPLACE": "replace", "V4_WARN": "warn"}
+# 裁定書46(班F・F-6): TabooPairList の実体は modValidate5.bas にあり、
+#   定数名は V5_ 接頭辞(modValidate4 の V4_REPLACE/V4_WARN とは別物)。
+VBA_MODES = {"V5_REPLACE": "replace", "V5_WARN": "warn"}
 VBA_TERM_TOKEN = re.compile(r'ChrW\(&H([0-9A-Fa-f]+)\)|([A-Za-z_]\w*)')
 VBA_TERM_CONST = re.compile(r'^Private Const (V4_TERM_\w+) As String = "((?:[^"]|"")*)"',
                             re.MULTILINE)
@@ -672,10 +681,15 @@ VBA_CONSTANTS = {"vbTab": "\t", "vbCr": "\r", "vbLf": "\n"}
 
 
 def glossary_from_vba(src: str) -> list[tuple[str, str, str]]:
-    """modValidate4.bas の TabooPairs() が組み立てる行(社内語・顧客語・mode)。"""
-    if "Public Function TabooPairs()" not in src:
+    """modValidate5.bas の TabooPairList() が組み立てる行(社内語・顧客語・mode)。
+
+    実体は裁定書46(班F・F-6)で modValidate4.bas から移した(30,000字契約)。
+    modValidate4.TabooPairs() は `TabooPairs = modValidate5.TabooPairList()`
+    の1行委譲になったので、宣言⇔実装の突合はこちらの字面を読む。
+    """
+    if "Public Function TabooPairList(" not in src:
         return []
-    body = src.split("Public Function TabooPairs()", 1)[1].split("End Function", 1)[0]
+    body = src.split("Public Function TabooPairList(", 1)[1].split("End Function", 1)[0]
     rows = []
     for line in body.splitlines():
         if "AdPair " not in line:
@@ -721,29 +735,34 @@ def term_from_vba(src: str) -> tuple[str, list[str]]:
 
 
 def check_glossary_impl(problems_sink: list[str]) -> int:
-    """1本目: 宣言(対訳表)と実装(modValidate4)の**全列**を突き合わせる。"""
+    """1本目: 宣言(対訳表)と実装(modValidate5.TabooPairList)の**全列**を
+    突き合わせる。終端集合・取り消し規則・mode語彙は modValidate4 のまま
+    (裁定書46 班F・F-6でTabooPairsの実体だけを分割したため。TermChars は
+    動かしていない)。
+    """
     md_rows, rules = glossary_from_md(GLOSSARY.read_text(encoding="utf-8"))
     problems_sink.extend(rules["problems"])
     vba_src = (REPO_ROOT / "src" / "app" / "modValidate4.bas").read_text(encoding="utf-8")
-    vba_rows = glossary_from_vba(vba_src)
+    vba5_src = (REPO_ROOT / "src" / "app" / "modValidate5.bas").read_text(encoding="utf-8")
+    vba_rows = glossary_from_vba(vba5_src)
     if not vba_rows:
-        problems_sink.append("modValidate4.bas の TabooPairs() を読み取れませんでした")
+        problems_sink.append("modValidate5.bas の TabooPairList() を読み取れませんでした")
         return 0
     md_map = {s: (d, m) for s, d, m in md_rows}
     vba_map = {s: (d, m) for s, d, m in vba_rows}
     for word in sorted(set(md_map) | set(vba_map)):
         if word not in vba_map:
             problems_sink.append(
-                f"対訳表の「{word}」が modValidate4.TabooPairs() にありません"
+                f"対訳表の「{word}」が modValidate5.TabooPairList() にありません"
                 "(宣言だけあって機械置換されない=顧客資料に社内語が残る)")
         elif word not in md_map:
             problems_sink.append(
-                f"modValidate4.TabooPairs() の「{word}」が対訳表にありません"
+                f"modValidate5.TabooPairList() の「{word}」が対訳表にありません"
                 "(実装だけが知っている禁止語=誰も検算していない)")
         elif md_map[word] != vba_map[word]:
             problems_sink.append(
                 f"「{word}」の顧客語/mode が対訳表と実装で違います"
-                f"(対訳表={md_map[word]} / TabooPairs={vba_map[word]})")
+                f"(対訳表={md_map[word]} / TabooPairList={vba_map[word]})")
 
     # 終端集合を**1文字ずつ**。ここが前波の死角(実装の語尾リストを半分に削っても
     # 全ゲートが緑だった)を閉じる本体である。

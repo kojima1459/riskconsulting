@@ -357,11 +357,13 @@ PURE_ALLOWLIST = [
     #   テストが叩くのは純関数だけ(技術メモ4):
     #     modPromptsS5 / modSchemas2 = 15章§5.6 の本文とスキーマ(全体が純文字列)
     #     modValidate4 = CheckS5 / TabooPairs / SoftenTaboo / TabooHit / ObjBlock
+    #       (TabooPairs は modValidate5.TabooPairList への1行委譲。裁定書46 班F)
+    #     modValidate5 = TabooPairList(対訳表の実体。全体が純文字列)
     #     modProposalHtml1..4 = 提案書テンプレ(全体が純文字列。R4)
     #     modExportProposal = NeedsReviewMessage / BuildProposalMetaJson /
     #       BuildProposalData / BuildProposalHtml / StatsText(純組立)。
     #       GenerateProposalHtml はファイルとstoreに触れるが実行に到達しない
-    "modPromptsS5", "modSchemas2", "modValidate4",
+    "modPromptsS5", "modSchemas2", "modValidate4", "modValidate5",
     "modProposalHtml1", "modProposalHtml2", "modProposalHtml3", "modProposalHtml4",
     "modExportProposal",
     # modRibbonSim: 相手側(リボンちゃん)の parseText / ExtractText / UnEscapeJSON
