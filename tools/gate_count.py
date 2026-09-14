@@ -76,6 +76,7 @@ CONTRACT_TOOLS = {
     "doc_gate.py",
     "render_report.py",
     "notice_check.py",
+    "kb_check.py",
 }
 
 # 未適用の登記。**理由を書かずにここへ足さない**。
