@@ -35,7 +35,10 @@ GATES = [
      r"ERROR: \d+ 件"),
     ("lo-compile",   [sys.executable, "tools/run_lo_tests.py", "--mode", "compile"],
      r"対象モジュール数: \d+|結果: OK"),
-    ("lo-pure",      [sys.executable, "tools/run_lo_tests.py", "--mode", "pure"],
+    # 裁定書44: この環境は LibreOffice の初回起動が遅く既定 120s で時々 exit=124
+    #   になる(班Cが3回連続で再現)。純テストの本数が 1,082 本に増えたので余裕を持つ。
+    ("lo-pure",      [sys.executable, "tools/run_lo_tests.py", "--mode", "pure",
+                      "--pure-timeout", "240"],
      r"PASS \d+ / FAIL \d+ / SKIP \d+"),
     # 裁定書30 裁定1(e): 純層は配布集合(ship:true)と dev専用で別々に照合する。
     #   lo-pure     = 配布集合だけを走らせ tests_expected の prod と一致
