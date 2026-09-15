@@ -213,9 +213,27 @@ Public Function BuildPrompts(ByVal company As String, ByVal basics As String, _
             ",""template"":" & modNaviJson.Q(template) & ",""text"":" & modNaviJson.Q(srcText) & _
             ",""chars"":" & CStr(chars) & ",""over"":" & modNaviJson.Flag(IsOverDrLimit(chars, limitChars)) & _
             ",""warning"":" & modNaviJson.Q(warnText) & _
+            ",""holes"":" & HolesJsonOf(modUIResearch.HolesOf(srcText)) & _
             ",""copied_at"":" & modNaviJson.Q(modJsonLite.GetStr(basics, "copied_" & CStr(n))) & "}"
     Next n
     BuildPrompts = result & "]"
+End Function
+
+' HolesJsonOf - 裁定書47 I-1(b): HolesOf の`;`区切りを文字列配列のJSONへ組む。
+'   コピー前に見せる(未入力の穴の名前一覧)ため BuildPrompts が使う。
+Private Function HolesJsonOf(ByVal holesText As String) As String
+    If LenB(holesText) = 0 Then
+        HolesJsonOf = "[]"
+        Exit Function
+    End If
+    Dim names() As String, i As Long, result As String
+    names = Split(holesText, ";")
+    result = "["
+    For i = LBound(names) To UBound(names)
+        If i > LBound(names) Then result = result & ","
+        result = result & modNaviJson.Q(names(i))
+    Next i
+    HolesJsonOf = result & "]"
 End Function
 
 ' PromptNameOf / FillPrompt - 指示文1本の「名前定義」と「差し込み」。
@@ -226,8 +244,12 @@ Private Function PromptNameOf(ByVal n As Long) As String
 End Function
 Private Function FillPrompt(ByVal template As String, ByVal company As String, _
                             ByVal basics As String, ByVal industry As String) As String
+    ' 裁定書47 I-1(a): 公式サイトURL・会社の規模・直近決算期も nav_basics から読む
+    ' (会社情報フォームの新3項目。空ならFillTemplateが従来どおり穴を返す)。
     FillPrompt = modUIResearch.FillTemplate(template, company, modJsonLite.GetStr(basics, "address"), _
-        industry, modJsonLite.GetStr(basics, "sec_code"), modJsonLite.GetStr(basics, "sites"))
+        industry, modJsonLite.GetStr(basics, "sec_code"), modJsonLite.GetStr(basics, "sites"), _
+        modJsonLite.GetStr(basics, "official_url"), modJsonLite.GetStr(basics, "company_size"), _
+        modJsonLite.GetStr(basics, "fiscal_term"))
 End Function
 
 ' PromptTextOf - 指示文 n 本目の展開後の本文(裁定書39 R1-06)。

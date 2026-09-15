@@ -377,11 +377,22 @@ Public Function ActCopyPrompt(ByVal caseId As String, ByVal data As String) As S
         openedUrl = modUIResearch.DrUrlOf("full", modConfig.GetStr("dr_url_full", ""))
         modUIResearch.OpenUrl openedUrl
     End If
-    message = "調査指示文をコピーしました。" & NA2_COPY_GUIDE
+    ' 裁定書47 I-1(c): コピーの直後に言う。本文に埋まっていない穴が残っていれば
+    ' 「貼る前に埋めてください」を先に言う(コピー自体は止めない)。
+    Dim holesText As String, holeCount As Long
+    holesText = modUIResearch.HolesOf(bodyText)
+    holeCount = 0
+    If LenB(holesText) > 0 Then holeCount = UBound(Split(holesText, ";")) + 1
+    If holeCount > 0 Then
+        message = "コピーしました。貼る前に、指示文の中の〔ここに…〕を" & CStr(holeCount) & _
+            "か所埋めてください: " & Replace$(holesText, ";", "、")
+    Else
+        message = "調査指示文をコピーしました。" & NA2_COPY_GUIDE
+    End If
     If LenB(warnText) > 0 Then message = message & warnText
     ActCopyPrompt = "{""ok"":true,""copied"":" & modNaviJson.Flag(copied) & _
         ",""opened_url"":" & modNaviJson.Q(openedUrl) & _
-        IIf(LenB(warnText) > 0, ",""kind"":""warn""", "") & _
+        IIf(LenB(warnText) > 0 Or holeCount > 0, ",""kind"":""warn""", "") & _
         ",""message"":" & modNaviJson.Q(message) & "}"
 End Function
 

@@ -165,8 +165,11 @@ Public Sub BuildPrompts()
 
     Dim n As Long
     For n = 1 To UR_ALL_COUNT
+        ' 裁定書47 I-1(a): シート予備画面には公式URL/企業規模/決算期の入力口を
+        ' 新設しない(従来どおり穴のまま)。3引数とも空文字を渡す。
         modUISheet.WriteNamed BodyRangeOf(n), _
-            FillTemplate(TemplateOf(n), company, address, industry, secCode, sites)
+            FillTemplate(TemplateOf(n), company, address, industry, secCode, sites, _
+                         "", "", "")
     Next n
 End Sub
 
@@ -200,6 +203,10 @@ End Function
 ' (前方一致で食い違わないための保険。互いに部分文字列ではないが、表の並びで
 '  意図を示しておく)。
 ' ============================================================================
+' 裁定書47 I-1(a): {{企業規模}}/{{直近決算期}}/{{公式ドメイン}}は、区画①の
+'   会社情報フォームに入力口ができたので x(常に穴)から HoleOr 方式
+'   (h_size/h_fy/h_url。値があれば値、無ければ従来の穴文言)へ変えた。
+'   穴の文言そのものは1字も変えていない(pure14 の逐語・11章§3.2の表を壊さない)。
 Public Function PlaceholderTable() As String
     Dim s As String
     s = s & "{{企業名}}|v_company|" & vbLf
@@ -209,11 +216,11 @@ Public Function PlaceholderTable() As String
     s = s & "{{業種名}}|v_industry|" & vbLf
     s = s & "{{コード}}|h_seccode|証券コードを書いてください（上場していなければ消してください）" & vbLf
     s = s & "{{拠点リスト（名称・住所）}}|h_sites|拠点の名前と住所" & vbLf
-    s = s & "{{企業規模}}|x|会社の規模（従業員数や売上のめやす）" & vbLf
+    s = s & "{{企業規模}}|h_size|会社の規模（従業員数や売上のめやす）" & vbLf
     s = s & "{{リスク/課題}}|x|気になっていること" & vbLf
     s = s & "{{前回更新からの期間}}|x|前回の更新からの期間" & vbLf
-    s = s & "{{直近決算期}}|x|決算期を書いてください（例: 2026年3月期）" & vbLf
-    s = s & "{{公式ドメイン}}|x|会社の公式サイトのURL"
+    s = s & "{{直近決算期}}|h_fy|決算期を書いてください（例: 2026年3月期）" & vbLf
+    s = s & "{{公式ドメイン}}|h_url|会社の公式サイトのURL"
     PlaceholderTable = s
 End Function
 
@@ -233,12 +240,51 @@ Public Function PlaceholderKeys() As String
     PlaceholderKeys = acc
 End Function
 
+' HolesOf - 展開後の指示文本文から、埋まっていない穴の名前を`;`区切りで返す
+'   純関数(裁定書47 I-1(c))。`〔ここに` 〜 `〕` を拾い、`〔ここに` と
+'   `を書いてください〕`(包み紙A)の2枚を剥がした中身を名前として返す。
+'   穴の文言自身がすでに「…ください」を含む(包み紙B。例:
+'   証券コード・直近決算期の穴)ときは `を書いてください〕` に一致しないので、
+'   `〔ここに` と `〕` だけを剥がす(=文言をそのまま名前にする)。
+'   穴が無ければ空文字。副作用なし・Excelを開かず呼べる(層(a)対象)。
+Public Function HolesOf(ByVal body As String) As String
+    Const OPEN_MARK As String = "〔ここに"
+    Const CLOSE_MARK As String = "〕"
+    Const WRAP_SUFFIX As String = "を書いてください"
+    Dim pos As Long, openPos As Long, closePos As Long, innerStart As Long
+    Dim inner As String, result As String
+    pos = 1
+    Do
+        openPos = InStr(pos, body, OPEN_MARK, vbBinaryCompare)
+        If openPos = 0 Then Exit Do
+        innerStart = openPos + Len(OPEN_MARK)
+        closePos = InStr(innerStart, body, CLOSE_MARK, vbBinaryCompare)
+        If closePos = 0 Then Exit Do
+        inner = Mid$(body, innerStart, closePos - innerStart)
+        If Len(inner) >= Len(WRAP_SUFFIX) Then
+            If Right$(inner, Len(WRAP_SUFFIX)) = WRAP_SUFFIX Then
+                inner = Left$(inner, Len(inner) - Len(WRAP_SUFFIX))
+            End If
+        End If
+        If LenB(result) > 0 Then result = result & ";"
+        result = result & inner
+        pos = closePos + Len(CLOSE_MARK)
+    Loop
+    HolesOf = result
+End Function
+
 ' `{{ }}` の差し込みと、埋まらない穴の日本語化(11章§3.2 の表が正)。
 '   **戻り値に `{{` が1つも残らないことが契約**である(利用者は `{{ }}` の
 '   意味を知らない)。層(a)が8本ぶんの雛形で全穴埋め・全空の2系を固定する。
+' 裁定書47 I-1(a): officialUrl/companySize/fiscalTerm を末尾へ Optional で
+'   足した(空既定)。シート予備画面(modUIResearch.BuildPrompts)は空文字を渡す
+'   (入力口を新設しない)。既存呼び出し(層(a)テスト・6引数)はそのまま通る。
 Public Function FillTemplate(ByVal tpl As String, ByVal company As String, _
                              ByVal address As String, ByVal industry As String, _
-                             ByVal secCode As String, ByVal sites As String) As String
+                             ByVal secCode As String, ByVal sites As String, _
+                             Optional ByVal officialUrl As String = "", _
+                             Optional ByVal companySize As String = "", _
+                             Optional ByVal fiscalTerm As String = "") As String
     Dim s As String
     s = tpl
     If LenB(s) = 0 Then Exit Function
@@ -275,6 +321,12 @@ Public Function FillTemplate(ByVal tpl As String, ByVal company As String, _
                 rep = HoleOr(secCode, f(2))
             Case "h_sites"
                 rep = HoleOr(sites, f(2))
+            Case "h_url"
+                rep = HoleOr(officialUrl, f(2))
+            Case "h_size"
+                rep = HoleOr(companySize, f(2))
+            Case "h_fy"
+                rep = HoleOr(fiscalTerm, f(2))
             Case Else
                 rep = Hole(f(2))
             End Select
@@ -417,21 +469,28 @@ Private Function ResearchWarningOf(ByVal body As String) As String
     End If
 End Function
 
+' 裁定書47 I-3: 2026-09-15 実測(三菱電機フル実走)に合わせて更新。
+'   「10分ほど」→「13分ほど」(実測13分。10分では切れない)。
+'   「同時には投げられません」→「同時に投げるのは3本までにしてください」
+'   (同日、3本を同時に投げても動いた利用者の実感。ただし時間帯で変わる
+'    可能性があるため断定しない)。
 Private Function CopiedTextOf(ByVal n As Long) As String
     Select Case n
     Case 1
         CopiedTextOf = "1本目（会社の基本）を写しました。" & _
                        "社内のディープリサーチに貼って投げてください。" & _
-                       "返ってくるまで10分ほどかかります。"
+                       "返ってくるまで13分ほどかかります。"
     Case 2
         CopiedTextOf = "2本目（リスクの兆候）を写しました。" & _
-                       "1本目が返ってから投げてください。同時には投げられません。"
+                       "1本目が返ってから投げてください。" & _
+                       "同時に投げるのは3本までにしてください（時間帯で動かないことがあります）。"
     Case 3
         CopiedTextOf = "3本目（調達・仕入れ）を写しました。これで標準の3本は終わりです。" & _
                        "もっと調べたいときは[＋ もっと調べる（あと5本）]を押してください。"
     Case Else
         CopiedTextOf = TitleOfPrompt(n) & "を写しました。" & _
-                       "前の1本が返ってから投げてください。同時には投げられません。"
+                       "前の1本が返ってから投げてください。" & _
+                       "同時に投げるのは3本までにしてください（時間帯で動かないことがあります）。"
     End Select
 End Function
 
