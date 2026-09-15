@@ -34,7 +34,8 @@ Private Const V5_REPLACE As String = "replace"
 Private Const V5_WARN As String = "warn"
 
 ' TabooPairList - 対訳表の全対(旧46語+§4.1の3語+§6.4の表記ゆれ2語=51行に、
-'   裁定書46 F-6 の新規15対を足した66行)を組み立てる。
+'   裁定書46 F-6 の新規15対を足した66行、さらに裁定書47 H-1 の二重化防止
+'   複合語(D&O保険)1行を足した67行)を組み立てる。
 Public Function TabooPairList() As String
     Dim s As String
     AdPair s, "付保", "保険のご加入", V5_REPLACE
@@ -85,6 +86,10 @@ Public Function TabooPairList() As String
     AdPair s, "KRI", "リスクの予兆指標", V5_REPLACE
     AdPair s, "SLA", "サービス水準の取り決め", V5_REPLACE
     AdPair s, "D&O", "会社役員賠償責任保険", V5_REPLACE
+    ' 二重化を防ぐ複合語(対訳表§3 #67。裁定書47 H-1)。「D&O」単独の顧客語が
+    ' 既に「保険」で終わるため、"D&O保険"をそのまま「D&O」で置換すると
+    ' 「会社役員賠償責任保険保険」になる。最長一致でこちらが先に当たる。
+    AdPair s, "D&O保険", "会社役員賠償責任保険", V5_REPLACE
     AdPair s, "PL保険", "生産物賠償責任保険", V5_REPLACE
     AdPair s, "対話の順序", "ご説明の順序", V5_REPLACE
     AdPair s, "クロスセル", "追加でご検討いただける備え", V5_WARN

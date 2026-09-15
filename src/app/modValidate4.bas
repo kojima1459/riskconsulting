@@ -32,6 +32,12 @@ Option Explicit
 '   (4) **冪等**(変化が無くなるまで V4_SOFT_PASS_MAX 回まで通す。顧客語が別の
 '       社内語を含む対があるため1回走査では冪等にならない)。
 '   (5) **取り消し規則**(UndoNeeded。対訳表§6.5 の二重の安全網)。
+'   (6) **半角英字で始まる社内語は終端集合を見ない**(裁定書47 H-1。略語
+'       PML/CBI/BI/RTO/BCP/OT/MFA/EDR/KRI/SLA/D&O とその複合語 D&O保険。
+'       直後が半角英字でなければ置換してよい。日本語の中の英字略語は語境界が
+'       自明なため)。
+'   (7) **直前1字による閉じた除外**(PrevExcluded。裁定書47 H-2。1件だけ:
+'       付保の直前が「据」なら置換も警告も出さない。白名簿を一般化しない)。
 '
 ' R4準拠(12章§2): Excelトークン・Application.Run・案件データ参照を持たない
 '   純関数モジュール。CP932準拠(15章§0 原則7)。
@@ -385,12 +391,21 @@ Private Function IsTermAt(ByVal hay As String, ByVal pos As Long, _
     IsTermAt = (InStr(1, termText, Mid$(hay, pos, 1), vbBinaryCompare) > 0)
 End Function
 
-' ReplaceOk - その位置で置換してよいか(対訳表§6 + §6.5)。**判定はここ1箇所**
-'   (SoftenOnce と HitList の両方が使う)。pos = 社内語の直後の位置。
+' ReplaceOk - その位置で置換してよいか(対訳表§6 + §6.5 + §6新設)。**判定は
+'   ここ1箇所**(SoftenOnce と HitList の両方が使う)。pos = 社内語の直後の位置。
+'   word(=社内語そのもの)が半角英字で始まる対(略語 PML/CBI/BI/RTO/BCP/OT/
+'   MFA/EDR/KRI/SLA/D&O と、その複合語 D&O保険。裁定書47 H-1)は終端集合を
+'   見ず、「直後が半角英字でないこと」だけで置換可否を決める(日本語の中の
+'   英字略語は語境界が自明。対訳表§6 新設の段落)。
 Private Function ReplaceOk(ByVal hay As String, ByVal pos As Long, _
                            ByVal dstText As String, ByVal termText As String, _
-                           Optional ByVal startPos As Long = 0) As Boolean
-    If Not IsTermAt(hay, pos, termText) Then Exit Function
+                           Optional ByVal startPos As Long = 0, _
+                           Optional ByVal word As String = vbNullString) As Boolean
+    If IsAlphaAt(word, 1) Then
+        If IsAlnumAt(hay, pos) Then Exit Function
+    ElseIf Not IsTermAt(hay, pos, termText) Then
+        Exit Function
+    End If
     If UndoNeeded(dstText, hay, pos) Then Exit Function
     ' 語頭側の重なり(裁定書43 検証者・W15 司令塔の手直し)。終端集合は直後しか
     '   見ないので「保険付保の状況」→「保険保険のご加入…」が素通りしていた。
@@ -449,7 +464,7 @@ Private Function ReplaceableFound(ByVal hay As String, ByVal word As String, _
     p = InStr(1, hay, word, vbBinaryCompare)
     Do While p > 0
         If BoundaryOk(hay, p, word) Then
-            If ReplaceOk(hay, p + Len(word), dstText, termText, p) Then
+            If ReplaceOk(hay, p + Len(word), dstText, termText, p, word) Then
                 ReplaceableFound = True
                 Exit Function
             End If
@@ -547,7 +562,7 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
                         If BoundaryOk(bodyText, i, srcArr(k)) Then
                             ' 置換してよい文脈でなければ、この位置はここで
                             '   打ち切る(規約2)。
-                            If Not ReplaceOk(bodyText, i + wLen, dstArr(k), termText, i) Then
+                            If Not ReplaceOk(bodyText, i + wLen, dstArr(k), termText, i, srcArr(k)) Then
                                 Exit For
                             End If
                             matched = k + 1
@@ -574,10 +589,17 @@ Private Function SoftenOnce(ByVal bodyText As String, ByRef srcArr() As String, 
 End Function
 
 ' 置換してよい位置か。ASCII だけの語は前後が半角英字でないときだけ当てる
-'   (「IoT」の中の OT を置換しない。全角を含む語は常に True)。
+'   (「IoT」の中の OT を置換しない。全角を含む語は常に True)。半角英字で
+'   始まる複合語(例: D&O保険。裁定書47 H-1)は左側だけ確認する(右側は
+'   非ASCII文字が続くため語境界が自明)。閉じた表による直前1字の除外
+'   (PrevExcluded。裁定書47 H-2)はここで先に見る。
 Private Function BoundaryOk(ByVal hay As String, ByVal pos As Long, _
                             ByVal word As String) As Boolean
+    If PrevExcluded(hay, pos, word) Then Exit Function
     If Not IsAsciiWord(word) Then
+        If IsAlphaAt(word, 1) Then
+            If IsAlphaAt(hay, pos - 1) Then Exit Function
+        End If
         BoundaryOk = True
         Exit Function
     End If
@@ -586,25 +608,49 @@ Private Function BoundaryOk(ByVal hay As String, ByVal pos As Long, _
     BoundaryOk = True
 End Function
 
-' 禁止語の出現判定。ASCII だけの語は前後が英字でないときだけ当てる。
+' 禁止語の出現判定。ASCII だけの語は前後が英字でないときだけ当てる。閉じた表
+'   による直前1字の除外(PrevExcluded。裁定書47 H-2)は**警告にも出さない**
+'   ため、ここでも見る。
 Private Function WordFound(ByVal hay As String, ByVal word As String) As Boolean
     Dim p As Long
 
     If LenB(word) = 0 Then Exit Function
     If Not IsAsciiWord(word) Then
-        WordFound = (InStr(1, hay, word, vbBinaryCompare) > 0)
+        p = InStr(1, hay, word, vbBinaryCompare)
+        Do While p > 0
+            If Not PrevExcluded(hay, p, word) Then
+                WordFound = True
+                Exit Function
+            End If
+            p = InStr(p + 1, hay, word, vbBinaryCompare)
+        Loop
         Exit Function
     End If
     p = InStr(1, hay, word, vbBinaryCompare)
     Do While p > 0
         If Not IsAlphaAt(hay, p - 1) Then
             If Not IsAlphaAt(hay, p + Len(word)) Then
-                WordFound = True
-                Exit Function
+                If Not PrevExcluded(hay, p, word) Then
+                    WordFound = True
+                    Exit Function
+                End If
             End If
         End If
         p = InStr(p + 1, hay, word, vbBinaryCompare)
     Loop
+End Function
+
+' PrevExcluded - 直前1字による除外(対訳表§6.5 取り消し規則の型。**閉じた表。
+'   1件だけ**。裁定書47 H-2)。社内語「付保」は直前が「据」(=「据付保守」の
+'   複合語)のとき、置換もせず警告にも出さない。**白名簿を一般化しない**
+'   (他の語で同型の誤検知が出たら1件ずつ足す。対訳表§6.5)。
+Private Function PrevExcluded(ByVal hay As String, ByVal pos As Long, _
+                              ByVal word As String) As Boolean
+    If word = "付保" Then
+        If pos > 1 Then
+            PrevExcluded = (Mid$(hay, pos - 1, 1) = "据")
+        End If
+    End If
 End Function
 
 ' 語が半角英字と記号だけでできているか(全角が1字でもあれば False)。
@@ -626,6 +672,18 @@ Private Function IsAlphaAt(ByVal hay As String, ByVal pos As Long) As Boolean
     If pos < 1 Or pos > Len(hay) Then Exit Function
     c = AscW(Mid$(hay, pos, 1))
     IsAlphaAt = (c >= 65 And c <= 90) Or (c >= 97 And c <= 122)
+End Function
+
+' hay の pos 文字目が半角英字**または半角数字**か(範囲外は False)。ReplaceOk
+'   の半角英字例外(規約6。裁定書47 H-1)専用: 「BCP2」のように直後が数字の
+'   ときも置換しない(既存のG2-08「英数」の型を壊さない)。
+Private Function IsAlnumAt(ByVal hay As String, ByVal pos As Long) As Boolean
+    Dim c As Long
+
+    If pos < 1 Or pos > Len(hay) Then Exit Function
+    c = AscW(Mid$(hay, pos, 1))
+    IsAlnumAt = (c >= 65 And c <= 90) Or (c >= 97 And c <= 122) Or _
+                (c >= 48 And c <= 57)
 End Function
 
 ' 10進の正の整数か(V-S5-06。"3.5" や "三" を弾く)。

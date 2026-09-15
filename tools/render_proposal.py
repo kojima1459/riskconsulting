@@ -810,8 +810,26 @@ def _is_ascii_word(word: str) -> bool:
     return all(32 <= ord(c) <= 126 for c in word)
 
 
+def _starts_with_half_alpha(word: str) -> bool:
+    """社内語の1文字目が半角英字か(対訳表§6.7。裁定書47 H-1)。"""
+    return bool(word) and word[0].isascii() and word[0].isalpha()
+
+
+def _is_half_alpha_at(hay: str, pos: int) -> bool:
+    return 0 <= pos < len(hay) and hay[pos].isascii() and hay[pos].isalpha()
+
+
+def _is_half_alnum_at(hay: str, pos: int) -> bool:
+    """`_replace_ok` の半角英字例外専用(規約6。裁定書47 H-1): 「BCP2」のように
+    直後が半角数字のときも置換しない(既存のG2-08「英数」の型を壊さない)。"""
+    return 0 <= pos < len(hay) and hay[pos].isascii() and hay[pos].isalnum()
+
+
 def _boundary_ok(hay: str, pos: int, word: str) -> bool:
     if not _is_ascii_word(word):
+        # 半角英字で始まる複合語(D&O保険)は左側だけ確認する(対訳表§6.7)。
+        if _starts_with_half_alpha(word) and pos > 0 and _is_half_alpha_at(hay, pos - 1):
+            return False
         return True
     if pos > 0 and hay[pos - 1].isascii() and hay[pos - 1].isalpha():
         return False
@@ -840,9 +858,16 @@ def _undo_needed(dst: str, hay: str, pos: int, rules: dict) -> bool:
     return _has_run(seam, rules["run_max"])
 
 
-def _replace_ok(hay: str, pos: int, dst: str, rules: dict) -> bool:
-    """置換してよい位置か(対訳表§6 の終端集合 + §6.5 の取り消し規則)。"""
-    if pos < len(hay) and hay[pos] not in rules["term"]:
+def _replace_ok(hay: str, pos: int, dst: str, rules: dict, word: str = "") -> bool:
+    """置換してよい位置か(対訳表§6 の終端集合 + §6.5 の取り消し規則 + §6.7)。
+
+    社内語が半角英字で始まる対(略語とその複合語。対訳表§6.7・裁定書47 H-1)は
+    終端集合を見ず、直後が半角英字でないことだけで決める。
+    """
+    if _starts_with_half_alpha(word):
+        if _is_half_alnum_at(hay, pos):
+            return False
+    elif pos < len(hay) and hay[pos] not in rules["term"]:
         return False
     return not _undo_needed(dst, hay, pos, rules)
 
@@ -862,7 +887,7 @@ def soften_reference(text: str, rows: list[tuple[str, str, str]], rules: dict,
                         continue
                     if not _boundary_ok(text, i, src):
                         continue
-                    if not _replace_ok(text, i + len(src), dst, rules):
+                    if not _replace_ok(text, i + len(src), dst, rules, src):
                         break            # 終端でない位置は打ち切る(規約2)
                     hit = (src, dst)
                     break
@@ -940,7 +965,14 @@ def check_glossary_effective(problems_sink: list[str], sweep_path: Path) -> int:
                                f"[{body}] → [{got1}]")
                         break
                 # (c) 置換が起きたのに、置換した位置の直後が終端集合でない
-                if nxt < len(got1) and got1[nxt] not in term:
+                #     (半角英字で始まる社内語=略語とその複合語は対訳表§6.7の
+                #     例外で、終端集合ではなく「直後が半角英数字でないこと」を
+                #     見る。裁定書47 H-1)
+                if _starts_with_half_alpha(src):
+                    bad = _is_half_alnum_at(got1, nxt)
+                else:
+                    bad = nxt < len(got1) and got1[nxt] not in term
+                if bad:
                     report(f"終端集合でない文脈で置換が起きました: "
                            f"[{body}] → [{got1}](「{src}」の直後は "
                            f"U+{ord(got1[nxt]):04X})")

@@ -10,17 +10,22 @@ Option Explicit
 '
 ' 執筆方針: 期待値は**対訳表§6(終端集合)・§6.1(mode)・§6.5(取り消し規則)の
 '   文だけ**から手で書き出した(17章§1。実装の出力を見てから期待値を合わせない)。
-'   前波まではここが「D&O保険 → 会社役員賠償責任保険」「PML額 → 想定最大損害額額」
-'   のように**壊れた出力を正解として固定**していた(裁定書43 §1-6)。新しい設計では
-'   どちらも「直後が漢字なので置換しない」が正解である。
+'   前波は「PML額 → 想定最大損害額額」のように**壊れた出力を正解として固定**
+'   していた(裁定書43 §1-6)。「直後が漢字なので置換しない」がここでの正解で
+'   あることは変わらないが、**裁定書47 H-1**(2026-09-15 実機FB)で「社内語が
+'   半角英字で始まる対」だけは例外になった。「D&O保険」はその複合語(直後が
+'   漢字でも置換する)なので、09 の期待値を裁定書47 にあわせて直した
+'   (BCP計画は引き続き置換しない。理由は §6.5 の取り消し規則で、半角英字の
+'   例外とは無関係)。
 '
-' 対象と根拠(**全24本**。本数は modTestRunner.Check の呼び出し数の実測であり、
+' 対象と根拠(**全34本**。本数は modTestRunner.Check の呼び出し数の実測であり、
 '   wintest/tests_expected.txt の prod と必ず同時に直すこと):
 '   G1 終端集合の文脈では置換する(対訳表§6)
 '      01 助詞(を)  02 記号(。)  03 文字列の末尾  04 全角空白
 '   G2 終端集合でない文脈では置換しない(型ごとに1本。**列挙ではなく型**)
 '      05 ひらがな(活用・サ変)  06 漢字(PML額)  07 カタカナ(ニューリスクリスク)
-'      08 英数(BCP2)  09 複合語(D&O保険/BCP計画)=末尾の重なりが出ない
+'      08 英数(BCP2)  09 複合語(D&O保険は置換する/BCP計画は置換しない。
+'      末尾の重なりが出ない)
 '   G3 mode=warn の対は一切置換しない(対訳表§6.1)
 '      10 一般語(抜け)  11 顧客語が述語(未充足)  12 動作性名詞×静的名詞句
 '      (ヒアリングを行う。**終端の文脈でも置換しない**のが warn の力)
@@ -38,8 +43,15 @@ Option Explicit
 '      21 てん補期間(終端の文脈で置換)  22 1事故免責金額(免責金額より最長一致で
 '      先に1回。ご負担いただく金額が混ざらない)  23 No DD, No cover(warn。
 '      置換せずTabooHitに出る)  24 ノンリコース型(リコース型に食われない)
+'   G7 半角英字で始まる社内語の終端集合の例外(裁定書47 H-1。対訳表§6.7)
+'      25〜30 実機FBの6文脈(CBI限度額/利益保険CBI等/BCP訓練/OT停止/
+'      SLA責任分界/D&O保険等)がそれぞれ期待の顧客語になり TabooHit が空になる
+'      31 IoT の中の OT は引き続き当てない  32 NOTE の中の OT は引き続き当てない
+'   G8 直前1字による除外(裁定書47 H-2。対訳表§6.5.1)
+'      33 「据付保守」の中の「付保」は誤検知として拾わない(置換も警告もしない)
+'      34 「据付保守と付保の方針」は後者の「付保」だけ1回置換される
 '
-' 変異注入(出来レース禁止・裁定書38 §2・43 §1-5):
+' 変異注入(出来レース禁止・裁定書38 §2・43 §1-5・47):
 '   (a) modValidate4 の終端集合から「を」を1字消すと 01 が落ちる
 '       (tools/render_proposal.py の check_glossary_impl も同時に赤くなる)。
 '   (b) 対訳表の「ヒアリング」の mode を replace にすると 12 と 16 が落ちる
@@ -49,6 +61,10 @@ Option Explicit
 '       そのまま戻る)。
 '   (e) SoftenOnce の「終端でない位置は打ち切る」(Exit For)をやめると 14 が
 '       落ちる(「引受けの方針」に「引受」が当たり送り仮名が残る)。
+'   (f) ReplaceOk の `IsAlphaAt(word, 1)` 分岐を外す(常に終端集合だけで判定)と
+'       25〜30 が落ちる(裁定書47 H-1)。
+'   (g) modValidate4.PrevExcluded の「据」の比較を別の字に変える(または関数を
+'       常に False にする)と 33・34 が落ちる(裁定書47 H-2)。
 '   取り消し規則(§6.5)は終端集合がある限り発火しない二重の安全網なので、
 '   純テストからは観測できない。**宣言(対訳表§6.5)と実装(V4_RUN_MAX /
 '   V4_UNDO_TAIL_MAX と ReplaceOk が UndoNeeded を呼ぶこと)の突合**を
@@ -68,6 +84,8 @@ Public Sub RunAll()
     T28Longest
     T28Table
     T28NewLines46
+    T28AsciiAbbrev
+    T28PrevExcluded
 End Sub
 
 ' --- G1 終端集合の文脈では置換する(対訳表§6) ---
@@ -127,9 +145,13 @@ Private Sub T28NotTerm()
                         "after=" & after & " n=" & n
 
     ' 複合語。終端集合があるので「顧客語の末尾を吸収する」特別規則が要らない。
+    ' 裁定書47 H-1: 「D&O保険」は67番の複合語として置換する(会社役員賠償責任
+    ' 保険保険にはならない)。「BCP計画」は67番のような複合語登録が無いため、
+    ' 「BCP」を置換すると§6.5のUndoNeededが「計画計画」の重複を検知して
+    ' 取り消す=引き続き置換しない。
     after = modValidate4.SoftenTaboo("D&O保険のご案内とBCP計画の策定", n)
-    ok = (after = "D&O保険のご案内とBCP計画の策定") And (n = 0)
-    modTestRunner.Check "W15Y1 複合語は置換しない(保険保険・計画計画を作らない)", _
+    ok = (after = "会社役員賠償責任保険のご案内とBCP計画の策定") And (n = 1)
+    modTestRunner.Check "W15Y1(H-1) D&O保険は複合語で置換・BCP計画は重複回避で置換しない", _
                         ok, "after=" & after & " n=" & n
 End Sub
 
@@ -214,8 +236,8 @@ Private Sub T28Table()
             End If
         End If
     Next i
-    ok = (total = 66) And (Len(warnN) = 16)
-    modTestRunner.Check "W15Y1 対訳表は66行で warn は16行(全行に mode がある)", ok, _
+    ok = (total = 67) And (Len(warnN) = 16)
+    modTestRunner.Check "W15Y1 対訳表は67行で warn は16行(全行に mode がある)", ok, _
                         "total=" & total & " warn=" & Len(warnN) & " modes=" & modes
 
     ok = (modes = "[replace][warn]") Or (modes = "[warn][replace]")
@@ -277,5 +299,89 @@ Private Sub T28NewLines46()
     after = modValidate4.SoftenTaboo("ノンリコース型で契約する。", n)
     ok = (after = "売主が補償責任を負わない型で契約する。") And (n = 1)
     modTestRunner.Check "W15Y1(F-6) ノンリコース型はリコース型に食われず置換する", ok, _
+                        "after=" & after & " n=" & n
+End Sub
+
+' --- G7 半角英字で始まる社内語の終端集合の例外(裁定書47 H-1。対訳表§6.7) ---
+' 値源: 2026-09-15 実機FB(三菱電機フル実走)の付録「12リスク一覧」の実際の
+'   残存文脈。いずれも半角略語の直後が漢字で、旧設計では§6の終端集合に
+'   当たらず置換されないまま V-S5-12 の警告に出続けていた。
+Private Sub T28AsciiAbbrev()
+    Dim n As Long
+    Dim after As String
+    Dim ok As Boolean
+    Dim hit As String
+
+    after = modValidate4.SoftenTaboo("地震・水災、復旧期間、CBI限度額", n)
+    hit = modValidate4.TabooHit(after)
+    ok = (after = "地震・水災、復旧期間、取引先の被災による損害限度額") And (n = 1)
+    If ok Then ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-1) CBI限度額はCBIを置換しTabooHitが空になる", ok, _
+                        "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    after = modValidate4.SoftenTaboo("利益保険CBI等は物損要件が中心", n)
+    hit = modValidate4.TabooHit(after)
+    ok = (after = "利益保険取引先の被災による損害等は物損要件が中心") And (n = 1)
+    If ok Then ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-1) 利益保険CBI等はCBIを置換しTabooHitが空になる", ok, _
+                        "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    after = modValidate4.SoftenTaboo("拠点別MPL、代替生産、BCP訓練", n)
+    hit = modValidate4.TabooHit(after)
+    ok = (after = "拠点別MPL、代替生産、事業継続計画訓練") And (n = 1)
+    If ok Then ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-1) BCP訓練はBCPを置換しTabooHitが空になる(MPLは対訳表に無い語)", _
+                        ok, "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    after = modValidate4.SoftenTaboo("OT停止、委託先、海外事故の範囲", n)
+    hit = modValidate4.TabooHit(after)
+    ok = (after = "工場の制御システム停止、委託先、海外事故の範囲") And (n = 1)
+    If ok Then ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-1) OT停止はOTを置換しTabooHitが空になる", ok, _
+                        "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    after = modValidate4.SoftenTaboo("統合試験、冗長化、SLA責任分界", n)
+    hit = modValidate4.TabooHit(after)
+    ok = (after = "統合試験、冗長化、サービス水準の取り決め責任分界") And (n = 1)
+    If ok Then ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-1) SLA責任分界はSLAを置換しTabooHitが空になる", ok, _
+                        "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    after = modValidate4.SoftenTaboo("D&O保険等で防御費用は限定的", n)
+    hit = modValidate4.TabooHit(after)
+    ok = (after = "会社役員賠償責任保険等で防御費用は限定的") And (n = 1)
+    If ok Then ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-1) D&O保険等はD&O保険を1回で置換しTabooHitが空になる", ok, _
+                        "after=" & after & " n=" & n & " hit=[" & hit & "]"
+
+    ' 半角英字の例外を足しても、既存の語境界規則(BoundaryOk)は崩れない。
+    after = modValidate4.SoftenTaboo("IoTを活用します。", n)
+    ok = (after = "IoTを活用します。") And (n = 0)
+    modTestRunner.Check "W15Y1(H-1) IoTの中のOTは引き続き当てない", ok, _
+                        "after=" & after & " n=" & n
+
+    after = modValidate4.SoftenTaboo("NOTE欄に記載します。", n)
+    ok = (after = "NOTE欄に記載します。") And (n = 0)
+    modTestRunner.Check "W15Y1(H-1) NOTEの中のOTは引き続き当てない", ok, _
+                        "after=" & after & " n=" & n
+End Sub
+
+' --- G8 直前1字による除外(裁定書47 H-2。対訳表§6.5.1) ---
+Private Sub T28PrevExcluded()
+    Dim n As Long
+    Dim after As String
+    Dim ok As Boolean
+    Dim hit As String
+
+    ' 「据付保守」の中の「付保」は誤検知。置換もせず警告(TabooHit)にも出さない。
+    hit = modValidate4.TabooHit("製造据付保守重大労災")
+    ok = (LenB(hit) = 0)
+    modTestRunner.Check "W15Y1(H-2) 据付保守の中の付保は誤検知として拾わない", ok, _
+                        "hit=[" & hit & "]"
+
+    ' 同じ文に除外される出現と置換すべき出現が混在してよい(位置ごとの判定)。
+    after = modValidate4.SoftenTaboo("据付保守と付保の方針", n)
+    ok = (after = "据付保守と保険のご加入の方針") And (n = 1)
+    modTestRunner.Check "W15Y1(H-2) 据付保守は素通しし後続の付保だけ1回置換する", ok, _
                         "after=" & after & " n=" & n
 End Sub
