@@ -23,7 +23,9 @@ Option Explicit
 '                             (割り切れる / 余りあり / 0秒)
 '   W63H RibbonFailure 26本   裁定書24 A-1。リボンの定型失敗文の分類
 '                             (16章 E-15/E-16/E-54〜E-56・14章§2/§6・15章§8.2)
-'   計 61本
+'   W61A2 HolesOf       4本   裁定書47 I-1(c)。〔ここに〜〕から穴の名前を
+'                             取り出す(0個/1個/2個/包み紙2種)
+'   計 65本
 ' 末尾から modTestsPure15.RunAll(W7・裁定書25 の12本)を呼ぶ。
 '
 ' グループ単位の失敗隔離: modTestsPure.bas と同じ On Error GoTo 方式。
@@ -33,6 +35,9 @@ Option Explicit
 Public Sub RunAll()
     On Error GoTo FA
     T_W61A_FillTemplate
+WA2:
+    On Error GoTo FA2
+    T_W61A2_HolesOf
 WB:
     On Error GoTo FB
     T_W61B_AreaTable
@@ -61,6 +66,9 @@ WDone:
     Exit Sub
 FA:
     GroupFail "W61A FillTemplate"
+    Resume WA2
+FA2:
+    GroupFail "W61A2 HolesOf"
     Resume WB
 FB:
     GroupFail "W61B AreaTable"
@@ -205,6 +213,31 @@ Private Sub T_W61A_FillTemplate()
     modTestRunner.Check _
         "Test_W61A_11_docs08の全プレースホルダが置換辞書に載っている_11章3.2", _
         (LenB(missing) = 0), "辞書に無い語=[" & missing & "]"
+End Sub
+
+' ============================================================================
+' W61A2 HolesOf(裁定書47 I-1(c))
+' ----------------------------------------------------------------------------
+' 〔ここに〜〕から穴の名前を取り出す純関数。包み紙2種
+' (「を書いてください〕」を剥がすA型／文言自身がすでに「…ください」を含み
+'  「〕」だけを剥がすB型)を1本ずつ、0個・1個・2個も固定する。
+' ============================================================================
+Private Sub T_W61A2_HolesOf()
+    ChkS "Test_W61A2_01_穴が0個なら空文字_裁定書47I1c", _
+        modUIResearch.HolesOf("穴が無い普通の文章です。"), ""
+
+    ChkS "Test_W61A2_02_穴が1個_包み紙A型を剥がす_裁定書47I1c", _
+        modUIResearch.HolesOf("〔ここに会社の規模（従業員数や売上のめやす）を書いてください〕のみです。"), _
+        "会社の規模（従業員数や売上のめやす）"
+
+    ChkS "Test_W61A2_03_穴が2個_名前をセミコロン区切りで返す_裁定書47I1c", _
+        modUIResearch.HolesOf("〔ここに会社の公式サイトのURLを書いてください〕と〔ここに気になっていることを書いてください〕"), _
+        "会社の公式サイトのURL;気になっていること"
+
+    ChkS "Test_W61A2_04_包み紙2種混在_B型は剥がさずそのまま返す_裁定書47I1c", _
+        modUIResearch.HolesOf("〔ここに証券コードを書いてください（上場していなければ消してください）〕と" & _
+        "〔ここに拠点の名前と住所を書いてください〕"), _
+        "証券コードを書いてください（上場していなければ消してください）;拠点の名前と住所"
 End Sub
 
 ' ============================================================================

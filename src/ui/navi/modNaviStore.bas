@@ -277,7 +277,10 @@ End Function
 Public Function MergeBasics(ByVal stored As String, ByVal data As String, _
                             Optional ByVal proposalPath As String) As String
     Dim keys() As String, i As Long, key As String, srcValue As String, result As String
-    keys = Split("address;sec_code;sites;copied_1;copied_2;copied_3;copied_4;copied_5;copied_6;copied_7;copied_8", ";")
+    ' 裁定書47 I-1(a): official_url/company_size/fiscal_term を追加(会社情報
+    '   フォームの新3項目。区画①の調査指示文の穴を自動で埋めるための保存先)。
+    keys = Split("address;sec_code;sites;official_url;company_size;fiscal_term;" & _
+        "copied_1;copied_2;copied_3;copied_4;copied_5;copied_6;copied_7;copied_8", ";")
     For i = LBound(keys) To UBound(keys)
         key = keys(i)
         If LenB(modNaviJson.RawField(data, key)) > 0 Then
