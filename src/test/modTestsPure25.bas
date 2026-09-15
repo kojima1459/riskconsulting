@@ -30,6 +30,9 @@ Option Explicit
 '     24 financials の外にある fiscal_year 等を読まない【R1-10】
 '     25 対象外フィールドの「(見立て)」を接頭辞とみなさない【G-2】
 '
+'   G7 裁定書47 追補(2): modPipeline3.FirstRuleIdOf(verrの規則ID)
+'     26 [V-…]があれば角括弧ごと最初の1個を返す  27 無ければ空文字
+'
 '   G5 スキーマ・mock・描画の結線(B-04 / B-11)
 '     15 SchemaS1 が sources と missing_info[].kind を required で持つ
 '     16 mock の S1応答2本が CheckS1 を**警告も含めて0件**で通る
@@ -41,6 +44,8 @@ Option Explicit
 '   (a) modValidate3.UrlNotes の InStr 判定を常に「見つかった」にすると 01 と 04
 '       が落ちる。
 '   (b) modPipeline3.S1DiffCount を常に 0 にすると 12 と 13 が落ちる。
+'   (c) 裁定書47 追補(2): FirstRuleIdOf の `Mid$(errText, p, q - p + 1)` を
+'       `q - p` に変えると26が閉じ角括弧を落として失敗する。
 '
 ' グループ単位の失敗隔離: modTestsPure24 と同じ On Error GoTo 方式。
 ' **テストを増減したら wintest/tests_expected.txt を必ず同時に更新すること**。
@@ -56,7 +61,7 @@ Public Sub RunAll()
     Dim i As Long
     Dim grpName As String
 
-    For i = 1 To 6
+    For i = 1 To 7
         grpName = "W15-G" & CStr(i)
         On Error Resume Next
         Err.Clear
@@ -77,6 +82,7 @@ Private Sub RunGroup(ByVal idx As Long)
     Case 4: T_Diff
     Case 5: T_Wiring
     Case 6: T_Round2Fixes
+    Case 7: T_VerrRule
     End Select
 End Sub
 
@@ -216,6 +222,16 @@ Private Sub T_Diff()
     ' 14 片方が空(前回が無い)なら比較しない=0。
     ChkN "Test_W15_14_片方が空なら比較せず0件_裁定書38B-14", _
         modPipeline3.S1DiffCount("", baseJson), 0
+End Sub
+
+' G7 裁定書47 追補(2): modPipeline3.FirstRuleIdOf(verrの規則ID)
+'   26 本文中に[V-…]があれば角括弧ごと最初の1個を返す
+'   27 [V-…]が無ければ空文字を返す
+Private Sub T_VerrRule()
+    ChkS "Test_W15_26_VあればFirstRuleIdOfが角括弧ごと返す_裁定書47追補2", _
+        modPipeline3.FirstRuleIdOf("[S2-01] [V-S2-06] 不正: rework_suggestions"), "[V-S2-06]"
+    ChkS "Test_W15_27_Vが無ければFirstRuleIdOfは空文字_裁定書47追補2", _
+        modPipeline3.FirstRuleIdOf("[S2-01] JSON構文エラー"), ""
 End Sub
 
 ' S1DiffCount が見る主要8フィールドだけを持つ最小のS1(他のキーは持たない)。

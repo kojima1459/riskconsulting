@@ -74,6 +74,13 @@ Public Sub RunAllTestsFromBook()
     Dim pureExecuted As Long
     pureExecuted = modTestRunner.ExecutedCount()
 
+    ' 裁定書47 G-3: RunAllPureTests は戻った時点で「純層本数=expected」を
+    ' 自分で検査済み(上のSetExpectedCountはそのため据え置く)。ここから先は
+    ' 層(b)+T47-00を足して走らせるので、レポート表示用に期待本数を積み増す
+    ' (積み増さないとReportTextのEXECUTED/EXPECTEDが不一致に見える。
+    ' SummaryTextの「純層=期待」判定は下の expected(prod)のまま比べる)。
+    modTestRunner.SetExpectedCount expected + modTestsExcel.ExcelLayerExpected() + 1
+
     modTestsExcel.RunAllExcelTests
 
     Dim excelExecuted As Long
@@ -133,6 +140,10 @@ Public Function RunAllTestsHeadless() As String
 
     Dim hPure As Long
     hPure = modTestRunner.ExecutedCount()
+
+    ' 裁定書47 G-3: RunAllTestsFromBook と同じ理由(コメントは同関数を参照)で
+    ' 層(b)+T47-00の分をレポート表示用の期待本数へ足す。
+    modTestRunner.SetExpectedCount hExpected + modTestsExcel.ExcelLayerExpected() + 1
 
     modTestsExcel.RunAllExcelTests
 

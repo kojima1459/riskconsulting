@@ -36,18 +36,25 @@ Option Explicit
 '   G6 打切り総数と境界(R1-04 / G-1)
 '     21 補充が起きたとき totalHits は「完全一致の該当総数+補充候補の総数」
 '     22 lastRow=0 でも実行時エラー(Err9)にならず0件で返ること
+'   G7 modKnowledge2.ShouldFallbackToCommonIndustry(裁定書47 G-5・事故事例00)
+'     25 完全一致0行かつ業種が"00"でなければフォールバックすべき
+'     26 完全一致で1行以上あればフォールバックしない
+'     27 0行でも業種が既に"00"ならフォールバックしない(無限ループの芽を断つ)
 '
 ' 変異注入(出来レース禁止・裁定書38 共通規約):
 '   (a) modKnowledgeRank.RankRows の並べ替えを昇順に変えると04/05が落ちる。
 '   (b) modPii.SharesLongFragment の判定を `>= minLen - 1` 等へずらすと
 '       11(19字)が誤ってTrueになり落ちる。
+'   (c) 裁定書47 G-5: ShouldFallbackToCommonIndustry の `matchedRows <= 0` を
+'       `matchedRows < 0` に変えると25が誤ってFalseになり落ちる(司令塔抜き打ち
+'       想定箇所)。
 '
 ' CP932準拠: 本文・注釈ともにCP932内の文字だけで書く(絵文字不可)。
 ' ============================================================================
 
 Public Sub RunAll()
     Dim i As Long, grpName As String
-    For i = 1 To 6
+    For i = 1 To 7
         grpName = "W15B-G" & CStr(i)
         On Error Resume Next
         Err.Clear
@@ -70,6 +77,7 @@ Private Sub RunGroup(ByVal idx As Long)
     Case 4: T_SharesLongFragment
     Case 5: T_RankIndexAndCap
     Case 6: T_TotalHitsAndEmpty
+    Case 7: T_IncidentFallback
     End Select
 End Sub
 
@@ -560,6 +568,19 @@ Private Sub T_TotalHitsAndEmpty()
     n = modKnowledge2.SelectRows(blk, -1, "id", "industry", "09", 3, selOut, idsOut, _
                                   totalHits, "abcdefgh", "body")
     ChkN "Test_P-m2_24_lastRowが負でも実行時エラーにならない_裁定書40P-m2", n, 0
+End Sub
+
+' G7 裁定書47 G-5: modKnowledge2.ShouldFallbackToCommonIndustry(事故事例00フォールバック)
+'   25 完全一致0行かつ業種が"00"でなければフォールバックすべき(True)
+'   26 完全一致で1行以上あればフォールバックしない(False)
+'   27 0行でも業種が既に"00"ならフォールバックしない(無限ループの芽を断つ)
+Private Sub T_IncidentFallback()
+    ChkB "Test_G-5_25_完全一致0行なら00へフォールバックすべき_裁定書47G-5", _
+        modKnowledge2.ShouldFallbackToCommonIndustry(0, "33", "00"), "実際=False"
+    ChkB "Test_G-5_26_完全一致で1行以上あればフォールバックしない_裁定書47G-5", _
+        Not modKnowledge2.ShouldFallbackToCommonIndustry(1, "33", "00"), "実際=True"
+    ChkB "Test_G-5_27_0行でも業種が既に00ならフォールバックしない_裁定書47G-5", _
+        Not modKnowledge2.ShouldFallbackToCommonIndustry(0, "00", "00"), "実際=True"
 End Sub
 
 ' JoinLongs - Long配列をカンマ等で連結する(裁定書44 追加裁定A-8a)。

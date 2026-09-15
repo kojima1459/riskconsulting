@@ -7,21 +7,20 @@ Option Explicit
 '   16章 E-08(退避)・E-09(0行)・E-13(退避再送)・E-34(列検査)。
 ' 配置: app層(12章§2)。シート名という製品固有語彙を持つため core層 へ置けない。
 '   R4のExcelトークン許可10本の1つで、触るのは kb_path のブックと隠しシート2枚。
-' 責務の分離(12章§2・裁定書6 項目6): **整形は持たない**。ここは「読む / 絞る /
-'   行数上限を適用する / 注入IDを積む」まで。1行の書式・0行の既定文言・空項目の
-'   省略は modKnowledgeFmt(純文字列・Excel非依存)の責務。整形をここに閉じ込めると
-'   層(a)から検査できず、区切り記号を壊しても誰も気づかない(W2aの実害)。
-' 分割(12章§2の30,000字契約・17章§7 Z-13): **シートを触らない純関数は
-'   modKnowledge2** にある(PickAt / CellAt / CellRaw / AddIdList / ColOf /
-'   SelectRows / MissingColsOf / BadRowsOf)。本モジュールはシートに触る側
-'   (kb_pathの読込・キャッシュ・退避/復元・再送)だけを持つ。絞込スペック
-'   ("ind^tgt^act^sts^suf^ref")の規約は modKnowledge2 の冒頭が正。
-' 注入ID: 整形テキストへ現れるIDを全て積む(行頭 [ID] に加え型行の (P2)・パターン
-'   行の 社内実績: の参照IDも)。17章 T-21「ID集合と完全一致」のため。業種コードは
-'   IDではない。切詰め後の行のIDだけを積む。
-' 15章§0.7: 行数上限(kb_*_rows)は本モジュールが適用。総量3割超のときの段階的な
-'   半減を計画するのは modPipeline4.TrimPlan、適用するのは modPipeline4 であり、
-'   各注入関数の Optional maxRows がその口(0=config既定。14章§6)。
+' 責務の分離(12章§2・裁定書6 項目6): **整形は持たない**。ここは「読む/絞る/
+'   行数上限を適用する/注入IDを積む」まで。1行の書式・0行の既定文言は
+'   modKnowledgeFmt(純文字列・Excel非依存)の責務(層(a)から検査できるよう
+'   整形をここに閉じ込めない。W2aの実害)。
+' 分割(12章§2の30,000字契約・17章§7 Z-13): シートを触らない純関数は
+'   modKnowledge2(PickAt/CellAt/CellRaw/AddIdList/ColOf/SelectRows/
+'   MissingColsOf/BadRowsOf)。本モジュールはシートに触る側(kb_pathの読込・
+'   キャッシュ・退避/復元・再送)だけを持つ。絞込スペック("ind^tgt^act^sts^
+'   suf^ref")の規約は modKnowledge2 の冒頭が正。
+' 注入ID: 整形テキストへ現れるIDを全て積む(行頭[ID]・型行(P2)・パターン行の
+'   参照IDも)。17章T-21「ID集合と完全一致」のため。業種コードはIDでない。
+' 15章§0.7: 行数上限(kb_*_rows)は本モジュールが適用。総量3割超のときの半減の
+'   計画は modPipeline4.TrimPlan、適用も modPipeline4。各注入関数の
+'   Optional maxRows がその口(0=config既定。14章§6)。
 ' ============================================================================
 
 ' --- シート索引(13章§3)。KB_SHEETS の並びと対応 ---
@@ -43,15 +42,13 @@ Private Const KB_SHEET_GAP As String = "新サービス候補"
 Private Const KB_GAPCOLS As String = "logged_at,case_id,industry_code,unmatched_risk,operator"
 
 ' --- 絞込スペック(1行書式そのものは modKnowledgeFmt が持つ) ---
-' 裁定書39 R1-03: 並べ替え補充(modKnowledgeRank)の n-gram 比較に掛ける字数上限の
-'   既定値。config `kb_rank_case_chars` / `kb_rank_row_chars` が正(13章§2.3)。
-'   上限が無いと案件本文2万字 x 全業種の行 の比較で Excel が数分～数十分固まる。
+' 裁定書39 R1-03: 並べ替え補充のn-gram比較に掛ける字数上限の既定値。config
+'   `kb_rank_case_chars`/`kb_rank_row_chars`が正(13章§2.3。上限が無いと
+'   案件本文2万字x全業種の行の比較でExcelが数分固まる)。
 Private Const KB_RANK_CASE_CHARS As Long = 3000
 Private Const KB_RANK_ROW_CHARS As Long = 2000
-' 裁定書40 P-M3(b): 並べ替え(modKnowledgeRank.RankRows)に掛ける候補**行数**の
-'   上限。config `kb_rank_max_rows` が正(13章§2.3)。字数上限だけでは
-'   「候補行数 x 行の字数」で時間が伸び続けるため、行数にも天井を置く。
-'   超えた分はシート順で切り、打ち切ったことを run_log detail に残す。
+' 裁定書40 P-M3(b): 並べ替え候補**行数**の上限。config`kb_rank_max_rows`が正
+'   (13章§2.3。超えた分はシート順で切り run_log detail に残す)。
 Private Const KB_RANK_MAX_ROWS As Long = 60
 
 Private Const KB_F_MENU As String = "^target_industries^is_active"
@@ -68,12 +65,15 @@ Private Const KB_SCAN_COLS As Long = 16
 Private Const KB_DIR_UP As Long = -4162
 
 Private Const KB_SRC As String = "modKnowledge"
+' 裁定書47 G-5: 事故事例の00フォールバック(印はIncidentsFallbackNoteが持つ)。
+Private Const KB_INDUSTRY_COMMON As String = "00"
 
 ' --- キャッシュ(宣言のみ) ---
 Private gKbBlocks(1 To KB_N) As Variant
 Private gKbRows(1 To KB_N) As Long
 Private gKbLoaded As Boolean
 Private gInjectedIds As String
+Private mIncidentsFallback As Boolean
 
 ' --- kb_cut集計(裁定書38 B-10)。4種のみ追跡(cases/incidents/schemes/risks。
 '   いずれも industryCode で絞る種別。0=cases 1=incidents 2=schemes 3=risks)。
@@ -202,13 +202,29 @@ Public Function ResearchingText(Optional ByVal maxRows As Long = 0) As String
                              CapAll(maxRows, KB_I_RT), "researching")
 End Function
 
-' IncidentsFor - S2用の業種別事故事例(15章§3 {{incidentsText}}。13章§3.11)。
-'   riskLibText と**同じ経路**(業種別抽出 -> modKnowledgeFmt の1行整形)。
-'   maxRows は15章§0.7 の半減を外から掛ける口で、0=config kb_incident_rows
-'   (既定5)。0行は専用文言(16章 E-09 と同じ扱い)。
+' IncidentsFor - S2用の業種別事故事例(15章§3・13章§3.11)。maxRowsは0.7の
+'   半減口(0=config既定5)。0行は専用文言(E-09)。G-5: 0行なら"00"で引き直す。
 Public Function IncidentsFor(ByVal industryCode As String, Optional ByVal maxRows As Long = 0) As String
-    IncidentsFor = Inject(KB_I_INC, "inc_id", "industry_code", industryCode, _
-                          CapCfg(maxRows, "kb_incident_rows", 5), "incidents")
+    Dim capRows As Long, sel As Variant, ids As String, totalHits As Long, n As Long
+    capRows = CapCfg(maxRows, "kb_incident_rows", 5)
+    n = modKnowledge2.SelectRows(gKbBlocks(KB_I_INC), gKbRows(KB_I_INC), "inc_id", _
+        "industry_code", industryCode, capRows, sel, ids, totalHits)
+    mIncidentsFallback = modKnowledge2.ShouldFallbackToCommonIndustry(n, industryCode, KB_INDUSTRY_COMMON)
+    If mIncidentsFallback Then _
+        n = modKnowledge2.SelectRows(gKbBlocks(KB_I_INC), gKbRows(KB_I_INC), "inc_id", _
+            "industry_code", KB_INDUSTRY_COMMON, capRows, sel, ids, totalHits)
+    IncidentsFor = FormatBy("incidents", sel)
+    RecordKbCut "incidents", n, totalHits
+    If n <= 0 Then
+        modLog.LogUsage "kb_zero_rows", vbNullString, "field=incidents industry=" & industryCode
+        Exit Function
+    End If
+    modKnowledge2.AddIdList gInjectedIds, ids
+End Function
+
+' 直近のIncidentsForが"00"へ差替えていたら1語返す(G-5。積む側はmodPipeline4)。
+Public Function IncidentsFallbackNote() As String
+    If mIncidentsFallback Then IncidentsFallbackNote = "incidents_fallback=00"
 End Function
 
 ' MechsText - 機構ライブラリ抜粋(商談の予行演習system)。Phase 1.5のため常に「(登録なし)」。

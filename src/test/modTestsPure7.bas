@@ -322,8 +322,8 @@ Private Sub T_CoreTrim()
     Dim plan As Variant
     Dim lo As Long
 
-    ' lens(0..4)=切る順(追加ドシエ/前回更新メモ/有報/営業メモ/HP)の現在字数、
-    ' lens(5)=打切らない4欄の合計(16章E-03(3))。
+    ' lens(0..4)=切る順(HP/有報/追加ドシエ/前回更新メモ/営業メモ)の現在字数、
+    ' lens(5)=打切らない4欄の合計(16章E-03(3))。裁定書47 G-1で順を反転。
     lens(0) = 1000
     lens(1) = 1000
     lens(2) = 1000
@@ -345,17 +345,17 @@ Private Sub T_CoreTrim()
     ChkB "G60_予算0は上限なしとして扱う_16章E-03", _
         (plan(lo) = 1000 And plan(lo + 4) = 1000), "実際=[" & PlanText(plan) & "]"
 
-    ' 予算5,500字。先頭(追加ドシエ)を削れば足りるので、そこだけが減り、
-    ' 後ろのHP(lens(4))は満額で残る=打切り順が守られていること。
+    ' 予算5,500字。先頭(HP)を削れば足りるので、そこだけが減り、
+    ' 後ろの営業メモ(lens(4))は満額で残る=打切り順が守られていること。
     plan = modPipeline.TrimInputPlan(lens, 5500)
     lo = LBound(plan)
-    ChkB "G60_1欄で足りるときは追加ドシエだけを削る_16章E-03", _
+    ChkB "G60_1欄で足りるときはHPだけを削る_16章E-03", _
         (plan(lo) < 1000 And plan(lo + 1) = 1000 And plan(lo + 2) = 1000 And _
          plan(lo + 3) = 1000 And plan(lo + 4) = 1000), _
         "実際=[" & PlanText(plan) & "]"
 
-    ' 予算4,500字。追加ドシエを全部落としても足りないので前回更新メモまで
-    ' 及ぶ。有報より後ろ(lens(2..4))は満額で残る。
+    ' 予算4,500字。HPを全部落としても足りないので有報まで
+    ' 及ぶ。追加ドシエより後ろ(lens(2..4))は満額で残る。
     plan = modPipeline.TrimInputPlan(lens, 4500)
     lo = LBound(plan)
     ChkB "G60_足りなければ次の欄へ順に及ぶ_16章E-03", _
@@ -388,6 +388,15 @@ Private Sub T_CoreTrim()
     ' 上限ちょうどは「超過」ではない(境界で警告を出さない)。
     ChkF "G60_保護4欄が上限ちょうどなら超過ではない_16章E-03", _
         modPipeline.ProtectedOverBudget(10000, 10000)
+
+    ' CutOrderLabels/CutOrderKeys: 切る順を機械で固定する窓(裁定書47 G-1)。
+    ' 順を1つでも入れ替えたら赤になる(位置とラベル・data_keyの対応の逐語一致)。
+    ChkS "G60_切る順のラベルはHP有報ドシエ前回更新メモ営業メモ_裁定書47G-1", _
+        modPipeline.CutOrderLabels(), "hp|yuho|dossier|prev_renewal|memo"
+
+    ChkS "G60_切る順のdata_keyはHP有報ドシエ前回更新メモ営業メモ_裁定書47G-1", _
+        modPipeline.CutOrderKeys(), _
+        "input_hp|input_yuho|input_dossier|input_prev_renewal|input_memo"
 End Sub
 
 ' ---- 予算配分・切詰め注記・入念モード(15章§0.7・16章E-03(6)・15章§4.5) ----

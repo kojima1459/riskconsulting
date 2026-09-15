@@ -286,16 +286,18 @@ End Sub
 '         (コピー**直後**には触らない)。
 '
 ' なぜ読む側と書く側を分けたか(裁定書44 A-8c。実機NG: T47-W9-01/T47B-W61-15):
-'   もとは読み書きとも `paste_buf` 1枚を共用していた。Excel の Copy は
-'   遅延レンダリング(貼り付け側が実際に読むまでコピー元セルの中身を確定
-'   しない)なので、コピーした直後に**同じセル**を貼り付け側の下ごしらえで
-'   Clear すると、確定前のクリップボードの中身ごと消える。ClipPasteText は
-'   読む前に必ず `ws.Cells.Clear` するので、直前に ClipCopyText で書いた
-'   `paste_buf` をそのまま読もうとすると自分で消したあとを読むことになり、
-'   往復が必ず空になっていた(LibreOfficeは遅延レンダリングを実装していない
-'   ので層(a)では再現しない・実機だけの壊れ方)。書く器を copy_buf へ分けた
-'   ことで、ClipPasteText の Clear は paste_buf だけに閉じ、直前の
-'   ClipCopyText が copy_buf へ持たせたクリップボード参照に触らなくなる。
+'   もとは読み書きとも `paste_buf` 1枚を共用していた。**裁定書47 G-2の是正**:
+'   当初「遅延レンダリング」説を採ったが実機第3弾FBで再発し、原因は別にあった。
+'   Excel は**セルへの書き込み・Clear が1回でも入ると CutCopyMode を解除し、
+'   直前の Range.Copy(クリップボードへの参照)を捨てる**。ClipPasteText は
+'   読む前に必ず `ws.Cells.Clear` していたので、直前に ClipCopyText が
+'   `Copy` して確定させたクリップボードの中身そのものを、貼り付け直前の
+'   Clear が解除して捨てていた(器を paste_buf/copy_buf の2枚へ分けても、
+'   paste_buf の Clear が CutCopyMode を解除する動作は変わらないため足りな
+'   かった)。LibreOffice は CutCopyMode の解除条件が違うため層(a)では再現
+'   しない(実機だけの壊れ方)。是正は「Copy と Paste の間でセルを一切書か
+'   ない」: `ws.Cells.Clear` は受け皿に中身が残っているとき(前回クラッシュ
+'   の残骸)だけ行う。器を分けたこと自体は無害なのでそのまま残す。
 '
 ' 受け皿シートは実行時生成の作業シートであり、13章§2.9 の `enum_hidden` と
 '   同じ扱い(仕様上のシートではないので照合対象外・配布ビルドに焼かない)。
@@ -322,7 +324,10 @@ Public Function ClipPasteText(ByRef okFlag As Boolean) As String
 
     Set ws = modUISheet.EnsureHiddenSheet(U7_BUF_SHEET)
     If ws Is Nothing Then GoTo Cleanup
-    ws.Cells.Clear
+    ' 裁定書47 G-2: Copy と Paste の間でセルを一切書かない。DropPasteBuf が
+    ' 毎回シートを消すので通常は空=Clear しない。残っているのは前回クラッシュ
+    ' の残骸だけ(Clear がCutCopyModeを解除し直前のCopyを捨てるのを防ぐ)。
+    If Application.WorksheetFunction.CountA(ws.Cells) > 0 Then ws.Cells.Clear
     ws.Visible = U7_SHEET_VISIBLE
     ws.Activate
     ws.Cells(1, 1).Select

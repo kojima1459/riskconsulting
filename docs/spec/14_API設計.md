@@ -1,4 +1,6 @@
-# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.6
+# 14. API設計（LLM呼び出し仕様と内部インターフェース契約）v2.6.1
+
+> v2.6.1（裁定書47 W18 G-1: 実機第3弾FBの是正）: `TrimInputPlan` の注釈（切る順）を**HP/有報/追加ドシエ/前回更新メモ/営業メモ**へ改めた（16章E-03(2)の順反転に追随）。`modPipeline` に `CutOrderLabels` / `CutOrderKeys`（切る順とdata_keyの対応を機械で固定する読み出し口。層(a)から純テストで直接叩く）を追記した。
 
 > v2.6（W12-A・裁定書34「HTML画面の正式採用と統合」）: §6の登記表へ **navi公開関数**（`modNaviHost` / `modNaviState` / `modNaviActions` / `modNaviChat` / `modNaviStore` / `modBootNavi`。仮置き＝班1報告で最終確定）を追記し、**§8「HTMLとVBAの受け渡し」を新設**した（`vba://dispatch` の疑似ナビゲーション・textarea 2本・JSONの形・多重実行の拒否・action許可リスト・「クリップボードから取り込む」ボタン撤去）。ChatGPT呼出は従来どおり `modGatewayRPN` 経由（navi層から `Application.Run` を直接書かない=R3）。
 
@@ -746,11 +748,18 @@ Public Function CaseIdOfPfLine(ByVal lineText As String) As String
 '   登録する。**Private へ戻すことは契約違反**（vba_lint の CONTRACT required が検出する）。
 Public Function TrimInputPlan(ByRef lens() As Long, ByVal budgetChars As Long) As Long()
 ' 16章E-03(2)の打切りを**計画するだけ**（実際に削るのは呼び出し側）。lens(0..4)=切る順
-'   （追加ドシエ/前回更新メモ/有報/営業メモ/HP）の現在字数、lens(5)=打切らない4欄の合計。
-'   budgetChars<=0 は上限なし。戻り値=5要素の「残してよい字数」。1欄ずつ削って再計測し、
-'   上限を下回った時点で止める。**4欄だけで超過する場合は自動では削らない**（E-03(3)(4)）
+'   （HP/有報/追加ドシエ/前回更新メモ/営業メモ。裁定書47 G-1で反転）の現在字数、
+'   lens(5)=打切らない4欄の合計。budgetChars<=0 は上限なし。戻り値=5要素の「残してよい
+'   字数」。1欄ずつ削って再計測し、上限を下回った時点で止める。**4欄だけで超過する場合は
+'   自動では削らない**（E-03(3)(4)）
 Public Function ProtectedOverBudget(ByVal keepChars As Long, ByVal budgetChars As Long) As Boolean
 ' 打切らない4欄だけで上限超過か（E-03(4) の E0102 警告の唯一の条件）
+Public Function CutOrderLabels() As String
+' 切る順のラベル一覧をそのまま返す読み出し口（裁定書47 G-1。`hp|yuho|dossier|
+'   prev_renewal|memo` の逐語一致を層(a)の純テストで固定するため）
+Public Function CutOrderKeys() As String
+' 切る順を保存の data_key で表した一覧（裁定書47 G-1。`input_hp|input_yuho|
+'   input_dossier|input_prev_renewal|input_memo` の逐語一致を層(a)の純テストで固定する）
 Public Function TruncField(ByVal s As String, ByVal allowedChars As Long) As String
 ' 切詰めた欄に注記「（一部省略）」を付す（E-03(6)）。allowedChars<=0 は注記だけを返す
 Public Function BudgetOf(ByVal limitChars As Long, ByVal pct As Long) As Long
