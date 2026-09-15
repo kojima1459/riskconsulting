@@ -1,5 +1,7 @@
 # 15. プロンプトとJSONスキーマ v2.7（本製品の核心）
 
+> v2.11（裁定書47 H-1・W18実機FB是正）: §5.6 system【3. 用語】に「D&O保険 -> 会社役員賠償責任保険」を1行追加した（対訳表§3 #67）。半角略語「D&O」の顧客語が既に「保険」で終わるため、実機で「D&O保険」がそのまま「D&O」で置換されると「会社役員賠償責任保険保険」になる二重化を防ぐ複合語。`modValidate4.ReplaceOk` は半角英字で始まる社内語(略語とその複合語)を終端集合の判定から外した(直後が半角英数字でなければ置換する)。詳細は対訳表§6・§6.5。
+>
 > v2.9（W15 Round2・裁定書39 R1-09 / X-1）: **`sources` の欠落を `CheckS1` の不合格から外した**。Schema-S1 のルート required は**17キーのまま**（direct 経路ではスキーマを強制できるので落とす理由がない）だが、実運用のリボン経路は**スキーマを強制できない**ため、モデルが新設キーを落とすと V-S1-01（不合格）→ 修復リトライ1回 → `PL_RES_FAILED` → 案件 status=error となり、**その案件は二度と S1 を通せなくなる**（mock は必ず `sources` を返すので純層・ゲートでは絶対に露見しない）。そこで (a) `modValidate.CheckS1` の必須キー検査を**16キー**（`sources` を除く）とし、(b) 欠落は新設の **V-S1-16（警告）** で印だけ残し、(c) `modValidate.NormalizeLlmJson`（S1のとき）が**空配列 `"sources":[]` を補填**してから検証へ渡す（＝実運用では V-S1-16 は発火せず、補填が効かない壊れたJSONのときだけ出る安全網）。あわせて `missing_info[].kind` に検証が1つも無かった穴を **V-S1-17（enum 外は警告）** で塞いだ。**v2.10（裁定書40 P-M1）**: この V-S1-16 / V-S1-17 は当初 `CheckS1` の**戻り値**へ連結していたが、それでは「警告」が修復リトライ→`FailStep` の fail-closed 経路に乗り、(a) で塞いだ事故を `kind` で作り直していた。出口を V-S1-14 / V-S1-15 と同じ注記チャネル（`modValidate3.CheckS1Notes` → run_log の `s1_warn` と `meta.s1_warn`）へ移し、`kind` の**欠落・空は `not_found` とみなして警告しない**（値が enum 外のときだけ警告する）。§11 は**計92件**（不合格73 / 警告17 / 合格判定2）。実装は容量（12章§2）の都合で `modValidate3.SoftNotesS1` / `modValidate3.PostNormalize` に置く。入口は、警告2件が `modValidate3.CheckS1Notes`（注記チャネル。v2.10 で `modValidate.CheckS1` から移した）、補填が `modValidate.NormalizeLlmJson` である。
 >
 > v2.7（W15・裁定書38 班A「S1の証拠と出典」）: §2 S1 を**出典が残る形**へ改訂した。**system**: 冒頭に証拠階層の1段落（一次資料 > 調査AIアプリの要約 > 学習済み知識は使わない）を置き、**ルール11**（入力にそのまま現れたURLだけを `sources` に列挙・URLを創作しない）を新設した（既存のルール1～10の番号と文言は不変）。**user**: 出力JSON例へ `missing_info[].kind` と `sources[]` を足し、※行を2本足した。**Schema-S1**: `missing_info[].kind`（enum `conflict` / `undisclosed` / `not_found` / `hearing_only`・required）と `sources[]`（`label` / `url` / `aspect`・0～20件・required・空配列可。`aspect` は14観点キーまたは `other`）を追加し、ルートの required を**17キー**へ。**§11**: CheckS1 へ **V-S1-14**（sources[].url の貼付原文実在。警告）と **V-S1-15**（接頭辞・出所の不整合。警告）を新設し**計77件**（不合格61 / 警告14 / 合格判定2）へ。この2件は落とさない警告のため実装は `modValidate3.CheckS1Notes` に置き、`modPipeline3` の注記経路から run_log と HTML meta へ渡す（§2 の注記）。§10.2 の §2 system / user の実装モジュールを **modPromptsCore2**（modPromptsCore が30,000字契約に達したための分割先。12章§2）へ改めた。
@@ -1406,6 +1408,7 @@ EDR -> 端末の不審な動きを検知する仕組み
 KRI -> リスクの予兆指標
 SLA -> サービス水準の取り決め
 D&O -> 会社役員賠償責任保険
+D&O保険 -> 会社役員賠償責任保険
 PL保険 -> 生産物賠償責任保険
 てん補期間 -> 保険金をお支払いする期間
 縮小支払割合 -> 損害額のうち保険金としてお支払いする割合

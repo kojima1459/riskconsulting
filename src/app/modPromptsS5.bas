@@ -76,6 +76,7 @@ Public Function BuildS5System() As String
     s = s & "KRI -> リスクの予兆指標" & vbLf
     s = s & "SLA -> サービス水準の取り決め" & vbLf
     s = s & "D&O -> 会社役員賠償責任保険" & vbLf
+    s = s & "D&O保険 -> 会社役員賠償責任保険" & vbLf
     s = s & "PL保険 -> 生産物賠償責任保険" & vbLf
     s = s & "てん補期間 -> 保険金をお支払いする期間" & vbLf
     s = s & "縮小支払割合 -> 損害額のうち保険金としてお支払いする割合" & vbLf
