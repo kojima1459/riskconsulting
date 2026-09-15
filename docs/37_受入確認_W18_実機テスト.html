@@ -1,0 +1,157 @@
+<title>リスク提案ナビ 受入確認 W18</title>
+<style>
+:root{
+  --bg:#faf9f7; --card:#fff; --ink:#1f2328; --muted:#5a626e; --line:#e3e6ea;
+  --accent:#b91c1c; --ok:#166534; --warn:#92400e; --chip:#f1f3f5; --brand:#0f5c4a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181c; --card:#1e2128; --ink:#e8eaed; --muted:#a4acb9; --line:#333842;
+    --accent:#f87171; --ok:#86efac; --warn:#fcd34d; --chip:#272b33; --brand:#5eead4;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181c; --card:#1e2128; --ink:#e8eaed; --muted:#a4acb9; --line:#333842;
+  --accent:#f87171; --ok:#86efac; --warn:#fcd34d; --chip:#272b33; --brand:#5eead4;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:"Yu Gothic UI","Hiragino Sans",system-ui,sans-serif;
+  line-height:1.75;padding-block:28px;padding-left:18px;padding-right:18px;max-width:900px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 26px}
+h2{font-size:18px;margin:36px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+.pri{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;margin-right:8px;vertical-align:2px}
+.p0{background:var(--accent);color:#fff}
+.p1{background:var(--warn);color:#fff}
+.p2{background:var(--chip);color:var(--muted)}
+.p3{background:var(--chip);color:var(--muted);opacity:.8}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 14px}
+.item h3{font-size:15px;margin:0 0 10px}
+.new{display:inline-block;font-size:11px;font-weight:700;color:var(--card);background:var(--ok);
+  padding:1px 7px;border-radius:99px;margin-left:8px;vertical-align:2px}
+dl{margin:0}
+dt{font-size:12px;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:.04em}
+dd{margin:3px 0 0}
+.ok::before{content:"○ ";color:var(--ok);font-weight:700}
+.ng::before{content:"× ";color:var(--accent);font-weight:700}
+code{background:var(--chip);padding:1px 6px;border-radius:4px;font-size:13px;
+  font-family:"Consolas","SF Mono",monospace;word-break:break-all}
+.note{background:var(--chip);border-left:3px solid var(--accent);padding:12px 14px;border-radius:0 8px 8px 0;margin:14px 0;font-size:14px}
+.note.calm{border-left-color:var(--brand)}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+.tbl th,.tbl td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.tbl th{background:var(--chip);font-size:13px}
+.wrap{overflow-x:auto}
+.time{color:var(--muted);font-size:13px;font-weight:400;margin-left:8px}
+kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:12px}
+</style>
+<h1>リスク提案ナビ 受入確認（W18 実機第3弾FBの是正版）</h1>
+<p class="sub">2026-09-15 ／ 会社PC（Windows・Office 32bit・社内AIリボン）で確かめていただく手順書です。<b>上から順に、赤いラベルから</b>。全部で <b>40〜60分</b>（AIの待ち時間込み）。P群は5分で終わります。</p>
+
+<div class="note calm">
+<b>今回の版で変わったこと</b>（2026-09-15 の三菱電機フル実走のログから直したもの）: ① 貼った資料が上限を超えたときに切る順を「HP本文から先に」へ反転（前回はドシエ・有報・営業メモが先に全部消えていました） ② 調査指示文の穴（URL・規模・決算期）は会社情報に入れると自動で埋まり、空のままだと赤字と警告が出る ③ 指示文の本文を「番号どおり・項目を飛ばさない・出典と日付を写す・SNS/Wikipedia禁止」に改訂 ④ 提案書の付録に残っていた CBI／D&amp;O保険／OT 等を顧客語へ ⑤ 自動テストの NG 3本の是正 ⑥「13分ほど・同時に投げるのは3本まで」に文言を統一。
+</div>
+
+<h2><span class="pri p0">最優先</span>P群 自動テスト<span class="time">約5分</span></h2>
+
+<div class="item">
+<h3>P-1 [テストを実行] が FAIL 0、本数の自己照合が 62 本で一致</h3>
+<dl>
+<dt>手順</dt>
+<dd>画面左下の [<b>テストを実行</b>] を押して待つ（数分）</dd>
+<dt>合格</dt>
+<dd class="ok"><code>PASS … / FAIL 0 / SKIP 0</code> かつ <code>EXECUTED</code> と <code>EXPECTED</code> が<b>同じ数</b>（前回は 1149 / 1086 とずれていました。今回は層(b)ぶんを足して表示します）</dd>
+<dd class="ok"><code>T47-00_層(b)本数の自己照合(62本)</code>・<code>T47-W9-01_複数行テキストがクリップボードを往復…</code>・<code>T47B-W61-15_案件未選択の画面へ貼ると採番→保存…</code> の3本が NG 一覧に<b>出ない</b></dd>
+<dt>不合格</dt>
+<dd class="ng">上の3本のどれかが NG のまま → NG の行をそのまま送ってください。特に W9-01 が <code>戻り=[]</code> のままなら、Excel のコピー状態の扱いにまだ別の原因があります</dd>
+<dt>補足</dt>
+<dd>クリップボード往復と本数の自己照合は<b>Windows の実 Excel でしか確かめられません</b>。開発側の検問（37本）はここだけ届きません</dd>
+</dl>
+</div>
+
+<h2><span class="pri p0">最優先</span>A群 打切り順の反転（レポートの根拠が変わる）<span class="time">約20分＋AI待ち</span></h2>
+
+<div class="item">
+<h3>A-1 三菱電機を同じ材料でもう一度 S1 から実行し、ドシエが切られていない</h3>
+<dl>
+<dt>手順</dt>
+<dd>① 前回と同じ案件（C-20260915-001）を開く ② 資料はそのまま（HP約8万字・ドシエ・有報・営業メモ）③ [まとめて分析] ④ 終わったら <code>run_log.csv</code>（保存先の <code>データ</code> フォルダ）の s1 行の detail を見る</dd>
+<dt>合格</dt>
+<dd class="ok">detail に <code>truncated:hp=…</code> だけがあり、<code>truncated:dossier</code>・<code>truncated:yuho</code>・<code>truncated:memo</code> が<b>無い</b></dd>
+<dd class="ok">レポートの「リスクの整理」の根拠に、②で集めた 2021 年の検査不正・労災認定・ブラック企業大賞などの事実が<b>使われている</b>（前回はドシエごと消えていたので1つも出ていませんでした）</dd>
+<dt>不合格</dt>
+<dd class="ng">まだ dossier が切られる → s1 行の detail をそのまま送ってください</dd>
+<dt>送ってほしいもの</dt>
+<dd>run_log.csv の s1〜s3r の行（そのまま）と、出力した レポート HTML</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>A-2 s2r／s3r の <code>verr=</code> に規則IDが付く</h3>
+<dl>
+<dt>手順</dt>
+<dd>同じ run_log.csv の s2r・s3r の行の detail を見る</dd>
+<dt>合格</dt>
+<dd class="ok">1回目が failed のとき <code>verr=E0302:[V-S2-xx]</code> のように <b>角括弧の規則ID</b>が付いている（前回は <code>verr=E0302</code> だけで、どの規則で落ちたか分かりませんでした）</dd>
+<dt>送ってほしいもの</dt>
+<dd>その規則ID（次の是正で「1回目から通る」ようにする材料になります）</dd>
+</dl>
+</div>
+
+<h2><span class="pri p1">高</span>B群 調査指示文の穴<span class="time">約10分</span></h2>
+
+<div class="item">
+<h3>B-1 空のままだと赤字と警告、会社情報に入れると消える</h3>
+<dl>
+<dt>手順</dt>
+<dd>① 新しい案件で会社名と本社の場所だけ入れて保存 ② 調査指示文の 1本目・5本目・8本目の行を見る ③ 1本目の [コピー] を押す ④ 会社情報の「会社の公式サイトのURL」「会社の規模」「直近の決算期」を入れて保存 ⑤ もう一度 1本目の行と [コピー]</dd>
+<dt>合格</dt>
+<dd class="ok">②で赤字「<code>未入力 N か所: …（上の会社情報に入れると自動で埋まります）</code>」が出る。③で黄色の警告「<code>コピーしました。貼る前に、指示文の中の〔ここに…〕を N か所埋めてください: …</code>」が出る（コピー自体はできる）。⑤で赤字が消え、警告が通常の「調査指示文をコピーしました。」に戻り、貼り付けた本文の中に <code>〔ここに</code> が残っていない</dd>
+<dd class="ok">[全文] を押すと <code>〔ここに…〕</code> が赤く強調されている</dd>
+<dt>不合格</dt>
+<dd class="ng">赤字や警告が出ない／URL を入れても <code>〔ここに会社の公式サイトのURL…〕</code> が残る</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B-2 新しい指示文で ディープリサーチ を1本投げる（任意・13分）</h3>
+<dl>
+<dt>手順</dt>
+<dd>D-1（1本目）を投げる。時間があれば D-3（2本目）も同時に</dd>
+<dt>合格</dt>
+<dd class="ok">返答が「はじめに／目次／結論」無しで、<b>番号どおりの見出し</b>になっている。無い項目に「取得できず」「見当たらない」が書かれている。各事実の末尾に出典URLと日付がある</dd>
+<dt>送ってほしいもの</dt>
+<dd>返答の全文（前回と同じく）。効いていない指示があれば、それが次の改訂の材料になります</dd>
+</dl>
+</div>
+
+<h2><span class="pri p1">高</span>C群 提案書の用語<span class="time">約5分</span></h2>
+
+<div class="item">
+<h3>C-1 付録「12リスク一覧」の略語が顧客語になっている</h3>
+<dl>
+<dt>手順</dt>
+<dd>A-1 のあと [提案書（お客さま向け）を出す] → 付録の表を見る。<code>usage_log.csv</code> の <code>proposal_taboo_left</code> の行も見る</dd>
+<dt>合格</dt>
+<dd class="ok">「CBI限度額」→「取引先の被災による損害限度額」、「D&amp;O保険等」→「会社役員賠償責任保険等」、「OT停止」→「工場の制御システム停止」、「BCP訓練」→「事業継続計画訓練」、「SLA責任分界」→「サービス水準の取り決め責任分界」のように置き換わっている</dd>
+<dd class="ok"><code>proposal_jargon_left</code> が 7 から減っている（「与信」は警告のまま残ることがあります＝想定内）。「製造据付保守」が「付保」として数えられていない</dd>
+<dt>不合格</dt>
+<dd class="ng">略語が残る／置換で日本語が壊れている（例: 「保険保険」）→ その文をそのまま送ってください</dd>
+</dl>
+</div>
+
+<h2><span class="pri p2">中</span>D群 事故事例の補充<span class="time">約2分</span></h2>
+
+<div class="item">
+<h3>D-1 業種に事故事例が無いとき共通（00）で補う</h3>
+<dl>
+<dt>手順</dt>
+<dd>A-1 の run_log.csv の s2 行の detail を見る</dd>
+<dt>合格</dt>
+<dd class="ok"><code>kb_cut:…incidents=N/N</code> の N が 0 でなく、<code>incidents_fallback=00</code> が付いている（前回は <code>incidents=0/0</code>）</dd>
+</dl>
+</div>
+
+<div class="note">
+<b>送っていただくもの（まとめ）</b>: テスト結果の本文（NG があれば行ごと）／run_log.csv／usage_log.csv／出力したレポートと提案書の HTML／B-2 を投げた場合はその返答全文。前回と同じ zip の形で結構です。
+</div>
