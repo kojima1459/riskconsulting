@@ -402,3 +402,10 @@ Public Function BadRowsOf(ByVal blk As Variant, ByVal lastRow As Long, _
     Next r
     BadRowsOf = acc
 End Function
+
+' ShouldFallbackToCommonIndustry - 裁定書47 G-5: 業種コード完全一致で0行の
+'   とき"00"(共通)へ引き直すべきか。0行かつ既にcommonCodeでなければTrue。
+Public Function ShouldFallbackToCommonIndustry(ByVal matchedRows As Long, _
+        ByVal industryCode As String, ByVal commonCode As String) As Boolean
+    ShouldFallbackToCommonIndustry = (matchedRows <= 0 And industryCode <> commonCode)
+End Function

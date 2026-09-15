@@ -50,38 +50,12 @@ Private Const TE_SNAP_MARK As String = "T47_SNAP_MARK"
 Private Const TE_BAND_SEQ As Long = 100001
 
 ' 本モジュールが打つ Check の総本数(自己照合用。テストを増減したら更新)。
-' (裁定書12: V5で1本・V1で2本を modTestsExcel2 へ追加し 44 -> 47)
-' (裁定書22 M4: W6.1のナビ貼付3本を modTestsExcel2 へ追加し 47 -> 50)
-' (裁定書22 仕上げ: v3.1の予約行方式を前提にしていた modTestsExcel2 の
-'  旧 Q9/Q1/V1 群 12本を撤去し、新経路(保管+プレビュー)の Q9N 5本・V1N 2本へ
-'  書き換えたため 50 -> 45。内訳 = 本モジュール34本 + modTestsExcel2 11本。
-'  Q1(overflowの永続ガード)は v3.2 で**事象そのものが消えた**ため書き換え先を
-'  持たない(跡地の理由は modTestsExcel2 の「跡地」節が持つ))
-' (裁定書25 S3 / T-56: 7欄目 input_finance の往復1本を modTestsExcel2 へ
-'  追加し 45 -> 46。内訳 = 本モジュール34本 + modTestsExcel2 12本)
-' (裁定書26 A/D / W8.1: コーチ帯の図形の中の文字とフッター図形の存在の2本を
-'  modTestsExcel2 へ追加し 46 -> 48。図形の描画は LibreOffice で確かめられない
-'  ため、この2本は層(b)にしか置けない)
-' (裁定書26追補 b: ブックイベントのクラス(gAppEvents)の結線1本を追加し
-'  48 -> 49。内訳 = 本モジュール34本 + modTestsExcel2 15本)
-' (裁定書27 W9-B1/B2 / W9: Windowsでしか確かめられない3本を追加し 49 -> 52。
-'  内訳 = 本モジュール37本 + modTestsExcel2 15本。層(a)は「連結の規則」と
-'  「UTF-8のバイト列」を固定できるが、**Excel自身の貼り付け・コピーが実機で
-'  何を返すか**と **Open For Binary が実際に書いたバイト**は層(b)にしか置けない)
-' (W9.3: ブックイベントの受け口を clsAppEvents から ThisWorkbook 文書モジュール
-'  へ移した(17章 Z-24)ため、T47B-W81-03「ブックイベントのクラスが結線されて
-'  いる」を撤去し 52 -> 51。内訳 = 本モジュール37本 + modTestsExcel2 14本。
-'  **置換できなかった理由**: VBA から「ThisWorkbook に Workbook_Activate が
-'  あるか」を読むには VBE のプロジェクト参照を使うしかなく、その語は配布物の
-'  禁止文字列(裁定書27 W9-B 6)である。焼き込まれたスタブの形の検査は
-'  tools/bin_roundtrip.py [4b] へ移した)
-'  (裁定書28 W10 / T-59: 企業ファイル(1社1.xlsx)の往復一致と、その照合が効いて
-'   いることの変異注入(dossier_case の列を1つ落とすと落ちる)の2本を
-'   **modTestsExcel3**(新設)へ追加し 51 -> 53。内訳 = 本モジュール37本 +
-'   modTestsExcel2 14本 + modTestsExcel3 2本。層(a)に置けないのは、一致の中身が
-'   .xlsx を実際に開いて書いて読み直した結果でしか作れないため)
-'  (裁定書30 裁定2: W61 (3)の警告帯の後始末1本を追加し 53 -> 54)
-Private Const TE_EXPECTED As Long = 61
+' 内訳の変遷は git log(本ファイル)が正。容量(12章§2)の都合でここには
+' 最新の内訳だけを置く: 本モジュール37本 + modTestsExcel2 15本 +
+' (modTestsExcel3 2本 + modTestsExcelNavi 8本=10本) = 62本。
+' 裁定書47 追補(1): 旧値61は静的に追った全経路の invariant 合計(62)と
+' 1件ずれていた(全経路とも枝分岐に依らず一定になることを確認済み。concerns参照)。
+Private Const TE_EXPECTED As Long = 62
 
 Private mRun As Long    ' ECheck が数える実行本数
 
@@ -110,6 +84,14 @@ Public Sub RunAllExcelTests()
         mRun = TE_EXPECTED, "実際=" & CStr(mRun) & _
         " (不足は途中クラッシュ・前提不成立でテストが最後まで走っていない兆候)"
 End Sub
+
+' ExcelLayerExpected - 層(b)の期待本数(TE_EXPECTED)の読み出し口(裁定書47 G-3)。
+'   層(b)を走らせる入口(modTestsRunnerUi)が modTestRunner.SetExpectedCount へ
+'   prod(純層)に本数を足すために読む。値源は本モジュールのTE_EXPECTED1つだけ
+'   (直書きの重複を作らない)。
+Public Function ExcelLayerExpected() As Long
+    ExcelLayerExpected = TE_EXPECTED
+End Function
 
 ' Check の相乗り口。層(b)の実行本数を自前で数える。
 Private Sub ECheck(ByVal testName As String, ByVal cond As Boolean, _
@@ -277,8 +259,14 @@ Private Sub TestB11SnapshotGuard()
         createdSnap = True
     End If
     If wsSnap Is Nothing Then
+        ' 裁定書47 G-3: 早期Exitでも本数を一定に保つ(同じ名前のECheckを同じ
+        ' 本数打つ)。以降の2本は前提不成立のため検査不能=Falseで打つ。
         ECheck "T47-B11-01_kb_pathを0件フィクスチャへ差替できる", False, _
                "kb_snapshot シートを用意できない"
+        ECheck "T47-B11-02_0件読込でスナップショットを触らない(マーカー生存)", False, _
+               "前提不成立(kb_snapshot シートを用意できない)のため検査不能"
+        ECheck "T47-B11-03_err_logへE0401 kb_zero_rows", False, _
+               "前提不成立(kb_snapshot シートを用意できない)のため検査不能"
         Exit Sub
     End If
     ' マーカーは4列目: SaveSnapshot(1..3列)にも RestoreSnapshot(3列読み)にも
@@ -516,7 +504,19 @@ Private Sub TestC1DraftRow()
     End If
     ECheck "T47-C1-01_受信箱の見出し(inbox_id/body)が引ける", _
            (Not ws Is Nothing) And cId > 0 And cBody > 0
-    If ws Is Nothing Or cId <= 0 Or cBody <= 0 Then Exit Sub
+    If ws Is Nothing Or cId <= 0 Or cBody <= 0 Then
+        ' 裁定書47 G-3: 早期Exitでも本数を一定に保つ(同じ名前のECheckを同じ
+        ' 本数打つ)。以降の4本は前提不成立のため検査不能=Falseで打つ。
+        ECheck "T47-C1-02_起動後の先頭データ行id列が投函下書きマーカー", False, _
+               "前提不成立(受信箱の見出しが引けない)のため検査不能"
+        ECheck "T47-C1-03_body空でも受信箱の行が増えない", False, _
+               "前提不成立(受信箱の見出しが引けない)のため検査不能"
+        ECheck "T47-C1-04_body空でも下書き行のマーカーが残る", False, _
+               "前提不成立(受信箱の見出しが引けない)のため検査不能"
+        ECheck "T47-C1-05_下書き行は未診断一覧に混ざらない(走査スキップ)", False, _
+               "前提不成立(受信箱の見出しが引けない)のため検査不能"
+        Exit Sub
+    End If
 
     modUIInbox.EnsureInboxButtons
     ECheck "T47-C1-02_起動後の先頭データ行id列が投函下書きマーカー", _

@@ -310,3 +310,22 @@ Private Sub P3AddNote(ByRef acc As String, ByVal noteText As String)
     If LenB(acc) > 0 Then acc = acc & ";"
     acc = acc & noteText
 End Sub
+
+' FirstRuleIdOf - 裁定書47 追補(2): errText中で最初に現れる"[V-…]"を角括弧
+'   ごと返す(無ければ"")。modPipeline は満杯のため置き場をここへ寄せる。
+Public Function FirstRuleIdOf(ByVal errText As String) As String
+    Dim p As Long, q As Long
+    p = InStr(1, errText, "[V-", vbBinaryCompare)
+    If p <= 0 Then Exit Function
+    q = InStr(p, errText, "]", vbBinaryCompare)
+    If q <= 0 Then Exit Function
+    FirstRuleIdOf = Mid$(errText, p, q - p + 1)
+End Function
+
+' VerrNoteOf - "verr=<コード>[:<規則ID>]"を1箇所から組む(裁定書47 追補(2)。
+'   modPipeline/modPipeline2/modPipeline5の3箇所が同じ形をここから得る)。
+Public Function VerrNoteOf(ByVal errText As String) As String
+    Dim rule As String
+    rule = FirstRuleIdOf(errText)
+    VerrNoteOf = "verr=" & modPipeline.FailCodeOf(errText) & IIf(rule <> "", ":" & rule, "")
+End Function

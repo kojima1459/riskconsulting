@@ -112,6 +112,7 @@ Public Sub LoadKbSlots(ByRef ctx As TCaseCtx, ByVal stepNo As Long, _
     modKnowledge.ResetInjectedIds
     FetchKb ctx, stepNo, txt, -1, 0, caseText
     AddNote detailAcc, modKnowledge.LastKbCutNote()
+    AddNote detailAcc, modKnowledge.IncidentsFallbackNote() ' 裁定書47 G-5
     For i = 0 To P4_PLAN_N - 1
         counts(i) = modPipeline.KbRowCount(txt(i))
         counts(P4_PLAN_N + i) = Len(txt(i))

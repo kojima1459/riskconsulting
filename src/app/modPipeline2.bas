@@ -542,7 +542,9 @@ Private Function OneCall(ByRef ctx As TCaseCtx, ByRef d As TDeepCtx, _
     End If
 
     errText = Defend(ctx, d, stepKey, outRaw, outJson, detailAcc)
-    If LenB(errText) > 0 Then AddNote detailAcc, "verr=E0302"
+    ' 裁定書47 G-4/追補(2): E0302固定をやめ、modPipeline.bas/modPipeline5.bas
+    ' と同じ modPipeline3.VerrNoteOf(errText)へ揃える(コード+規則ID1個)。
+    If LenB(errText) > 0 Then AddNote detailAcc, modPipeline3.VerrNoteOf(errText)
     RecordRun modPipeline.ClassifyResult((LenB(errText) = 0), isRepair, _
                                          (LenB(errText) = 0)), detailAcc
     OneCall = errText

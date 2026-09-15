@@ -281,7 +281,8 @@ Private Function OneCall(ByVal caseId As String, ByVal caseType As String, _
         If removedCount > 0 Then AddNote detailAcc, "e49_removed=" & CStr(removedCount)
         errText = modValidate4.CheckS5(outJson, s2Json)
     End If
-    If LenB(errText) > 0 Then AddNote detailAcc, "verr=" & modPipeline.FailCodeOf(errText)
+    ' 裁定書47 追補(2): modPipeline/modPipeline2 と同じ VerrNoteOf へ揃える。
+    If LenB(errText) > 0 Then AddNote detailAcc, modPipeline3.VerrNoteOf(errText)
     RecordRun modPipeline.ClassifyResult((LenB(errText) = 0), isRepair, (LenB(errText) = 0)), _
               detailAcc
     OneCall = errText

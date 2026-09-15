@@ -45,9 +45,9 @@ Private Const PL_OMIT_TEXT As String = "（一部省略）"
 ' 15章§2 S1 user の9貼付ブロック(AsmS1User 引数順)
 Private Const PL_S1_KEYS As String = "input_hp|input_yuho|input_memo|input_contract|" & _
     "input_prev_renewal|input_dossier|input_field_notes|input_coverage_note|input_hearing_answers"
-' 16章E-03(2) 切る順(ドシエ/前回更新/有報/メモ/HP)を上の添字で表す。
-Private Const PL_CUT_IDX As String = "5|4|1|2|0"
-Private Const PL_CUT_LABELS As String = "dossier|prev_renewal|yuho|memo|hp"
+' 16章E-03(2) 切る順(HP/有報/追加ドシエ/前回更新メモ/営業メモ)。裁定書47 G-1で反転。
+Private Const PL_CUT_IDX As String = "0|1|5|4|2"
+Private Const PL_CUT_LABELS As String = "hp|yuho|dossier|prev_renewal|memo"
 ' 16章E-03(3) 打切らない4欄(現契約/現場メモ/付保見立て/ヒアリング回答)。
 Private Const PL_KEEP_IDX As String = "3|6|7|8"
 ' 15章§0.7 切詰め順(成功事例/型/メニュー/種目/リスクライブラリ)。
@@ -460,7 +460,7 @@ Private Function OneCall(ByRef c As TChkCtx, ByVal playId As String, _
     ' 裁定書37 B-03/B-05: 検証の**後ろ**で原文照合(S2)と充足度(S1)を detail へ
     ' 1行で足す。**落とさない・修復リトライを起こさない**(実体は modPipeline3)。
     modPipeline3.DefendNotes c.stepNo, c.caseId, outJson, c.s1Json, (LenB(errText) = 0), detailAcc
-    If LenB(errText) > 0 Then AddNote detailAcc, "verr=" & FailCodeOf(errText)
+    If LenB(errText) > 0 Then AddNote detailAcc, modPipeline3.VerrNoteOf(errText)
     RecordRun ClassifyResult((LenB(errText) = 0), isRepair, (LenB(errText) = 0)), detailAcc
     OneCall = errText
 End Function
@@ -671,6 +671,19 @@ Public Function TrimInputPlan(ByRef lens() As Long, ByVal budgetChars As Long) A
         total = total - cut
     Next i
     TrimInputPlan = res
+End Function
+
+Public Function CutOrderLabels() As String
+    CutOrderLabels = PL_CUT_LABELS
+End Function
+
+Public Function CutOrderKeys() As String
+    Dim i As Long, s As String
+    For i = 0 To 4
+        If Len(s) > 0 Then s = s & "|"
+        s = s & PickAt(PL_S1_KEYS, IdxAt(PL_CUT_IDX, i))
+    Next i
+    CutOrderKeys = s
 End Function
 
 ' 切詰めた欄には必ず注記を付す(E-03(6))。
